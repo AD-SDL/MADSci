@@ -80,7 +80,7 @@ class TestTemplateRegistry:
     def test_list_module_templates(self, registry: TemplateRegistry) -> None:
         """Test filtering templates by module category."""
         templates = registry.list_templates(category=TemplateCategory.MODULE)
-        assert len(templates) >= 2  # basic and device
+        assert len(templates) >= 3  # basic, device, and robot_arm
         for t in templates:
             assert t.category == TemplateCategory.MODULE
 
@@ -97,6 +97,20 @@ class TestTemplateRegistry:
         assert len(templates) >= 2  # basic and multi_step
         for t in templates:
             assert t.category == TemplateCategory.WORKFLOW
+
+    def test_list_comm_templates(self, registry: TemplateRegistry) -> None:
+        """Test filtering templates by comm category."""
+        templates = registry.list_templates(category=TemplateCategory.COMM)
+        assert len(templates) >= 5  # serial, socket, rest, sdk, modbus
+        for t in templates:
+            assert t.category == TemplateCategory.COMM
+
+    def test_list_lab_templates(self, registry: TemplateRegistry) -> None:
+        """Test filtering templates by lab category."""
+        templates = registry.list_templates(category=TemplateCategory.LAB)
+        assert len(templates) >= 3  # minimal, standard, distributed
+        for t in templates:
+            assert t.category == TemplateCategory.LAB
 
     def test_list_templates_by_tag(self, registry: TemplateRegistry) -> None:
         """Test filtering templates by tag."""
@@ -116,6 +130,12 @@ class TestTemplateRegistry:
         engine = registry.get_template("module/device")
         assert isinstance(engine, TemplateEngine)
         assert engine.manifest.name == "Device Module"
+
+    def test_get_template_camera_module(self, registry: TemplateRegistry) -> None:
+        """Test getting the camera module template."""
+        engine = registry.get_template("module/camera")
+        assert isinstance(engine, TemplateEngine)
+        assert engine.manifest.name == "Camera Module"
 
     def test_get_template_not_found(self, registry: TemplateRegistry) -> None:
         """Test that missing templates raise TemplateNotFoundError."""
@@ -365,6 +385,408 @@ class TestTemplateRendering:
                 except SyntaxError as e:
                     pytest.fail(f"Invalid Python syntax in {f}: {e}")
 
+    def test_render_robot_arm_module(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of robot arm module template."""
+        engine = registry.get_template("module/robot_arm")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_arm", "port": 3000},
+        )
+
+        assert len(result.files_created) > 0
+        # Verify key files exist
+        file_names = [f.name for f in result.files_created]
+        assert "my_arm_rest_node.py" in file_names
+        assert "my_arm_interface.py" in file_names
+        assert "my_arm_fake_interface.py" in file_names
+        assert "my_arm_types.py" in file_names
+        assert "test_my_arm_interface.py" in file_names
+
+    def test_render_robot_arm_module_python_syntax(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that robot arm module generates valid Python."""
+        engine = registry.get_template("module/robot_arm")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_arm", "port": 3000},
+        )
+
+        for f in result.files_created:
+            if f.suffix == ".py":
+                content = f.read_text()
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    pytest.fail(f"Invalid Python syntax in {f}: {e}")
+
+    def test_render_robot_arm_module_content(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that robot arm module content has correct class names and actions."""
+        engine = registry.get_template("module/robot_arm")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_arm", "port": 3000},
+        )
+
+        # Check types file for robot arm specific types
+        types_file = None
+        for f in result.files_created:
+            if f.name == "my_arm_types.py":
+                types_file = f
+                break
+        assert types_file is not None
+        types_content = types_file.read_text()
+        assert "MyArmNodeConfig" in types_content
+        assert "MyArmInterfaceConfig" in types_content
+        assert "MyArmPosition" in types_content
+        assert "MyArmResult" in types_content
+        assert "default_speed" in types_content
+        assert "workspace_bounds" in types_content
+
+        # Check interface file for robot arm operations
+        interface_file = None
+        for f in result.files_created:
+            if f.name == "my_arm_interface.py":
+                interface_file = f
+                break
+        assert interface_file is not None
+        interface_content = interface_file.read_text()
+        assert "def home(" in interface_content
+        assert "def pick(" in interface_content
+        assert "def place(" in interface_content
+        assert "def move(" in interface_content
+        assert "def get_position(" in interface_content
+        assert "is_homed" in interface_content
+        assert "_holding_item" in interface_content
+
+        # Check rest node file for action methods
+        rest_file = None
+        for f in result.files_created:
+            if f.name == "my_arm_rest_node.py":
+                rest_file = f
+                break
+        assert rest_file is not None
+        rest_content = rest_file.read_text()
+        assert "def home(" in rest_content
+        assert "def pick(" in rest_content
+        assert "def place(" in rest_content
+        assert "def move_to(" in rest_content
+        assert "def get_arm_status(" in rest_content
+
+    def test_render_camera_module(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of camera module template."""
+        engine = registry.get_template("module/camera")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_cam", "port": 3000},
+        )
+
+        assert len(result.files_created) > 0
+        # Verify key files exist
+        file_names = [f.name for f in result.files_created]
+        assert "my_cam_rest_node.py" in file_names
+        assert "my_cam_interface.py" in file_names
+        assert "my_cam_fake_interface.py" in file_names
+        assert "my_cam_types.py" in file_names
+        assert "test_my_cam_interface.py" in file_names
+
+    def test_render_camera_module_python_syntax(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that camera module generates valid Python."""
+        engine = registry.get_template("module/camera")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_cam", "port": 3000},
+        )
+
+        for f in result.files_created:
+            if f.suffix == ".py":
+                content = f.read_text()
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    pytest.fail(f"Invalid Python syntax in {f}: {e}")
+
+    def test_render_camera_module_content(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that camera module content has correct class names and actions."""
+        engine = registry.get_template("module/camera")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_cam", "port": 3000},
+        )
+
+        # Check types file for camera-specific types
+        types_file = None
+        for f in result.files_created:
+            if f.name == "my_cam_types.py":
+                types_file = f
+                break
+        assert types_file is not None
+        types_content = types_file.read_text()
+        assert "MyCamNodeConfig" in types_content
+        assert "MyCamInterfaceConfig" in types_content
+        assert "MyCamCaptureResult" in types_content
+        assert "MyCamResult" in types_content
+        assert "default_exposure_ms" in types_content
+        assert "default_resolution" in types_content
+
+        # Check interface file for camera operations
+        interface_file = None
+        for f in result.files_created:
+            if f.name == "my_cam_interface.py":
+                interface_file = f
+                break
+        assert interface_file is not None
+        interface_content = interface_file.read_text()
+        assert "def capture(" in interface_content
+        assert "def configure(" in interface_content
+        assert "def get_image_info(" in interface_content
+        assert "def get_status(" in interface_content
+        assert "_capture_count" in interface_content
+        assert "_last_capture" in interface_content
+
+        # Check rest node file for action methods
+        rest_file = None
+        for f in result.files_created:
+            if f.name == "my_cam_rest_node.py":
+                rest_file = f
+                break
+        assert rest_file is not None
+        rest_content = rest_file.read_text()
+        assert "def capture(" in rest_content
+        assert "def configure_camera(" in rest_content
+        assert "def get_camera_status(" in rest_content
+        assert "def reset_camera(" in rest_content
+
+    def test_render_instrument_module(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of instrument module template."""
+        engine = registry.get_template("module/instrument")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_spec", "port": 3000},
+        )
+
+        assert len(result.files_created) > 0
+        file_names = [f.name for f in result.files_created]
+        assert "my_spec_rest_node.py" in file_names
+        assert "my_spec_interface.py" in file_names
+        assert "my_spec_fake_interface.py" in file_names
+        assert "my_spec_types.py" in file_names
+        assert "test_my_spec_interface.py" in file_names
+
+    def test_render_instrument_module_python_syntax(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that instrument module generates valid Python."""
+        engine = registry.get_template("module/instrument")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_spec", "port": 3000},
+        )
+
+        for f in result.files_created:
+            if f.suffix == ".py":
+                content = f.read_text()
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    pytest.fail(f"Invalid Python syntax in {f}: {e}")
+
+    def test_render_instrument_module_content(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that instrument module content has correct class names and actions."""
+        engine = registry.get_template("module/instrument")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_spec", "port": 3000},
+        )
+
+        # Check types file for instrument-specific types
+        types_file = None
+        for f in result.files_created:
+            if f.name == "my_spec_types.py":
+                types_file = f
+                break
+        assert types_file is not None
+        types_content = types_file.read_text()
+        assert "MySpecNodeConfig" in types_content
+        assert "MySpecInterfaceConfig" in types_content
+        assert "MySpecReading" in types_content
+        assert "MySpecCalibrationData" in types_content
+        assert "MySpecResult" in types_content
+        assert "measurement_units" in types_content
+
+        # Check interface file for instrument operations
+        interface_file = None
+        for f in result.files_created:
+            if f.name == "my_spec_interface.py":
+                interface_file = f
+                break
+        assert interface_file is not None
+        interface_content = interface_file.read_text()
+        assert "def connect(" in interface_content
+        assert "def initialize(" in interface_content
+        assert "def measure(" in interface_content
+        assert "def calibrate(" in interface_content
+        assert "def get_status(" in interface_content
+        assert "is_connected" in interface_content
+        assert "is_calibrated" in interface_content
+
+        # Check rest node file for action methods
+        rest_file = None
+        for f in result.files_created:
+            if f.name == "my_spec_rest_node.py":
+                rest_file = f
+                break
+        assert rest_file is not None
+        rest_content = rest_file.read_text()
+        assert "def measure(" in rest_content
+        assert "def calibrate(" in rest_content
+        assert "def get_instrument_status(" in rest_content
+        assert "def reset_instrument(" in rest_content
+
+    def test_render_liquid_handler_module(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of liquid handler module template."""
+        engine = registry.get_template("module/liquid_handler")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_pipette", "port": 3000},
+        )
+
+        assert len(result.files_created) > 0
+        file_names = [f.name for f in result.files_created]
+        assert "my_pipette_rest_node.py" in file_names
+        assert "my_pipette_interface.py" in file_names
+        assert "my_pipette_fake_interface.py" in file_names
+        assert "my_pipette_types.py" in file_names
+        assert "test_my_pipette_interface.py" in file_names
+
+    def test_render_liquid_handler_module_python_syntax(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that liquid handler module generates valid Python."""
+        engine = registry.get_template("module/liquid_handler")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_pipette", "port": 3000},
+        )
+
+        for f in result.files_created:
+            if f.suffix == ".py":
+                content = f.read_text()
+                try:
+                    ast.parse(content)
+                except SyntaxError as e:
+                    pytest.fail(f"Invalid Python syntax in {f}: {e}")
+
+    def test_render_liquid_handler_module_content(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test that liquid handler module content has correct class names and actions."""
+        engine = registry.get_template("module/liquid_handler")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "my_pipette", "port": 3000},
+        )
+
+        # Check types file for liquid handler specific types
+        types_file = None
+        for f in result.files_created:
+            if f.name == "my_pipette_types.py":
+                types_file = f
+                break
+        assert types_file is not None
+        types_content = types_file.read_text()
+        assert "MyPipetteNodeConfig" in types_content
+        assert "MyPipetteInterfaceConfig" in types_content
+        assert "MyPipetteAspirateCommand" in types_content
+        assert "MyPipetteDispenseCommand" in types_content
+        assert "MyPipetteResult" in types_content
+        assert "tip_capacity" in types_content
+        assert "max_volume_ul" in types_content
+
+        # Check interface file for liquid handler operations
+        interface_file = None
+        for f in result.files_created:
+            if f.name == "my_pipette_interface.py":
+                interface_file = f
+                break
+        assert interface_file is not None
+        interface_content = interface_file.read_text()
+        assert "def aspirate(" in interface_content
+        assert "def dispense(" in interface_content
+        assert "def transfer(" in interface_content
+        assert "def pick_up_tips(" in interface_content
+        assert "def drop_tips(" in interface_content
+        assert "def get_status(" in interface_content
+        assert "_has_tips" in interface_content
+        assert "_current_volume_ul" in interface_content
+
+        # Check rest node file for action methods
+        rest_file = None
+        for f in result.files_created:
+            if f.name == "my_pipette_rest_node.py":
+                rest_file = f
+                break
+        assert rest_file is not None
+        rest_content = rest_file.read_text()
+        assert "def aspirate(" in rest_content
+        assert "def dispense(" in rest_content
+        assert "def transfer(" in rest_content
+        assert "def pick_up_tips(" in rest_content
+        assert "def drop_tips(" in rest_content
+        assert "def get_handler_status(" in rest_content
+
     def test_render_experiment_script(
         self, registry: TemplateRegistry, tmp_path: Path
     ) -> None:
@@ -575,6 +997,53 @@ class TestTemplateRendering:
         assert "README.md" in file_names
         assert "example.workflow.yaml" in file_names
 
+    def test_render_lab_standard(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of standard lab template."""
+        engine = registry.get_template("lab/standard")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        assert len(result.files_created) == 7
+        file_names = [f.name for f in result.files_created]
+        assert "start_lab.py" in file_names
+        assert ".env" in file_names
+        assert ".gitignore" in file_names
+        assert "pyproject.toml" in file_names
+        assert "README.md" in file_names
+        assert "compose.yaml" in file_names
+        assert "example.workflow.yaml" in file_names
+
+    def test_render_lab_distributed(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Test rendering of distributed lab template."""
+        engine = registry.get_template("lab/distributed")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        assert len(result.files_created) == 8
+        file_names = [f.name for f in result.files_created]
+        assert "start_lab.py" in file_names
+        assert ".env" in file_names
+        assert ".gitignore" in file_names
+        assert "pyproject.toml" in file_names
+        assert "README.md" in file_names
+        assert "compose.yaml" in file_names
+        assert "compose.nodes.yaml" in file_names
+        assert "example.workflow.yaml" in file_names
+
     def test_render_workcell_basic(
         self, registry: TemplateRegistry, tmp_path: Path
     ) -> None:
@@ -608,7 +1077,14 @@ class TestTemplateCompleteness:
         [
             "module/basic",
             "module/device",
+            "module/camera",
+            "module/instrument",
+            "module/liquid_handler",
+            "module/robot_arm",
             "interface/fake",
+            "interface/real",
+            "interface/sim",
+            "interface/mock",
             "node/basic",
             "experiment/script",
             "experiment/notebook",
@@ -618,6 +1094,13 @@ class TestTemplateCompleteness:
             "workflow/multi_step",
             "workcell/basic",
             "lab/minimal",
+            "lab/standard",
+            "lab/distributed",
+            "comm/serial",
+            "comm/socket",
+            "comm/rest",
+            "comm/sdk",
+            "comm/modbus",
         ],
     )
     def test_template_exists(
@@ -634,10 +1117,23 @@ class TestTemplateCompleteness:
         [
             "module/basic",
             "module/device",
+            "module/camera",
+            "module/instrument",
+            "module/liquid_handler",
+            "module/robot_arm",
+            "interface/fake",
+            "interface/real",
+            "interface/sim",
+            "interface/mock",
             "node/basic",
             "experiment/script",
             "experiment/tui",
             "experiment/node",
+            "comm/serial",
+            "comm/socket",
+            "comm/rest",
+            "comm/sdk",
+            "comm/modbus",
         ],
     )
     def test_template_defaults_are_valid(
@@ -656,6 +1152,14 @@ class TestTemplateCompleteness:
         [
             ("module/basic", {"module_name": "test_gen", "port": 2000}),
             ("module/device", {"module_name": "test_gen", "port": 2000}),
+            ("module/camera", {"module_name": "test_gen", "port": 2000}),
+            ("module/instrument", {"module_name": "test_gen", "port": 2000}),
+            ("module/liquid_handler", {"module_name": "test_gen", "port": 2000}),
+            ("module/robot_arm", {"module_name": "test_gen", "port": 2000}),
+            ("interface/fake", {"module_name": "test_gen"}),
+            ("interface/real", {"module_name": "test_gen"}),
+            ("interface/sim", {"module_name": "test_gen"}),
+            ("interface/mock", {"module_name": "test_gen"}),
             ("node/basic", {"node_name": "test_gen", "port": 2000}),
             ("experiment/script", {"experiment_name": "test_gen"}),
             ("experiment/tui", {"experiment_name": "test_gen"}),
@@ -675,7 +1179,14 @@ class TestTemplateCompleteness:
                 },
             ),
             ("lab/minimal", {"lab_name": "test_gen"}),
+            ("lab/standard", {"lab_name": "test_gen"}),
+            ("lab/distributed", {"lab_name": "test_gen"}),
             ("workcell/basic", {"workcell_name": "test_gen"}),
+            ("comm/serial", {"interface_name": "test_gen"}),
+            ("comm/socket", {"interface_name": "test_gen"}),
+            ("comm/rest", {"interface_name": "test_gen"}),
+            ("comm/sdk", {"interface_name": "test_gen"}),
+            ("comm/modbus", {"interface_name": "test_gen"}),
         ],
     )
     def test_template_renders_successfully(
@@ -700,6 +1211,14 @@ class TestTemplateCompleteness:
         [
             ("module/basic", {"module_name": "syntax_test", "port": 2000}),
             ("module/device", {"module_name": "syntax_test", "port": 2000}),
+            ("module/camera", {"module_name": "syntax_test", "port": 2000}),
+            ("module/instrument", {"module_name": "syntax_test", "port": 2000}),
+            ("module/liquid_handler", {"module_name": "syntax_test", "port": 2000}),
+            ("module/robot_arm", {"module_name": "syntax_test", "port": 2000}),
+            ("interface/fake", {"module_name": "syntax_test"}),
+            ("interface/real", {"module_name": "syntax_test"}),
+            ("interface/sim", {"module_name": "syntax_test"}),
+            ("interface/mock", {"module_name": "syntax_test"}),
             ("node/basic", {"node_name": "syntax_test", "port": 2000}),
             ("experiment/script", {"experiment_name": "syntax_test"}),
             ("experiment/tui", {"experiment_name": "syntax_test"}),
@@ -707,6 +1226,11 @@ class TestTemplateCompleteness:
                 "experiment/node",
                 {"experiment_name": "syntax_test", "server_port": 6000},
             ),
+            ("comm/serial", {"interface_name": "syntax_test"}),
+            ("comm/socket", {"interface_name": "syntax_test"}),
+            ("comm/rest", {"interface_name": "syntax_test"}),
+            ("comm/sdk", {"interface_name": "syntax_test"}),
+            ("comm/modbus", {"interface_name": "syntax_test"}),
         ],
     )
     def test_generated_python_syntax(

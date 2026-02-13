@@ -1,0 +1,42 @@
+name: "Distributed Lab"
+version: "1.0.0"
+description: "A distributed lab configuration for multi-host deployments"
+category: "lab"
+tags: ["distributed", "multi-host", "production"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: lab_name
+    type: string
+    description: "Lab name (lowercase, underscores or hyphens allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_-]*$"
+    default: "my_lab"
+
+  - name: lab_description
+    type: string
+    description: "Human-readable description of the lab"
+    required: true
+    default: "A distributed MADSci self-driving laboratory"
+
+files:
+  - source: "{{lab_name}}/README.md.j2"
+    destination: "{{lab_name}}/README.md"
+  - source: "{{lab_name}}/.env.j2"
+    destination: "{{lab_name}}/.env"
+  - source: "{{lab_name}}/.gitignore.j2"
+    destination: "{{lab_name}}/.gitignore"
+  - source: "{{lab_name}}/compose.yaml.j2"
+    destination: "{{lab_name}}/compose.yaml"
+  - source: "{{lab_name}}/compose.nodes.yaml.j2"
+    destination: "{{lab_name}}/compose.nodes.yaml"
+  - source: "{{lab_name}}/pyproject.toml.j2"
+    destination: "{{lab_name}}/pyproject.toml"
+  - source: "{{lab_name}}/start_lab.py.j2"
+    destination: "{{lab_name}}/start_lab.py"
+  - source: "{{lab_name}}/workflows/example.workflow.yaml.j2"
+    destination: "{{lab_name}}/workflows/example.workflow.yaml"

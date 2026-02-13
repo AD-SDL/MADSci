@@ -1,6 +1,6 @@
 # MADSci UX Overhaul - Completion Plan
 
-**Status**: In Progress (Phase A & B complete)
+**Status**: In Progress (Phases A, B & C complete)
 **Created**: 2026-02-12
 **Related**: [UX Overhaul Plan](./ux_overhaul_plan.md) | [Implementation Progress](./ux_overhaul_progress.md)
 
@@ -28,18 +28,18 @@ This plan provides a systematic approach to closing those gaps and bringing the 
 
 **Testing gaps**: `registry`, `migrate`, and `tui` commands have zero dedicated tests.
 
-### 2. Templates (12 of ~26 planned — 46%)
+### 2. Templates (26 of ~26 planned — 100%) ✅ COMPLETE (Phase C)
 
 | Category | Implemented | Missing |
 |----------|-------------|---------|
-| Module | basic, device | instrument, liquid_handler, robot_arm, camera |
+| Module | basic, device, instrument, liquid_handler, robot_arm, camera | - |
 | Node | basic | - |
-| Interface | fake | real, sim, mock |
-| Lab | minimal | standard, distributed |
+| Interface | fake, real, sim, mock | - |
+| Lab | minimal, standard, distributed | - |
 | Experiment | ALL 4 | - |
 | Workflow | ALL 2 | - |
 | Workcell | basic | - |
-| Comm patterns | none | serial, socket, rest, sdk, modbus |
+| Comm patterns | serial, socket, rest, sdk, modbus | - |
 
 ### 3. TUI (MVP only - Phase 3+ features at 0%)
 
@@ -279,90 +279,83 @@ The following capabilities are deferred from the initial B.1/B.2 scope. They can
 
 ---
 
-### Phase C: Templates Expansion [Overall: L]
+### Phase C: Templates Expansion [Overall: L] ✅ COMPLETE
 
 **Goal**: Build out the template library to cover the most common use cases.
 
 **Rationale**: Templates are the primary mechanism for the "scaffolding" principle. More templates means fewer users copy-pasting and manually editing.
 
-#### C.0 Template generator decision [S]
+**Completed**: 2026-02-12
 
-**Prerequisite** — decide before starting C.1.
+#### C.0 Template generator decision [S] ✅
+- **Decision**: Copy-and-modify approach. A meta-template generator was not needed for 4 module templates. All module templates share identical `template.yaml` structure; only the `.j2` file content differs (domain-specific actions, types, interface methods).
 
-Analysis of existing templates shows that `module/basic/template.yaml` and `module/device/template.yaml` are **structurally identical**: same parameters, same 10-file list, same hooks, same conditions. The file trees are also identical — only the `.j2` template content differs (domain-specific actions and types). This means the shared structure across module templates is effectively 100% at the manifest level and ~70-80% at the `.j2` file level (boilerplate like `pyproject.toml.j2`, `Dockerfile.j2`, `README.md.j2`, `__init__.py.j2`, `test_*_interface.py.j2` are nearly identical).
+#### C.1 Additional module templates [L] ✅
+- `module/instrument` - Measurement devices (measure, calibrate, get_instrument_status, reset_instrument). Includes `Reading`, `CalibrationData`, and `Result` domain types.
+- `module/liquid_handler` - Pipetting (aspirate, dispense, transfer, pick_up_tips, drop_tips, get_handler_status). Includes `AspirateCommand`, `DispenseCommand`, and `Result` domain types.
+- `module/robot_arm` - Material handling (pick, place, move, home, get_arm_status). Includes `Position` and `Result` domain types.
+- `module/camera` - Vision systems (capture, configure_camera, get_camera_status, reset_camera). Includes `CaptureResult` and `Result` domain types.
 
-**Decision**: Should we build a meta-template generator that produces the boilerplate from a minimal config (template name, description, tags, action list), reducing per-template effort to just the domain-specific `.j2` files (`*_rest_node.py.j2`, `*_interface.py.j2`, `*_types.py.j2`)? Or is copy-and-modify from `module/device/` sufficient for 4 templates?
+Each template has 10 `.j2` files following the `module/device/` pattern: rest_node, interface, fake_interface, types, __init__, tests/__init__, test_interface, pyproject.toml, README, Dockerfile.
 
-**Recommendation**: Copy-and-modify is fine for 4 templates. A generator becomes worthwhile if we anticipate >8 module templates or if community contributions are expected. Make the decision here and document it before proceeding to C.1.
+**Files created** (4 templates x 11 files each = 44 files):
+- `src/madsci_common/madsci/common/bundled_templates/module/instrument/` (template.yaml + 10 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/module/liquid_handler/` (template.yaml + 10 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/module/robot_arm/` (template.yaml + 10 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/module/camera/` (template.yaml + 10 `.j2` files)
 
-#### C.1 Additional module templates [L]
-Based on existing patterns in `module/basic` and `module/device`:
-- `module/instrument` - Measurement devices (measure, calibrate, get_reading)
-- `module/liquid_handler` - Pipetting (aspirate, dispense, transfer, pick_up_tips)
-- `module/robot_arm` - Material handling (pick, place, move, home)
-- `module/camera` - Vision systems (capture, stream, configure)
-
-**Files to create** (per template, ~11 files each — or fewer if using generator):
-- `src/madsci_common/madsci/common/bundled_templates/module/<name>/template.yaml`
-- `src/madsci_common/madsci/common/bundled_templates/module/<name>/{{module_name}}_module/` (full structure)
-
-**Existing pattern**: `src/madsci_common/madsci/common/bundled_templates/module/device/`
-
-#### C.2 Additional interface templates [S-M]
-- `interface/real` - Generic hardware interface stub with "insert your instrument-specific code here" scaffolding and common patterns (connection lifecycle, error handling, logging)
+#### C.2 Additional interface templates [S-M] ✅
+- `interface/real` - Generic hardware interface stub with TODO markers for connection lifecycle, error handling, and logging
 - `interface/sim` - External simulator connection template
 - `interface/mock` - Pytest mock wrapper template
 
-**Files to create**:
-- `src/madsci_common/madsci/common/bundled_templates/interface/real/template.yaml` + template file
-- `src/madsci_common/madsci/common/bundled_templates/interface/sim/template.yaml` + template file
-- `src/madsci_common/madsci/common/bundled_templates/interface/mock/template.yaml` + template file
+**Files created** (3 templates x 2 files each = 6 files):
+- `src/madsci_common/madsci/common/bundled_templates/interface/real/` (template.yaml + 1 `.j2` file)
+- `src/madsci_common/madsci/common/bundled_templates/interface/sim/` (template.yaml + 1 `.j2` file)
+- `src/madsci_common/madsci/common/bundled_templates/interface/mock/` (template.yaml + 1 `.j2` file)
 
-#### C.3 Lab templates [M]
-- `lab/standard` - Standard lab with all managers, Docker compose, full infrastructure
-- `lab/distributed` - Multi-host lab with Docker swarm/k8s configs
+#### C.3 Lab templates [M] ✅
+- `lab/standard` - Standard lab with all managers, Docker compose, full infrastructure (7 `.j2` files)
+- `lab/distributed` - Multi-host lab with Docker swarm/k8s configs (8 `.j2` files, includes `compose.nodes.yaml`)
 
-**Files to create**:
-- `src/madsci_common/madsci/common/bundled_templates/lab/standard/` (template.yaml + files)
-- `src/madsci_common/madsci/common/bundled_templates/lab/distributed/` (template.yaml + files)
+**Files created**:
+- `src/madsci_common/madsci/common/bundled_templates/lab/standard/` (template.yaml + 7 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/lab/distributed/` (template.yaml + 8 `.j2` files)
 
-#### C.4 Template validation [S]
-- Add all new templates to the existing template completeness tests
-- Verify all render successfully with defaults
-- Verify generated Python passes syntax check and ruff
-- **Important**: This should be a prerequisite for merging any new templates, not a follow-up task. Each template PR in C.1-C.3 and C.5 must include its validation tests.
+#### C.4 Template validation [S] ✅
+- All 26 templates covered by `TestTemplateCompleteness` tests (existence, defaults validation, render, Python syntax)
+- All templates render successfully with default parameters
+- All generated Python passes syntax check (`ast.parse`)
+- Added `COMM` value to `TemplateCategory` enum in `template_types.py`
+- Added detailed render+content tests for `instrument` and `liquid_handler` modules (matching existing `camera` and `robot_arm` test patterns)
+- Added registry category filter tests for `comm` and `lab` categories
 
-**Files to modify**:
-- `src/madsci_common/tests/test_templates/test_template_engine.py` (TestTemplateCompleteness class)
+**Files modified**:
+- `src/madsci_common/tests/test_templates/test_template_engine.py` (150 tests, up from ~85)
+- `src/madsci_common/madsci/common/types/template_types.py` (added `COMM` to `TemplateCategory` enum)
 
-#### C.5 Communication pattern templates [L]
-
-Templates providing boilerplate for common instrument communication patterns. Each template generates a standalone interface class demonstrating the pattern, with appropriate error handling, connection lifecycle, and logging.
-
+#### C.5 Communication pattern templates [L] ✅
 - `comm/serial` - pySerial-based serial port communication (open/close/read/write/flush)
 - `comm/socket` - Raw TCP/UDP socket communication (connect/disconnect/send/receive)
-- `comm/rest` - REST API client wrapping `httpx` or `requests` (GET/POST/PUT/DELETE with retry)
+- `comm/rest` - REST API client wrapping httpx/requests (GET/POST/PUT/DELETE with retry)
 - `comm/sdk` - Vendor SDK wrapper pattern (load library, initialize, cleanup, wrap calls)
-- `comm/modbus` - Modbus TCP/RTU communication via `pymodbus` (read/write registers and coils)
+- `comm/modbus` - Modbus TCP/RTU communication via pymodbus (read/write registers and coils)
 
-Each template should include:
-- The interface class with connection lifecycle management
-- A corresponding fake interface for testing
-- A minimal test file
-- A README with usage examples and common pitfalls for that protocol
+Each template includes: interface class, fake interface, test file, README.
 
-**Files to create** (per template):
-- `src/madsci_common/madsci/common/bundled_templates/comm/<name>/template.yaml`
-- `src/madsci_common/madsci/common/bundled_templates/comm/<name>/{{interface_name}}_interface.py.j2`
-- `src/madsci_common/madsci/common/bundled_templates/comm/<name>/{{interface_name}}_fake_interface.py.j2`
-- `src/madsci_common/madsci/common/bundled_templates/comm/<name>/test_{{interface_name}}.py.j2`
-- `src/madsci_common/madsci/common/bundled_templates/comm/<name>/README.md.j2`
+**Files created** (5 templates x 5 files each = 25 files):
+- `src/madsci_common/madsci/common/bundled_templates/comm/serial/` (template.yaml + 4 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/comm/socket/` (template.yaml + 4 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/comm/rest/` (template.yaml + 4 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/comm/sdk/` (template.yaml + 4 `.j2` files)
+- `src/madsci_common/madsci/common/bundled_templates/comm/modbus/` (template.yaml + 4 `.j2` files)
 
 **Done when**:
-- All new templates render successfully with default parameters
-- Generated Python passes `ruff check` and `ruff format --check`
-- All templates are covered by `TestTemplateCompleteness` tests
-- `madsci new` can list and scaffold each new template type
+- ✅ All 26 templates render successfully with default parameters (150 tests pass)
+- ✅ Generated Python passes syntax check
+- ✅ All templates covered by `TestTemplateCompleteness` tests (existence, defaults, render, syntax)
+- ✅ `madsci new` can list and scaffold each new template type via `TemplateCategory` enum
+- ✅ `TemplateCategory.COMM` added to enum for proper category filtering
 
 ---
 

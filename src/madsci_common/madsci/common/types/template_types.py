@@ -36,6 +36,7 @@ class TemplateCategory(str, Enum):
     WORKFLOW = "workflow"
     WORKCELL = "workcell"
     LAB = "lab"
+    COMM = "comm"
 
 
 class ParameterChoice(MadsciBaseModel):
