@@ -467,11 +467,18 @@ Each template includes: interface class, fake interface, test file, README.
 
 **Rollback plan**: Phase E changes to `AbstractManagerBase` (in `src/madsci_common/madsci/common/manager_base.py`) affect all 7 managers. Before each manager migration, use the existing backup tools (`madsci backup create` from B.7, or directly via `PostgreSQLBackupTool`/`MongoDBBackupTool`) to snapshot the manager's database. The opt-in flag in E.2 provides a code-level rollback (set `enable_registry_resolution: False` to revert), but this requires that the old definition YAML files still exist on disk — so G.2 (remove auto-writing) must not have been applied yet, or the definition files must have been preserved manually. Each manager migration should be a separate PR so it can be reverted independently.
 
-#### E.1 example_lab migration [M]
+#### E.1 example_lab migration [M] ✅
 - Run migration tool against example_lab
 - Validate all components register in local registry
 - Update example_lab to work with both old and new patterns
 - Document the migration process in `docs/guides/migration.md`
+
+**Files created**:
+- `docs/guides/migration.md` (migration guide)
+- `src/madsci_client/tests/cli/test_migrate_apply.py` (8 integration tests)
+
+**Files modified**:
+- `example_lab/.env` (added commented-out settings equivalents)
 
 #### E.2 Manager integration with ID Registry [XL]
 
