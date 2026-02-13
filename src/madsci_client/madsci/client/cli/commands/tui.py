@@ -9,7 +9,7 @@ import click
 @click.command()
 @click.option(
     "--screen",
-    type=click.Choice(["dashboard", "status", "logs"]),
+    type=click.Choice(["dashboard", "status", "logs", "nodes", "workflows"]),
     default="dashboard",
     help="Initial screen to display.",
 )
@@ -22,8 +22,10 @@ def tui(ctx: click.Context, screen: str) -> None:  # noqa: ARG001
 
     \b
     Examples:
-        madsci tui                  Launch TUI on dashboard
-        madsci tui --screen logs    Launch TUI on logs screen
+        madsci tui                      Launch TUI on dashboard
+        madsci tui --screen logs        Launch TUI on logs screen
+        madsci tui --screen nodes       Launch TUI on nodes screen
+        madsci tui --screen workflows   Launch TUI on workflows screen
     """
     try:
         from madsci.client.cli.tui import MadsciApp
@@ -39,11 +41,34 @@ def tui(ctx: click.Context, screen: str) -> None:  # noqa: ARG001
         else:
             click.echo(f"Error: TUI dependencies not installed. Details: {e}")
         ctx.exit(1)
+        return
 
     # Get lab URL from context
     lab_url = ctx.obj.get("lab_url", "http://localhost:8000/")
 
     # Create and run the TUI app
     app = MadsciApp(lab_url=lab_url)
+    result = app.run()
 
-    app.run()
+    # If user pressed Ctrl+P (return code 2), launch command palette
+    if result is not None and app.return_code == 2:
+        _launch_command_palette(ctx)
+
+
+def _launch_command_palette(ctx: click.Context) -> None:
+    """Launch Trogon command palette after TUI exit.
+
+    Args:
+        ctx: Click context.
+    """
+    try:
+        from trogon import Trogon
+    except ImportError:
+        click.echo(
+            "Trogon not available. Run 'madsci commands' after installing trogon."
+        )
+        return
+
+    root_cmd = ctx.parent.command if ctx.parent else ctx.command
+    root_ctx = ctx.parent or ctx
+    Trogon(root_cmd, app_name="madsci", click_context=root_ctx).run()

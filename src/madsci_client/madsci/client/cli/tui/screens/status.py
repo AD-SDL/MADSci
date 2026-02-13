@@ -11,7 +11,11 @@ from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
+
+# Default auto-refresh interval in seconds
+AUTO_REFRESH_INTERVAL = 5.0
 
 # Default service URLs
 DEFAULT_SERVICES = {
@@ -34,15 +38,6 @@ INFRASTRUCTURE_SERVICES = {
 
 class ServiceDetailPanel(Static):
     """Panel showing details for a selected service."""
-
-    DEFAULT_CSS = """
-    ServiceDetailPanel {
-        border: solid $primary;
-        padding: 1 2;
-        height: auto;
-        min-height: 10;
-    }
-    """
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the panel."""
@@ -95,6 +90,7 @@ class StatusScreen(Screen):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         ("r", "refresh", "Refresh"),
+        ("a", "toggle_auto_refresh", "Auto-refresh"),
         ("escape", "go_back", "Back"),
     ]
 
@@ -102,6 +98,8 @@ class StatusScreen(Screen):
         """Initialize the screen."""
         super().__init__(**kwargs)
         self.service_status = {}
+        self.auto_refresh_enabled = True
+        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the status screen layout."""
@@ -123,21 +121,64 @@ class StatusScreen(Screen):
             yield ServiceDetailPanel(id="detail-panel")
 
             yield Label("")
-            yield Label("[dim]Press 'r' to refresh, 'Esc' to go back[/dim]")
+            yield Label(
+                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | 'Esc' back[/dim]",
+                id="status-footer",
+            )
 
     async def on_mount(self) -> None:
         """Handle screen mount - set up tables and load data."""
-        # Set up managers table
         managers_table = self.query_one("#managers-table", DataTable)
         managers_table.add_columns("Status", "Service", "URL", "State", "Version")
         managers_table.cursor_type = "row"
 
-        # Set up infrastructure table
         infra_table = self.query_one("#infra-table", DataTable)
         infra_table.add_columns("Status", "Service", "Host", "Port", "State")
         infra_table.cursor_type = "row"
 
         await self.refresh_data()
+        self._start_auto_refresh()
+
+    def _start_auto_refresh(self) -> None:
+        """Start the auto-refresh timer."""
+        if self._auto_refresh_timer is None:
+            self._auto_refresh_timer = self.set_interval(
+                AUTO_REFRESH_INTERVAL, self._auto_refresh, name="status-auto-refresh"
+            )
+
+    def _stop_auto_refresh(self) -> None:
+        """Stop the auto-refresh timer."""
+        if self._auto_refresh_timer is not None:
+            self._auto_refresh_timer.stop()
+            self._auto_refresh_timer = None
+
+    async def _auto_refresh(self) -> None:
+        """Perform an auto-refresh cycle."""
+        if self.auto_refresh_enabled:
+            await self.refresh_data()
+
+    def _update_footer(self) -> None:
+        """Update the footer label with current auto-refresh state."""
+        footer = self.query_one("#status-footer", Label)
+        if self.auto_refresh_enabled:
+            footer.update(
+                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
+            )
+        else:
+            footer.update(
+                "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
+            )
+
+    def action_toggle_auto_refresh(self) -> None:
+        """Toggle auto-refresh on/off."""
+        self.auto_refresh_enabled = not self.auto_refresh_enabled
+        if self.auto_refresh_enabled:
+            self._start_auto_refresh()
+            self.notify("Auto-refresh enabled", timeout=2)
+        else:
+            self._stop_auto_refresh()
+            self.notify("Auto-refresh disabled", timeout=2)
+        self._update_footer()
 
     async def refresh_data(self) -> None:
         """Refresh all service statuses."""

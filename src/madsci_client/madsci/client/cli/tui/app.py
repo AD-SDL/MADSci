@@ -3,11 +3,14 @@
 Main Textual application for the MADSci terminal user interface.
 """
 
+from pathlib import Path
 from typing import ClassVar
 
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
+from madsci.client.cli.tui.screens.nodes import NodesScreen
 from madsci.client.cli.tui.screens.status import StatusScreen
+from madsci.client.cli.tui.screens.workflows import WorkflowsScreen
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
@@ -24,54 +27,26 @@ class MadsciApp(App):
     TITLE = "MADSci"
     SUB_TITLE = "Self-Driving Laboratory Manager"
 
-    CSS = """
-    Screen {
-        background: $surface;
-    }
-
-    #main-content {
-        width: 100%;
-        height: 100%;
-        padding: 1 2;
-    }
-
-    .panel {
-        border: solid $primary;
-        padding: 1 2;
-        margin: 1 0;
-    }
-
-    .panel-title {
-        text-style: bold;
-        color: $primary;
-    }
-
-    .status-healthy {
-        color: $success;
-    }
-
-    .status-unhealthy {
-        color: $warning;
-    }
-
-    .status-offline {
-        color: $error;
-    }
-    """
+    CSS_PATH = Path("styles/theme.tcss")
 
     BINDINGS: ClassVar[list[Binding]] = [
         Binding("d", "switch_screen('dashboard')", "Dashboard", show=True),
         Binding("s", "switch_screen('status')", "Status", show=True),
         Binding("l", "switch_screen('logs')", "Logs", show=True),
+        Binding("n", "switch_screen('nodes')", "Nodes", show=True),
+        Binding("w", "switch_screen('workflows')", "Workflows", show=True),
         Binding("q", "quit", "Quit", show=True),
         Binding("?", "show_help", "Help", show=True),
         Binding("r", "refresh", "Refresh", show=True),
+        Binding("ctrl+p", "command_palette", "Commands", show=True),
     ]
 
     SCREENS: ClassVar[dict[str, type[Screen]]] = {
         "dashboard": DashboardScreen,
         "status": StatusScreen,
         "logs": LogsScreen,
+        "nodes": NodesScreen,
+        "workflows": WorkflowsScreen,
     }
 
     def __init__(self, lab_url: str = "http://localhost:8000/") -> None:
@@ -90,7 +65,6 @@ class MadsciApp(App):
 
     async def on_mount(self) -> None:
         """Handle application mount event."""
-        # Push the dashboard screen as the initial screen
         await self.push_screen("dashboard")
 
     def action_switch_screen(self, screen: str) -> None:
@@ -103,17 +77,23 @@ class MadsciApp(App):
 
     def action_show_help(self) -> None:
         """Show help information."""
-        # For now, just notify - can be expanded to a full help screen
         self.notify(
             "Keyboard shortcuts:\n"
             "  d - Dashboard\n"
             "  s - Status\n"
             "  l - Logs\n"
+            "  n - Nodes\n"
+            "  w - Workflows\n"
             "  r - Refresh\n"
+            "  Ctrl+P - Command Palette\n"
             "  q - Quit",
             title="Help",
             timeout=10,
         )
+
+    def action_command_palette(self) -> None:
+        """Exit TUI and launch Trogon command palette."""
+        self.exit(return_code=2, message="Launching command palette...")
 
     async def action_refresh(self) -> None:
         """Refresh the current screen."""

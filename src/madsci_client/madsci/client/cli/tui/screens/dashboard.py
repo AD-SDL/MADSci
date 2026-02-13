@@ -11,7 +11,11 @@ from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
+from textual.timer import Timer
 from textual.widgets import Label, Static
+
+# Default auto-refresh interval in seconds
+AUTO_REFRESH_INTERVAL = 5.0
 
 # Default service URLs
 DEFAULT_SERVICES = {
@@ -66,14 +70,6 @@ class ServiceStatusWidget(Static):
 class ServicesPanel(Static):
     """Panel showing all service statuses."""
 
-    DEFAULT_CSS = """
-    ServicesPanel {
-        border: solid $primary;
-        padding: 1 2;
-        height: auto;
-    }
-    """
-
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Services[/bold]")
@@ -89,34 +85,19 @@ class ServicesPanel(Static):
 class QuickActionsPanel(Static):
     """Panel showing quick action shortcuts."""
 
-    DEFAULT_CSS = """
-    QuickActionsPanel {
-        border: solid $primary;
-        padding: 1 2;
-        height: auto;
-    }
-    """
-
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Quick Actions[/bold]")
         yield Label("  [dim]s[/dim] View Status")
         yield Label("  [dim]l[/dim] View Logs")
+        yield Label("  [dim]n[/dim] View Nodes")
+        yield Label("  [dim]w[/dim] View Workflows")
         yield Label("  [dim]r[/dim] Refresh")
         yield Label("  [dim]q[/dim] Quit")
 
 
 class RecentEventsPanel(Static):
     """Panel showing recent events."""
-
-    DEFAULT_CSS = """
-    RecentEventsPanel {
-        border: solid $primary;
-        padding: 1 2;
-        height: auto;
-        max-height: 12;
-    }
-    """
 
     def compose(self) -> ComposeResult:
         """Compose the panel."""
@@ -156,7 +137,14 @@ class DashboardScreen(Screen):
 
     BINDINGS: ClassVar[list[BindingType]] = [
         ("r", "refresh", "Refresh"),
+        ("a", "toggle_auto_refresh", "Auto-refresh"),
     ]
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the dashboard screen."""
+        super().__init__(**kwargs)
+        self.auto_refresh_enabled = True
+        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the dashboard layout."""
@@ -172,11 +160,45 @@ class DashboardScreen(Screen):
 
             yield RecentEventsPanel(id="events-panel")
             yield Label("")
-            yield Label("[dim]Press 'r' to refresh, '?' for help[/dim]")
+            yield Label(
+                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | '?' help[/dim]",
+                id="dashboard-footer",
+            )
 
     async def on_mount(self) -> None:
-        """Handle screen mount - initial data load."""
+        """Handle screen mount - initial data load and start auto-refresh."""
         await self.refresh_data()
+        self._start_auto_refresh()
+
+    def _start_auto_refresh(self) -> None:
+        """Start the auto-refresh timer."""
+        if self._auto_refresh_timer is None:
+            self._auto_refresh_timer = self.set_interval(
+                AUTO_REFRESH_INTERVAL, self._auto_refresh, name="dashboard-auto-refresh"
+            )
+
+    def _stop_auto_refresh(self) -> None:
+        """Stop the auto-refresh timer."""
+        if self._auto_refresh_timer is not None:
+            self._auto_refresh_timer.stop()
+            self._auto_refresh_timer = None
+
+    async def _auto_refresh(self) -> None:
+        """Perform an auto-refresh cycle."""
+        if self.auto_refresh_enabled:
+            await self.refresh_data()
+
+    def _update_footer(self) -> None:
+        """Update the footer label with current auto-refresh state."""
+        footer = self.query_one("#dashboard-footer", Label)
+        if self.auto_refresh_enabled:
+            footer.update(
+                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | '?' help[/dim]"
+            )
+        else:
+            footer.update(
+                "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | '?' help[/dim]"
+            )
 
     async def refresh_data(self) -> None:
         """Refresh all dashboard data."""
@@ -190,3 +212,14 @@ class DashboardScreen(Screen):
         """Refresh dashboard data."""
         await self.refresh_data()
         self.notify("Dashboard refreshed", timeout=2)
+
+    def action_toggle_auto_refresh(self) -> None:
+        """Toggle auto-refresh on/off."""
+        self.auto_refresh_enabled = not self.auto_refresh_enabled
+        if self.auto_refresh_enabled:
+            self._start_auto_refresh()
+            self.notify("Auto-refresh enabled", timeout=2)
+        else:
+            self._stop_auto_refresh()
+            self.notify("Auto-refresh disabled", timeout=2)
+        self._update_footer()

@@ -1,6 +1,6 @@
 # MADSci UX Overhaul - Completion Plan
 
-**Status**: In Progress (Phases A, B & C complete)
+**Status**: In Progress (Phases A, B, C & D complete)
 **Created**: 2026-02-12
 **Related**: [UX Overhaul Plan](./ux_overhaul_plan.md) | [Implementation Progress](./ux_overhaul_progress.md)
 
@@ -14,7 +14,7 @@ This plan provides a systematic approach to closing those gaps and bringing the 
 
 ## Audit Summary: Gaps Identified
 
-### 1. CLI Commands (15 of 15 implemented — 100%)
+### 1. CLI Commands (16 of 16 implemented — 100%)
 
 | Command | Status | Impact |
 |---------|--------|--------|
@@ -41,17 +41,12 @@ This plan provides a systematic approach to closing those gaps and bringing the 
 | Workcell | basic | - |
 | Comm patterns | serial, socket, rest, sdk, modbus | - |
 
-### 3. TUI (MVP only - Phase 3+ features at 0%)
+### 3. TUI (Phase D features complete) ✅ COMPLETE (Phase D)
 
-**Implemented**: Dashboard, Status, Logs screens, keyboard navigation
-**Missing**:
-- Trogon command palette integration (was Phase 1 MVP)
-- Interactive wizards for `madsci new` (Phase 3+)
-- Node management screens (Phase 3+)
-- Workflow visualization (Phase 3+)
-- Auto-refresh / real-time updates on dashboard and status (Phase 3+)
-- Custom widgets (widgets/ dir is empty)
-- CSS theming (styles/ dir is empty)
+**Implemented**: Dashboard, Status, Logs, Nodes, Workflows screens + keyboard navigation + auto-refresh + CSS theming + Trogon command palette
+**Remaining (deferred)**:
+- Interactive wizards for `madsci new` (Phase 3+ - significant UI work)
+- Custom widgets (widgets/ dir is empty - can be extracted from screens as needed)
 
 ### 4. Integration Gaps
 
@@ -359,63 +354,104 @@ Each template includes: interface class, fake interface, test file, README.
 
 ---
 
-### Phase D: TUI Enhancements [Overall: L]
+### Phase D: TUI Enhancements [Overall: L] ✅ COMPLETE
 
 **Goal**: Bring the TUI from MVP to the full feature set described in the TUI design document.
 
-#### D.1 Trogon command palette integration [M]
-- Add `trogon` dependency
-- Integrate with Click command group to auto-generate command forms
-- Accessible via keyboard shortcut in TUI
+**Completed**: 2026-02-12
 
-**Risk note**: Trogon is a third-party dependency that auto-generates TUI forms from Click commands. It adds a dependency on both `trogon` and its Textual version requirements, which may conflict with the version of Textual used by the custom TUI (`app.py`). Verify version compatibility before committing to this approach. If Trogon's Textual version pins conflict, consider deferring this in favor of hand-built forms.
+#### D.1 Trogon command palette integration [M] ✅
+- Trogon was already a dependency (`>=0.6.0`)
+- Since Trogon creates its own Textual App (can't nest Textual apps), implemented as:
+  - `madsci commands` CLI command — standalone Trogon command palette
+  - `cmd` alias registered
+  - `Ctrl+P` in TUI exits and launches Trogon command palette
+- Version compatibility confirmed: trogon 0.6.0 works with textual >=0.50.0
 
-**Files to modify**:
-- `src/madsci_client/madsci/client/cli/tui/app.py`
-- `src/madsci_client/pyproject.toml` (add trogon dependency)
+**Files created**:
+- `src/madsci_client/madsci/client/cli/commands/commands.py` (Trogon command palette launcher)
 
-**Design reference**: `docs/designs/tui_design.md`
+**Files modified**:
+- `src/madsci_client/madsci/client/cli/__init__.py` (added `commands` to `_LAZY_COMMANDS`, `cmd` alias)
+- `src/madsci_client/madsci/client/cli/tui/app.py` (added `Ctrl+P` binding for command palette)
+- `src/madsci_client/madsci/client/cli/commands/tui.py` (handle return code 2 to launch Trogon after TUI exit)
 
-#### D.2 Auto-refresh on dashboard and status screens [S]
-- Add configurable timer-based refresh to dashboard
-- Add configurable timer-based refresh to status screen
-- Use Textual's `set_interval()` for periodic updates
+#### D.2 Auto-refresh on dashboard and status screens [S] ✅
+- Added configurable timer-based refresh (5s default) to both Dashboard and Status screens
+- Uses Textual's `set_interval()` for periodic updates
+- `a` keybinding toggles auto-refresh on/off with visual feedback in footer
+- Footer shows current auto-refresh state
 
-**Files to modify**:
-- `src/madsci_client/madsci/client/cli/tui/screens/dashboard.py`
-- `src/madsci_client/madsci/client/cli/tui/screens/status.py`
+**Files modified**:
+- `src/madsci_client/madsci/client/cli/tui/screens/dashboard.py` (auto-refresh timer, toggle, footer)
+- `src/madsci_client/madsci/client/cli/tui/screens/status.py` (auto-refresh timer, toggle, footer)
 
-#### D.3 Node management screen [M]
-- New screen showing discovered nodes from workcell manager
-- Node status, actions, and configuration display
-- Node health monitoring
+#### D.3 Node management screen [M] ✅
+- New screen showing discovered nodes from Workcell Manager (`GET /nodes` on port 8005)
+- DataTable with Status, Node name, URL, Action count, State columns
+- NodeDetailPanel showing node URL, status, available actions list, admin capabilities, errors
+- Row selection updates detail panel
+- Auto-refresh with toggle (consistent with other screens)
+- Keyboard shortcuts: `n` to navigate, `a` toggle auto-refresh, `r` manual refresh, `Esc` back
 
-**Files to create**:
-- `src/madsci_client/madsci/client/cli/tui/screens/nodes.py`
+**Files created**:
+- `src/madsci_client/madsci/client/cli/tui/screens/nodes.py` (247 lines)
 
-#### D.4 Workflow visualization screen [L]
-- Display workflow steps and their status
-- Show active workflow runs from workcell manager
-- Step-by-step progress tracking
+#### D.4 Workflow visualization screen [L] ✅
+- Active workflows table from `GET /workflows/active` and `GET /workflows/queue`
+- DataTable with Status icon, Name, Progress (completed/total), Current Step, Started time, Duration
+- WorkflowDetailPanel with:
+  - Workflow header (name, ID, status with color)
+  - Timing info (started, ended, duration)
+  - Step progress bar (Unicode block characters, 20-char width, percentage)
+  - Step list with icons (✓ completed, ► running, ○ pending) and node assignments
+- Workflow control: `p` pause, `u` resume, `c` cancel (sends POST to workcell manager)
+- Auto-refresh with toggle
 
-**Files to create**:
-- `src/madsci_client/madsci/client/cli/tui/screens/workflows.py`
+**Files created**:
+- `src/madsci_client/madsci/client/cli/tui/screens/workflows.py` (493 lines)
 
-#### D.5 CSS theming [S]
-- Move hardcoded styles from app.py to CSS files
-- Support light/dark themes
-- Use Textual's CSS system properly
+#### D.5 CSS theming [S] ✅
+- Moved all inline CSS from `app.py` (60 lines) and screen `DEFAULT_CSS` blocks to external `.tcss` file
+- Created `styles/theme.tcss` with consolidated styles for all components
+- Uses Textual CSS variables (`$surface`, `$primary`, `$success`, `$warning`, `$error`) for theme compatibility
+- Supports Textual's built-in light/dark theme toggling automatically
 
-**Files to modify/create**:
-- `src/madsci_client/madsci/client/cli/tui/styles/` (CSS files)
-- `src/madsci_client/madsci/client/cli/tui/app.py` (reference external CSS)
+**Files created**:
+- `src/madsci_client/madsci/client/cli/tui/styles/theme.tcss` (consolidated theme, 95 lines)
+
+**Files modified**:
+- `src/madsci_client/madsci/client/cli/tui/app.py` (replaced inline `CSS` with `CSS_PATH`)
+- `src/madsci_client/madsci/client/cli/tui/screens/dashboard.py` (removed 3 `DEFAULT_CSS` blocks)
+- `src/madsci_client/madsci/client/cli/tui/screens/status.py` (removed 1 `DEFAULT_CSS` block)
+- `src/madsci_client/madsci/client/cli/tui/screens/logs.py` (removed 2 `DEFAULT_CSS` blocks)
+
+#### Additional changes ✅
+
+**App-level updates**:
+- Registered 2 new screens (`nodes`, `workflows`) in `SCREENS` dict
+- Added keybindings: `n` (Nodes), `w` (Workflows), `Ctrl+P` (Commands)
+- Updated help text with all keybindings
+- Updated `tui.py` `--screen` choices to include `nodes` and `workflows`
+- Updated Quick Actions panel with new screen shortcuts
+
+**Screens package**:
+- Updated `screens/__init__.py` with `NodesScreen` and `WorkflowsScreen` exports
+
+**Tests**:
+- 14 tests total (up from 5): TUI command (5), Commands command (3), Screen imports (6)
+- Tests cover: help output, screen choices, mocked launch, import error handling, aliases, screen imports, theme CSS existence and content
 
 **Done when**:
-- `madsci tui` launches without errors and all screens are accessible via keyboard navigation
-- Dashboard and status screens auto-refresh on a configurable interval
-- Node management and workflow visualization screens display data from running managers
-- All styles are in external CSS files; light and dark themes are selectable
-- Trogon integration (if version-compatible) provides command palette access
+- ✅ `madsci tui` launches without errors and all 5 screens are accessible via keyboard navigation (`d`, `s`, `l`, `n`, `w`)
+- ✅ Dashboard and status screens auto-refresh on 5s interval with `a` toggle
+- ✅ Node management screen displays nodes from Workcell Manager with detail panel
+- ✅ Workflow visualization screen shows active workflows with step progress and control actions
+- ✅ All styles in external CSS file (`styles/theme.tcss`); Textual theme variables used for light/dark support
+- ✅ Trogon command palette accessible via `madsci commands` / `Ctrl+P` in TUI
+- ✅ 14 tests pass, ruff check clean, ruff format clean
+
+**Test results**: 2119 tests pass (up from 2110 baseline, +9 new tests)
 
 ---
 

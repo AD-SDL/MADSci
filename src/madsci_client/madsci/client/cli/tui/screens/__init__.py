@@ -5,10 +5,14 @@ This module contains the screen implementations for the MADSci TUI.
 
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
+from madsci.client.cli.tui.screens.nodes import NodesScreen
 from madsci.client.cli.tui.screens.status import StatusScreen
+from madsci.client.cli.tui.screens.workflows import WorkflowsScreen
 
 __all__ = [
     "DashboardScreen",
     "LogsScreen",
+    "NodesScreen",
     "StatusScreen",
+    "WorkflowsScreen",
 ]

@@ -37,27 +37,6 @@ LEVEL_COLORS = {
 class FilterPanel(Static):
     """Panel with log filters."""
 
-    DEFAULT_CSS = """
-    FilterPanel {
-        height: 5;
-        padding: 1 2;
-        border: solid $primary;
-    }
-
-    FilterPanel Horizontal {
-        height: 3;
-    }
-
-    FilterPanel Select {
-        width: 20;
-        margin-right: 2;
-    }
-
-    FilterPanel Input {
-        width: 30;
-    }
-    """
-
     def compose(self) -> ComposeResult:
         """Compose the filter panel."""
         yield Label("[bold]Filters[/bold]")
@@ -75,14 +54,6 @@ class LogsScreen(Screen):
         ("f", "toggle_follow", "Follow"),
         ("escape", "go_back", "Back"),
     ]
-
-    DEFAULT_CSS = """
-    LogsScreen #log-view {
-        height: 1fr;
-        border: solid $primary;
-        padding: 1;
-    }
-    """
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
