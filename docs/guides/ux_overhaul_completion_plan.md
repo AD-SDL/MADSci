@@ -1,6 +1,6 @@
 # MADSci UX Overhaul - Completion Plan
 
-**Status**: In Progress (Phases A, B, C & D complete)
+**Status**: In Progress (Phases A, B, C, D & E complete)
 **Created**: 2026-02-12
 **Related**: [UX Overhaul Plan](./ux_overhaul_plan.md) | [Implementation Progress](./ux_overhaul_progress.md)
 
@@ -491,12 +491,21 @@ Each template includes: interface class, fake interface, test file, README.
 **Files created**:
 - `src/madsci_common/tests/test_registry_resolution.py` (15 tests)
 
-#### E.3 Settings consolidation in managers [L]
-- Gradually move structural config from definitions to settings
-- Follow the same gradual rollout order as E.2 (Location -> Event -> Data -> ... -> Lab)
-- Workcell nodes list moves from WorkcellManagerDefinition to WorkcellManagerSettings
-- Update docker-compose/env files to match
-- Each manager migration should be a separate, reviewable PR
+#### E.3 Settings consolidation in managers [L] ✅ COMPLETE
+
+**Implemented**: Optional settings fields for structural config overrides in Workcell (`nodes`), Location (`locations_file`, `transfer_capabilities_file`), and Resource (`default_templates_file`) managers. Override logic in server initialize() methods loads from settings when set, falls back to definition. 12 unit tests.
+
+**Files modified**:
+- `src/madsci_common/madsci/common/types/workcell_types.py` (added `nodes` to `WorkcellManagerSettings`)
+- `src/madsci_common/madsci/common/types/location_types.py` (added `locations_file`, `transfer_capabilities_file` to `LocationManagerSettings`)
+- `src/madsci_common/madsci/common/types/resource_types/definitions.py` (added `default_templates_file` to `ResourceManagerSettings`)
+- `src/madsci_workcell_manager/madsci/workcell_manager/workcell_server.py` (nodes override in `initialize()`)
+- `src/madsci_location_manager/madsci/location_manager/location_server.py` (file-based overrides in `_apply_settings_file_overrides()`)
+- `src/madsci_resource_manager/madsci/resource_manager/resource_server.py` (file-based override in `_apply_templates_file_override()`)
+- `example_lab/.env` (added commented-out structural config env vars)
+
+**Files created**:
+- `src/madsci_common/tests/test_settings_consolidation.py` (12 tests)
 
 **Done when**:
 - `madsci migrate scan` finds all definition files in `example_lab/` and `madsci migrate convert --dry-run` produces correct output

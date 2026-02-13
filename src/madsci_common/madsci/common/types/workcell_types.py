@@ -156,6 +156,13 @@ class WorkcellManagerSettings(
 ):
     """Settings for the MADSci Workcell Manager."""
 
+    # Structural config override (from definition)
+    nodes: Optional[dict[str, AnyUrl]] = Field(
+        default=None,
+        title="Workcell Node URLs",
+        description="Node URLs for the workcell, as a JSON dict. When set, overrides the nodes from the definition file.",
+    )
+
     server_url: AnyUrl = Field(
         title="Workcell Server URL",
         description="The URL of the workcell manager server.",

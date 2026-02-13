@@ -52,6 +52,13 @@ class ResourceManagerSettings(
 ):
     """Settings for the MADSci Resource Manager."""
 
+    # Structural config override (from definition)
+    default_templates_file: Optional[PathLike] = Field(
+        default=None,
+        title="Default Templates File",
+        description="Path to a YAML file containing default resource template definitions. When set, overrides default_templates from the definition file.",
+    )
+
     server_url: AnyUrl = Field(
         title="Resource Server URL",
         description="The URL of the resource manager server.",

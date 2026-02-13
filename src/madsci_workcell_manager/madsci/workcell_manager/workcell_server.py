@@ -96,6 +96,10 @@ class WorkcellManager(
         """
         super().initialize(**kwargs)
 
+        # Override definition nodes from settings if provided
+        if self.settings.nodes is not None:
+            self.definition.nodes = self.settings.nodes
+
         # Skip version validation if external mongo_connection was provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
         if self.mongo_connection is not None:

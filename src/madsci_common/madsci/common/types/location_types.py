@@ -316,6 +316,18 @@ class LocationManagerSettings(
 ):
     """Settings for the LocationManager."""
 
+    # Structural config overrides (from definition)
+    locations_file: Optional[PathLike] = Field(
+        default=None,
+        title="Locations File",
+        description="Path to a YAML file containing location definitions. When set, overrides locations from the definition file.",
+    )
+    transfer_capabilities_file: Optional[PathLike] = Field(
+        default=None,
+        title="Transfer Capabilities File",
+        description="Path to a YAML file containing transfer capabilities. When set, overrides transfer_capabilities from the definition file.",
+    )
+
     server_url: AnyUrl = Field(
         title="Server URL",
         description="The URL where this manager's server runs.",

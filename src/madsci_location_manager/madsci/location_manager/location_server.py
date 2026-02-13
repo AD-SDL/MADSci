@@ -17,6 +17,7 @@ from madsci.common.types.location_types import (
     LocationManagerDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
+    LocationTransferCapabilities,
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -64,6 +65,9 @@ class LocationManager(
         resource_server_url = context.resource_server_url
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
+        # Override definition from settings files if provided
+        self._apply_settings_file_overrides()
+
         self._initialize_locations_from_definition()
         self.transfer_planner = TransferPlanner(
             self.state_handler, self.definition, self.resource_client
@@ -72,6 +76,34 @@ class LocationManager(
         # Sync any Redis-only locations to the definition file on startup
         # This ensures locations added via API are persisted immediately
         self._sync_locations_to_definition()
+
+    def _apply_settings_file_overrides(self) -> None:
+        """Override definition locations/transfer_capabilities from settings files if provided."""
+        from pathlib import Path  # noqa: PLC0415
+
+        import yaml  # noqa: PLC0415
+
+        if self.settings.locations_file is not None:
+            locations_path = Path(self.settings.locations_file)
+            if locations_path.exists():
+                data = yaml.safe_load(locations_path.read_text())
+                if isinstance(data, list):
+                    self.definition.locations = [
+                        LocationDefinition.model_validate(loc) for loc in data
+                    ]
+                elif isinstance(data, dict) and "locations" in data:
+                    self.definition.locations = [
+                        LocationDefinition.model_validate(loc)
+                        for loc in data["locations"]
+                    ]
+
+        if self.settings.transfer_capabilities_file is not None:
+            tc_path = Path(self.settings.transfer_capabilities_file)
+            if tc_path.exists():
+                data = yaml.safe_load(tc_path.read_text())
+                self.definition.transfer_capabilities = (
+                    LocationTransferCapabilities.model_validate(data)
+                )
 
     def _initialize_locations_from_definition(self) -> None:
         """Initialize locations from the definition, creating or updating them in the state handler."""

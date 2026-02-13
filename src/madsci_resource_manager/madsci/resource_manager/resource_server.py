@@ -99,8 +99,34 @@ class ResourceManager(
         # Initialize the resource interface
         self._setup_resource_interface()
 
+        # Override default templates from settings file if provided
+        self._apply_templates_file_override()
+
         # Initialize default templates after everything is set up
         self._initialize_default_templates()
+
+    def _apply_templates_file_override(self) -> None:
+        """Override default templates from a settings file if provided."""
+        from pathlib import Path  # noqa: PLC0415
+
+        import yaml  # noqa: PLC0415
+        from madsci.common.types.resource_types.definitions import (  # noqa: PLC0415
+            TemplateDefinition,
+        )
+
+        if self.settings.default_templates_file is not None:
+            templates_path = Path(self.settings.default_templates_file)
+            if templates_path.exists():
+                data = yaml.safe_load(templates_path.read_text())
+                if isinstance(data, list):
+                    self.definition.default_templates = [
+                        TemplateDefinition.model_validate(t) for t in data
+                    ]
+                elif isinstance(data, dict) and "default_templates" in data:
+                    self.definition.default_templates = [
+                        TemplateDefinition.model_validate(t)
+                        for t in data["default_templates"]
+                    ]
 
     def _setup_resource_interface(self) -> None:
         """Setup the resource interface."""
