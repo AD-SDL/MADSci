@@ -193,9 +193,9 @@ def validate(
         madsci validate path/to/file.yaml     Validate a single file
         madsci validate --json                Machine-readable output
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     results = _scan_and_validate(paths)
 

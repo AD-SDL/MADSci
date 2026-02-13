@@ -183,7 +183,7 @@ class LocalRunner:
         for _name, app, port in apps:
             config = uvicorn.Config(
                 app,
-                host="0.0.0.0",  # noqa: S104
+                host="127.0.0.1",
                 port=port,
                 log_level="info",
             )

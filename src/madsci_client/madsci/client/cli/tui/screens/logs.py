@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import EVENT_MANAGER_URL
+from madsci.client.cli.tui.constants import DEFAULT_SERVICES
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
@@ -144,9 +144,12 @@ class LogsScreen(Screen):
             if search:
                 params["search"] = search
 
+            event_url = self.app.service_urls.get(
+                "event_manager", DEFAULT_SERVICES["event_manager"]
+            )
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
-                    f"{EVENT_MANAGER_URL.rstrip('/')}/events",
+                    f"{event_url.rstrip('/')}/events",
                     params=params,
                 )
                 if response.status_code == 200:

@@ -250,9 +250,9 @@ def create_manager(
         madsci config create manager event
         madsci config create manager resource -o my-resource.yaml
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     class_path, friendly_name = _MANAGER_SETTINGS[manager_type]
 
@@ -275,7 +275,7 @@ def create_manager(
         f"[green]Created {friendly_name} configuration: {output_path}[/green]"
     )
     console.print(
-        "[dim]Edit the file and replace {'***REDACTED***'} placeholders "
+        "[dim]Edit the file and replace ***REDACTED*** placeholders "
         "with actual values.[/dim]"
     )
 
@@ -319,9 +319,9 @@ def create_node(
         madsci config create node rest
         madsci config create node basic -o my-node.yaml
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     config_classes = {
         "basic": "madsci.common.types.node_types.NodeConfig",

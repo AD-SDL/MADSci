@@ -3,9 +3,12 @@
 Main Textual application for the MADSci terminal user interface.
 """
 
-from pathlib import Path
-from typing import ClassVar
+from __future__ import annotations
 
+from pathlib import Path
+from typing import TYPE_CHECKING, ClassVar
+
+from madsci.client.cli.tui.constants import get_default_services
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
 from madsci.client.cli.tui.screens.nodes import NodesScreen
@@ -15,6 +18,9 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import Screen
 from textual.widgets import Footer, Header
+
+if TYPE_CHECKING:
+    from madsci.client.cli.utils.config import MadsciCLIConfig
 
 
 class MadsciApp(App):
@@ -53,16 +59,20 @@ class MadsciApp(App):
         self,
         lab_url: str = "http://localhost:8000/",
         initial_screen: str = "dashboard",
+        config: MadsciCLIConfig | None = None,
     ) -> None:
         """Initialize the MADSci TUI application.
 
         Args:
             lab_url: URL of the Lab Manager.
             initial_screen: Name of the screen to show on launch.
+            config: Optional CLI configuration for service URLs.
         """
         super().__init__()
         self.lab_url = lab_url
         self._initial_screen = initial_screen
+        self.cli_config = config
+        self.service_urls = get_default_services(config)
 
     def compose(self) -> ComposeResult:
         """Compose the application layout."""

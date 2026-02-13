@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.sandbox import SandboxedEnvironment
 from madsci.common.types.template_types import (
     GeneratedProject,
     ParameterType,
@@ -114,16 +115,19 @@ class TemplateEngine:
         )
     """
 
-    def __init__(self, template_dir: Path) -> None:
+    def __init__(self, template_dir: Path, *, sandboxed: bool = False) -> None:
         """Initialize the template engine.
 
         Args:
             template_dir: Path to the template directory containing template.yaml.
+            sandboxed: If True, use Jinja2's SandboxedEnvironment to restrict
+                template code execution.  Recommended for user/remote templates.
 
         Raises:
             TemplateError: If the template manifest cannot be loaded.
         """
         self.template_dir = template_dir
+        self._sandboxed = sandboxed
         self.manifest = self._load_manifest()
         self._jinja_env = self._create_jinja_env()
 
@@ -148,13 +152,17 @@ class TemplateEngine:
         Returns:
             Configured Jinja2 environment.
         """
-        env = Environment(  # noqa: S701 - templates are trusted internal files
-            loader=FileSystemLoader(str(self.template_dir)),
-            undefined=StrictUndefined,
-            keep_trailing_newline=True,
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
+        env_kwargs = {
+            "loader": FileSystemLoader(str(self.template_dir)),
+            "undefined": StrictUndefined,
+            "keep_trailing_newline": True,
+            "trim_blocks": True,
+            "lstrip_blocks": True,
+        }
+        if self._sandboxed:
+            env = SandboxedEnvironment(**env_kwargs)
+        else:
+            env = Environment(**env_kwargs)  # noqa: S701 - trusted bundled templates
 
         # Add custom filters
         env.filters["pascal_case"] = pascal_case
@@ -327,6 +335,12 @@ class TemplateEngine:
             # Full paths
             source_full = self.template_dir / source_path
             dest_full = output_dir / dest_path
+
+            # Prevent path traversal: rendered destination must stay inside output_dir
+            if not dest_full.resolve().is_relative_to(output_dir.resolve()):
+                raise TemplateValidationError(
+                    [f"Path traversal detected in destination: {dest_path}"]
+                )
 
             if not dry_run:
                 # Create parent directories

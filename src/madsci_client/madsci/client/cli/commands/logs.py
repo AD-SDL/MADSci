@@ -257,7 +257,12 @@ def logs(  # noqa: C901, PLR0912
             console.print(f"[red]Error: {e}[/red]")
             ctx.exit(1)
 
-    event_manager_url = ctx.obj.get("event_manager_url", DEFAULT_EVENT_MANAGER_URL)
+    cli_config = ctx.obj.get("config")
+    event_manager_url = (
+        str(cli_config.event_manager_url)
+        if cli_config
+        else ctx.obj.get("event_manager_url", DEFAULT_EVENT_MANAGER_URL)
+    )
 
     log_entries = fetch_logs_from_event_manager(
         base_url=event_manager_url,

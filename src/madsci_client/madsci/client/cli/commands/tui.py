@@ -43,11 +43,16 @@ def tui(ctx: click.Context, screen: str) -> None:
         ctx.exit(1)
         return
 
-    # Get lab URL from context
-    lab_url = ctx.obj.get("lab_url", "http://localhost:8000/")
+    # Get lab URL and config from context
+    cli_config = ctx.obj.get("config")
+    lab_url = (
+        str(cli_config.lab_url)
+        if cli_config
+        else ctx.obj.get("lab_url", "http://localhost:8000/")
+    )
 
     # Create and run the TUI app, starting on the requested screen
-    app = MadsciApp(lab_url=lab_url, initial_screen=screen)
+    app = MadsciApp(lab_url=lab_url, initial_screen=screen, config=cli_config)
     result = app.run()
 
     # If user pressed Ctrl+P (return code 2), launch command palette

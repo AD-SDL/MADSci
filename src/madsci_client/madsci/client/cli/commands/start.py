@@ -124,26 +124,28 @@ def _print_health_summary(
 def _wait_for_health(console: Console, timeout: int) -> None:
     """Poll service health endpoints and display progress.
 
-    Uses ``check_service_health`` and ``DEFAULT_SERVICES`` from the status
-    module to avoid duplicating health-check logic.
+    Uses ``check_service_health`` from the status module and
+    ``get_default_services`` from TUI constants to avoid duplicating
+    health-check logic.
     """
     from madsci.client.cli.commands.status import (
-        DEFAULT_SERVICES,
         ServiceStatus,
         check_service_health,
     )
+    from madsci.client.cli.tui.constants import get_default_services
     from rich.live import Live
     from rich.table import Table
 
+    services = get_default_services()
     start_time = time.monotonic()
     deadline = start_time + timeout
-    total = len(DEFAULT_SERVICES)
+    total = len(services)
 
     def _build_table(results: dict[str, ServiceStatus]) -> Table:
         table = Table(title="Waiting for services...", show_header=True)
         table.add_column("Status", justify="center", width=4)
         table.add_column("Service", style="cyan")
-        for name in DEFAULT_SERVICES:
+        for name in services:
             st = results.get(name, ServiceStatus.UNKNOWN)
             icon = (
                 "[green]\u25cf[/green]"
@@ -158,7 +160,7 @@ def _wait_for_health(console: Console, timeout: int) -> None:
     try:
         with Live(console=console, refresh_per_second=2) as live:
             while time.monotonic() < deadline:
-                for name, url in DEFAULT_SERVICES.items():
+                for name, url in services.items():
                     info = check_service_health(name, url, timeout=3.0)
                     results[name] = info.status
                 live.update(_build_table(results))
@@ -330,7 +332,9 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
             cmd,
             stdout=log_fh,
             stderr=log_fh,
+            start_new_session=True,
         )
+        log_fh.close()
         pid_file = _write_pid(f"manager-{name}", proc.pid)
         console.print(f"[green]Started {name} manager[/green] (PID {proc.pid})")
         console.print(f"  PID file: [dim]{pid_file}[/dim]")
@@ -393,7 +397,9 @@ def start_node(
             cmd,
             stdout=log_fh,
             stderr=log_fh,
+            start_new_session=True,
         )
+        log_fh.close()
         pid_file = _write_pid(f"node-{name}", proc.pid)
         console.print(f"[green]Started node '{name}'[/green] (PID {proc.pid})")
         console.print(f"  PID file: [dim]{pid_file}[/dim]")

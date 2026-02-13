@@ -197,19 +197,22 @@ def status(  # noqa: C901
         madsci status --watch            Continuously update
         madsci status --json             Output as JSON
     """
-    from rich.console import Console
+    from madsci.client.cli.tui.constants import get_default_services
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console())
+    console = get_console(ctx)
+
+    resolved_services = get_default_services(ctx.obj.get("config"))
 
     if services:
         service_urls = {
-            name: url for name, url in DEFAULT_SERVICES.items() if name in services
+            name: url for name, url in resolved_services.items() if name in services
         }
         for svc in services:
-            if svc not in DEFAULT_SERVICES and svc.startswith("http"):
+            if svc not in resolved_services and svc.startswith("http"):
                 service_urls[svc] = svc
     else:
-        service_urls = DEFAULT_SERVICES.copy()
+        service_urls = resolved_services.copy()
 
     def fetch_all_status() -> list[ServiceInfo]:
         """Fetch status of all services."""

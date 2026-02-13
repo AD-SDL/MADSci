@@ -88,7 +88,7 @@ class TestStopCommand:
         assert "No running node" in result.output
 
     def test_stop_manager_sends_sigterm(self) -> None:
-        """Test that stop manager sends SIGTERM and removes PID file."""
+        """Test that stop manager sends SIGTERM, waits, and removes PID file."""
         runner = CliRunner()
         with (
             patch(
@@ -96,10 +96,38 @@ class TestStopCommand:
                 return_value=12345,
             ),
             patch("madsci.client.cli.commands.stop.os.kill") as mock_kill,
+            patch(
+                "madsci.client.cli.commands.stop._wait_for_exit",
+                return_value=True,
+            ),
             patch("madsci.client.cli.commands.start._remove_pid") as mock_remove,
         ):
             result = runner.invoke(madsci, ["stop", "manager", "event"])
             assert result.exit_code == 0
             assert "Stopped event manager" in result.output
             mock_kill.assert_called_once_with(12345, signal.SIGTERM)
+            mock_remove.assert_called_once_with("manager-event")
+
+    def test_stop_manager_escalates_to_sigkill(self) -> None:
+        """Test that stop manager sends SIGKILL when process doesn't exit."""
+        runner = CliRunner()
+        with (
+            patch(
+                "madsci.client.cli.commands.start._read_pid",
+                return_value=12345,
+            ),
+            patch("madsci.client.cli.commands.stop.os.kill") as mock_kill,
+            patch(
+                "madsci.client.cli.commands.stop._wait_for_exit",
+                return_value=False,
+            ),
+            patch("madsci.client.cli.commands.start._remove_pid") as mock_remove,
+        ):
+            result = runner.invoke(madsci, ["stop", "manager", "event"])
+            assert result.exit_code == 0
+            assert "SIGKILL" in result.output
+            # Should have been called twice: SIGTERM then SIGKILL
+            assert mock_kill.call_count == 2
+            mock_kill.assert_any_call(12345, signal.SIGTERM)
+            mock_kill.assert_any_call(12345, signal.SIGKILL)
             mock_remove.assert_called_once_with("manager-event")

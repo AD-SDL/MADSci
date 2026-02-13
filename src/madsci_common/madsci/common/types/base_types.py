@@ -146,6 +146,15 @@ class MadsciBaseSettings(BaseSettings):
                 value = getattr(self, field_name, None)
                 if isinstance(value, (MadsciBaseModel, MadsciBaseSettings)):
                     data[field_name] = value.model_dump_safe(include_secrets=False)
+            elif isinstance(data[field_name], list):
+                values = getattr(self, field_name, None)
+                if isinstance(values, list):
+                    data[field_name] = [
+                        item.model_dump_safe(include_secrets=False)
+                        if isinstance(item, (MadsciBaseModel, MadsciBaseSettings))
+                        else item
+                        for item in values
+                    ]
         return data
 
 
@@ -276,6 +285,15 @@ class MadsciBaseModel(BaseModel):
                 value = getattr(self, field_name, None)
                 if isinstance(value, MadsciBaseModel):
                     data[field_name] = value.model_dump_safe(include_secrets=False)
+            elif isinstance(data[field_name], list):
+                values = getattr(self, field_name, None)
+                if isinstance(values, list):
+                    data[field_name] = [
+                        item.model_dump_safe(include_secrets=False)
+                        if isinstance(item, MadsciBaseModel)
+                        else item
+                        for item in values
+                    ]
         return data
 
     def to_yaml(

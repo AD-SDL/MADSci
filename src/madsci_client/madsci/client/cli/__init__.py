@@ -5,13 +5,16 @@ comprehensive toolkit for building and operating self-driving laboratories.
 """
 
 import importlib
+import importlib.metadata
 from typing import ClassVar
 
 import click
 from rich.console import Console
 
-# Version will be loaded dynamically
-__version__ = "0.6.2"
+try:
+    __version__ = importlib.metadata.version("madsci_client")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "0.6.2"
 
 # Lazy command registry: maps command names to (module_path, attr_name) tuples.
 # Commands are only imported when actually invoked.
@@ -158,9 +161,19 @@ def madsci(
     # Ensure context object exists
     ctx.ensure_object(dict)
 
+    # Load centralized CLI configuration
+    from madsci.client.cli.utils.config import MadsciCLIConfig
+
+    cli_config = MadsciCLIConfig.load(config)
+    # CLI --lab-url overrides config file when explicitly provided
+    if lab_url and lab_url != "http://localhost:8000/":
+        cli_config.lab_url = lab_url  # type: ignore[assignment]
+
+    ctx.obj["config"] = cli_config
+
     # Store configuration in context
     ctx.obj["config_path"] = config
-    ctx.obj["lab_url"] = lab_url
+    ctx.obj["lab_url"] = str(cli_config.lab_url)
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output

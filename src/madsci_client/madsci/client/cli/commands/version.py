@@ -97,10 +97,10 @@ def version(ctx: click.Context, as_json: bool, check_updates: bool) -> None:
         madsci version --json       Output as JSON
         madsci version --check-updates  Check for updates
     """
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
     from rich.table import Table
 
-    console: Console = ctx.obj.get("console", Console())
+    console = get_console(ctx)
 
     # Gather information
     packages = get_installed_packages()

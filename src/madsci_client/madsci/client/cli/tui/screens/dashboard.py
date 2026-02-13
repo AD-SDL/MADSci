@@ -7,11 +7,7 @@ active workflows, and recent events.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import (
-    AUTO_REFRESH_INTERVAL,
-    DEFAULT_SERVICES,
-    EVENT_MANAGER_URL,
-)
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal, Vertical
@@ -64,7 +60,7 @@ class ServicesPanel(Static):
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Services[/bold]")
-        for name, url in DEFAULT_SERVICES.items():
+        for name, url in self.app.service_urls.items():
             yield ServiceStatusWidget(name, url)
 
     async def refresh_data(self) -> None:
@@ -102,8 +98,11 @@ class RecentEventsPanel(Static):
         content = self.query_one("#events-content", Label)
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
+                event_url = self.app.service_urls.get(
+                    "event_manager", "http://localhost:8001/"
+                )
                 response = await client.get(
-                    f"{EVENT_MANAGER_URL.rstrip('/')}/events",
+                    f"{event_url.rstrip('/')}/events",
                     params={"limit": 5},
                 )
                 if response.status_code == 200:

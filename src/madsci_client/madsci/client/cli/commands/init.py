@@ -48,12 +48,12 @@ def init(
         madsci init --no-interactive         Use all defaults
         madsci init --name my_lab --no-interactive
     """
+    from madsci.client.cli.utils.output import get_console
     from madsci.common.templates.registry import TemplateRegistry
-    from rich.console import Console
     from rich.panel import Panel
     from rich.prompt import Prompt
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     console.print()
     console.print(

@@ -336,19 +336,21 @@ def _matches(doc: dict[str, Any], query: dict[str, Any]) -> bool:
     return True
 
 
+_COMPARISON_OPS: dict[str, Any] = {
+    "$eq": lambda d, v: d == v,
+    "$ne": lambda d, v: d != v,
+    "$gt": lambda d, v: d is not None and d > v,
+    "$gte": lambda d, v: d is not None and d >= v,
+    "$lt": lambda d, v: d is not None and d < v,
+    "$lte": lambda d, v: d is not None and d <= v,
+    "$in": lambda d, v: d in v,
+    "$nin": lambda d, v: d not in v,
+    "$exists": lambda d, v: (d is not None) == v,
+}
+
+
 def _apply_operator(doc_val: Any, op: str, op_val: Any) -> bool:
     """Evaluate a single MongoDB comparison operator."""
-    _COMPARISON_OPS = {  # noqa: N806
-        "$eq": lambda d, v: d == v,
-        "$ne": lambda d, v: d != v,
-        "$gt": lambda d, v: d is not None and d > v,
-        "$gte": lambda d, v: d is not None and d >= v,
-        "$lt": lambda d, v: d is not None and d < v,
-        "$lte": lambda d, v: d is not None and d <= v,
-        "$in": lambda d, v: d in v,
-        "$nin": lambda d, v: d not in v,
-        "$exists": lambda d, v: (d is not None) == v,
-    }
     fn = _COMPARISON_OPS.get(op)
     if fn is not None:
         return fn(doc_val, op_val)

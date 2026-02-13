@@ -7,7 +7,7 @@ import socket
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
@@ -177,7 +177,7 @@ class StatusScreen(Screen):
         table = self.query_one("#managers-table", DataTable)
         table.clear()
 
-        for name, url in DEFAULT_SERVICES.items():
+        for name, url in self.app.service_urls.items():
             status_data = await self._check_service(name, url)
             self.service_status[name] = status_data
 

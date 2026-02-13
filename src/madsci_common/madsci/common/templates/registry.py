@@ -62,7 +62,6 @@ class TemplateRegistry:
                               Defaults to ~/.madsci/templates/.
         """
         self.user_template_dir = user_template_dir or self._default_user_dir()
-        self._cache: dict[str, TemplateManifest] = {}
 
     @staticmethod
     def _default_user_dir() -> Path:
@@ -173,6 +172,18 @@ class TemplateRegistry:
 
         return templates
 
+    @staticmethod
+    def _validate_path_component(component: str) -> None:
+        """Reject path components that could cause path traversal.
+
+        Raises:
+            ValueError: If the component contains ``..`` or path separators.
+        """
+        if ".." in component or "/" in component or "\\" in component:
+            raise ValueError(
+                f"Invalid path component: {component!r} (path traversal not allowed)"
+            )
+
     def get_template(self, template_id: str) -> TemplateEngine:
         """Get a template engine by ID.
 
@@ -194,13 +205,15 @@ class TemplateRegistry:
             )
 
         category, name = parts
+        self._validate_path_component(category)
+        self._validate_path_component(name)
 
-        # Check user templates first
+        # Check user templates first (sandboxed — user-installed content)
         user_path = self.user_template_dir / category / name
         if user_path.exists() and (user_path / "template.yaml").exists():
-            return TemplateEngine(user_path)
+            return TemplateEngine(user_path, sandboxed=True)
 
-        # Check bundled templates
+        # Check bundled templates (trusted, no sandbox)
         bundled_dir = self._bundled_template_dir()
         if bundled_dir:
             bundled_path = bundled_dir / category / name
@@ -242,6 +255,10 @@ class TemplateRegistry:
 
             manifest = TemplateManifest.from_yaml(manifest_path)
             template_name = name or f"{manifest.category.value}/{source_path.name}"
+
+            # Validate path components to prevent traversal
+            for component in template_name.split("/"):
+                self._validate_path_component(component)
 
             dest_path = self.user_template_dir / template_name
             dest_path.parent.mkdir(parents=True, exist_ok=True)

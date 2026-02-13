@@ -7,7 +7,7 @@ by querying the Workcell Manager.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, WORKCELL_MANAGER_URL
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
@@ -179,7 +179,10 @@ class NodesScreen(Screen):
 
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{WORKCELL_MANAGER_URL.rstrip('/')}/nodes")
+                workcell_url = self.app.service_urls.get(
+                    "workcell_manager", "http://localhost:8005/"
+                )
+                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
                 if response.status_code == 200:
                     nodes = response.json()
                     if isinstance(nodes, dict):

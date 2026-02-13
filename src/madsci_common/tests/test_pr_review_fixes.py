@@ -1,33 +1,47 @@
 """Tests for fixes identified during PR #226 review.
 
 Covers:
-- InMemoryRedis clear_all_registries
-- MadsciBaseSettings nested model_dump_safe
+- InMemoryRedis clear_all_registries (including Redlock state)
+- InMemoryRedis shared-lock semantics across instances
+- MadsciBaseSettings nested model_dump_safe (including list-of-model)
 - no_color context propagation
 - Shell injection prevention in template hooks
 - PATH parameter validation
 - min_length=0 truthiness fix
+- Template path traversal prevention (engine + registry)
+- SandboxedEnvironment for user templates
 """
 
 import shlex
-from typing import ClassVar
+import threading
+from typing import ClassVar, List
 from unittest.mock import MagicMock
 
+import pytest
 from click.testing import CliRunner
+from jinja2 import Environment
+from jinja2.sandbox import SandboxedEnvironment
 from madsci.client.cli import madsci
 from madsci.common.local_backends.inmemory_redis import (
     InMemoryRedisClient,
     InMemoryRedisDict,
     InMemoryRedisList,
+    InMemoryRedlock,
     clear_all_registries,
 )
-from madsci.common.templates.engine import TemplateEngine
+from madsci.common.templates.engine import TemplateEngine, TemplateValidationError
+from madsci.common.templates.registry import TemplateRegistry
 from madsci.common.types.base_types import (
     REDACTED_PLACEHOLDER,
     MadsciBaseModel,
     MadsciBaseSettings,
 )
-from madsci.common.types.template_types import ParameterType, TemplateParameter
+from madsci.common.types.template_types import (
+    ParameterType,
+    TemplateFile,
+    TemplateManifest,
+    TemplateParameter,
+)
 from pydantic import Field
 
 # ------------------------------------------------------------------ #
@@ -243,3 +257,287 @@ class TestMinLengthZero:
         errors = engine.validate_parameters({"name": "toolong"})
         assert len(errors) == 1
         assert "too long" in errors[0].lower()
+
+
+# ------------------------------------------------------------------ #
+# Phase 2D: clear_all_registries also clears InMemoryRedlock          #
+# ------------------------------------------------------------------ #
+
+
+class TestClearAllRegistriesRedlock:
+    def test_clears_redlock_state(self) -> None:
+        """clear_all_registries should also clear the Redlock registry."""
+        InMemoryRedlock(key="test:lock")  # Creates the lock in the registry
+        assert "test:lock" in InMemoryRedlock._locks
+
+        clear_all_registries()
+
+        assert "test:lock" not in InMemoryRedlock._locks
+
+
+# ------------------------------------------------------------------ #
+# Phase 4A: Shared locks across InMemoryRedisDict instances           #
+# ------------------------------------------------------------------ #
+
+
+class TestSharedLockSemantics:
+    def test_dict_instances_share_lock(self) -> None:
+        """Two InMemoryRedisDict with same key/client share the same lock."""
+        clear_all_registries()
+        client = InMemoryRedisClient()
+        d1 = InMemoryRedisDict(key="shared:key", redis=client)
+        d2 = InMemoryRedisDict(key="shared:key", redis=client)
+
+        assert d1._lock is d2._lock
+        assert d1._store is d2._store
+
+    def test_list_instances_share_lock(self) -> None:
+        """Two InMemoryRedisList with same key/client share the same lock."""
+        clear_all_registries()
+        client = InMemoryRedisClient()
+        l1 = InMemoryRedisList(key="shared:list", redis=client)
+        l2 = InMemoryRedisList(key="shared:list", redis=client)
+
+        assert l1._lock is l2._lock
+        assert l1._store is l2._store
+
+    def test_dict_different_keys_have_different_locks(self) -> None:
+        """Different keys should produce different locks."""
+        clear_all_registries()
+        client = InMemoryRedisClient()
+        d1 = InMemoryRedisDict(key="a", redis=client)
+        d2 = InMemoryRedisDict(key="b", redis=client)
+
+        assert d1._lock is not d2._lock
+
+    def test_concurrent_writes_with_shared_lock(self) -> None:
+        """Verify that concurrent writes via shared locks are safe."""
+        clear_all_registries()
+        client = InMemoryRedisClient()
+        d1 = InMemoryRedisDict(key="conc:key", redis=client)
+        d2 = InMemoryRedisDict(key="conc:key", redis=client)
+
+        barrier = threading.Barrier(2)
+
+        def writer(d: InMemoryRedisDict, prefix: str) -> None:
+            barrier.wait()
+            for i in range(100):
+                d[f"{prefix}_{i}"] = i
+
+        t1 = threading.Thread(target=writer, args=(d1, "a"))
+        t2 = threading.Thread(target=writer, args=(d2, "b"))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+
+        # All 200 keys should exist
+        assert len(d1) == 200
+
+
+# ------------------------------------------------------------------ #
+# Phase 5: List-of-model secret redaction                             #
+# ------------------------------------------------------------------ #
+
+
+class NestedItemModel(MadsciBaseModel):
+    """A model with a secret field, used as a list item."""
+
+    token: str = Field(default="tok123", json_schema_extra={"secret": True})
+    label: str = "visible"
+
+
+class ParentWithListModel(MadsciBaseModel):
+    """A model containing a list of models with secrets."""
+
+    items: List[NestedItemModel] = Field(
+        default_factory=lambda: [NestedItemModel(), NestedItemModel(token="tok456")]  # noqa: S106
+    )
+    name: str = "parent"
+
+
+class TestListOfModelSecretRedaction:
+    def test_list_of_models_secrets_redacted(self) -> None:
+        """Secret fields in a list of nested models should be redacted."""
+        obj = ParentWithListModel()
+        data = obj.model_dump_safe()
+
+        assert len(data["items"]) == 2
+        for item in data["items"]:
+            assert item["token"] == REDACTED_PLACEHOLDER
+            assert item["label"] == "visible"
+
+    def test_list_of_models_include_secrets(self) -> None:
+        """include_secrets=True should show actual values in list items."""
+        obj = ParentWithListModel()
+        data = obj.model_dump_safe(include_secrets=True)
+
+        assert data["items"][0]["token"] == "tok123"  # noqa: S105
+        assert data["items"][1]["token"] == "tok456"  # noqa: S105
+
+
+class NestedItemSettings(MadsciBaseSettings):
+    """Settings model with a secret, used in a list."""
+
+    model_config: ClassVar = {
+        "env_prefix": "NESTED_ITEM_TEST_",
+        "cli_parse_args": False,
+    }
+
+    api_key: str = Field(default="key999", json_schema_extra={"secret": True})
+    host: str = "localhost"
+
+
+class ParentWithListSettings(MadsciBaseSettings):
+    """Settings containing a list of nested settings models."""
+
+    model_config: ClassVar = {
+        "env_prefix": "PARENT_LIST_TEST_",
+        "cli_parse_args": False,
+    }
+
+    backends: List[NestedItemSettings] = Field(
+        default_factory=lambda: [NestedItemSettings()]
+    )
+
+
+class TestListOfSettingsSecretRedaction:
+    def test_list_of_settings_secrets_redacted(self) -> None:
+        """Secret fields in a list of nested settings should be redacted."""
+        obj = ParentWithListSettings()
+        data = obj.model_dump_safe()
+
+        assert len(data["backends"]) == 1
+        assert data["backends"][0]["api_key"] == REDACTED_PLACEHOLDER
+        assert data["backends"][0]["host"] == "localhost"
+
+
+# ------------------------------------------------------------------ #
+# Phase 3: Template security — path traversal prevention              #
+# ------------------------------------------------------------------ #
+
+
+class TestTemplatePathTraversal:
+    def test_path_traversal_in_registry_get_template(self) -> None:
+        """Template IDs with '..' should be rejected."""
+        registry = TemplateRegistry()
+
+        # IDs with != 2 parts are rejected as invalid format
+        with pytest.raises(ValueError, match="Invalid template ID"):
+            registry.get_template("../etc/passwd")
+
+    def test_path_traversal_in_registry_category(self) -> None:
+        """Category component with '..' should be rejected."""
+        registry = TemplateRegistry()
+
+        # '..' in category part triggers path traversal check
+        with pytest.raises(ValueError, match="path traversal"):
+            registry.get_template("../device")
+
+    def test_path_traversal_in_registry_name(self) -> None:
+        """Name component with '..' should be rejected."""
+        registry = TemplateRegistry()
+
+        # '..' in name part triggers path traversal check
+        with pytest.raises(ValueError, match="path traversal"):
+            registry.get_template("module/..")
+
+    def test_path_traversal_multi_segment_rejected(self) -> None:
+        """Template IDs with more than 2 parts (common in traversal) are rejected."""
+        registry = TemplateRegistry()
+
+        with pytest.raises(ValueError, match="Invalid template ID"):
+            registry.get_template("module/../../etc")
+
+    def test_valid_template_id_accepted(self) -> None:
+        """Normal template IDs should not raise ValueError."""
+        registry = TemplateRegistry()
+        # This should not raise ValueError (may raise TemplateNotFoundError)
+        try:
+            registry.get_template("module/device")
+        except ValueError:
+            pytest.fail("Valid template ID should not raise ValueError")
+        except Exception:  # noqa: S110
+            pass  # TemplateNotFoundError or import errors are acceptable
+
+    def test_engine_path_traversal_in_dest(self, tmp_path) -> None:
+        """Rendered destination paths escaping output_dir should be rejected."""
+        # Create a minimal template directory
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        source_file = template_dir / "file.txt.j2"
+        source_file.write_text("content")
+
+        manifest = TemplateManifest(
+            name="test",
+            version="0.1.0",
+            description="test template",
+            category="module",
+            parameters=[],
+            files=[
+                TemplateFile(
+                    source="file.txt.j2",
+                    destination="../../../etc/malicious.txt",
+                )
+            ],
+        )
+
+        engine = TemplateEngine.__new__(TemplateEngine)
+        engine.template_dir = template_dir
+        engine.manifest = manifest
+        engine._sandboxed = False
+        engine._jinja_env = engine._create_jinja_env()
+
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        with pytest.raises(TemplateValidationError, match=r"[Pp]ath traversal"):
+            engine.render(output_dir=output_dir, parameters={})
+
+
+# ------------------------------------------------------------------ #
+# Phase 3C: SandboxedEnvironment for user templates                   #
+# ------------------------------------------------------------------ #
+
+
+class TestSandboxedEnvironment:
+    def test_sandboxed_flag_creates_sandbox(self, tmp_path) -> None:
+        """TemplateEngine(sandboxed=True) should use SandboxedEnvironment."""
+        # Create minimal template
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        manifest = template_dir / "template.yaml"
+        manifest.write_text(
+            "name: test\nversion: '0.1.0'\ndescription: test\n"
+            "category: module\nparameters: []\nfiles: []\n"
+        )
+
+        engine = TemplateEngine(template_dir, sandboxed=True)
+        assert isinstance(engine._jinja_env, SandboxedEnvironment)
+
+    def test_non_sandboxed_uses_regular_env(self, tmp_path) -> None:
+        """TemplateEngine(sandboxed=False) should use regular Environment."""
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        manifest = template_dir / "template.yaml"
+        manifest.write_text(
+            "name: test\nversion: '0.1.0'\ndescription: test\n"
+            "category: module\nparameters: []\nfiles: []\n"
+        )
+
+        engine = TemplateEngine(template_dir, sandboxed=False)
+        assert isinstance(engine._jinja_env, Environment)
+        assert not isinstance(engine._jinja_env, SandboxedEnvironment)
+
+
+# ------------------------------------------------------------------ #
+# Phase 6: MadsciCLIConfig wiring                                     #
+# ------------------------------------------------------------------ #
+
+
+class TestCLIConfigLoading:
+    def test_config_available_in_context(self) -> None:
+        """MadsciCLIConfig should be loaded and stored in ctx.obj."""
+        runner = CliRunner()
+        result = runner.invoke(madsci, ["version"])
+        assert result.exit_code == 0

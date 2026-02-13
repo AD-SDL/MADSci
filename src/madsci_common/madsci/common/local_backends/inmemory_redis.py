@@ -20,12 +20,14 @@ from typing import Any, ClassVar, Optional
 # ---------------------------------------------------------------------------
 # Module-level registries keyed by (client_id, key) so that multiple
 # InMemoryRedisDict / InMemoryRedisList instances with the **same** key and
-# client share the same underlying data — exactly like Redis does.
+# client share the same underlying data **and lock** — exactly like Redis does.
+# Each entry is a (data, lock) tuple so that all instances sharing a key
+# synchronise on the same lock.
 # ---------------------------------------------------------------------------
-_dict_registry: dict[tuple[int, str], dict[str, Any]] = {}
+_dict_registry: dict[tuple[int, str], tuple[dict[str, Any], threading.Lock]] = {}
 _dict_registry_lock = threading.Lock()
 
-_list_registry: dict[tuple[int, str], list[Any]] = {}
+_list_registry: dict[tuple[int, str], tuple[list[Any], threading.Lock]] = {}
 _list_registry_lock = threading.Lock()
 
 
@@ -38,6 +40,8 @@ def clear_all_registries() -> None:
         _dict_registry.clear()
     with _list_registry_lock:
         _list_registry.clear()
+    with InMemoryRedlock._registry_lock:
+        InMemoryRedlock._locks.clear()
 
 
 class InMemoryRedisClient:
@@ -88,13 +92,12 @@ class InMemoryRedisDict:
         self._key = key
         self._redis = redis
         self._client_id = id(redis)
-        self._lock = threading.Lock()
 
         with _dict_registry_lock:
             registry_key = (self._client_id, self._key)
             if registry_key not in _dict_registry:
-                _dict_registry[registry_key] = {}
-            self._store = _dict_registry[registry_key]
+                _dict_registry[registry_key] = ({}, threading.Lock())
+            self._store, self._lock = _dict_registry[registry_key]
 
     # --- dict-like interface ---
 
@@ -169,13 +172,12 @@ class InMemoryRedisList:
         self._key = key
         self._redis = redis
         self._client_id = id(redis)
-        self._lock = threading.Lock()
 
         with _list_registry_lock:
             registry_key = (self._client_id, self._key)
             if registry_key not in _list_registry:
-                _list_registry[registry_key] = []
-            self._store = _list_registry[registry_key]
+                _list_registry[registry_key] = ([], threading.Lock())
+            self._store, self._lock = _list_registry[registry_key]
 
     def append(self, value: Any) -> None:
         """Append a value to the list."""

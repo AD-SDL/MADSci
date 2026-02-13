@@ -27,8 +27,8 @@ def run() -> None:
     "--workcell",
     "workcell_url",
     envvar="MADSCI_WORKCELL_URL",
-    default="http://localhost:8005/",
-    help="Workcell manager URL.",
+    default=None,
+    help="Workcell manager URL (default: from config or http://localhost:8005/).",
 )
 @click.option(
     "--parameters",
@@ -58,9 +58,17 @@ def workflow(
     """
     import json
 
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
+
+    if workcell_url is None:
+        cli_config = ctx.obj.get("config") if ctx.obj else None
+        workcell_url = (
+            str(cli_config.workcell_manager_url)
+            if cli_config
+            else "http://localhost:8005/"
+        )
 
     workflow_path = Path(path).resolve()
     console.print(f"Submitting workflow: [cyan]{workflow_path.name}[/cyan]")
@@ -121,9 +129,9 @@ def experiment(
     import subprocess
     import sys
 
-    from rich.console import Console
+    from madsci.client.cli.utils.output import get_console
 
-    console: Console = ctx.obj.get("console", Console()) if ctx.obj else Console()
+    console = get_console(ctx)
 
     script_path = Path(path).resolve()
     console.print(f"Running experiment: [cyan]{script_path.name}[/cyan]")

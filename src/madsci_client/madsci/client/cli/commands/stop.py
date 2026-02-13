@@ -9,8 +9,16 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import time
 
 import click
+
+
+def _manager_names() -> list[str]:
+    """Return the list of known manager names from the start module."""
+    from madsci.client.cli.commands.start import MANAGER_MODULES
+
+    return list(MANAGER_MODULES.keys())
 
 
 def _find_compose_file(config_path: str | None) -> str:
@@ -18,6 +26,25 @@ def _find_compose_file(config_path: str | None) -> str:
     from madsci.client.cli.commands.start import _find_compose_file as _find
 
     return str(_find(config_path))
+
+
+def _wait_for_exit(pid: int, timeout: int = 5) -> bool:
+    """Wait for a process to exit after SIGTERM.
+
+    Polls with ``os.kill(pid, 0)`` at short intervals until the process
+    exits or *timeout* seconds elapse.
+
+    Returns:
+        True if the process exited within the timeout, False otherwise.
+    """
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.25)
+    return False
 
 
 @click.group(invoke_without_command=True)
@@ -94,19 +121,7 @@ def stop(
 @stop.command("manager")
 @click.argument(
     "name",
-    type=click.Choice(
-        sorted(
-            [
-                "lab",
-                "event",
-                "experiment",
-                "resource",
-                "data",
-                "workcell",
-                "location",
-            ]
-        )
-    ),
+    type=click.Choice(sorted(_manager_names())),
 )
 @click.pass_context
 def stop_manager(ctx: click.Context, name: str) -> None:
@@ -132,7 +147,14 @@ def stop_manager(ctx: click.Context, name: str) -> None:
 
     try:
         os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]Stopped {name} manager[/green] (PID {pid})")
+        console.print(f"Sent SIGTERM to {name} manager (PID {pid}), waiting...")
+        if _wait_for_exit(pid, timeout=5):
+            console.print(f"[green]Stopped {name} manager[/green] (PID {pid})")
+        else:
+            os.kill(pid, signal.SIGKILL)
+            console.print(
+                f"[yellow]Manager '{name}' did not exit in time, sent SIGKILL.[/yellow]"
+            )
     except ProcessLookupError:
         console.print(f"[yellow]Manager '{name}' was already stopped.[/yellow]")
     finally:
@@ -165,7 +187,14 @@ def stop_node(ctx: click.Context, name: str) -> None:
 
     try:
         os.kill(pid, signal.SIGTERM)
-        console.print(f"[green]Stopped node '{name}'[/green] (PID {pid})")
+        console.print(f"Sent SIGTERM to node '{name}' (PID {pid}), waiting...")
+        if _wait_for_exit(pid, timeout=5):
+            console.print(f"[green]Stopped node '{name}'[/green] (PID {pid})")
+        else:
+            os.kill(pid, signal.SIGKILL)
+            console.print(
+                f"[yellow]Node '{name}' did not exit in time, sent SIGKILL.[/yellow]"
+            )
     except ProcessLookupError:
         console.print(f"[yellow]Node '{name}' was already stopped.[/yellow]")
     finally:
