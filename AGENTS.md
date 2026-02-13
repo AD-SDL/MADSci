@@ -377,3 +377,4 @@ src/madsci_common/
 - Always use pydantic's `AnyUrl` to store URL's, and note that AnyUrl always ensures a trailing forward slash
 - Imports should generally be done at the top of the file, unless there are circular dependencies or other factors which require localized importing.
 - **IMPORTANT**: do not use noqa's or modify the configuration of linters or checks to bypass linter errors without the users _EXPLICIT_ permission.
+- **IMPORTANT**: Use `./.scratch/` for any temporary files, test outputs, or scratch work. Do NOT use `/tmp` or other system-level temporary directories.

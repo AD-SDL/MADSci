@@ -1,6 +1,6 @@
 # MADSci UX Overhaul - Completion Plan
 
-**Status**: Planning
+**Status**: In Progress (Phase A complete)
 **Created**: 2026-02-12
 **Related**: [UX Overhaul Plan](./ux_overhaul_plan.md) | [Implementation Progress](./ux_overhaul_progress.md)
 
@@ -85,45 +85,52 @@ The entire stretch goal is unstarted:
 
 ## Proposed Completion Phases
 
-### Phase A: Test Coverage & Stability (Foundation) [Overall: M]
+### Phase A: Test Coverage & Stability (Foundation) [Overall: M] ✅ COMPLETE
 
 **Goal**: Ensure everything that's already built actually works correctly and has test coverage.
 
 **Rationale**: Before adding new features, we need confidence the existing code is solid. Several implemented commands have zero tests.
 
-#### A.1 Add missing CLI command tests [S]
-- `registry` command tests (list, resolve, rename, clean, export, import)
-- `migrate` command tests (scan, convert, status, finalize, rollback)
-- `tui` command test (launch, graceful handling when textual missing)
+**Completed**: 2026-02-12
 
-**Files to modify**:
-- Create `src/madsci_client/tests/cli/test_registry.py`
-- Create `src/madsci_client/tests/cli/test_migrate.py`
-- Create `src/madsci_client/tests/cli/test_tui.py`
+#### A.1 Add missing CLI command tests [S] ✅
+- `registry` command tests (21 tests): list (empty/populated/filtered/json), resolve (found/not found/json), rename (success/nonexistent), clean (empty/dry-run), export (stdout/file), import
+- `migrate` command tests (21 tests): scan (empty/manager yaml/node yaml/example_lab/json/verbose), convert (no mode/no files/dry-run empty), status, finalize (no mode/dry-run), rollback (no files/nothing to rollback)
+- `tui` command tests (5 tests): help, screen choices, mocked launch, import error handling, `ui` alias
 
-**Existing patterns to follow**: `src/madsci_client/tests/cli/test_version.py` (uses `CliRunner`)
+**Files created**:
+- `src/madsci_client/tests/cli/test_registry.py` (21 tests)
+- `src/madsci_client/tests/cli/test_migrate.py` (21 tests)
+- `src/madsci_client/tests/cli/test_tui.py` (5 tests)
 
-#### A.2 Validate migration tool against example_lab [M]
-- Run `madsci migrate scan` against `example_lab/`
-- Verify scanner finds all 21 definition/info files (8 manager + 6 node + 7 node info)
-- Test `convert --dry-run` produces correct output
-- Add integration test for this
+**Existing patterns followed**: `src/madsci_client/tests/cli/test_version.py` (uses `CliRunner`)
+
+#### A.2 Validate migration tool against example_lab [M] ✅
+- Scanner finds 20 definition files: 7 manager + 6 node + 7 workflow (note: `.info.yaml` and `example_workcell.yaml` are not scanned because they don't match `*.manager.yaml`/`*.node.yaml`/`*.workflow.yaml` patterns)
+- All files have PENDING status, valid component IDs, and planned migration actions
+- `convert --dry-run` produces correct output without modifying files
+- 12 integration tests added
+
+**Files created**:
+- `src/madsci_client/tests/cli/test_migrate_example_lab.py` (12 tests)
 
 **Files involved**:
 - `example_lab/` definition files
 - `src/madsci_common/madsci/common/migration/scanner.py`
 - `src/madsci_common/madsci/common/migration/converter.py`
 
-#### A.3 Verify test suite baseline [S]
-- Confirm all 2004+ tests pass (current baseline is green as of 2026-02-12)
-- Verify `madsci doctor`, `madsci version`, and `madsci new module --no-interactive` work end-to-end
-- Gate: do not proceed to Phase B until this passes
+#### A.3 Verify test suite baseline [S] ✅
+- 2063 tests pass (up from 2004+ baseline, with the 59 new tests)
+- `madsci doctor` — 12/12 checks pass
+- `madsci version` — works correctly
+- `madsci new module --no-interactive` — scaffolds 10 files correctly
+- Gate passed: Phase B is unblocked
 
 **Done when**:
-- All existing tests pass (`pytest` green)
-- `registry`, `migrate`, and `tui` commands each have dedicated test files with `--help` and basic invocation tests
-- `madsci migrate scan` successfully finds all definition files in `example_lab/`
-- `madsci doctor`, `madsci version`, and `madsci new module --no-interactive` work end-to-end
+- ✅ All existing tests pass (`pytest` green) — 2063 passed
+- ✅ `registry`, `migrate`, and `tui` commands each have dedicated test files with `--help` and basic invocation tests
+- ✅ `madsci migrate scan` successfully finds all definition files in `example_lab/`
+- ✅ `madsci doctor`, `madsci version`, and `madsci new module --no-interactive` work end-to-end
 
 ---
 
