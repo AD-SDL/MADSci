@@ -31,7 +31,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: pdm install -G:all
+        run: pdm lock && pdm install -G:all
 
       - name: Run E2E framework tests
         run: pdm run pytest src/madsci_common/tests/testing/ -v --tb=short
@@ -56,7 +56,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: pdm install -G:all
+        run: pdm lock && pdm install -G:all
 
       - name: Run tutorial tests (no Docker)
         run: pdm run pytest tests/e2e/test_tutorials.py -v --tb=short --tutorial-filter=no-docker
@@ -81,7 +81,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: pdm install -G:all
+        run: pdm lock && pdm install -G:all
 
       - name: Install ruff for template validation
         run: pip install ruff
