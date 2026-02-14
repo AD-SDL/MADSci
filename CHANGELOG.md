@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Service registry for dynamic service discovery
 
 #### Testing
-- 2359+ automated tests
+- 2427+ automated tests
 - 150+ template validation tests
 - CLI tests using Click's CliRunner
 - E2E test harness with tutorial validation

@@ -668,6 +668,10 @@ class E2ETestRunner:
             for validation in result.validation_results:
                 if not validation.passed:
                     self.console.print(f"    [red]- {validation.message}[/red]")
+            if result.stderr:
+                self.console.print(f"    [dim]STDERR:[/dim]\n{result.stderr.strip()}")
+            if result.stdout:
+                self.console.print(f"    [dim]STDOUT:[/dim]\n{result.stdout.strip()}")
 
         if self.verbose:
             for validation in result.validation_results:

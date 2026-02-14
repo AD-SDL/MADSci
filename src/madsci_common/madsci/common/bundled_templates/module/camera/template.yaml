@@ -62,9 +62,6 @@ files:
   - source: "{{module_name}}_module/src/{{module_name}}_types.py.j2"
     destination: "{{module_name}}_module/src/{{module_name}}_types.py"
 
-  - source: "{{module_name}}_module/src/__init__.py.j2"
-    destination: "{{module_name}}_module/src/__init__.py"
-
   - source: "{{module_name}}_module/tests/__init__.py.j2"
     destination: "{{module_name}}_module/tests/__init__.py"
     condition: "{{ include_tests }}"
