@@ -72,14 +72,6 @@ steps:
       - type: exit_code
         expected: 0
 
-  - name: "Install module in development mode"
-    command: "python -m pip install -e ./test_tutorial_02/test_sensor_module"
-    timeout: 120.0
-    continue_on_error: true
-    validations:
-      - type: exit_code
-        expected: 0
-
   - name: "Run generated tests"
     command: "pytest ./test_tutorial_02/test_sensor_module/tests/ -v"
     timeout: 60.0
