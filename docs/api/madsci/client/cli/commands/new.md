@@ -45,3 +45,5 @@ Functions
 
 `get_console(ctx: click.Context) ‑> Console`
 :   Get console from context or create new one.
+
+    Delegates to the canonical ``madsci.client.cli.utils.output.get_console``.

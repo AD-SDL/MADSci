@@ -9,6 +9,7 @@ Sub-modules
 * madsci.common.data_manipulation
 * madsci.common.deprecation
 * madsci.common.exceptions
+* madsci.common.local_backends
 * madsci.common.manager_base
 * madsci.common.middleware
 * madsci.common.migration

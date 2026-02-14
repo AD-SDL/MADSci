@@ -86,6 +86,9 @@ Classes
     `model_config`
     :
 
+    `version: str | None`
+    :
+
 `ManagerSettings(**values: Any)`
 :   Base settings class for MADSci Manager services.
 
@@ -122,7 +125,19 @@ Classes
 
     ### Class variables
 
+    `enable_registry_resolution: bool`
+    :
+
+    `lab_url: pydantic.networks.AnyUrl | None`
+    :
+
     `manager_definition: str | pathlib.Path`
+    :
+
+    `manager_description: str | None`
+    :
+
+    `manager_name: str | None`
     :
 
     `otel_enabled: bool`

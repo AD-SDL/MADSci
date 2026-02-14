@@ -58,6 +58,13 @@ Functions
         def my_function(new_param=None, old_param=None):
             pass
 
+`emit_auto_write_deprecation_warning(file_path: pathlib.Path, file_type: str = 'configuration') ‑> None`
+:   Emit a deprecation warning for auto-writing of configuration files.
+
+    Args:
+        file_path: Path to the file being auto-written.
+        file_type: Type of file (e.g., "manager definition", "node info").
+
 `emit_definition_deprecation_warning(definition_path: pathlib.Path, definition_type: str = 'definition', migration_command: str | None = None) ‑> None`
 :   Emit a deprecation warning for definition file loading.
 

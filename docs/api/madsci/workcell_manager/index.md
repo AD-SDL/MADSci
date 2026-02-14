@@ -100,7 +100,7 @@ Classes
         Client initialization is handled by MadsciClientMixin via setup_clients().
 
     `pause_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
-    :   Pause a specific workflow.
+    :   Pause a running workflow.
 
     `resume_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.

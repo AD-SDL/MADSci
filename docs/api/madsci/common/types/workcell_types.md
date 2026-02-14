@@ -118,6 +118,9 @@ Classes
     `node_update_interval: float`
     :
 
+    `nodes: dict[str, pydantic.networks.AnyUrl] | None`
+    :
+
     `reconnect_attempt_interval: float`
     :
 

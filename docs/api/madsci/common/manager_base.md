@@ -149,7 +149,8 @@ Classes
 
         This endpoint allows exporting the current manager settings in a format
         suitable for backup, documentation, or replicating the configuration
-        to another environment.
+        to another environment. Secrets are always redacted from the API
+        endpoint for safety.
 
         Args:
             include_defaults: If True, include fields with default values.
@@ -159,21 +160,27 @@ Classes
         Returns:
             dict: Settings as a dictionary with sensitive fields redacted.
 
-    `get_settings_export(self, include_defaults: bool = True, include_schema: bool = False) ‑> dict[str, typing.Any]`
+    `get_settings_export(self, include_defaults: bool = True, include_schema: bool = False, include_secrets: bool = False) ‑> dict[str, typing.Any]`
     :   Export current settings for backup/replication.
 
         This method allows programmatic access to the current manager settings
         in a format suitable for backup, documentation, or replicating the
         configuration to another environment.
 
+        Sensitive fields are identified via field-level metadata:
+        - Fields with ``json_schema_extra={"secret": True}``
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+
         Args:
             include_defaults: If True, include fields with default values.
                              If False, only include non-default settings.
             include_schema: If True, include JSON schema for documentation.
+            include_secrets: If True, include actual secret values.
+                            Defaults to False (secrets are redacted).
 
         Returns:
             dict: Settings as a dictionary with the following structure:
-                - "settings": The settings values (secrets redacted)
+                - "settings": The settings values (secrets redacted by default)
                 - "schema" (optional): JSON schema if include_schema is True
                 - "schema_title" (optional): Settings class name if include_schema is True
 
@@ -196,12 +203,29 @@ Classes
         Args:
             **kwargs: Additional arguments from __init__
 
+    `load_definition(self) ‑> ~DefinitionT`
+    :   Load definition from file or create default.
+
+        .. deprecated:: 0.7.0
+            Definition files are deprecated. Use settings-based configuration
+            instead. This method will be removed in v0.8.0.
+
+        As of v0.7.0, this method no longer auto-writes definition files
+        to disk. To export a definition, use ``madsci config export``.
+
     `load_or_create_definition(self) ‑> ~DefinitionT`
     :   Load definition from file or create default.
 
         .. deprecated:: 0.7.0
-            Definition files are deprecated. Use settings-based configuration instead.
-            This method will be removed in v0.8.0.
+            Renamed to :meth:`load_definition`. Definition files are no longer
+            auto-written to disk. Use ``madsci config export`` to export
+            configuration explicitly.
+
+    `release_identity(self) ‑> None`
+    :   Release the registry lock for this manager's identity.
+
+        Should be called during shutdown to allow other instances to
+        acquire the same name.
 
     `run_server(self, host: str | None = None, port: int | None = None, **uvicorn_kwargs: Any) ‑> None`
     :   Run the server using uvicorn.

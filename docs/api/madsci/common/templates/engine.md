@@ -49,7 +49,7 @@ Functions
 Classes
 -------
 
-`TemplateEngine(template_dir: pathlib.Path)`
+`TemplateEngine(template_dir: pathlib.Path, *, sandboxed: bool = False)`
 :   Engine for rendering MADSci templates.
 
     This class handles loading a template, validating parameters, and
@@ -74,6 +74,8 @@ Classes
 
     Args:
         template_dir: Path to the template directory containing template.yaml.
+        sandboxed: If True, use Jinja2's SandboxedEnvironment to restrict
+            template code execution.  Recommended for user/remote templates.
 
     Raises:
         TemplateError: If the template manifest cannot be loaded.

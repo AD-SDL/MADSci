@@ -2,6 +2,12 @@ Module madsci.common.types.base_types
 =====================================
 Base types for MADSci.
 
+Variables
+---------
+
+`REDACTED_PLACEHOLDER`
+:   Placeholder string used when redacting secret field values.
+
 Classes
 -------
 
@@ -149,8 +155,31 @@ Classes
 
     ### Methods
 
-    `model_dump_yaml(self) ‑> str`
+    `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Dump model data with secret fields redacted by default.
+
+        This method provides a safe way to export model data without
+        accidentally exposing sensitive values. Secret fields are identified
+        by:
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+        - Fields with ``json_schema_extra={"secret": True}`` metadata
+
+        Args:
+            include_secrets: If True, include actual secret values.
+                Defaults to False (secrets are replaced with
+                ``***REDACTED***``).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump(mode="json", ...)``.
+
+        Returns:
+            dict: Model data with secrets redacted unless
+                ``include_secrets=True``.
+
+    `model_dump_yaml(self, include_secrets: bool = True) ‑> str`
     :   Convert the model to a YAML string.
+
+        Args:
+            include_secrets: If False, redact secret field values.
 
         Returns:
             YAML string representation of the model
@@ -158,10 +187,16 @@ Classes
     `to_mongo(self) ‑> dict[str, typing.Any]`
     :   Convert the model to a MongoDB-compatible dictionary.
 
-    `to_yaml(self, path: str | pathlib.Path, **kwargs: Any) ‑> None`
-    :   Allows all derived data models to be exported into yaml.
+    `to_yaml(self, path: str | pathlib.Path, include_secrets: bool = True, **kwargs: Any) ‑> None`
+    :   Export the model to a YAML file.
 
-        kwargs are passed to model_dump
+        Args:
+            path: File path to write to.
+            include_secrets: If False, redact secret field values.
+                Defaults to True for backwards compatibility with
+                internal serialization (e.g., definition file round-trips).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump``.
 
 `MadsciBaseSettings(**values: Any)`
 :   Base class for all MADSci settings.
@@ -202,6 +237,22 @@ Classes
 
     `settings_customise_sources(settings_cls: type[pydantic_settings.main.BaseSettings], init_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, env_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, dotenv_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, file_secret_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource) ‑> tuple[pydantic_settings.sources.base.PydanticBaseSettingsSource, ...]`
     :   Sets the order of settings sources for the settings model.
+
+    ### Methods
+
+    `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Dump settings data with secret fields redacted by default.
+
+        Secret fields are identified by ``json_schema_extra={"secret": True}``
+        or ``SecretStr`` / ``SecretBytes`` type annotations. Nested models
+        are recursively redacted.
+
+        Args:
+            include_secrets: If True, include actual secret values.
+            **kwargs: Additional keyword arguments forwarded to ``model_dump``.
+
+        Returns:
+            dict: Settings with secrets redacted unless ``include_secrets=True``.
 
 `MadsciDeveloperSettings(**values: Any)`
 :   Developer-focused settings for MADSci behavior.

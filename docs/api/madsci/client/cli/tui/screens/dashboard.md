@@ -8,15 +8,10 @@ active workflows, and recent events.
 Classes
 -------
 
-`DashboardScreen(name: str | None = None, id: str | None = None, classes: str | None = None)`
+`DashboardScreen(**kwargs: Any)`
 :   Main dashboard screen showing lab overview.
 
-    Initialize the screen.
-
-    Args:
-        name: The name of the screen.
-        id: The ID of the screen in the DOM.
-        classes: The CSS classes for the screen.
+    Initialize the dashboard screen.
 
     ### Ancestors (in MRO)
 
@@ -42,11 +37,14 @@ Classes
     `action_refresh(self) ‑> None`
     :   Refresh dashboard data.
 
+    `action_toggle_auto_refresh(self) ‑> None`
+    :   Toggle auto-refresh on/off.
+
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the dashboard layout.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - initial data load.
+    :   Handle screen mount - initial data load and start auto-refresh.
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
@@ -72,9 +70,6 @@ Classes
     * textual.message_pump.MessagePump
 
     ### Class variables
-
-    `DEFAULT_CSS`
-    :
 
     `can_focus`
     :
@@ -108,9 +103,6 @@ Classes
     * textual.message_pump.MessagePump
 
     ### Class variables
-
-    `DEFAULT_CSS`
-    :
 
     `can_focus`
     :
@@ -179,9 +171,6 @@ Classes
     * textual.message_pump.MessagePump
 
     ### Class variables
-
-    `DEFAULT_CSS`
-    :
 
     `can_focus`
     :

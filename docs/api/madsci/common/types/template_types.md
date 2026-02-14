@@ -122,6 +122,9 @@ Classes
 
     ### Class variables
 
+    `COMM`
+    :
+
     `EXPERIMENT`
     :
 

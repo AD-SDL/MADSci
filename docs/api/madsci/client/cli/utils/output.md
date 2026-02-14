@@ -24,6 +24,18 @@ Functions
     Returns:
         Formatted URL string.
 
+`get_console(ctx: click.core.Context) ‑> rich.console.Console`
+:   Get Rich Console from Click context, with fallback.
+
+    All CLI commands should use this function instead of
+    creating their own Console or inlining ``ctx.obj.get(...)``.
+
+    Args:
+        ctx: Click context.
+
+    Returns:
+        Console instance from context, or a new default Console.
+
 `info(console: rich.console.Console, message: str) ‑> None`
 :   Print info message with blue info icon.
 

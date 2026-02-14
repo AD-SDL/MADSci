@@ -8,20 +8,18 @@ Sub-modules
 -----------
 * madsci.client.cli.tui.screens.dashboard
 * madsci.client.cli.tui.screens.logs
+* madsci.client.cli.tui.screens.new_wizard
+* madsci.client.cli.tui.screens.nodes
 * madsci.client.cli.tui.screens.status
+* madsci.client.cli.tui.screens.workflows
 
 Classes
 -------
 
-`DashboardScreen(name: str | None = None, id: str | None = None, classes: str | None = None)`
+`DashboardScreen(**kwargs: Any)`
 :   Main dashboard screen showing lab overview.
 
-    Initialize the screen.
-
-    Args:
-        name: The name of the screen.
-        id: The ID of the screen in the DOM.
-        classes: The CSS classes for the screen.
+    Initialize the dashboard screen.
 
     ### Ancestors (in MRO)
 
@@ -47,11 +45,14 @@ Classes
     `action_refresh(self) ‑> None`
     :   Refresh dashboard data.
 
+    `action_toggle_auto_refresh(self) ‑> None`
+    :   Toggle auto-refresh on/off.
+
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the dashboard layout.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - initial data load.
+    :   Handle screen mount - initial data load and start auto-refresh.
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
@@ -72,9 +73,6 @@ Classes
     ### Class variables
 
     `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
-    :
-
-    `DEFAULT_CSS`
     :
 
     `can_focus`
@@ -112,6 +110,53 @@ Classes
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.
 
+`NodesScreen(**kwargs: Any)`
+:   Screen showing node management and monitoring.
+
+    Initialize the screen.
+
+    ### Ancestors (in MRO)
+
+    * textual.screen.Screen
+    * typing.Generic
+    * textual.widget.Widget
+    * textual.dom.DOMNode
+    * textual.message_pump.MessagePump
+
+    ### Class variables
+
+    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    :
+
+    `can_focus`
+    :
+
+    `can_focus_children`
+    :
+
+    ### Methods
+
+    `action_go_back(self) ‑> None`
+    :   Go back to the previous screen.
+
+    `action_refresh(self) ‑> None`
+    :   Refresh node data.
+
+    `action_toggle_auto_refresh(self) ‑> None`
+    :   Toggle auto-refresh on/off.
+
+    `compose(self) ‑> Iterable[textual.widget.Widget]`
+    :   Compose the nodes screen layout.
+
+    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    :   Handle row selection in the table.
+
+    `on_mount(self) ‑> None`
+    :   Handle screen mount - set up table and load data.
+
+    `refresh_data(self) ‑> None`
+    :   Refresh node data from workcell manager.
+
 `StatusScreen(**kwargs: Any)`
 :   Screen showing detailed service status.
 
@@ -144,6 +189,9 @@ Classes
     `action_refresh(self) ‑> None`
     :   Refresh status data.
 
+    `action_toggle_auto_refresh(self) ‑> None`
+    :   Toggle auto-refresh on/off.
+
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the status screen layout.
 
@@ -155,3 +203,59 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh all service statuses.
+
+`WorkflowsScreen(**kwargs: Any)`
+:   Screen showing workflow visualization and management.
+
+    Initialize the screen.
+
+    ### Ancestors (in MRO)
+
+    * textual.screen.Screen
+    * typing.Generic
+    * textual.widget.Widget
+    * textual.dom.DOMNode
+    * textual.message_pump.MessagePump
+
+    ### Class variables
+
+    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    :
+
+    `can_focus`
+    :
+
+    `can_focus_children`
+    :
+
+    ### Methods
+
+    `action_cancel_workflow(self) ‑> None`
+    :   Cancel the selected workflow.
+
+    `action_go_back(self) ‑> None`
+    :   Go back to the previous screen.
+
+    `action_pause_workflow(self) ‑> None`
+    :   Pause the selected workflow.
+
+    `action_refresh(self) ‑> None`
+    :   Refresh workflow data.
+
+    `action_resume_workflow(self) ‑> None`
+    :   Resume the selected workflow.
+
+    `action_toggle_auto_refresh(self) ‑> None`
+    :   Toggle auto-refresh on/off.
+
+    `compose(self) ‑> Iterable[textual.widget.Widget]`
+    :   Compose the workflows screen layout.
+
+    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    :   Handle row selection in the workflows table.
+
+    `on_mount(self) ‑> None`
+    :   Handle screen mount - set up tables and load data.
+
+    `refresh_data(self) ‑> None`
+    :   Refresh workflow data from workcell manager.

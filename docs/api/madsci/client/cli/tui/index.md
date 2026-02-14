@@ -8,6 +8,7 @@ monitoring MADSci labs.
 Sub-modules
 -----------
 * madsci.client.cli.tui.app
+* madsci.client.cli.tui.constants
 * madsci.client.cli.tui.screens
 * madsci.client.cli.tui.styles
 * madsci.client.cli.tui.widgets
@@ -15,7 +16,7 @@ Sub-modules
 Classes
 -------
 
-`MadsciApp(lab_url: str = 'http://localhost:8000/')`
+`MadsciApp(lab_url: str = 'http://localhost:8000/', initial_screen: str = 'dashboard', config: MadsciCLIConfig | None = None)`
 :   MADSci Terminal User Interface Application.
 
     Provides an interactive terminal interface for managing and
@@ -25,6 +26,8 @@ Classes
 
     Args:
         lab_url: URL of the Lab Manager.
+        initial_screen: Name of the screen to show on launch.
+        config: Optional CLI configuration for service URLs.
 
     ### Ancestors (in MRO)
 
@@ -35,13 +38,13 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list[textual.binding.Binding]]`
+    `BINDINGS: ClassVar[list[Binding]]`
     :
 
-    `CSS`
+    `CSS_PATH`
     :
 
-    `SCREENS: ClassVar[dict[str, type[textual.screen.Screen]]]`
+    `SCREENS: ClassVar[dict[str, type[Screen]]]`
     :
 
     `SUB_TITLE`
@@ -51,6 +54,9 @@ Classes
     :
 
     ### Methods
+
+    `action_command_palette(self) ‑> None`
+    :   Exit TUI and launch Trogon command palette.
 
     `action_refresh(self) ‑> None`
     :   Refresh the current screen.

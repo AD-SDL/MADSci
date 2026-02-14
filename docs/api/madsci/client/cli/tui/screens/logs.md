@@ -29,9 +29,6 @@ Classes
 
     ### Class variables
 
-    `DEFAULT_CSS`
-    :
-
     `can_focus`
     :
 
@@ -59,9 +56,6 @@ Classes
     ### Class variables
 
     `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
-    :
-
-    `DEFAULT_CSS`
     :
 
     `can_focus`

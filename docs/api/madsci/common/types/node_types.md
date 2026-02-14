@@ -162,10 +162,25 @@ Classes
 
     ### Class variables
 
+    `module_name: str | None`
+    :
+
+    `module_version: str | None`
+    :
+
     `node_definition: str | pathlib.Path | None`
     :
 
+    `node_id: str | None`
+    :
+
     `node_info_path: str | pathlib.Path | None`
+    :
+
+    `node_name: str | None`
+    :
+
+    `node_type: madsci.common.types.node_types.NodeType | None`
     :
 
     `state_update_interval: float | None`
@@ -262,8 +277,35 @@ Classes
 
     ### Static methods
 
+    `from_config(config: madsci.common.types.node_types.NodeConfig, *, node_name: str | None = None, module_name: str | None = None, module_version: str | None = None, node_definition: madsci.common.types.node_types.NodeDefinition | None = None) ‑> madsci.common.types.node_types.NodeInfo`
+    :   Create a NodeInfo from settings and optional module metadata.
+
+        This factory builds a NodeInfo from ``NodeConfig`` settings fields
+        without requiring a separate ``NodeDefinition`` file.  Identity
+        fields are resolved with the following priority:
+
+        1. Explicit keyword arguments (``node_name``, ``module_name``, etc.)
+        2. Values from ``config`` identity fields (if set)
+        3. Values from ``node_definition`` (if provided, for backwards compat)
+        4. Sensible defaults
+
+        Args:
+            config: The node's configuration settings.
+            node_name: Explicit node name override.
+            module_name: Explicit module name override.
+            module_version: Explicit module version override.
+            node_definition: Optional legacy definition for backwards compat.
+
+        Returns:
+            NodeInfo: A new NodeInfo instance.
+
     `from_node_def_and_config(node: madsci.common.types.node_types.NodeDefinition, config: madsci.common.types.node_types.NodeConfig | None = None) ‑> madsci.common.types.node_types.NodeInfo`
     :   Create a NodeInfo from a NodeDefinition and config.
+
+        .. deprecated:: 0.7.0
+            Use :meth:`from_config` when possible. This method is maintained
+            for backwards compatibility with existing code that passes a
+            ``NodeDefinition`` object.
 
 `NodeReservation(**data: Any)`
 :   Reservation of a MADSci Node.

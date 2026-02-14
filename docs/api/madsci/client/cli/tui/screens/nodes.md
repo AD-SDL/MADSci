@@ -1,14 +1,15 @@
-Module madsci.client.cli.tui.screens.status
-===========================================
-Status screen for MADSci TUI.
+Module madsci.client.cli.tui.screens.nodes
+==========================================
+Node management screen for MADSci TUI.
 
-Provides detailed service status with health information.
+Provides node discovery, status monitoring, and action display
+by querying the Workcell Manager.
 
 Classes
 -------
 
-`ServiceDetailPanel(**kwargs: Any)`
-:   Panel showing details for a selected service.
+`NodeDetailPanel(**kwargs: Any)`
+:   Panel showing details for a selected node.
 
     Initialize the panel.
 
@@ -36,11 +37,11 @@ Classes
     :   Update the detail display.
 
         Args:
-            name: Service name.
-            data: Service data dictionary.
+            name: Node name.
+            data: Node data dictionary.
 
-`StatusScreen(**kwargs: Any)`
-:   Screen showing detailed service status.
+`NodesScreen(**kwargs: Any)`
+:   Screen showing node management and monitoring.
 
     Initialize the screen.
 
@@ -69,19 +70,19 @@ Classes
     :   Go back to the previous screen.
 
     `action_refresh(self) ‑> None`
-    :   Refresh status data.
+    :   Refresh node data.
 
     `action_toggle_auto_refresh(self) ‑> None`
     :   Toggle auto-refresh on/off.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the status screen layout.
+    :   Compose the nodes screen layout.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the table.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - set up tables and load data.
+    :   Handle screen mount - set up table and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh node data from workcell manager.
