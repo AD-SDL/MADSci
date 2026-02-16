@@ -39,6 +39,45 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
 }
 
 
+class _LazyMadsciContext:
+    """Proxy that defers MadsciContext instantiation until first attribute access.
+
+    This prevents Pydantic's CliSettingsSource from parsing sys.argv (and
+    intercepting --help) during Click's argument processing phase. The real
+    MadsciContext is only created when a command callback actually needs it.
+    """
+
+    def __init__(self, lab_url_override: str | None = None) -> None:
+        object.__setattr__(self, "_ctx", None)
+        object.__setattr__(self, "_lab_url_override", lab_url_override)
+
+    def _ensure_init(self) -> "MadsciContext":  # noqa: F821
+        ctx = object.__getattribute__(self, "_ctx")
+        if ctx is None:
+            from madsci.common.context import GlobalMadsciContext
+            from madsci.common.types.context_types import MadsciContext
+
+            ctx = MadsciContext(_cli_parse_args=[])
+            lab_url = object.__getattribute__(self, "_lab_url_override")
+            if lab_url is not None:
+                ctx.lab_server_url = lab_url  # type: ignore[assignment]
+            GlobalMadsciContext.set_context(ctx)
+            object.__setattr__(self, "_ctx", ctx)
+        return ctx
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._ensure_init(), name)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        setattr(self._ensure_init(), name, value)
+
+    def __repr__(self) -> str:
+        ctx = object.__getattribute__(self, "_ctx")
+        if ctx is None:
+            return "<LazyMadsciContext (not yet initialized)>"
+        return repr(ctx)
+
+
 class AliasedGroup(click.Group):
     """Click group that supports command aliases and lazy command loading.
 
@@ -153,27 +192,10 @@ def madsci(
     # Ensure context object exists
     ctx.ensure_object(dict)
 
-    # Load MadsciContext (reads settings.yaml, .env, and env vars)
-    from madsci.common.context import GlobalMadsciContext
-    from madsci.common.types.context_types import MadsciContext
+    # Defer MadsciContext creation so Pydantic's CliSettingsSource doesn't
+    # parse sys.argv and intercept --help before Click can handle it.
+    ctx.obj["context"] = _LazyMadsciContext(lab_url_override=lab_url)
 
-    madsci_ctx = MadsciContext(_cli_parse_args=False)
-
-    # CLI --lab-url overrides context when explicitly provided
-    if lab_url is not None:
-        madsci_ctx.lab_server_url = lab_url  # type: ignore[assignment]
-
-    # Install context globally
-    GlobalMadsciContext.set_context(madsci_ctx)
-
-    ctx.obj["context"] = madsci_ctx
-
-    # Store configuration in context
-    ctx.obj["lab_url"] = (
-        str(madsci_ctx.lab_server_url)
-        if madsci_ctx.lab_server_url
-        else "http://localhost:8000/"
-    )
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output
