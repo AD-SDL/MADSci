@@ -531,13 +531,13 @@ class TestSandboxedEnvironment:
 
 
 # ------------------------------------------------------------------ #
-# Phase 6: MadsciCLIConfig wiring                                     #
+# Phase 6: MadsciContext wiring                                        #
 # ------------------------------------------------------------------ #
 
 
-class TestCLIConfigLoading:
-    def test_config_available_in_context(self) -> None:
-        """MadsciCLIConfig should be loaded and stored in ctx.obj."""
+class TestCLIContextLoading:
+    def test_context_available_in_click_context(self) -> None:
+        """MadsciContext should be loaded and stored in ctx.obj."""
         runner = CliRunner()
         result = runner.invoke(madsci, ["version"])
         assert result.exit_code == 0

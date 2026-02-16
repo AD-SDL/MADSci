@@ -10,8 +10,7 @@ madsci [OPTIONS] COMMAND [ARGS]...
 
 | Option | Environment Variable | Description |
 |--------|---------------------|-------------|
-| `-c, --config PATH` | `MADSCI_CONFIG` | Configuration file path |
-| `--lab-url URL` | `MADSCI_LAB_URL` | Lab manager URL (default: `http://localhost:8000/`) |
+| `--lab-url URL` | `LAB_SERVER_URL` | Lab manager URL (default: `http://localhost:8000/`) |
 | `-v, --verbose` | | Increase verbosity (repeatable: `-vv`, `-vvv`) |
 | `-q, --quiet` | | Suppress non-essential output |
 | `--no-color` | `NO_COLOR` | Disable colored output |

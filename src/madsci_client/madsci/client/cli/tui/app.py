@@ -20,7 +20,7 @@ from textual.screen import Screen
 from textual.widgets import Footer, Header
 
 if TYPE_CHECKING:
-    from madsci.client.cli.utils.config import MadsciCLIConfig
+    from madsci.common.types.context_types import MadsciContext
 
 
 class MadsciApp(App):
@@ -59,20 +59,20 @@ class MadsciApp(App):
         self,
         lab_url: str = "http://localhost:8000/",
         initial_screen: str = "dashboard",
-        config: MadsciCLIConfig | None = None,
+        context: MadsciContext | None = None,
     ) -> None:
         """Initialize the MADSci TUI application.
 
         Args:
             lab_url: URL of the Lab Manager.
             initial_screen: Name of the screen to show on launch.
-            config: Optional CLI configuration for service URLs.
+            context: Optional MadsciContext for service URLs.
         """
         super().__init__()
         self.lab_url = lab_url
         self._initial_screen = initial_screen
-        self.cli_config = config
-        self.service_urls = get_default_services(config)
+        self.context = context
+        self.service_urls = get_default_services(context)
 
     def compose(self) -> ComposeResult:
         """Compose the application layout."""

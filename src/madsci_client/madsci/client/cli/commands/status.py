@@ -13,17 +13,6 @@ from typing import Any
 
 import click
 
-# Default service URLs
-DEFAULT_SERVICES = {
-    "lab_manager": "http://localhost:8000/",
-    "event_manager": "http://localhost:8001/",
-    "experiment_manager": "http://localhost:8002/",
-    "resource_manager": "http://localhost:8003/",
-    "data_manager": "http://localhost:8004/",
-    "workcell_manager": "http://localhost:8005/",
-    "location_manager": "http://localhost:8006/",
-}
-
 
 class ServiceStatus(str, Enum):
     """Status of a service."""
@@ -202,7 +191,7 @@ def status(  # noqa: C901
 
     console = get_console(ctx)
 
-    resolved_services = get_default_services(ctx.obj.get("config"))
+    resolved_services = get_default_services(ctx.obj.get("context"))
 
     if services:
         service_urls = {

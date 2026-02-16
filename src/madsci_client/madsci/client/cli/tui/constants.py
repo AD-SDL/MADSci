@@ -5,12 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from madsci.client.cli.utils.config import MadsciCLIConfig
+    from madsci.common.types.context_types import MadsciContext
 
 # Default auto-refresh interval in seconds
 AUTO_REFRESH_INTERVAL = 5.0
 
-# Fallback service URLs (used when no MadsciCLIConfig is available)
+# Fallback service URLs (used when no MadsciContext is available)
 DEFAULT_SERVICES = {
     "lab_manager": "http://localhost:8000/",
     "event_manager": "http://localhost:8001/",
@@ -22,25 +22,39 @@ DEFAULT_SERVICES = {
 }
 
 
-def get_default_services(config: MadsciCLIConfig | None = None) -> dict[str, str]:
-    """Build the service URL mapping from a CLI config, falling back to defaults.
+def get_default_services(context: MadsciContext | None = None) -> dict[str, str]:
+    """Build the service URL mapping from a MadsciContext, falling back to defaults.
 
     Args:
-        config: Optional CLI configuration.  When provided, URLs are read from
-            the config (which in turn consults env-vars and config files).
+        context: Optional MadsciContext.  When provided, URLs are read from
+            the context (which in turn consults env-vars and settings files).
 
     Returns:
         dict mapping service names to their base URLs.
     """
-    if config is None:
+    if context is None:
         return dict(DEFAULT_SERVICES)
 
     return {
-        "lab_manager": str(config.lab_url),
-        "event_manager": str(config.event_manager_url),
-        "experiment_manager": str(config.experiment_manager_url),
-        "resource_manager": str(config.resource_manager_url),
-        "data_manager": str(config.data_manager_url),
-        "workcell_manager": str(config.workcell_manager_url),
-        "location_manager": str(config.location_manager_url),
+        "lab_manager": str(context.lab_server_url)
+        if context.lab_server_url
+        else DEFAULT_SERVICES["lab_manager"],
+        "event_manager": str(context.event_server_url)
+        if context.event_server_url
+        else DEFAULT_SERVICES["event_manager"],
+        "experiment_manager": str(context.experiment_server_url)
+        if context.experiment_server_url
+        else DEFAULT_SERVICES["experiment_manager"],
+        "resource_manager": str(context.resource_server_url)
+        if context.resource_server_url
+        else DEFAULT_SERVICES["resource_manager"],
+        "data_manager": str(context.data_server_url)
+        if context.data_server_url
+        else DEFAULT_SERVICES["data_manager"],
+        "workcell_manager": str(context.workcell_server_url)
+        if context.workcell_server_url
+        else DEFAULT_SERVICES["workcell_manager"],
+        "location_manager": str(context.location_server_url)
+        if context.location_server_url
+        else DEFAULT_SERVICES["location_manager"],
     }

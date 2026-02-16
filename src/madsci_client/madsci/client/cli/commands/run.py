@@ -63,10 +63,10 @@ def workflow(
     console = get_console(ctx)
 
     if workcell_url is None:
-        cli_config = ctx.obj.get("config") if ctx.obj else None
+        context = ctx.obj.get("context") if ctx.obj else None
         workcell_url = (
-            str(cli_config.workcell_manager_url)
-            if cli_config
+            str(context.workcell_server_url)
+            if context and context.workcell_server_url
             else "http://localhost:8005/"
         )
 

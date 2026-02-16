@@ -123,7 +123,6 @@ Usage: madsci [OPTIONS] COMMAND [ARGS]...
       madsci tui            Launch interactive interface
 
 Options:
-  -c, --config PATH    Configuration file path.
   --lab-url TEXT       Lab manager URL.
   -v, --verbose        Increase verbosity.
   -q, --quiet          Suppress non-essential output.
@@ -276,33 +275,25 @@ Press `q` to exit the TUI.
 
 MADSci uses a layered configuration system:
 
-1. **Environment Variables**: Highest priority, prefix with service name (e.g., `EVENT_SERVER_URL`)
-2. **Configuration Files**: TOML or YAML files
+1. **Environment Variables**: Highest priority, prefix with service name (e.g., `LAB_SERVER_URL`)
+2. **Settings Files**: `settings.yaml` or `.env` files
 3. **Defaults**: Sensible defaults for all settings
 
 ### User Configuration
 
-You can create a user configuration file at `~/.madsci/config.toml`:
+You can create a `settings.yaml` file in your project directory:
 
-```toml
-# ~/.madsci/config.toml
+```yaml
+# settings.yaml
 
-# Default lab URL
-lab_url = "http://localhost:8000/"
-
-# Output preferences
-use_color = true
-json_output = false
-verbose = false
-
-# Manager URLs (optional overrides)
-[managers]
-event_url = "http://localhost:8001/"
-experiment_url = "http://localhost:8002/"
-resource_url = "http://localhost:8003/"
-data_url = "http://localhost:8004/"
-workcell_url = "http://localhost:8005/"
-location_url = "http://localhost:8006/"
+# Service URLs (all optional — defaults to localhost)
+lab_server_url: "http://localhost:8000/"
+event_server_url: "http://localhost:8001/"
+experiment_server_url: "http://localhost:8002/"
+resource_server_url: "http://localhost:8003/"
+data_server_url: "http://localhost:8004/"
+workcell_server_url: "http://localhost:8005/"
+location_server_url: "http://localhost:8006/"
 ```
 
 ## Concepts Deep Dive

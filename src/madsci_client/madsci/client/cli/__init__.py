@@ -95,16 +95,9 @@ class AliasedGroup(click.Group):
 
 @click.group(cls=AliasedGroup)
 @click.option(
-    "-c",
-    "--config",
-    type=click.Path(exists=True),
-    help="Configuration file path.",
-    envvar="MADSCI_CONFIG",
-)
-@click.option(
     "--lab-url",
-    envvar="MADSCI_LAB_URL",
-    default="http://localhost:8000/",
+    envvar="LAB_SERVER_URL",
+    default=None,
     help="Lab manager URL.",
 )
 @click.option(
@@ -135,8 +128,7 @@ class AliasedGroup(click.Group):
 @click.pass_context
 def madsci(
     ctx: click.Context,
-    config: str | None,
-    lab_url: str,
+    lab_url: str | None,
     verbose: int,
     quiet: bool,
     no_color: bool,
@@ -161,19 +153,27 @@ def madsci(
     # Ensure context object exists
     ctx.ensure_object(dict)
 
-    # Load centralized CLI configuration
-    from madsci.client.cli.utils.config import MadsciCLIConfig
+    # Load MadsciContext (reads settings.yaml, .env, and env vars)
+    from madsci.common.context import GlobalMadsciContext
+    from madsci.common.types.context_types import MadsciContext
 
-    cli_config = MadsciCLIConfig.load(config)
-    # CLI --lab-url overrides config file when explicitly provided
-    if ctx.get_parameter_source("lab_url") == click.core.ParameterSource.COMMANDLINE:
-        cli_config.lab_url = lab_url  # type: ignore[assignment]
+    madsci_ctx = MadsciContext(_cli_parse_args=False)
 
-    ctx.obj["config"] = cli_config
+    # CLI --lab-url overrides context when explicitly provided
+    if lab_url is not None:
+        madsci_ctx.lab_server_url = lab_url  # type: ignore[assignment]
+
+    # Install context globally
+    GlobalMadsciContext.set_context(madsci_ctx)
+
+    ctx.obj["context"] = madsci_ctx
 
     # Store configuration in context
-    ctx.obj["config_path"] = config
-    ctx.obj["lab_url"] = str(cli_config.lab_url)
+    ctx.obj["lab_url"] = (
+        str(madsci_ctx.lab_server_url)
+        if madsci_ctx.lab_server_url
+        else "http://localhost:8000/"
+    )
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output

@@ -133,10 +133,11 @@ def _wait_for_health(console: Console, timeout: int) -> None:
         check_service_health,
     )
     from madsci.client.cli.tui.constants import get_default_services
+    from madsci.common.context import get_current_madsci_context
     from rich.live import Live
     from rich.table import Table
 
-    services = get_default_services()
+    services = get_default_services(get_current_madsci_context())
     start_time = time.monotonic()
     deadline = start_time + timeout
     total = len(services)
