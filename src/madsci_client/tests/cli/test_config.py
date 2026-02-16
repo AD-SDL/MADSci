@@ -47,19 +47,19 @@ class TestConfigExport:
         assert result.exit_code != 0
 
     def test_export_event_yaml(self, runner: CliRunner) -> None:
-        """config export event produces YAML output."""
+        """config export event produces YAML output with prefixed keys."""
         result = runner.invoke(madsci, ["config", "export", "event"])
         assert result.exit_code == 0
-        assert "server_url" in result.output
+        assert "event_server_url" in result.output
 
     def test_export_event_json(self, runner: CliRunner) -> None:
-        """config export event --format json produces JSON output."""
+        """config export event --format json produces JSON with prefixed keys."""
         result = runner.invoke(
             madsci, ["config", "export", "event", "--format", "json"]
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
-        assert "server_url" in data
+        assert "event_server_url" in data
 
     def test_export_redacts_secrets(self, runner: CliRunner) -> None:
         """config export redacts secret fields by default."""
@@ -80,8 +80,8 @@ class TestConfigExport:
         """config export --all exports all manager settings."""
         result = runner.invoke(madsci, ["config", "export", "--all"])
         assert result.exit_code == 0
-        # Should contain settings from multiple managers
-        assert "server_url" in result.output
+        # Should contain prefixed settings from multiple managers
+        assert "event_server_url" in result.output
 
     def test_export_to_file(self, runner: CliRunner, tmp_path) -> None:
         """config export --output writes to file."""
@@ -92,7 +92,7 @@ class TestConfigExport:
         )
         assert result.exit_code == 0
         assert output_file.exists()
-        assert "server_url" in output_file.read_text()
+        assert "event_server_url" in output_file.read_text()
 
     def test_export_no_defaults(self, runner: CliRunner) -> None:
         """config export --no-include-defaults excludes default values."""
@@ -111,7 +111,7 @@ class TestConfigCreateManager:
     """Tests for config create manager subcommand."""
 
     def test_create_manager_event(self, runner: CliRunner, tmp_path) -> None:
-        """config create manager event creates a config file."""
+        """config create manager event creates a config file with prefixed keys."""
         output_file = tmp_path / "event.settings.yaml"
         result = runner.invoke(
             madsci,
@@ -127,7 +127,7 @@ class TestConfigCreateManager:
         assert result.exit_code == 0
         assert output_file.exists()
         content = output_file.read_text()
-        assert "server_url" in content
+        assert "event_server_url" in content
         assert "***REDACTED***" in content  # secrets are placeholders
 
     def test_create_manager_resource(self, runner: CliRunner, tmp_path) -> None:
@@ -148,7 +148,7 @@ class TestConfigCreateManager:
         assert output_file.exists()
 
     def test_create_manager_json(self, runner: CliRunner, tmp_path) -> None:
-        """config create manager event --format json produces JSON."""
+        """config create manager event --format json produces JSON with prefixed keys."""
         output_file = tmp_path / "event.settings.json"
         result = runner.invoke(
             madsci,
@@ -165,7 +165,7 @@ class TestConfigCreateManager:
         )
         assert result.exit_code == 0
         data = json.loads(output_file.read_text())
-        assert "server_url" in data
+        assert "event_server_url" in data
 
 
 class TestConfigCreateNode:

@@ -24,7 +24,9 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Environment files (keep .env.example, ignore actual .env overrides)
+# Environment files -- .env holds secrets and is gitignored
+# Default configuration lives in settings.yaml (version-controlled)
+.env
 .env.local
 .env.*.local
 

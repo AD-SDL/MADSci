@@ -35,7 +35,8 @@ Navigate to http://localhost:8000 in your browser.
 
 ```
 {{ lab_name }}/
-├── .env              # Environment configuration
+├── settings.yaml     # Default configuration (version-controlled)
+├── .env              # Secrets and overrides (gitignored)
 ├── .gitignore        # Git ignore rules
 ├── pyproject.toml    # Python project configuration
 ├── start_lab.py      # Script to start the lab
@@ -43,6 +44,12 @@ Navigate to http://localhost:8000 in your browser.
 │   └── example.workflow.yaml
 └── README.md         # This file
 ```
+
+## Configuration
+
+Default settings live in `settings.yaml` (safe to commit).
+Secrets and environment-specific overrides go in `.env` (gitignored).
+Environment variables override both files.
 
 ## Adding Nodes
 

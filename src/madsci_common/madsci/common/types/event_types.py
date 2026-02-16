@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.client_types import MadsciClientConfig
 from madsci.common.types.manager_types import (
     ManagerDefinition,
@@ -67,6 +72,12 @@ class EventManagerSettings(
     env_prefix="EVENT_",
 ):
     """Handles settings and configuration for the Event Manager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("event"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("event")
 
     server_url: AnyUrl = Field(
         title="Event Server URL",

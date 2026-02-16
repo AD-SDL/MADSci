@@ -51,10 +51,15 @@ MANAGER_HOST=<manager-ip> docker compose -f compose.nodes.yaml up -d
 
 ## Configuration
 
+Default settings live in `settings.yaml` (safe to commit to git).
+Secrets and credentials go in `.env` (gitignored).
+Environment variables override both files.
+
+Edit `settings.yaml` to customize ports, database names, and other non-secret settings.
 Edit `.env` to set:
-- Manager host addresses
-- Database connection strings
-- Network configuration
+- `MANAGER_HOST` for distributed deployments
+- Database credentials
+- Other secrets and environment-specific overrides
 
 ## Documentation
 

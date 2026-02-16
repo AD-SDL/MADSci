@@ -11,6 +11,8 @@ from madsci.common.types.base_types import (
     PathLike,
     PositiveInt,
     PositiveNumber,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.manager_types import (
     ManagerDefinition,
@@ -23,6 +25,7 @@ from madsci.common.utils import new_name_str, new_ulid_str
 from pydantic import AfterValidator, AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
+from pydantic_settings import SettingsConfigDict
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field as SQLField
 
@@ -51,6 +54,12 @@ class ResourceManagerSettings(
     env_prefix="RESOURCE_",
 ):
     """Settings for the MADSci Resource Manager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("resource"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("resource")
 
     # Structural config override (from definition)
     default_templates_file: Optional[PathLike] = Field(

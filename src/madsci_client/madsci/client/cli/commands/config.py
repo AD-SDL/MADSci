@@ -18,7 +18,7 @@ import click
 
 # --- Manager settings registry: maps manager type to (settings_class_path, friendly_name)
 _MANAGER_SETTINGS: dict[str, tuple[str, str]] = {
-    "lab": ("madsci.common.types.squid_types.SquidSettings", "Lab Manager"),
+    "lab": ("madsci.common.types.lab_types.LabManagerSettings", "Lab Manager"),
     "event": ("madsci.common.types.event_types.EventManagerSettings", "Event Manager"),
     "experiment": (
         "madsci.common.types.experiment_types.ExperimentManagerSettings",
@@ -55,18 +55,23 @@ def _export_settings(
     include_defaults: bool,
     output_format: str,
 ) -> str:
-    """Export settings from a class, with optional secret redaction."""
+    """Export settings from a class, with optional secret redaction.
+
+    Uses by_alias=True so that settings with a prefixed alias_generator
+    produce prefixed keys (e.g., event_server_url instead of server_url),
+    which is correct for a shared settings.yaml file.
+    """
     settings_cls = _import_class(settings_class_path)
     settings = settings_cls()
 
     if hasattr(settings, "model_dump_safe"):
-        data = settings.model_dump_safe(include_secrets=include_secrets)
+        data = settings.model_dump_safe(include_secrets=include_secrets, by_alias=True)
     else:
-        data = settings.model_dump(mode="json")
+        data = settings.model_dump(mode="json", by_alias=True)
 
     if not include_defaults:
         try:
-            defaults = settings_cls().model_dump(mode="json")
+            defaults = settings_cls().model_dump(mode="json", by_alias=True)
             data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
         except Exception:
             import logging as _logging

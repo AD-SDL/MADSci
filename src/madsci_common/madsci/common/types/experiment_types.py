@@ -10,6 +10,8 @@ from madsci.common.types.base_types import (
     MadsciBaseModel,
     PathLike,
     datetime,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.manager_types import (
@@ -20,6 +22,7 @@ from madsci.common.types.manager_types import (
 )
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field, computed_field, field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class ExperimentManagerSettings(
@@ -31,6 +34,12 @@ class ExperimentManagerSettings(
     env_prefix="EXPERIMENT_",
 ):
     """Settings for the MADSci Experiment Manager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("experiment"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("experiment")
 
     server_url: AnyUrl = Field(
         title="Experiment Manager Server URL",

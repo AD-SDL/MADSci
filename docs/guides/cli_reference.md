@@ -193,12 +193,14 @@ madsci validate --type workcell path/to/workcell.yaml
 
 ### `madsci config`
 
-Manage MADSci configuration files.
+Manage MADSci configuration files. Exports use prefixed keys by default (e.g., `event_server_url`) for compatibility with the shared `settings.yaml` format.
 
 ```bash
-madsci config export            # Export current config to YAML
-madsci config create            # Create a new config file interactively
-madsci config show              # Display active configuration
+madsci config export event                # Export Event Manager settings (prefixed keys)
+madsci config export --all                # Export all manager settings
+madsci config export event --format json  # Export as JSON
+madsci config create manager event        # Create Event Manager settings file
+madsci config create manager event -o my-event.yaml  # Custom output path
 ```
 
 **Alias**: `cfg`

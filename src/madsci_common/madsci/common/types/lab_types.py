@@ -3,7 +3,11 @@
 from pathlib import Path
 from typing import Literal, Optional
 
-from madsci.common.types.base_types import PathLike
+from madsci.common.types.base_types import (
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -13,6 +17,7 @@ from madsci.common.types.manager_types import (
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, Field
 from pydantic.networks import AnyUrl
+from pydantic_settings import SettingsConfigDict
 
 
 class LabManagerSettings(
@@ -24,6 +29,12 @@ class LabManagerSettings(
     env_prefix="LAB_",
 ):
     """Settings for the MADSci Lab."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("lab"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("lab")
 
     server_url: AnyUrl = Field(
         title="Lab URL",

@@ -988,9 +988,10 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 6
+        assert len(result.files_created) == 7
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
+        assert "settings.yaml" in file_names
         assert ".env" in file_names
         assert ".gitignore" in file_names
         assert "pyproject.toml" in file_names
@@ -1010,9 +1011,10 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 7
+        assert len(result.files_created) == 8
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
+        assert "settings.yaml" in file_names
         assert ".env" in file_names
         assert ".gitignore" in file_names
         assert "pyproject.toml" in file_names
@@ -1033,9 +1035,10 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 8
+        assert len(result.files_created) == 9
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
+        assert "settings.yaml" in file_names
         assert ".env" in file_names
         assert ".gitignore" in file_names
         assert "pyproject.toml" in file_names

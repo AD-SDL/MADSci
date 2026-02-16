@@ -4,7 +4,12 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -15,6 +20,7 @@ from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class LocationArgument(MadsciBaseModel):
@@ -315,6 +321,12 @@ class LocationManagerSettings(
     json_file=("settings.json", "location.settings.json"),
 ):
     """Settings for the LocationManager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("location"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("location")
 
     # Structural config overrides (from definition)
     locations_file: Optional[PathLike] = Field(

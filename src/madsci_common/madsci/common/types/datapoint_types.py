@@ -8,7 +8,13 @@ from typing import Annotated, Any, Literal, Optional, Union
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -24,6 +30,7 @@ from pydantic import (
     field_validator,
 )
 from pydantic.types import Discriminator
+from pydantic_settings import SettingsConfigDict
 
 
 class DataPointTypeEnum(str, Enum):
@@ -253,6 +260,12 @@ class DataManagerSettings(
     env_prefix="DATA_",
 ):
     """Settings for the MADSci Data Manager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("data"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("data")
 
     server_url: AnyUrl = Field(
         title="Data Manager Server URL",

@@ -47,7 +47,12 @@ docker compose down
 
 ## Configuration
 
-Edit `.env` to customize ports, database URLs, and other settings.
+Default settings live in `settings.yaml` (safe to commit to git).
+Secrets and credentials go in `.env` (gitignored).
+Environment variables override both files.
+
+Edit `settings.yaml` to customize ports, database names, and other non-secret settings.
+Edit `.env` to set database credentials and other secrets.
 
 ## Workflows
 

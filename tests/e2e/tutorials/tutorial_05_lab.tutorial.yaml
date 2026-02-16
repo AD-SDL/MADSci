@@ -28,6 +28,8 @@ steps:
       - type: file_exists
         path: "./test_tutorial_05/test_lab/start_lab.py"
       - type: file_exists
+        path: "./test_tutorial_05/test_lab/settings.yaml"
+      - type: file_exists
         path: "./test_tutorial_05/test_lab/.env"
       - type: file_exists
         path: "./test_tutorial_05/test_lab/.gitignore"
@@ -54,8 +56,16 @@ steps:
       - type: output_contains
         pattern: "pyproject.toml valid"
 
-  - name: "Validate .env contains expected variables"
-    command: "python -c \"data=open('./test_tutorial_05/test_lab/.env').read(); assert 'LAB_SERVER_URL' in data; assert 'EVENT_SERVER_URL' in data; print('.env valid')\""
+  - name: "Validate settings.yaml contains expected variables"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/settings.yaml').read(); assert 'lab_server_url' in data; assert 'event_server_url' in data; print('settings.yaml valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "settings.yaml valid"
+
+  - name: "Validate .env contains lab metadata"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/.env').read(); assert 'LAB_NAME' in data; print('.env valid')\""
     validations:
       - type: exit_code
         expected: 0
