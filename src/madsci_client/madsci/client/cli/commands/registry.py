@@ -35,6 +35,7 @@ def registry() -> None:
     type=click.Choice(
         ["node", "module", "manager", "experiment", "workcell", "workflow"]
     ),
+    default=None,
     help="Filter by component type.",
 )
 @click.option(

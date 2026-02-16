@@ -353,6 +353,7 @@ def format_status_icon(status: CheckStatus) -> str:
     "categories",
     type=click.Choice(["python", "docker", "ports", "network"]),
     multiple=True,
+    default=None,
     help="Only run specific check categories.",
 )
 @click.option(

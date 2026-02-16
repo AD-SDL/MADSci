@@ -419,6 +419,7 @@ def module(
     "-t",
     "interface_type",
     type=click.Choice(["fake", "sim", "mock"]),
+    default=None,
     help="Interface type to add.",
 )
 @click.option("--name", "-n", help="Custom interface name.")
@@ -782,6 +783,7 @@ def lab(
     type=click.Choice(
         ["module", "interface", "node", "experiment", "workflow", "workcell", "lab"]
     ),
+    default=None,
     help="Filter by category.",
 )
 @click.option("--tag", "-t", multiple=True, help="Filter by tag.")

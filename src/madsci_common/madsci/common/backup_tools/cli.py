@@ -72,6 +72,7 @@ def madsci_backup(ctx: click.Context, config: Optional[str]) -> None:
     "--type",
     "db_type",
     type=click.Choice(["postgresql", "mongodb"]),
+    default=None,
     help="Database type (auto-detected if omitted)",
 )
 @click.option("--name", help="Backup name suffix")
@@ -133,6 +134,7 @@ def create(
     "--type",
     "db_type",
     type=click.Choice(["postgresql", "mongodb"]),
+    default=None,
     help="Database type (auto-detected if omitted)",
 )
 def restore(backup: str, db_url: str, db_type: Optional[str]) -> None:
@@ -185,6 +187,7 @@ def restore(backup: str, db_url: str, db_type: Optional[str]) -> None:
     "--type",
     "db_type",
     type=click.Choice(["postgresql", "mongodb"]),
+    default=None,
     help="Database type (auto-detected if omitted)",
 )
 def validate(backup: str, db_url: str, db_type: Optional[str]) -> None:

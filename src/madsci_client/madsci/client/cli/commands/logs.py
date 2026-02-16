@@ -204,6 +204,7 @@ def filter_logs(
     type=click.Choice(
         ["debug", "info", "warning", "error", "critical"], case_sensitive=False
     ),
+    default=None,
     help="Minimum log level to show.",
 )
 @click.option(
