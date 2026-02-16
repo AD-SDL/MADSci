@@ -41,7 +41,6 @@ class MigrationScanner:
     PATTERNS: ClassVar[dict[FileType, list[str]]] = {
         FileType.MANAGER_DEFINITION: ["**/*.manager.yaml", "**/*.manager.yml"],
         FileType.NODE_DEFINITION: ["**/*.node.yaml", "**/*.node.yml"],
-        FileType.WORKFLOW_DEFINITION: ["**/*.workflow.yaml", "**/*.workflow.yml"],
     }
 
     def __init__(self, project_dir: Path) -> None:
@@ -108,14 +107,10 @@ class MigrationScanner:
                 name = data.get("name", path.stem.replace(".manager", ""))
                 component_id = data.get("manager_id", "")
                 component_type = "manager"
-            elif file_type == FileType.NODE_DEFINITION:
+            else:
                 name = data.get("node_name", path.stem.replace(".node", ""))
                 component_id = data.get("node_id", "")
                 component_type = "node"
-            else:
-                name = data.get("name", path.stem.replace(".workflow", ""))
-                component_id = data.get("workflow_definition_id", "")
-                component_type = "workflow"
 
             # Build migration actions
             actions = self._plan_actions(data, file_type)
@@ -162,12 +157,9 @@ class MigrationScanner:
         if file_type == FileType.MANAGER_DEFINITION:
             id_field = "manager_id"
             name_field = "name"
-        elif file_type == FileType.NODE_DEFINITION:
+        else:
             id_field = "node_id"
             name_field = "node_name"
-        else:
-            id_field = "workflow_definition_id"
-            name_field = "name"
 
         # 1. Register ID
         if data.get(id_field):
@@ -252,7 +244,5 @@ class MigrationScanner:
                 env_vars["NODE_DESCRIPTION"] = data["node_description"]
             if data.get("module_name"):
                 env_vars["NODE_MODULE_NAME"] = data["module_name"]
-
-        # Workflow definitions are kept as YAML, not migrated to env vars
 
         return env_vars

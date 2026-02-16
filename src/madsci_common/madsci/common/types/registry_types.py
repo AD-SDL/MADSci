@@ -13,9 +13,7 @@ from madsci.common.types.base_types import MadsciBaseModel
 from madsci.common.utils import new_ulid_str
 from pydantic import Field
 
-ComponentType = Literal[
-    "node", "module", "manager", "experiment", "workcell", "workflow"
-]
+ComponentType = Literal["node", "module", "manager", "experiment", "workcell"]
 """Valid component types for registry entries."""
 
 

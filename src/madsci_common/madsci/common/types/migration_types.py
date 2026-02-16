@@ -30,7 +30,6 @@ class FileType(str, Enum):
 
     MANAGER_DEFINITION = "manager_definition"
     NODE_DEFINITION = "node_definition"
-    WORKFLOW_DEFINITION = "workflow_definition"
 
 
 class MigrationAction(MadsciBaseModel):

@@ -32,9 +32,7 @@ def registry() -> None:
     "--type",
     "-t",
     "component_type",
-    type=click.Choice(
-        ["node", "module", "manager", "experiment", "workcell", "workflow"]
-    ),
+    type=click.Choice(["node", "module", "manager", "experiment", "workcell"]),
     default=None,
     help="Filter by component type.",
 )

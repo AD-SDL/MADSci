@@ -80,32 +80,16 @@ class TestMigrationScannerAgainstExampleLab:
             f"{[m.source_path.name for m in node_files]}"
         )
 
-    def test_scanner_finds_all_workflow_definitions(
-        self, example_lab_path: Path
-    ) -> None:
-        """Scanner should find all 7 workflow definition files."""
-        scanner = MigrationScanner(example_lab_path)
-        plan = scanner.scan()
-
-        workflow_files = [
-            m for m in plan.files if m.file_type.value == "workflow_definition"
-        ]
-
-        assert len(workflow_files) == 7, (
-            f"Expected 7 workflow definitions, found {len(workflow_files)}: "
-            f"{[m.source_path.name for m in workflow_files]}"
-        )
-
     def test_scanner_total_file_count(self, example_lab_path: Path) -> None:
-        """Scanner should find at least 19 definition files (7 manager + 5 node + 7 workflow).
+        """Scanner should find at least 12 definition files (7 manager + 5 node).
 
         Note: locally-generated or gitignored files may increase the count.
         """
         scanner = MigrationScanner(example_lab_path)
         plan = scanner.scan()
 
-        assert plan.total_count >= 19, (
-            f"Expected at least 19 total definition files, found {plan.total_count}"
+        assert plan.total_count >= 12, (
+            f"Expected at least 12 total definition files, found {plan.total_count}"
         )
 
     def test_all_files_have_pending_status(self, example_lab_path: Path) -> None:
@@ -183,7 +167,7 @@ class TestMigrateScanCLIAgainstExampleLab:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert "files" in data
-        assert len(data["files"]) >= 19
+        assert len(data["files"]) >= 12
 
     def test_scan_cli_verbose_shows_details(self, example_lab_path: Path) -> None:
         """CLI scan with --verbose should show names and IDs."""
