@@ -344,7 +344,7 @@ class DataProcessor:
         return transform(data)
 ```
 
-See [example_lab/OBSERVABILITY.md](example_lab/OBSERVABILITY.md) for the full observability stack setup.
+See [docs/guides/observability.md](docs/guides/observability.md) for the full observability stack setup.
 
 ### Ownership Context
 

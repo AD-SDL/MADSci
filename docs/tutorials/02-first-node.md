@@ -568,5 +568,5 @@ You've created a working node module! Next steps:
 ### Reference
 
 - [Module Templates](../../docs/designs/template_system_design.md)
-- [Node Development Guide](../../example_lab/NODE_DEVELOPMENT_GUIDE.md)
+- [Node Development Guide](../guides/node_development.md)
 - [Interface Patterns](../guides/integrator/03-developing-interfaces.md)

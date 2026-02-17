@@ -302,7 +302,7 @@ if 'exp' in dir() and exp._experiment_id:
 
 ## Example Notebooks
 
-The `example_lab/notebooks/` directory contains example notebooks:
+The `examples/notebooks/` directory contains example notebooks:
 
 | Notebook | Description |
 |----------|-------------|

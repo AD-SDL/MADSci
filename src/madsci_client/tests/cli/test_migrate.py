@@ -91,30 +91,34 @@ class TestMigrateScanCommand:
         assert result.exit_code == 0
         assert "test.node.yaml" in result.output or "1 file" in result.output
 
-    def test_scan_example_lab(self) -> None:
-        """Test scanning the example_lab directory for definition files."""
+    def test_scan_fixture_data(self) -> None:
+        """Test scanning the v0.6 fixture directory for definition files."""
         runner = CliRunner()
-        example_lab = Path(__file__).resolve().parents[4] / "example_lab"
-        if not example_lab.exists():
-            return  # Skip if example_lab not found
+        fixture_dir = (
+            Path(__file__).resolve().parent / "fixtures" / "migration" / "v0.6"
+        )
+        if not fixture_dir.exists():
+            return  # Skip if fixture directory not found
 
-        result = runner.invoke(madsci, ["migrate", "scan", str(example_lab)])
+        result = runner.invoke(madsci, ["migrate", "scan", str(fixture_dir)])
 
         assert result.exit_code == 0
-        # example_lab should have definition files to migrate
+        # Fixture data should have definition files to migrate
         assert (
             "files requiring migration" in result.output
             or "No files need migration" in result.output
         )
 
-    def test_scan_example_lab_json(self) -> None:
-        """Test scanning example_lab with JSON output."""
+    def test_scan_fixture_data_json(self) -> None:
+        """Test scanning fixture data with JSON output."""
         runner = CliRunner()
-        example_lab = Path(__file__).resolve().parents[4] / "example_lab"
-        if not example_lab.exists():
-            return  # Skip if example_lab not found
+        fixture_dir = (
+            Path(__file__).resolve().parent / "fixtures" / "migration" / "v0.6"
+        )
+        if not fixture_dir.exists():
+            return  # Skip if fixture directory not found
 
-        result = runner.invoke(madsci, ["migrate", "scan", str(example_lab), "--json"])
+        result = runner.invoke(madsci, ["migrate", "scan", str(fixture_dir), "--json"])
 
         assert result.exit_code == 0
 

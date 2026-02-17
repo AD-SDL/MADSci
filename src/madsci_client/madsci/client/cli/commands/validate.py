@@ -189,7 +189,7 @@ def validate(
     \b
     Examples:
         madsci validate                       Validate current directory
-        madsci validate example_lab/          Validate a specific directory
+        madsci validate examples/example_lab/  Validate a specific directory
         madsci validate path/to/file.yaml     Validate a single file
         madsci validate --json                Machine-readable output
     """

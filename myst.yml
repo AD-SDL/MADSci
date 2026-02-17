@@ -56,6 +56,10 @@ project:
         - file: docs/guides/logging.md
         - file: docs/guides/migration.md
         - file: docs/guides/migration_from_definitions.md
+        - file: docs/guides/node_development.md
+        - file: docs/guides/workflow_development.md
+        - file: docs/guides/observability.md
+        - file: docs/guides/troubleshooting.md
 
     - title: Equipment Integrator Guide
       children:
@@ -90,13 +94,11 @@ project:
 
     - title: Example Lab
       children:
-        - file: example_lab/README.md
-        - file: example_lab/NODE_DEVELOPMENT_GUIDE.md
-        - file: example_lab/WORKFLOW_GUIDE.md
-        - file: example_lab/OBSERVABILITY.md
-        - file: example_lab/TROUBLESHOOTING.md
-        # Automatically include all notebooks
-        - pattern: example_lab/notebooks/*.ipynb
+        - file: examples/example_lab/README.md
+
+    - title: Example Notebooks
+      children:
+        - pattern: examples/notebooks/*.ipynb
 
     - title: Core Packages
       children:

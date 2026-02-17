@@ -1,12 +1,12 @@
 # Node Development Quick Reference
 
-> For comprehensive, interactive node development tutorials, see **[node_notebook.ipynb](notebooks/node_notebook.ipynb)**
+> For comprehensive, interactive node development tutorials, see **[node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb)**
 
 This guide provides quick reference information for node development patterns not covered in the interactive tutorial.
 
 ## Quick Start Checklist
 
-1. **📓 Start with the interactive tutorial**: Run `jupyter lab notebooks/node_notebook.ipynb` for hands-on learning
+1. **Start with the interactive tutorial**: Run `jupyter lab examples/notebooks/node_notebook.ipynb` for hands-on learning
 2. **Choose a template**: Copy from `example_modules/` that matches your instrument type
 3. **Define configuration**: Create your config class inheriting from `RestNodeConfig`
 4. **Implement hardware interface**: Separate device communication logic
@@ -212,7 +212,7 @@ def retry(times=3, delay=1.0):
 
 ## Next Steps
 
-1. **Complete the interactive tutorial**: Work through `node_notebook.ipynb` thoroughly
+1. **Complete the interactive tutorial**: Work through `examples/notebooks/node_notebook.ipynb` thoroughly
 2. **Study example implementations**: Review all modules in `example_modules/`
 3. **Start simple**: Begin with a basic node and add complexity gradually
 4. **Test extensively**: Use both unit and integration testing
@@ -220,7 +220,7 @@ def retry(times=3, delay=1.0):
 
 ## Reference Links
 
-- **Interactive Tutorial**: [node_notebook.ipynb](notebooks/node_notebook.ipynb)
-- **Example Implementations**: [example_modules/](example_modules/)
-- **Troubleshooting**: [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
-- **Workflow Development**: [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md)
+- **Interactive Tutorial**: [node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb)
+- **Example Implementations**: [example_modules/](../../examples/example_lab/example_modules/)
+- **Troubleshooting**: [Troubleshooting](troubleshooting.md)
+- **Workflow Development**: [Workflow Development](workflow_development.md)

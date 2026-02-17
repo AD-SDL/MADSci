@@ -70,7 +70,7 @@ Classes
 
     ### Class variables
 
-    `component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow']`
+    `component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell']`
     :
 
     `created_at: datetime.datetime`
@@ -166,7 +166,7 @@ Classes
 
     ### Class variables
 
-    `component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow']`
+    `component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell']`
     :
 
     `id: str`

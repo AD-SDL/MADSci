@@ -725,7 +725,7 @@ Congratulations! You've completed the MADSci tutorial series. You now know how t
 - **[Equipment Integrator Guide](../guides/integrator/01-understanding-modules.md)** - Deep dive into module development
 - **[Lab Operator Guide](../guides/operator/01-daily-operations.md)** - Day-to-day lab management
 - **[Experimentalist Guide](../guides/experimentalist/01-running-experiments.md)** - Advanced experiment techniques
-- **[Observability Guide](../../example_lab/OBSERVABILITY.md)** - Full observability setup
+- **[Observability Guide](../guides/observability.md)** - Full observability setup
 
 ### Join the Community
 

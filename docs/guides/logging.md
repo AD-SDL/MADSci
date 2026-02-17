@@ -437,4 +437,4 @@ def get_user(user_id: str):
     return api.fetch(user_id)
 ```
 
-See [OBSERVABILITY.md](../../example_lab/OBSERVABILITY.md) for the full observability stack setup.
+See [OBSERVABILITY.md](observability.md) for the full observability stack setup.

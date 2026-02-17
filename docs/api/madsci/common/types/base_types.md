@@ -8,6 +8,57 @@ Variables
 `REDACTED_PLACEHOLDER`
 :   Placeholder string used when redacting secret field values.
 
+Functions
+---------
+
+`prefixed_alias_generator(prefix: str) ‑> pydantic.aliases.AliasGenerator`
+:   Create an AliasGenerator that adds prefixed serialization aliases.
+
+    This enables ``model_dump(by_alias=True)`` to produce prefixed keys
+    (e.g., ``event_server_url``) while code still uses unprefixed field
+    names (e.g., ``server_url``).
+
+    Note:
+        Only ``serialization_alias`` is set here.  Setting ``validation_alias``
+        would override pydantic-settings' ``env_prefix``, causing ``.env`` files
+        to lose their per-manager prefixes.  Instead, use
+        :func:`prefixed_model_validator` on the settings class to accept
+        prefixed keys from YAML or keyword arguments.
+
+    Args:
+        prefix: The prefix to add (e.g., "event"). Trailing underscores are stripped.
+
+    Returns:
+        An AliasGenerator that serializes with the prefixed name.
+
+`prefixed_model_validator(prefix: str) ‑> Any`
+:   Create a ``model_validator(mode='before')`` that accepts prefixed keys.
+
+    When a shared ``settings.yaml`` uses prefixed keys (e.g.,
+    ``event_server_url``), this validator strips the prefix so that the
+    model can validate them against unprefixed field names (``server_url``).
+
+    The validator preserves precedence: if both ``server_url`` and
+    ``event_server_url`` are present, the unprefixed value wins (since env
+    vars, which have higher priority, are resolved to unprefixed names by
+    pydantic-settings' ``env_prefix``).
+
+    Usage::
+
+        class EventManagerSettings(ManagerSettings, env_prefix="EVENT_", ...):
+            model_config = SettingsConfigDict(
+                alias_generator=prefixed_alias_generator("event"),
+                populate_by_name=True,
+            )
+            _accept_prefixed_keys = prefixed_model_validator("event")
+
+    Args:
+        prefix: The prefix to strip (e.g., "event"). Trailing underscores
+            are stripped; matching is case-insensitive.
+
+    Returns:
+        A decorated classmethod suitable for use as a Pydantic model validator.
+
 Classes
 -------
 

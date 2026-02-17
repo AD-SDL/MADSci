@@ -132,7 +132,7 @@ EVENT_OTEL_ENABLED=false
 
 ### Custom Configuration
 
-Configuration files are located in `example_lab/otel/`:
+Configuration files are located in `../../examples/example_lab/otel/`:
 
 - `otel-collector-full.yaml`: Full collector config with all exporters
 - `prometheus.yaml`: Prometheus configuration

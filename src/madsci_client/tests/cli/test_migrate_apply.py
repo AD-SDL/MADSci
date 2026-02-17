@@ -1,8 +1,12 @@
-"""Integration tests for migration converter --apply against example_lab.
+"""Integration tests for migration converter --apply against fixture data.
 
-These tests run the converter against a copy of example_lab to validate
-that IDs are registered, backups are created, deprecated markers are added,
-and rollback restores originals.
+These tests run the converter against a copy of the v0.6 fixture data to
+validate that IDs are registered, backups are created, deprecated markers
+are added, and rollback restores originals.
+
+The fixture data in fixtures/migration/v0.6/ is a static snapshot decoupled
+from the live example lab, so these tests remain stable as the example lab
+configuration evolves.
 """
 
 import shutil
@@ -15,17 +19,17 @@ from madsci.common.migration.converter import MigrationRollback
 from madsci.common.registry import LocalRegistryManager
 from madsci.common.types.migration_types import MigrationStatus
 
-# Path to example_lab relative to this test file
-EXAMPLE_LAB = Path(__file__).resolve().parents[4] / "example_lab"
+# Path to v0.6 fixture data (self-contained, decoupled from live example_lab)
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "migration" / "v0.6"
 
 
 @pytest.fixture()
 def lab_copy(tmp_path: Path) -> Path:
-    """Create a copy of example_lab in tmp_path for safe modification."""
-    if not EXAMPLE_LAB.exists():
-        pytest.skip("example_lab directory not found")
-    dest = tmp_path / "example_lab"
-    shutil.copytree(EXAMPLE_LAB, dest)
+    """Create a copy of v0.6 fixtures in tmp_path for safe modification."""
+    if not FIXTURE_DIR.exists():
+        pytest.skip("v0.6 fixture directory not found")
+    dest = tmp_path / "v0.6_fixtures"
+    shutil.copytree(FIXTURE_DIR, dest)
     return dest
 
 
@@ -37,7 +41,7 @@ def temp_registry(tmp_path: Path) -> LocalRegistryManager:
 
 
 class TestMigrateConvertApply:
-    """Test applying migration converter to a copy of example_lab."""
+    """Test applying migration converter to a copy of fixture data."""
 
     def test_convert_apply_creates_backups(
         self, lab_copy: Path, temp_registry: LocalRegistryManager

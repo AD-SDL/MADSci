@@ -53,7 +53,7 @@ MADSci is made up of a number of different modular components, each of which can
 - [CLI Reference](./docs/guides/cli_reference.md): Complete reference for all 17 CLI commands, options, and aliases.
 - [Template Catalog](./docs/guides/template_catalog.md): All 26 built-in templates with parameters and examples.
 - [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
-- [Observability](./example_lab/OBSERVABILITY.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
+- [Observability](./docs/guides/observability.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
 - [Daily Operations](./docs/guides/operator/01-daily-operations.md): Day-to-day lab operations, startup, shutdown, and health checks.
 
 ## Installation
@@ -121,7 +121,7 @@ MADSci uses environment variables for configuration with hierarchical precedence
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
 
-See [Configuration.md](./Configuration.md) for comprehensive options, [example_lab/](./example_lab/) for working configurations, and [OBSERVABILITY.md](./example_lab/OBSERVABILITY.md) for OpenTelemetry setup.
+See [Configuration.md](./Configuration.md) for comprehensive options, [example_lab/](./examples/example_lab/) for working configurations, and [OBSERVABILITY.md](./docs/guides/observability.md) for OpenTelemetry setup.
 
 ## Roadmap
 
@@ -133,9 +133,9 @@ We're working on bringing the following additional components to MADSci:
 
 ### Learning Resources
 
-1. **[Example Lab](./example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
-2. **[Example Notebooks](./example_lab/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
-3. **Configuration examples**: See [example_lab/managers/](./example_lab/managers/) for manager configurations
+1. **[Example Lab](./examples/example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
+2. **[Example Notebooks](./examples/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
+3. **Configuration examples**: See [example_lab/managers/](./examples/example_lab/managers/) for manager configurations
 
 ### CLI Overview
 
@@ -206,7 +206,7 @@ madsci config show             # Display active configuration
 
 **Creating custom nodes:**
 ```python
-# See example_lab/example_modules/ for reference implementations
+# See examples/example_lab/example_modules/ for reference implementations
 from madsci.node_module import AbstractNodeModule
 
 class MyInstrument(AbstractNodeModule):
@@ -217,7 +217,7 @@ class MyInstrument(AbstractNodeModule):
 
 **Submitting workflows:**
 ```python
-# See example_lab/workflows/ for workflow definitions
+# See examples/example_lab/workflows/ for workflow definitions
 from madsci.client.workcell_client import WorkcellClient
 
 client = WorkcellClient("http://localhost:8005")

@@ -74,7 +74,7 @@ Classes
 
         Call this during shutdown to clean up all resources.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> str`
     :   Resolve a name to an ID.
 
         This is the primary method for components to get their identity.
@@ -92,7 +92,7 @@ Classes
         Raises:
             RegistryLockError: If the name is already locked by another process.
 
-    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
+    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
     :   Resolve a name and return detailed information.
 
         Like resolve(), but returns additional information about where

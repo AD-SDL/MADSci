@@ -19,7 +19,7 @@ Framework for creating laboratory instrument nodes that integrate with MADSci wo
 See the main [README](../../README.md#installation) for installation options. This package is available as:
 - PyPI: `pip install madsci.node_module`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example nodes**: See [example_lab/example_modules/](../../example_lab/example_modules/) including the comprehensive [advanced_example_module.py](../../example_lab/example_modules/advanced_example_module.py)
+- **Example nodes**: See [example_lab/example_modules/](../../examples/example_lab/example_modules/) including the comprehensive [advanced_example_module.py](../../examples/example_lab/example_modules/advanced_example_module.py)
 
 ## Quick Start
 
@@ -283,12 +283,12 @@ Choose the appropriate return type based on how the data will be used in workflo
 
 ## Example Nodes
 
-See complete working examples in [example_lab/example_modules/](../../example_lab/example_modules/):
+See complete working examples in [example_lab/example_modules/](../../examples/example_lab/example_modules/):
 
-- **[liquidhandler.py](../../example_lab/example_modules/liquidhandler.py)**: Liquid handling robot
-- **[platereader.py](../../example_lab/example_modules/platereader.py)**: Microplate reader
-- **[robotarm.py](../../example_lab/example_modules/robotarm.py)**: Robotic arm
-- **[advanced_example_module.py](../../example_lab/example_modules/advanced_example_module.py)**: Comprehensive example showcasing advanced features
+- **[liquidhandler.py](../../examples/example_lab/example_modules/liquidhandler.py)**: Liquid handling robot
+- **[platereader.py](../../examples/example_lab/example_modules/platereader.py)**: Microplate reader
+- **[robotarm.py](../../examples/example_lab/example_modules/robotarm.py)**: Robotic arm
+- **[advanced_example_module.py](../../examples/example_lab/example_modules/advanced_example_module.py)**: Comprehensive example showcasing advanced features
 
 ## Deployment
 
@@ -1265,4 +1265,4 @@ def get_multiple_files(self) -> list[Path]:
     return files  # All files automatically served
 ```
 
-**Working examples**: See [example_lab/](../../example_lab/) for a complete working laboratory with multiple integrated nodes.
+**Working examples**: See [example_lab/](../../examples/example_lab/) for a complete working laboratory with multiple integrated nodes.

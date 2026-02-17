@@ -618,6 +618,6 @@ steps:
 
 ### Reference
 
-- [Workflow Guide](../../example_lab/WORKFLOW_GUIDE.md)
+- [Workflow Guide](../guides/workflow_development.md)
 - [Workcell Manager Documentation](../../src/madsci_workcell_manager/README.md)
 - [Workflow YAML Schema](../../docs/designs/template_system_design.md)

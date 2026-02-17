@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/example_lab/otel-collector-full.yaml:/etc/otelcol/config.yaml:ro
+      - ${REPO_PATH:-.}/examples/example_lab/otel-collector-full.yaml:/etc/otelcol/config.yaml:ro
     command: ["--config=/etc/otelcol/config.yaml"]
     depends_on:
       - jaeger
@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/example_lab/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ${REPO_PATH:-.}/examples/example_lab/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
       - ${REPO_PATH:-.}/.madsci/prometheus:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -74,7 +74,7 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/example_lab/otel/loki.yaml:/etc/loki/local-config.yaml:ro
+      - ${REPO_PATH:-.}/examples/example_lab/otel/loki.yaml:/etc/loki/local-config.yaml:ro
       - ${REPO_PATH:-.}/.madsci/loki:/loki
     command: -config.file=/etc/loki/local-config.yaml
 
@@ -95,7 +95,7 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     volumes:
       - ${REPO_PATH:-.}/.madsci/grafana:/var/lib/grafana
-      - ${REPO_PATH:-.}/example_lab/otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${REPO_PATH:-.}/examples/example_lab/otel/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - jaeger
       - prometheus

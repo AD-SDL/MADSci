@@ -78,15 +78,15 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.resource_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_resource.manager.yaml](../../example_lab/managers/example_resource.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_resource.manager.yaml](../../examples/example_lab/managers/example_resource.manager.yaml)
 
-**Dependencies**: PostgreSQL database (see [example_lab](../../example_lab/))
+**Dependencies**: PostgreSQL database (see [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -99,7 +99,7 @@ python -m madsci.resource_manager.resource_server
 
 ### Manager Setup
 
-For custom deployments, see [example_resource.manager.yaml](../../example_lab/managers/example_resource.manager.yaml) for configuration options.
+For custom deployments, see [example_resource.manager.yaml](../../examples/example_lab/managers/example_resource.manager.yaml) for configuration options.
 
 ## Configuration
 
@@ -1330,7 +1330,7 @@ curl http://localhost:8003/health
 open http://localhost:8003/docs
 ```
 
-**Examples**: See [example_lab/](../../example_lab/) for complete resource management workflows integrated with laboratory operations.
+**Examples**: See [example_lab/](../../examples/example_lab/) for complete resource management workflows integrated with laboratory operations.
 
 ## Database Migration Tools
 

@@ -3,7 +3,7 @@ name: madsci_example_lab
 # * Usage Notes:
 # 1. Environment variables can be set in a `.env` file or directly in the shell.
 # 2. The `REPO_PATH` variable should point to the root of the repository.
-# 3. The `example_lab` directory should contain the lab definition and module files.
+# 3. The `examples/example_lab` directory should contain the lab definition and module files.
 # 4. The `madsci` image is built from the Dockerfile in the current directory.
 # 5. The `madsci_dashboard` image is built from the Dockerfile.dashboard in the current directory.
 # 6. Services are configured to use the host network mode to simplify port configuration. Production deployments may require a different network configuration.
@@ -27,11 +27,12 @@ x-madsci-service: &madsci-service
     - GROUP_ID=${GROUP_ID:-1000}
   network_mode: host
   env_file:
-    - example_lab/.env # Load environment variables from the example_lab directory
+    - examples/example_lab/.env # Load environment variables from the example lab
     - path: .env # Optional: Load environment variables from a .env file
       required: false
   volumes:
-    - ${REPO_PATH:-.}/example_lab:/home/madsci/example_lab
+    - ${REPO_PATH:-.}/examples/example_lab:/home/madsci/example_lab
+    - ${REPO_PATH:-.}/examples/notebooks:/home/madsci/notebooks
     - ${REPO_PATH:-.}/.madsci:/home/madsci/.madsci
     - ${REPO_PATH:-.}/src:/home/madsci/MADSci/src
   restart: unless-stopped

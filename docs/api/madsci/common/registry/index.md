@@ -101,7 +101,7 @@ Classes
 
         Call this during shutdown to clean up all resources.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> str`
     :   Resolve a name to an ID.
 
         This is the primary method for components to get their identity.
@@ -119,7 +119,7 @@ Classes
         Raises:
             RegistryLockError: If the name is already locked by another process.
 
-    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
+    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
     :   Resolve a name and return detailed information.
 
         Like resolve(), but returns additional information about where
@@ -202,7 +202,7 @@ Classes
             data: Registry data to import.
             merge: If True, merge with existing. If False, replace.
 
-    `list_entries(self, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'] | None = None, include_stale: bool = False) ‑> list[tuple[str, madsci.common.types.registry_types.RegistryEntry]]`
+    `list_entries(self, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'] | None = None, include_stale: bool = False) ‑> list[tuple[str, madsci.common.types.registry_types.RegistryEntry]]`
     :   List all entries in the registry.
 
         Args:
@@ -253,7 +253,7 @@ Classes
             RegistryError: If old_name doesn't exist or new_name already exists.
             RegistryLockError: If old_name is locked and force=False.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
     :   Resolve a name to an ID, creating if necessary.
 
         This is the primary method for getting a component's ID. If the name

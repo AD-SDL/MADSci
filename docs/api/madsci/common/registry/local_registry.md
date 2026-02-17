@@ -77,7 +77,7 @@ Classes
             data: Registry data to import.
             merge: If True, merge with existing. If False, replace.
 
-    `list_entries(self, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'] | None = None, include_stale: bool = False) ‑> list[tuple[str, madsci.common.types.registry_types.RegistryEntry]]`
+    `list_entries(self, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'] | None = None, include_stale: bool = False) ‑> list[tuple[str, madsci.common.types.registry_types.RegistryEntry]]`
     :   List all entries in the registry.
 
         Args:
@@ -128,7 +128,7 @@ Classes
             RegistryError: If old_name doesn't exist or new_name already exists.
             RegistryLockError: If old_name is locked and force=False.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell', 'workflow'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
     :   Resolve a name to an ID, creating if necessary.
 
         This is the primary method for getting a component's ID. If the name

@@ -9,15 +9,15 @@ The MADSci Workcell Manager handles the operation of a **Workcell**, a collectio
 See the main [README](../../README.md#installation) for installation options. This package is available as:
 - PyPI: `pip install madsci.workcell_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_workcell.manager.yaml](../../example_lab/managers/example_workcell.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_workcell.manager.yaml](../../examples/example_lab/managers/example_workcell.manager.yaml)
 
-**Dependencies**: MongoDB and Redis (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../example_lab/))
+**Dependencies**: MongoDB and Redis (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -37,7 +37,7 @@ For custom deployments:
 madsci workcell create
 ```
 
-See [example_workcell.manager.yaml](../../example_lab/managers/example_workcell.manager.yaml) for configuration options.
+See [example_workcell.manager.yaml](../../examples/example_lab/managers/example_workcell.manager.yaml) for configuration options.
 
 ### Workcell Client
 
@@ -82,7 +82,7 @@ workflow = workcell_client.submit_workflow(workflow=wf_def)
 status = workcell_client.query_workflow(workflow.workflow_id)
 ```
 
-**Example workflows**: See [example_lab/workflows/](../../example_lab/workflows/) for complete workflow definitions.
+**Example workflows**: See [example_lab/workflows/](../../examples/example_lab/workflows/) for complete workflow definitions.
 
 **Workflow Result Access:**
 ```python

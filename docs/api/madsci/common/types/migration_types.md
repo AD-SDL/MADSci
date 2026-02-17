@@ -84,9 +84,6 @@ Classes
     `NODE_DEFINITION`
     :
 
-    `WORKFLOW_DEFINITION`
-    :
-
 `MigrationAction(**data: Any)`
 :   A single action in a migration.
 

@@ -165,7 +165,7 @@ curl http://localhost:8005/nodes | jq '.[].node_id'
 1. **Node Configuration Issues:**
 ```bash
 # Verify node definition files exist
-ls -la example_lab/node_definitions/
+ls -la ../../examples/example_lab/node_definitions/
 
 # Check YAML syntax
 python -c "import yaml; print(yaml.safe_load(open('node_definitions/liquidhandler_1.node.yaml')))"
@@ -621,9 +621,9 @@ docker compose config --quiet && echo "Compose config valid" || echo "Compose co
 # Backup lab configuration and data
 tar -czf backup_$(date +%Y%m%d).tar.gz \
   .env \
-  example_lab/node_definitions/ \
-  example_lab/managers/ \
-  example_lab/workflows/ \
+  ../../examples/example_lab/node_definitions/ \
+  ../../examples/example_lab/managers/ \
+  ../../examples/example_lab/workflows/ \
   .madsci/
 ```
 
@@ -647,7 +647,7 @@ docker image prune -f
 ```
 
 For more help:
-- Check the main [README](README.md) for setup instructions
-- Review [Configuration.md](../Configuration.md) for all available settings
+- Check the main [README](../../README.md) for setup instructions
+- Review [Configuration.md](../../Configuration.md) for all available settings
 - Search issues in the [MADSci repository](https://github.com/AD-SDL/MADSci/issues)
 - Join the MADSci community discussions

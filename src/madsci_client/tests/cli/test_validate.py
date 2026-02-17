@@ -31,9 +31,9 @@ class TestValidateCommand:
         assert "No MADSci configuration files found" in result.output
 
     def test_validate_example_lab(self) -> None:
-        """Test validate finds and processes example_lab files."""
+        """Test validate finds and processes example lab files."""
         runner = CliRunner()
-        result = runner.invoke(madsci, ["validate", "example_lab/"])
+        result = runner.invoke(madsci, ["validate", "examples/example_lab/"])
         assert result.exit_code == 0 or "error" in result.output.lower()
         # Should find at least some files
         assert "valid" in result.output.lower() or "Summary" in result.output

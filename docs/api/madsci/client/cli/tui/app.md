@@ -7,7 +7,7 @@ Main Textual application for the MADSci terminal user interface.
 Classes
 -------
 
-`MadsciApp(lab_url: str = 'http://localhost:8000/', initial_screen: str = 'dashboard', config: MadsciCLIConfig | None = None)`
+`MadsciApp(lab_url: str = 'http://localhost:8000/', initial_screen: str = 'dashboard', context: MadsciContext | None = None)`
 :   MADSci Terminal User Interface Application.
 
     Provides an interactive terminal interface for managing and
@@ -18,7 +18,7 @@ Classes
     Args:
         lab_url: URL of the Lab Manager.
         initial_screen: Name of the screen to show on launch.
-        config: Optional CLI configuration for service URLs.
+        context: Optional MadsciContext for service URLs.
 
     ### Ancestors (in MRO)
 

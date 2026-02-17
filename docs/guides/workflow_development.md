@@ -1,6 +1,6 @@
 # Workflow Development Guide
 
-> For interactive workflow tutorials with live examples, see **[experiment_notebook.ipynb](notebooks/experiment_notebook.ipynb)**
+> For interactive workflow tutorials with live examples, see **[experiment_notebook.ipynb](../../examples/notebooks/experiment_notebook.ipynb)**
 
 This guide provides workflow schema reference and advanced patterns not covered in the interactive tutorial.
 
