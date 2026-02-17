@@ -60,7 +60,7 @@ RUN groupadd -g ${GROUP_ID} ${CONTAINER_USER} && \
 	chown -R ${USER_ID}:${GROUP_ID} /home/${CONTAINER_USER}/.madsci /home/${CONTAINER_USER}/MADSci
 
 # * Install madsci entrypoint script
-COPY madsci-entrypoint.sh /madsci-entrypoint.sh
+COPY docker/madsci-entrypoint.sh /madsci-entrypoint.sh
 RUN chmod +x /madsci-entrypoint.sh
 ENTRYPOINT ["/madsci-entrypoint.sh"]
 

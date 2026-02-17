@@ -1,13 +1,13 @@
 # OpenTelemetry Observability Stack for MADSci Example Lab
 #
-# This compose file extends the base compose.yaml with full observability infrastructure:
+# This compose file provides full observability infrastructure:
 # - Jaeger: Distributed tracing UI (http://localhost:16686)
 # - Prometheus: Metrics collection and querying (http://localhost:9090)
 # - Loki: Log aggregation (http://localhost:3100)
 # - Grafana: Unified dashboards (http://localhost:3000)
 #
 # Usage:
-#   docker compose -f compose.yaml -f compose.otel.yaml up
+#   docker compose --profile otel up
 #
 # Default credentials:
 #   Grafana: admin / admin (change on first login)
@@ -15,10 +15,8 @@
 # Port bindings default to localhost-only for security. To expose to other hosts,
 # override the port bindings in a local .env file or use a proxy.
 
-name: madsci_example_lab
-
 services:
-  # Override otel_collector to add exporters for the full observability stack
+  # OTEL Collector with exporters for the full observability stack
   otel_collector:
     container_name: otel_collector
     # Pin to a specific version for reproducibility
@@ -26,12 +24,14 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/examples/example_lab/otel-collector-full.yaml:/etc/otelcol/config.yaml:ro
+      - ./otel-collector-full.yaml:/etc/otelcol/config.yaml:ro
     command: ["--config=/etc/otelcol/config.yaml"]
     depends_on:
       - jaeger
       - prometheus
       - loki
+    profiles:
+      - otel
 
   # Jaeger - Distributed Tracing
   # UI: http://localhost:16686
@@ -48,7 +48,9 @@ services:
       - COLLECTOR_OTLP_GRPC_HOST_PORT=:14317
       - COLLECTOR_OTLP_HTTP_HOST_PORT=:14318
     volumes:
-      - ${REPO_PATH:-.}/.madsci/jaeger:/badger
+      - ${REPO_PATH:-../..}/.madsci/jaeger:/badger
+    profiles:
+      - otel
 
   # Prometheus - Metrics
   # UI: http://localhost:9090
@@ -58,13 +60,15 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/examples/example_lab/otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
-      - ${REPO_PATH:-.}/.madsci/prometheus:/prometheus
+      - ./otel/prometheus.yaml:/etc/prometheus/prometheus.yml:ro
+      - ${REPO_PATH:-../..}/.madsci/prometheus:/prometheus
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
       - "--web.enable-lifecycle"
       - "--web.enable-remote-write-receiver"
+    profiles:
+      - otel
 
   # Loki - Log Aggregation
   # API: http://localhost:3100
@@ -74,9 +78,11 @@ services:
     restart: unless-stopped
     network_mode: host
     volumes:
-      - ${REPO_PATH:-.}/examples/example_lab/otel/loki.yaml:/etc/loki/local-config.yaml:ro
-      - ${REPO_PATH:-.}/.madsci/loki:/loki
+      - ./otel/loki.yaml:/etc/loki/local-config.yaml:ro
+      - ${REPO_PATH:-../..}/.madsci/loki:/loki
     command: -config.file=/etc/loki/local-config.yaml
+    profiles:
+      - otel
 
   # Grafana - Unified Dashboards
   # UI: http://localhost:3000 (admin/admin)
@@ -94,9 +100,11 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     volumes:
-      - ${REPO_PATH:-.}/.madsci/grafana:/var/lib/grafana
-      - ${REPO_PATH:-.}/examples/example_lab/otel/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ${REPO_PATH:-../..}/.madsci/grafana:/var/lib/grafana
+      - ./otel/grafana/provisioning:/etc/grafana/provisioning:ro
     depends_on:
       - jaeger
       - prometheus
       - loki
+    profiles:
+      - otel

@@ -616,7 +616,7 @@ networks:
 Start with observability:
 
 ```bash
-docker compose -f compose.yaml -f compose.otel.yaml up -d
+docker compose --profile otel up -d
 ```
 
 Access the UIs:

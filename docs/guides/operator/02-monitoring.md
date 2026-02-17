@@ -191,10 +191,10 @@ MADSci Services
 
 Add the observability stack to your Docker Compose:
 
-```yaml
-# compose.yaml
-include:
-  - compose.otel.yaml
+The OTEL stack is included automatically via the root `compose.yaml`. Enable it with the `otel` profile:
+
+```bash
+docker compose --profile otel up
 ```
 
 Enable OTEL per manager via environment variables:

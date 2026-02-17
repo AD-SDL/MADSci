@@ -266,7 +266,8 @@ The example lab includes optional OpenTelemetry observability with distributed t
 
 ```bash
 # Start with full observability stack (Jaeger, Prometheus, Loki, Grafana)
-docker compose -f compose.yaml -f compose.otel.yaml up
+# Run from the repository root:
+docker compose --profile otel up
 ```
 
 **Access the UIs:**

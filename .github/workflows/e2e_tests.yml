@@ -84,8 +84,7 @@ jobs:
       - name: Build images locally (fallback or manual)
         if: ${{ github.event.inputs.use_local_build == 'true' }}
         run: |
-          docker compose build workcell_manager
-          docker compose build lab_manager
+          docker compose --profile build build
 
       - name: example.env to .env
         run: cp .env.example .env

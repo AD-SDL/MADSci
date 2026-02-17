@@ -63,7 +63,7 @@ docker compose up
 To enable the full observability stack with Jaeger, Prometheus, Loki, and Grafana:
 
 ```bash
-docker compose -f compose.yaml -f compose.otel.yaml up
+docker compose --profile otel up
 ```
 
 ## Accessing the UIs
@@ -88,7 +88,7 @@ To set a different Grafana password, set the environment variable before startin
 
 ```bash
 export GRAFANA_ADMIN_PASSWORD=your-secure-password
-docker compose -f compose.yaml -f compose.otel.yaml up
+docker compose --profile otel up
 ```
 
 ## What's Included
@@ -132,7 +132,7 @@ EVENT_OTEL_ENABLED=false
 
 ### Custom Configuration
 
-Configuration files are located in `../../examples/example_lab/otel/`:
+Configuration files are located in `examples/example_lab/otel/`:
 
 - `otel-collector-full.yaml`: Full collector config with all exporters
 - `prometheus.yaml`: Prometheus configuration
@@ -217,7 +217,7 @@ This allows you to:
 
 Check that all backend services are running:
 ```bash
-docker compose -f compose.yaml -f compose.otel.yaml ps
+docker compose --profile otel ps
 ```
 
 ### Grafana can't connect to datasources
@@ -236,7 +236,7 @@ Telemetry data is stored in `.madsci/` subdirectories:
 To reset all observability data:
 
 ```bash
-docker compose -f compose.yaml -f compose.otel.yaml down
+docker compose --profile otel down
 rm -rf .madsci/jaeger .madsci/prometheus .madsci/loki .madsci/grafana
 ```
 
