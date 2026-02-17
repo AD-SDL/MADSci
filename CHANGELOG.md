@@ -90,6 +90,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `load_definition()` replaces `load_or_create_definition()` as the primary API
 - Settings consolidation for structural config overrides
 - Opt-in registry resolution in manager base
+- Reorganized repository documentation and examples:
+  - Moved `example_lab/` to `examples/example_lab/`
+  - Moved example notebooks to `examples/notebooks/`
+  - Moved general-purpose guides (Node Development, Workflow Development, Observability, Troubleshooting) from `example_lab/` to `docs/guides/`
+  - Updated MyST TOC, compose files, and all cross-references
+- Example lab now uses modern `settings.yaml` + `.env` dual-layer configuration instead of `*_MANAGER_DEFINITION` environment variables
+- Example lab definition files fully deprecated: structural data (locations, transfer capabilities, resource templates, workcell nodes) extracted into standalone YAML files and inline settings; `*_manager_definition` keys removed from `settings.yaml`
+- Migration tests decoupled from the live example lab using versioned fixture data (`fixtures/migration/v0.6/`)
 
 ### Deprecated
 - Definition file auto-writing (use explicit `madsci config` commands instead)

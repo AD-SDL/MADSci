@@ -1,0 +1,63 @@
+# Settings for Example Lab
+#
+# This file contains default configuration values and is safe to commit to git.
+# Override any value with environment variables (prefixed, e.g. EVENT_SERVER_URL)
+# or a .env file (gitignored) for secrets and environment-specific overrides.
+# See Configuration.md for all available settings.
+
+# Lab Manager
+lab_server_url: http://localhost:8000/
+lab_manager_name: "Example Lab"
+lab_manager_description: "An example MADSci lab for development and testing"
+
+# Event Manager
+event_server_url: http://localhost:8001/
+event_manager_name: "Example Event Manager"
+event_manager_description: "Event manager for the example lab"
+event_database_name: madsci_events
+event_mongo_db_url: mongodb://localhost:27017/
+
+# Experiment Manager
+experiment_server_url: http://localhost:8002/
+experiment_manager_name: "Example Experiment Manager"
+experiment_manager_description: "Experiment manager for the example lab"
+experiment_database_name: madsci_experiments
+experiment_mongo_db_url: mongodb://localhost:27017/
+
+# Resource Manager
+resource_server_url: http://localhost:8003/
+resource_manager_name: "Example Resource Manager"
+resource_manager_description: "Resource manager for the example lab"
+# Note: resource_db_url contains credentials and is in .env instead.
+# Default resource templates (plate_nest, storage_stack) used by the location manager.
+resource_default_templates_file: resource_templates.yaml
+
+# Data Manager
+data_server_url: http://localhost:8004/
+data_manager_name: "Example Data Manager"
+data_manager_description: "Data manager for the example lab"
+data_database_name: madsci_data
+data_mongo_db_url: mongodb://localhost:27017/
+
+# Workcell Manager
+workcell_server_url: http://localhost:8005/
+workcell_manager_name: "Example Workcell"
+workcell_manager_description: "An example workcell with liquid handlers, plate reader, and robot arm"
+workcell_database_name: madsci_workcells
+workcell_mongo_db_url: mongodb://localhost:27017/
+# Workcell node URLs (which nodes belong to this workcell and how to reach them).
+workcell_nodes:
+  liquidhandler_1: http://localhost:2000/
+  liquidhandler_2: http://localhost:2001/
+  robotarm_1: http://localhost:2002/
+  platereader_1: http://localhost:2003/
+  advanced_example_node: http://localhost:2004/
+
+# Location Manager
+location_server_url: http://localhost:8006/
+location_manager_name: "Example Location Manager"
+location_manager_description: "Location manager for the example lab"
+# Location definitions and transfer capabilities (deck positions, storage,
+# robot arm routes, etc.) are loaded from standalone YAML files.
+location_locations_file: locations.yaml
+location_transfer_capabilities_file: transfer_capabilities.yaml
