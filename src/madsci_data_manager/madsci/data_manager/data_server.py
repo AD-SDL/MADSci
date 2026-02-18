@@ -19,7 +19,6 @@ from madsci.common.object_storage_helpers import (
     upload_file_to_object_storage,
 )
 from madsci.common.types.datapoint_types import (
-    DataManagerDefinition,
     DataManagerHealth,
     DataManagerSettings,
     DataPoint,
@@ -30,16 +29,14 @@ from minio import Minio
 from pymongo import MongoClient
 
 
-class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition]):
+class DataManager(AbstractManagerBase[DataManagerSettings]):
     """Data Manager REST Server."""
 
     SETTINGS_CLASS = DataManagerSettings
-    DEFINITION_CLASS = DataManagerDefinition
 
     def __init__(
         self,
         settings: Optional[DataManagerSettings] = None,
-        definition: Optional[DataManagerDefinition] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         db_client: Optional[MongoClient] = None,
         **kwargs: Any,
@@ -49,7 +46,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         self._object_storage_settings = object_storage_settings
         self._db_client = db_client
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Initialize database and storage
         self._setup_database()

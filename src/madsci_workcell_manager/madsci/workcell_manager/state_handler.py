@@ -15,6 +15,7 @@ from madsci.common.types.workcell_types import (
     WorkcellStatus,
 )
 from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
+from madsci.common.utils import new_ulid_str
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
 from pymongo import MongoClient
@@ -33,8 +34,9 @@ class WorkcellStateHandler:
 
     def __init__(
         self,
-        workcell_definition: Optional[WorkcellManagerDefinition] = None,
         workcell_settings: Optional[WorkcellManagerSettings] = None,
+        workcell_id: Optional[str] = None,
+        nodes: Optional[dict[str, str]] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
     ) -> None:
@@ -42,7 +44,10 @@ class WorkcellStateHandler:
         Initialize a StateManager for a given workcell.
         """
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
-        self._workcell_id = workcell_definition.manager_id
+        self._workcell_id = (
+            workcell_id or self.workcell_settings.manager_id or new_ulid_str()
+        )
+        self._nodes_config = nodes or self.workcell_settings.nodes or {}
         self._redis_host = self.workcell_settings.redis_host
         self._redis_port = self.workcell_settings.redis_port
         self._redis_password = self.workcell_settings.redis_password
@@ -55,17 +60,26 @@ class WorkcellStateHandler:
         self.archived_workflows = self.db_connection["archived_workflows"]
         self.workflow_definitions = self.db_connection["workflow_definitions"]
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
-        self.set_workcell_definition(workcell_definition)
 
     def initialize_workcell_state(self) -> None:
         """
-        Initializes the state of the workcell from the workcell definition.
+        Initializes the state of the workcell from settings.
         """
         self.set_workcell_status(WorkcellStatus(initializing=True))
         self._nodes.clear()
         self.state_change_marker = "0"
+
+        # Initialize the workcell definition in Redis from settings
+        workcell_def = WorkcellManagerDefinition(
+            name=self.workcell_settings.manager_name or "WorkcellManager",
+            manager_id=self._workcell_id,
+            description=self.workcell_settings.manager_description,
+            nodes={k: AnyUrl(v) for k, v in self._nodes_config.items()},
+        )
+        self.set_workcell_definition(workcell_def)
+
         # * Initialize Nodes
-        for key, value in self.get_workcell_definition().nodes.items():
+        for key, value in self._nodes_config.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
         status = self.get_workcell_status()
         status.initializing = False

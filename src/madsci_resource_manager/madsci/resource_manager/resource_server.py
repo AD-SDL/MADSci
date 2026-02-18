@@ -19,7 +19,6 @@ from madsci.common.types.resource_types import (
 )
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinitions,
-    ResourceManagerDefinition,
     ResourceManagerHealth,
     ResourceManagerSettings,
 )
@@ -51,9 +50,7 @@ HISTORY_QUERY_BODY_PARAM = Body(...)
 
 
 @ownership_class()
-class ResourceManager(
-    AbstractManagerBase[ResourceManagerSettings, ResourceManagerDefinition]
-):
+class ResourceManager(AbstractManagerBase[ResourceManagerSettings]):
     """Resource Manager REST Server.
 
     This class is decorated with @ownership_class() which automatically
@@ -62,7 +59,6 @@ class ResourceManager(
     """
 
     SETTINGS_CLASS = ResourceManagerSettings
-    DEFINITION_CLASS = ResourceManagerDefinition
 
     def get_ownership_overrides(self) -> dict:
         """Return ownership overrides for this manager.
@@ -70,22 +66,15 @@ class ResourceManager(
         This method is called by the @ownership_class decorator to get
         instance-specific ownership information.
         """
-        # Check if definition is available yet (may not be during __init__)
-        if not hasattr(self, "_definition") or self._definition is None:
+        if not hasattr(self, "_settings") or self._settings is None:
             return {}
 
-        # Use resource_manager_id as the primary field, but support manager_id for compatibility
-        manager_id = getattr(
-            self._definition,
-            "resource_manager_id",
-            getattr(self._definition, "manager_id", None),
-        )
+        manager_id = getattr(self._settings, "manager_id", None)
         return {"manager_id": manager_id} if manager_id else {}
 
     def __init__(
         self,
         settings: Optional[ResourceManagerSettings] = None,
-        definition: Optional[ResourceManagerDefinition] = None,
         resource_interface: Optional[ResourceInterface] = None,
         **kwargs: Any,
     ) -> None:
@@ -94,39 +83,13 @@ class ResourceManager(
         self._resource_interface = resource_interface
         self._external_resource_interface = resource_interface is not None
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Initialize the resource interface
         self._setup_resource_interface()
 
-        # Override default templates from settings file if provided
-        self._apply_templates_file_override()
-
         # Initialize default templates after everything is set up
         self._initialize_default_templates()
-
-    def _apply_templates_file_override(self) -> None:
-        """Override default templates from a settings file if provided."""
-        from pathlib import Path  # noqa: PLC0415
-
-        import yaml  # noqa: PLC0415
-        from madsci.common.types.resource_types.definitions import (  # noqa: PLC0415
-            TemplateDefinition,
-        )
-
-        if self.settings.default_templates_file is not None:
-            templates_path = Path(self.settings.default_templates_file)
-            if templates_path.exists():
-                data = yaml.safe_load(templates_path.read_text())
-                if isinstance(data, list):
-                    self.definition.default_templates = [
-                        TemplateDefinition.model_validate(t) for t in data
-                    ]
-                elif isinstance(data, dict) and "default_templates" in data:
-                    self.definition.default_templates = [
-                        TemplateDefinition.model_validate(t)
-                        for t in data["default_templates"]
-                    ]
 
     def _setup_resource_interface(self) -> None:
         """Setup the resource interface."""
@@ -183,17 +146,17 @@ class ResourceManager(
             raise e
 
     def _initialize_default_templates(self) -> None:
-        """Create or update default templates defined in the manager definition."""
-        if not self.definition.default_templates:
+        """Create or update default templates defined in the manager settings."""
+        if not self.settings.default_templates:
             return
 
         self.logger.info(
             "Initializing default templates",
             event_type=EventType.MANAGER_START,
-            template_count=len(self.definition.default_templates),
+            template_count=len(self.settings.default_templates),
         )
 
-        for template_def in self.definition.default_templates:
+        for template_def in self.settings.default_templates:
             try:
                 # Convert the base resource definition to a Resource instance
                 base_resource = Resource.discriminate(template_def.base_resource)
@@ -206,7 +169,7 @@ class ResourceManager(
                     or f"Template for {template_def.template_name}",
                     required_overrides=template_def.required_overrides,
                     tags=template_def.tags,
-                    created_by=f"resource_manager_{self.definition.resource_manager_id}",
+                    created_by=f"resource_manager_{self.settings.manager_id}",
                     version=template_def.version,
                 )
 

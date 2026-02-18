@@ -20,7 +20,6 @@ from madsci.common.types.backup_types import MongoDBBackupSettings
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
-    EventManagerDefinition,
     EventManagerHealth,
     EventManagerSettings,
     EventType,
@@ -92,23 +91,21 @@ class BackupStatusResponse(BaseModel):
     available_backups: List[Dict[str, Any]]
 
 
-class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinition]):
+class EventManager(AbstractManagerBase[EventManagerSettings]):
     """Event Manager REST Server."""
 
     SETTINGS_CLASS = EventManagerSettings
-    DEFINITION_CLASS = EventManagerDefinition
 
     def __init__(
         self,
         settings: Optional[EventManagerSettings] = None,
-        definition: Optional[EventManagerDefinition] = None,
         db_connection: Optional[Database] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Event Manager."""
         # Store additional dependencies before calling super().__init__
         self._db_connection = db_connection
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Initialize database connection and collections
         self._setup_database()
@@ -162,7 +159,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings, EventManagerDefinit
     def setup_logging(self) -> None:
         """Setup logging for the event manager. Prevent recursive logging."""
         self._logger = EventClient(
-            name=f"{self._definition.name}", event_server_url=None
+            name=f"{self._resolve_name()}", event_server_url=None
         )
         self._logger.event_server = None
 

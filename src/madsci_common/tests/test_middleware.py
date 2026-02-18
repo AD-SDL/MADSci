@@ -10,11 +10,9 @@ import pytest
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.middleware import RateLimitMiddleware
 from madsci.common.types.manager_types import (
-    ManagerDefinition,
     ManagerSettings,
     ManagerType,
 )
-from pydantic import Field
 from starlette.testclient import TestClient
 
 
@@ -24,44 +22,43 @@ class TestManagerSettings(ManagerSettings):
     model_config: ClassVar[dict] = {"env_prefix": "TEST_"}
 
 
-class TestManagerDefinition(ManagerDefinition):
-    """Test definition for the manager."""
-
-    manager_type: ManagerType = Field(default=ManagerType.EVENT_MANAGER)
-
-
-class TestManager(AbstractManagerBase[TestManagerSettings, TestManagerDefinition]):
+class TestManager(AbstractManagerBase[TestManagerSettings]):
     """Test manager implementation."""
 
     SETTINGS_CLASS = TestManagerSettings
-    DEFINITION_CLASS = TestManagerDefinition
 
 
 @pytest.fixture
 def test_manager_with_rate_limiting() -> TestManager:
     """Create a test manager instance with rate limiting enabled."""
     settings = TestManagerSettings(
+        manager_name="Rate Limited Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
         rate_limit_enabled=True,
         rate_limit_requests=5,
         rate_limit_window=2,  # Reduced from 10s to 2s for faster tests
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
-    definition = TestManagerDefinition(name="Rate Limited Manager")
-    return TestManager(settings=settings, definition=definition)
+    return TestManager(settings=settings)
 
 
 @pytest.fixture
 def test_manager_without_rate_limiting() -> TestManager:
     """Create a test manager instance with rate limiting disabled."""
-    settings = TestManagerSettings(rate_limit_enabled=False)
-    definition = TestManagerDefinition(name="Unlimited Manager")
-    return TestManager(settings=settings, definition=definition)
+    settings = TestManagerSettings(
+        manager_name="Unlimited Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
+        rate_limit_enabled=False,
+    )
+    return TestManager(settings=settings)
 
 
 @pytest.fixture
 def test_manager_with_dual_rate_limiting() -> TestManager:
     """Create a test manager instance with dual rate limiting enabled."""
     settings = TestManagerSettings(
+        manager_name="Dual Rate Limited Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
         rate_limit_enabled=True,
         rate_limit_requests=20,  # Long window: 20 requests per 5 seconds
         rate_limit_window=5,  # Reduced from 10s to 5s for faster tests
@@ -69,8 +66,7 @@ def test_manager_with_dual_rate_limiting() -> TestManager:
         rate_limit_short_window=1,  # Keep at 1s (minimum int value)
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
     )
-    definition = TestManagerDefinition(name="Dual Rate Limited Manager")
-    return TestManager(settings=settings, definition=definition)
+    return TestManager(settings=settings)
 
 
 @pytest.fixture

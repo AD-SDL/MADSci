@@ -33,7 +33,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
-from madsci.common.types.node_types import NodeDefinition, RestNodeConfig
+from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import BaseModel
@@ -82,13 +82,12 @@ class TestIntegrationNodeConfig(RestNodeConfig):
 
 def create_test_node_instance(node_class):
     """Helper to create a node instance with proper config and definition."""
-    node_definition = NodeDefinition(
+    node_config = TestIntegrationNodeConfig(
+        test_required_param=1,
         node_name="test_node",
         module_name="test_module",
-        description="Integration test node",
     )
-    node_config = TestIntegrationNodeConfig(test_required_param=1)
-    return node_class(node_definition=node_definition, node_config=node_config)
+    return node_class(node_config=node_config)
 
 
 class TestIntegrationNode(RestNode):
@@ -175,7 +174,7 @@ def node_with_complex_actions():
 def test_create_node_with_complex_actions(node_with_complex_actions):
     """Test 180: Node with all type combinations."""
     assert node_with_complex_actions is not None
-    assert node_with_complex_actions.node_definition.node_name == "test_node"
+    assert node_with_complex_actions.node_info.node_name == "test_node"
 
 
 def test_node_info_generation(node_with_complex_actions):

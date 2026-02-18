@@ -81,7 +81,7 @@ class TestMigrationScanner:
         plan = scanner.scan()
 
         for migration in plan.files:
-            # Should have at least register_id, generate_env, create_backup, mark_deprecated
+            # Should have at least register_id, generate_settings, create_backup, mark_deprecated
             action_types = [a.action_type for a in migration.actions]
             assert "register_id" in action_types or migration.component_id == ""
             assert "create_backup" in action_types

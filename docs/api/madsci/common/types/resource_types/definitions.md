@@ -447,7 +447,7 @@ Classes
     `db_url: str`
     :
 
-    `default_templates_file: str | pathlib.Path | None`
+    `default_templates: list['TemplateDefinition'] | None`
     :
 
     `manager_definition: str | pathlib.Path`

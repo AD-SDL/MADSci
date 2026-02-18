@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.event_client import EventClient
-from madsci.common.types.node_types import NodeDefinition
 from madsci.node_module.abstract_node_module import AbstractNode
 from rich.logging import RichHandler
 
@@ -103,7 +102,6 @@ def test_node_factory() -> Generator[Callable[..., TestNode], None, None]:
         config_overrides: Optional[Dict] = None,
         node_name: str = "Test Node",
         module_name: str = "test_node",
-        node_definition_overrides: Optional[Dict] = None,
         **config_kwargs,
     ) -> TestNode:
         """Create a test node with optional customizations.
@@ -113,25 +111,18 @@ def test_node_factory() -> Generator[Callable[..., TestNode], None, None]:
             config_overrides: Override specific config values
             node_name: Name for the node
             module_name: Module name for the node
-            node_definition_overrides: Override NodeDefinition fields
             **config_kwargs: Additional config parameters
 
         Returns:
             Configured TestNode instance
         """
-        # Create base node definition
-        node_def_params = {
+        # Create base config with identity fields
+        config_params = {
+            "test_required_param": 1,
             "node_name": node_name,
             "module_name": module_name,
-            "description": f"A test node module for automated testing ({node_name}).",
+            **config_kwargs,
         }
-        if node_definition_overrides:
-            node_def_params.update(node_definition_overrides)
-
-        node_definition = NodeDefinition(**node_def_params)
-
-        # Create base config
-        config_params = {"test_required_param": 1, **config_kwargs}
         if config_overrides:
             config_params.update(config_overrides)
 
@@ -139,7 +130,6 @@ def test_node_factory() -> Generator[Callable[..., TestNode], None, None]:
 
         # Create the node
         node = TestNode(
-            node_definition=node_definition,
             node_config=node_config,
         )
         created_nodes.append(node)

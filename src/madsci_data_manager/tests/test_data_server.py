@@ -18,7 +18,7 @@ import pytest
 import requests
 from fastapi.testclient import TestClient
 from madsci.common.types.datapoint_types import (
-    DataManagerDefinition,
+    DataManagerSettings,
     FileDataPoint,
     ObjectStorageSettings,
     ValueDataPoint,
@@ -26,10 +26,6 @@ from madsci.common.types.datapoint_types import (
 from madsci.data_manager.data_server import DataManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
-
-data_manager_def = DataManagerDefinition(
-    name="test_data_manager",
-)
 
 
 @pytest.fixture(scope="session")
@@ -44,7 +40,8 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_manager(db_connection: Database) -> DataManager:
     """Data Manager Fixture"""
-    manager = DataManager(definition=data_manager_def, db_client=db_connection.client)
+    settings = DataManagerSettings(manager_name="test_data_manager")
+    manager = DataManager(settings=settings, db_client=db_connection.client)
     return manager
 
 
@@ -57,13 +54,12 @@ def test_client(test_manager: DataManager) -> TestClient:
     client.close()
 
 
-def test_root(test_client: TestClient) -> None:
+def test_health_root(test_client: TestClient) -> None:
     """
-    Test the root endpoint for the Data Manager's server.
-    Should return a DataManagerDefinition.
+    Test the health endpoint for the Data Manager's server.
     """
-    result = test_client.get("/").json()
-    DataManagerDefinition.model_validate(result)
+    result = test_client.get("/health")
+    assert result.status_code == 200
 
 
 def test_roundtrip_datapoint(test_client: TestClient) -> None:
@@ -454,12 +450,12 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         "madsci.common.object_storage_helpers.Minio", return_value=mock_minio_client
     ):
         # Create DataManager with MinIO config
-        data_manager_def = DataManagerDefinition(
-            name="test_data_manager_with_minio",
+        settings = DataManagerSettings(
+            manager_name="test_data_manager_with_minio",
         )
 
         manager = DataManager(
-            definition=data_manager_def,
+            settings=settings,
             db_client=db_connection,
             object_storage_settings=ObjectStorageSettings(
                 endpoint="localhost:9000",
@@ -538,12 +534,12 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
 def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:  # noqa
     """Test actual MinIO upload using the subprocess MinIO server."""
     # No mocks - use real MinIO from the fixture
-    data_manager_def = DataManagerDefinition(
-        name="test_data_manager_with_minio",
+    settings = DataManagerSettings(
+        manager_name="test_data_manager_with_minio",
     )
 
     manager = DataManager(
-        definition=data_manager_def,
+        settings=settings,
         db_client=db_connection,
         object_storage_settings=ObjectStorageSettings(
             endpoint=minio_server["endpoint"],

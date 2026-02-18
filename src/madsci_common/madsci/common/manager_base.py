@@ -9,7 +9,6 @@ import contextlib
 import sys
 from abc import ABCMeta
 from importlib.metadata import version as pkg_version
-from pathlib import Path
 from typing import Any, ContextManager, Generic, Optional, TypeVar
 
 import uvicorn
@@ -28,13 +27,13 @@ from madsci.common.otel import (
     instrument_requests,
 )
 from madsci.common.ownership import global_ownership_info
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
+from madsci.common.types.base_types import MadsciBaseSettings
 from madsci.common.types.event_types import EventClientConfig, EventType
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
+from madsci.common.utils import new_ulid_str
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
-DefinitionT = TypeVar("DefinitionT", bound=MadsciBaseModel)
 
 
 # Create a compatible metaclass for both ABC and Routable
@@ -44,7 +43,7 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 class AbstractManagerBase(
     MadsciClientMixin,
-    Generic[SettingsT, DefinitionT],
+    Generic[SettingsT],
     Routable,
     metaclass=ManagerBaseMeta,
 ):
@@ -52,27 +51,22 @@ class AbstractManagerBase(
     Abstract base class for MADSci manager services using classy-fastapi.
 
     This class provides common functionality for all managers including:
-    - Settings and definition management
+    - Settings management
     - Logging setup
     - FastAPI app configuration
-    - Standard endpoints (info, definition)
+    - Standard endpoints (health, settings)
     - CORS middleware
     - Server lifecycle management
 
     Type Parameters:
         SettingsT: The manager's settings class (must inherit from MadsciBaseSettings)
-        DefinitionT: The manager's definition class (must inherit from MadsciBaseModel)
 
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
-        DEFINITION_CLASS: The definition class for this manager (set by subclasses)
-        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
     """
 
     # Class attributes to be set by subclasses
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
-    DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
-    ENABLE_ROOT_DEFINITION_ENDPOINT: bool = True
 
     def __init_subclass__(cls) -> None:
         """
@@ -80,7 +74,6 @@ class AbstractManagerBase(
 
         This override handles the __abstractmethods__ issue that occurs when
         combining ABC with classy-fastapi's Routable in generic classes.
-        Also conditionally excludes the root endpoint based on ENABLE_ROOT_DEFINITION_ENDPOINT.
         """
         # Import here to avoid circular dependencies and to match classy-fastapi's pattern
         import inspect  # noqa: PLC0415
@@ -96,13 +89,6 @@ class AbstractManagerBase(
                 obj = getattr(cls, obj_name)
                 if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
                     endpoint = obj._endpoint
-                    # Skip root definition endpoint if disabled
-                    if (
-                        not cls.ENABLE_ROOT_DEFINITION_ENDPOINT
-                        and obj_name == "get_definition_root"
-                        and endpoint.path == "/"
-                    ):
-                        continue
                     endpoints.append(endpoint)
             except AttributeError:
                 # Some attributes may not be accessible during class construction
@@ -112,7 +98,6 @@ class AbstractManagerBase(
     def __init__(
         self,
         settings: Optional[SettingsT] = None,
-        definition: Optional[DefinitionT] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -120,17 +105,19 @@ class AbstractManagerBase(
 
         Args:
             settings: Manager settings instance
-            definition: Manager definition instance
             **kwargs: Additional arguments passed to subclasses
         """
         super().__init__()
 
-        # Initialize settings and definition
+        # Initialize settings
         self._settings = settings or self.create_default_settings()
-        self._definition = definition or self.load_definition()
 
-        # Apply settings overrides to definition
-        self._apply_settings_overrides()
+        # Generate a manager_id if not provided
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and not self._settings.manager_id
+        ):
+            self._settings.manager_id = new_ulid_str()
 
         # Resolve identity from registry if enabled
         self._resolver = None
@@ -148,11 +135,6 @@ class AbstractManagerBase(
             settings=self._settings.model_dump_safe()
             if hasattr(self._settings, "model_dump_safe")
             else self._settings.model_dump(mode="json"),
-        )
-        self.logger.info(
-            "Manager definition loaded",
-            event_type=EventType.MANAGER_START,
-            definition=self._definition.model_dump(mode="json"),
         )
         self.logger.info(
             "MADSci context initialized",
@@ -195,11 +177,6 @@ class AbstractManagerBase(
         return self._settings
 
     @property
-    def definition(self) -> DefinitionT:
-        """Get the manager definition."""
-        return self._definition
-
-    @property
     def logger(self) -> EventClient:
         """Get the logger instance."""
         return self._logger
@@ -211,18 +188,6 @@ class AbstractManagerBase(
                 f"{self.__class__.__name__} must set SETTINGS_CLASS class attribute"
             )
         return self.SETTINGS_CLASS()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> DefinitionT:
-        """Create a default definition instance for this manager."""
-        if self.DEFINITION_CLASS is None:
-            raise NotImplementedError(
-                f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
-            )
-        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -243,8 +208,7 @@ class AbstractManagerBase(
         The EventClient is created via the mixin's lazy initialization.
         """
         # Set the name for the EventClient
-        if hasattr(self, "_definition") and self._definition:
-            self.name = f"{self._definition.name}"
+        self.name = self._resolve_name()
 
         # Propagate manager's OTEL settings to the EventClient config
         # so that the EventClient will also export logs via OTLP
@@ -290,44 +254,22 @@ class AbstractManagerBase(
                 exc_info=True,
             )
 
-    def _apply_settings_overrides(self) -> None:
-        """Apply settings-based overrides to the definition.
-
-        When manager_name or manager_description are set in settings,
-        they override the corresponding definition values.
-        """
-        if not isinstance(self._settings, ManagerSettings):
-            return
-
-        if self._settings.manager_name is not None and hasattr(
-            self._definition, "name"
-        ):
-            self._definition.name = self._settings.manager_name
-
-        if self._settings.manager_description is not None and hasattr(
-            self._definition, "description"
-        ):
-            self._definition.description = self._settings.manager_description
-
     def _resolve_name(self) -> str:
-        """Resolve the manager name from settings or definition.
+        """Resolve the manager name from settings.
 
-        Checks settings.manager_name first, then definition.name,
-        and falls back to the class name.
+        Checks settings.manager_name first, then falls back to the class name.
         """
         if isinstance(self._settings, ManagerSettings) and self._settings.manager_name:
             return self._settings.manager_name
-        if hasattr(self._definition, "name"):
-            return self._definition.name
         return self.__class__.__name__
 
     def _resolve_identity_from_registry(self) -> None:
         """Resolve manager identity from the ID Registry.
 
         Uses IdentityResolver to look up or create a stable ID for this
-        manager. The resolved ID is written back to the definition's
-        manager_id field. Resolution failures are non-fatal: a warning
-        is logged and the definition's existing ID is kept.
+        manager. The resolved ID is written back to settings.manager_id.
+        Resolution failures are non-fatal: a warning is logged and the
+        settings' existing ID is kept.
         """
         try:
             # Lazy import to avoid circular dependencies
@@ -350,18 +292,15 @@ class AbstractManagerBase(
                 metadata={"manager_class": self.__class__.__name__},
             )
 
-            # Update the definition's ID field
-            # Different definition classes use different field names
-            if hasattr(self._definition, "resource_manager_id"):
-                self._definition.resource_manager_id = result.id
-            if hasattr(self._definition, "manager_id"):
-                self._definition.manager_id = result.id
+            # Update the settings' ID field
+            if isinstance(self._settings, ManagerSettings):
+                self._settings.manager_id = result.id
 
         except Exception:
             import logging  # noqa: PLC0415
 
             logging.getLogger(__name__).warning(
-                "Registry identity resolution failed; using definition ID",
+                "Registry identity resolution failed; using settings ID",
                 exc_info=True,
             )
 
@@ -386,7 +325,8 @@ class AbstractManagerBase(
 
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
-        global_ownership_info.manager_id = self._definition.manager_id
+        if isinstance(self._settings, ManagerSettings):
+            global_ownership_info.manager_id = self._settings.manager_id
 
     def get_health(self) -> ManagerHealth:
         """
@@ -466,30 +406,6 @@ class AbstractManagerBase(
         if health.version is None:
             health.version = self._resolve_package_version()
         return health
-
-    @get("/")
-    def get_definition_root(self) -> DefinitionT:
-        """
-        Return the manager definition at the root endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
-        """
-        return self.definition
-
-    @get("/definition")
-    def get_definition_alt(self) -> DefinitionT:
-        """
-        Return the manager definition at the /definition endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
-        """
-        return self.definition
 
     @get("/settings")
     def get_settings_endpoint(
@@ -576,59 +492,6 @@ class AbstractManagerBase(
 
         return result
 
-    def load_definition(self) -> DefinitionT:
-        """Load definition from file or create default.
-
-        .. deprecated:: 0.7.0
-            Definition files are deprecated. Use settings-based configuration
-            instead. This method will be removed in v0.8.0.
-
-        As of v0.7.0, this method no longer auto-writes definition files
-        to disk. To export a definition, use ``madsci config export``.
-        """
-        from madsci.common.deprecation import (  # noqa: PLC0415
-            emit_definition_deprecation_warning,
-        )
-
-        # Get settings first (create if not set)
-        if not hasattr(self, "_settings") or self._settings is None:
-            self._settings = self.create_default_settings()
-
-        def_path = self.get_definition_path()
-        if def_path.exists():
-            # Emit deprecation warning when loading from definition file
-            emit_definition_deprecation_warning(
-                definition_path=def_path,
-                definition_type="manager definition",
-                migration_command=f"madsci migrate convert {def_path}",
-            )
-            definition = self.DEFINITION_CLASS.from_yaml(def_path)
-        else:
-            definition = self.create_default_definition()
-
-        return definition
-
-    def load_or_create_definition(self) -> DefinitionT:
-        """Load definition from file or create default.
-
-        .. deprecated:: 0.7.0
-            Renamed to :meth:`load_definition`. Definition files are no longer
-            auto-written to disk. Use ``madsci config export`` to export
-            configuration explicitly.
-        """
-        import warnings  # noqa: PLC0415
-
-        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
-
-        warnings.warn(
-            "load_or_create_definition() is deprecated. Use load_definition() instead. "
-            "Definition files are no longer auto-written to disk. "
-            "Use 'madsci config export' to export configuration explicitly.",
-            MadsciDeprecationWarning,
-            stacklevel=2,
-        )
-        return self.load_definition()
-
     def configure_app(self, app: FastAPI) -> None:
         """
         Configure the FastAPI application.
@@ -662,25 +525,10 @@ class AbstractManagerBase(
                 cleanup_interval=self._settings.rate_limit_cleanup_interval,
                 exempt_ips=exempt_ips,
             )
-            # Build log message with both long and short window info
-            log_msg = (
-                f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
-                f"per {self._settings.rate_limit_window} seconds"
-            )
-            if (
-                self._settings.rate_limit_short_requests is not None
-                and self._settings.rate_limit_short_window is not None
-            ):
-                log_msg += (
-                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
-                    f"per {self._settings.rate_limit_short_window} seconds"
-                )
             # Add exempt IPs info to log message
             actual_exempt_ips = (
                 exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
             )
-            if actual_exempt_ips:
-                log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
             self.logger.info(
                 "Rate limiting enabled",
                 event_type=EventType.MANAGER_START,
@@ -702,9 +550,7 @@ class AbstractManagerBase(
 
         # Add EventClient context middleware for hierarchical logging
         # This establishes per-request context that includes request_id, path, etc.
-        manager_name = (
-            self._definition.name if hasattr(self._definition, "name") else "manager"
-        )
+        manager_name = self._resolve_name()
         app.add_middleware(
             EventClientContextMiddleware,
             manager_name=manager_name,
@@ -722,10 +568,17 @@ class AbstractManagerBase(
         Returns:
             FastAPI: The configured FastAPI application
         """
+        manager_name = self._resolve_name()
+        manager_description = (
+            self._settings.manager_description
+            if isinstance(self._settings, ManagerSettings)
+            and self._settings.manager_description
+            else f"{manager_name} Manager"
+        )
+
         app = FastAPI(
-            title=self._definition.name,
-            description=self._definition.description
-            or f"{self._definition.name} Manager",
+            title=manager_name,
+            description=manager_description,
             **kwargs,
         )
 

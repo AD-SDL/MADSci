@@ -20,7 +20,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
-from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
+from madsci.common.types.node_types import NodeInfo, NodeStatus
 from madsci.node_module.abstract_node_module import AbstractNode
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -831,16 +831,11 @@ def enhanced_test_node():
     Uses module scope to avoid creating a new node for each test,
     significantly improving test performance.
     """
-    node_definition = NodeDefinition(
-        node_name="Enhanced Test Node",
-        module_name="enhanced_test_node",
-        description="An enhanced test node module for automated testing.",
-    )
-
     node = EnhancedTestNode(
-        node_definition=node_definition,
         node_config=TestNodeConfig(
             test_required_param=1,
+            node_name="Enhanced Test Node",
+            module_name="enhanced_test_node",
             enable_rate_limiting=False,  # Disable rate limiting for tests
         ),
     )
@@ -1634,16 +1629,11 @@ class TestProposalExampleActionResultHandling:
                     f.write("test file content")
                     return Path(f.name)
 
-        node_definition = NodeDefinition(
-            node_name="Proposal Test Node",
-            module_name="proposal_test_node",
-            description="A test node module for testing the action result handling proposal.",
-        )
-
         test_node = ProposalTestNode(
-            node_definition=node_definition,
             node_config=TestNodeConfig(
                 test_required_param=1,
+                node_name="Proposal Test Node",
+                module_name="proposal_test_node",
             ),
         )
         test_node.start_node(testing=True)
@@ -1904,16 +1894,11 @@ def var_args_test_node():
     Uses module scope to avoid creating a new node for each test,
     significantly improving test performance.
     """
-    node_definition = NodeDefinition(
-        node_name="Var Args Test Node",
-        module_name="var_args_test_node",
-        description="A test node module for testing *args and **kwargs.",
-    )
-
     node = VarArgsTestNode(
-        node_definition=node_definition,
         node_config=TestNodeConfig(
             test_required_param=1,
+            node_name="Var Args Test Node",
+            module_name="var_args_test_node",
             enable_rate_limiting=False,  # Disable rate limiting for tests
         ),
     )

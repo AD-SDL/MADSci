@@ -139,7 +139,7 @@ class TestEventManagerAliases:
         settings = EventManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "event_server_url" in data
-        assert "event_manager_definition" in data
+        assert "event_manager_id" in data
         assert "event_database_name" in data
         # field name should not appear
         assert "server_url" not in data
@@ -186,9 +186,9 @@ class TestWorkcellManagerAliases:
         assert "workcell_workcells_directory" not in data
 
     def test_explicit_validation_alias_preserved(self) -> None:
-        """manager_definition has an explicit validation_alias that should still work."""
-        settings = WorkcellManagerSettings(workcell_manager_definition="custom.yaml")
-        assert str(settings.manager_definition) == "custom.yaml"
+        """manager_name has an explicit value that can be set via settings."""
+        settings = WorkcellManagerSettings(manager_name="custom_workcell")
+        assert settings.manager_name == "custom_workcell"
 
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
         settings = WorkcellManagerSettings()
@@ -261,7 +261,7 @@ class TestLabManagerAliases:
         settings = LabManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "lab_server_url" in data
-        assert "lab_manager_definition" in data
+        assert "lab_manager_id" in data
 
 
 class TestSharedYAMLLoading:

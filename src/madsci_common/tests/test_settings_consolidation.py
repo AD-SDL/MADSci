@@ -1,15 +1,16 @@
 """Unit tests for E.3 settings consolidation: structural config overrides."""
 
-from pathlib import Path
+import warnings
 from typing import Optional
 
-import yaml
 from madsci.common.types.location_types import (
     LocationDefinition,
+    LocationManagerDefinition,
     LocationManagerSettings,
     LocationTransferCapabilities,
 )
 from madsci.common.types.resource_types.definitions import (
+    ResourceManagerDefinition,
     ResourceManagerSettings,
     TemplateDefinition,
 )
@@ -38,10 +39,12 @@ class TestWorkcellSettingsNodes:
 
     def test_settings_nodes_override_definition(self) -> None:
         """When settings.nodes is set, it should override definition.nodes."""
-        definition = WorkcellManagerDefinition(
-            name="Test Workcell",
-            nodes={"old_node": AnyUrl("http://localhost:3000/")},
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            definition = WorkcellManagerDefinition(
+                name="Test Workcell",
+                nodes={"old_node": AnyUrl("http://localhost:3000/")},
+            )
         settings_nodes = {"new_node": AnyUrl("http://localhost:4000/")}
 
         # Simulate the override logic from workcell_server.initialize()
@@ -53,10 +56,12 @@ class TestWorkcellSettingsNodes:
 
     def test_none_settings_nodes_preserve_definition(self) -> None:
         """When settings.nodes is None, definition.nodes should be preserved."""
-        definition = WorkcellManagerDefinition(
-            name="Test Workcell",
-            nodes={"original_node": AnyUrl("http://localhost:3000/")},
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            definition = WorkcellManagerDefinition(
+                name="Test Workcell",
+                nodes={"original_node": AnyUrl("http://localhost:3000/")},
+            )
         settings_nodes: Optional[dict] = None
 
         if settings_nodes is not None:
@@ -65,42 +70,48 @@ class TestWorkcellSettingsNodes:
         assert "original_node" in definition.nodes
 
 
-class TestLocationSettingsFiles:
-    """Test LocationManagerSettings file override fields."""
+class TestLocationSettingsInline:
+    """Test LocationManagerSettings inline data fields."""
 
-    def test_locations_file_none_by_default(self) -> None:
-        """locations_file should be None by default."""
+    def test_locations_none_by_default(self) -> None:
+        """locations should be None by default."""
         settings = LocationManagerSettings()
-        assert settings.locations_file is None
+        assert settings.locations is None
 
-    def test_transfer_capabilities_file_none_by_default(self) -> None:
-        """transfer_capabilities_file should be None by default."""
+    def test_transfer_capabilities_none_by_default(self) -> None:
+        """transfer_capabilities should be None by default."""
         settings = LocationManagerSettings()
-        assert settings.transfer_capabilities_file is None
+        assert settings.transfer_capabilities is None
 
-    def test_locations_file_can_be_set(self) -> None:
-        """Should be able to set locations_file."""
-        settings = LocationManagerSettings(locations_file="locations.yaml")
-        assert settings.locations_file is not None
+    def test_locations_can_be_set(self) -> None:
+        """Should be able to set locations inline."""
+        loc = LocationDefinition(location_name="test_loc")
+        settings = LocationManagerSettings(locations=[loc])
+        assert settings.locations is not None
+        assert len(settings.locations) == 1
+        assert settings.locations[0].location_name == "test_loc"
 
-    def test_locations_file_override_logic(self, tmp_path: Path) -> None:
-        """Loading locations from a file should override definition locations."""
-        locations_data = [
-            {"location_name": "loc_from_file"},
-        ]
-        locations_file = tmp_path / "locations.yaml"
-        locations_file.write_text(yaml.dump(locations_data))
+    def test_locations_override_logic(self) -> None:
+        """Settings locations should be usable to override definition locations."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            definition = LocationManagerDefinition(
+                name="Test Location Manager",
+                locations=[LocationDefinition(location_name="old_loc")],
+            )
+        settings_locations = [LocationDefinition(location_name="new_loc")]
 
-        raw = yaml.safe_load(locations_file.read_text())
-        parsed = [LocationDefinition.model_validate(loc) for loc in raw]
+        # Simulate the override logic
+        if settings_locations is not None:
+            definition.locations = settings_locations
 
-        assert len(parsed) == 1
-        assert parsed[0].location_name == "loc_from_file"
+        assert len(definition.locations) == 1
+        assert definition.locations[0].location_name == "new_loc"
 
-    def test_transfer_capabilities_file_override_logic(self, tmp_path: Path) -> None:
-        """Loading transfer capabilities from a file should parse correctly."""
-        tc_data = {
-            "transfer_templates": [
+    def test_transfer_capabilities_can_be_set(self) -> None:
+        """Should be able to set transfer_capabilities inline."""
+        tc = LocationTransferCapabilities(
+            transfer_templates=[
                 {
                     "node_name": "robot1",
                     "action": "transfer",
@@ -108,48 +119,56 @@ class TestLocationSettingsFiles:
                     "target_argument_name": "tgt",
                 }
             ]
-        }
-        tc_file = tmp_path / "transfer_capabilities.yaml"
-        tc_file.write_text(yaml.dump(tc_data))
-
-        raw = yaml.safe_load(tc_file.read_text())
-        parsed = LocationTransferCapabilities.model_validate(raw)
-
-        assert len(parsed.transfer_templates) == 1
-        assert parsed.transfer_templates[0].node_name == "robot1"
+        )
+        settings = LocationManagerSettings(transfer_capabilities=tc)
+        assert settings.transfer_capabilities is not None
+        assert len(settings.transfer_capabilities.transfer_templates) == 1
 
 
-class TestResourceSettingsTemplatesFile:
-    """Test ResourceManagerSettings.default_templates_file field."""
+class TestResourceSettingsInline:
+    """Test ResourceManagerSettings inline default_templates field."""
 
-    def test_default_templates_file_none_by_default(self) -> None:
-        """default_templates_file should be None by default."""
+    def test_default_templates_none_by_default(self) -> None:
+        """default_templates should be None by default."""
         settings = ResourceManagerSettings()
-        assert settings.default_templates_file is None
+        assert settings.default_templates is None
 
-    def test_default_templates_file_can_be_set(self) -> None:
-        """Should be able to set default_templates_file."""
-        settings = ResourceManagerSettings(default_templates_file="templates.yaml")
-        assert settings.default_templates_file is not None
+    def test_default_templates_can_be_set(self) -> None:
+        """Should be able to set default_templates inline."""
+        template = TemplateDefinition(
+            template_name="test_template",
+            description="A test template",
+            base_resource={
+                "base_type": "resource",
+                "resource_name": "test",
+                "resource_class": "test_class",
+            },
+        )
+        settings = ResourceManagerSettings(default_templates=[template])
+        assert settings.default_templates is not None
+        assert len(settings.default_templates) == 1
+        assert settings.default_templates[0].template_name == "test_template"
 
-    def test_templates_file_override_logic(self, tmp_path: Path) -> None:
-        """Loading templates from a file should parse correctly."""
-        templates_data = [
-            {
-                "template_name": "test_template",
-                "description": "A test template",
-                "base_resource": {
-                    "base_type": "resource",
-                    "resource_name": "test",
-                    "resource_class": "test_class",
-                },
-            }
-        ]
-        templates_file = tmp_path / "templates.yaml"
-        templates_file.write_text(yaml.dump(templates_data))
+    def test_none_default_templates_preserve_definition(self) -> None:
+        """When settings.default_templates is None, definition should be preserved."""
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            definition = ResourceManagerDefinition(
+                default_templates=[
+                    TemplateDefinition(
+                        template_name="original",
+                        base_resource={
+                            "base_type": "resource",
+                            "resource_name": "orig",
+                            "resource_class": "orig_class",
+                        },
+                    )
+                ],
+            )
+        settings_templates = None
 
-        raw = yaml.safe_load(templates_file.read_text())
-        parsed = [TemplateDefinition.model_validate(t) for t in raw]
+        if settings_templates is not None:
+            definition.default_templates = settings_templates
 
-        assert len(parsed) == 1
-        assert parsed[0].template_name == "test_template"
+        assert len(definition.default_templates) == 1
+        assert definition.default_templates[0].template_name == "original"

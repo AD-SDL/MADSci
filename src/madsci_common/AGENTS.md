@@ -58,9 +58,10 @@ Inherit from `AbstractManagerBase` for consistent manager patterns:
 ```python
 from madsci.common.manager_base import AbstractManagerBase
 
-class MyManagerServer(AbstractManagerBase[MySettings, MyDefinition]):
-    def __init__(self, settings: MySettings):
-        super().__init__(settings)
+class MyManagerServer(AbstractManagerBase[MySettings]):
+    SETTINGS_CLASS = MySettings
+    def __init__(self, settings: MySettings = None, **kwargs):
+        super().__init__(settings=settings, **kwargs)
 ```
 
 ### Context-Aware Logging

@@ -25,6 +25,13 @@ class MigrationStatus(str, Enum):
     FAILED = "failed"
 
 
+class OutputFormat(str, Enum):
+    """Output format for migrated configuration files."""
+
+    YAML = "yaml"
+    ENV = "env"
+
+
 class FileType(str, Enum):
     """Type of definition file."""
 

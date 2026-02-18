@@ -126,9 +126,9 @@ Each manager service follows this pattern:
 
 The `AbstractManagerBase` class provides:
 - Common functionality for all managers (settings, logging, CORS middleware)
-- Standard endpoints (definition, health)
+- Standard endpoints (settings, health)
 - FastAPI app configuration and server lifecycle management
-- Generic typing for settings and definition classes
+- Generic typing for settings class (`AbstractManagerBase[SettingsT]`)
 
 ### Type System
 - All types are defined in `madsci_common/types/`

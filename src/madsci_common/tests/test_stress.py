@@ -14,11 +14,9 @@ import httpx
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.types.manager_types import (
-    ManagerDefinition,
     ManagerSettings,
     ManagerType,
 )
-from pydantic import Field
 from starlette.testclient import TestClient
 
 
@@ -28,30 +26,24 @@ class TestManagerSettings(ManagerSettings):
     model_config: ClassVar[dict] = {"env_prefix": "TEST_"}
 
 
-class TestManagerDefinition(ManagerDefinition):
-    """Test definition for the manager."""
-
-    manager_type: ManagerType = Field(default=ManagerType.EVENT_MANAGER)
-
-
-class TestManager(AbstractManagerBase[TestManagerSettings, TestManagerDefinition]):
+class TestManager(AbstractManagerBase[TestManagerSettings]):
     """Test manager implementation."""
 
     SETTINGS_CLASS = TestManagerSettings
-    DEFINITION_CLASS = TestManagerDefinition
 
 
 @pytest.fixture
 def stress_test_manager() -> TestManager:
     """Create a manager configured for stress testing."""
     settings = TestManagerSettings(
+        manager_name="Stress Test Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
         rate_limit_enabled=True,
         rate_limit_requests=100,
         rate_limit_window=10,
         rate_limit_exempt_ips=[],  # Disable localhost exemption for stress testing
     )
-    definition = TestManagerDefinition(name="Stress Test Manager")
-    return TestManager(settings=settings, definition=definition)
+    return TestManager(settings=settings)
 
 
 @pytest.fixture
@@ -253,7 +245,7 @@ async def test_burst_traffic(stress_test_manager: TestManager) -> None:
 @pytest.mark.anyio
 async def test_multiple_endpoints_under_load(stress_test_manager: TestManager) -> None:
     """Test that multiple endpoints handle concurrent async load simultaneously."""
-    endpoints = ["/health", "/definition", "/"]
+    endpoints = ["/health", "/settings"]
     num_requests_per_endpoint = 20
     app = stress_test_manager.create_server()
 

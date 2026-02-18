@@ -16,6 +16,7 @@ from madsci.common.types.migration_types import (
     MigrationAction,
     MigrationPlan,
     MigrationStatus,
+    OutputFormat,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,13 +44,19 @@ class MigrationScanner:
         FileType.NODE_DEFINITION: ["**/*.node.yaml", "**/*.node.yml"],
     }
 
-    def __init__(self, project_dir: Path) -> None:
+    def __init__(
+        self,
+        project_dir: Path,
+        output_format: OutputFormat = OutputFormat.YAML,
+    ) -> None:
         """Initialize the scanner.
 
         Args:
             project_dir: Root directory of the project to scan.
+            output_format: Output format for generated config files.
         """
         self.project_dir = Path(project_dir)
+        self.output_format = output_format
 
     def scan(self) -> MigrationPlan:
         """Scan for all files needing migration.
@@ -174,14 +181,24 @@ class MigrationScanner:
                 )
             )
 
-        # 2. Generate environment variables
-        env_vars = self._data_to_env_vars(data, file_type)
-        if env_vars:
+        # 2. Generate settings file
+        settings_data = self._extract_settings(data, file_type)
+        if settings_data:
+            if self.output_format == OutputFormat.YAML:
+                description = (
+                    f"Generate settings.yaml with {len(settings_data)} settings"
+                )
+            else:
+                env_vars = self._settings_to_env_vars(settings_data)
+                description = f"Generate {len(env_vars)} environment variables"
             actions.append(
                 MigrationAction(
-                    action_type="generate_env",
-                    description=f"Generate {len(env_vars)} environment variables",
-                    details={"env_vars": env_vars},
+                    action_type="generate_settings",
+                    description=description,
+                    details={
+                        "settings": settings_data,
+                        "output_format": self.output_format.value,
+                    },
                 )
             )
 
@@ -203,46 +220,69 @@ class MigrationScanner:
 
         return actions
 
-    def _data_to_env_vars(
+    def _extract_settings(
         self, data: dict[str, Any], file_type: FileType
-    ) -> dict[str, str]:
-        """Convert definition data to environment variables.
+    ) -> dict[str, Any]:
+        """Extract settings from definition data.
+
+        Returns a dict of prefixed setting keys to their native values
+        (preserving dicts, lists, etc.).
 
         Args:
             data: Parsed YAML data.
             file_type: Type of definition file.
 
         Returns:
-            Dictionary of environment variable name to value.
+            Dictionary of prefixed setting key to native value.
         """
-        env_vars: dict[str, str] = {}
+        settings: dict[str, Any] = {}
 
         if file_type == FileType.MANAGER_DEFINITION:
-            manager_type = data.get("manager_type", "").upper()
-            # Remove _MANAGER suffix for prefix
-            prefix = manager_type.replace("_MANAGER", "") if manager_type else "MANAGER"
+            manager_type = data.get("manager_type", "")
+            # Remove _manager suffix for prefix
+            prefix = manager_type.replace("_manager", "") if manager_type else "manager"
 
-            # Map fields to env vars
+            # Map definition fields to prefixed settings keys
             field_mapping = {
-                "name": f"{prefix}_NAME",
-                "description": f"{prefix}_DESCRIPTION",
-                "nodes": f"{prefix}_NODES",
-                "locations": f"{prefix}_LOCATIONS",
+                "name": f"{prefix}_name",
+                "description": f"{prefix}_description",
+                "nodes": f"{prefix}_nodes",
+                "locations": f"{prefix}_locations",
+                "transfer_capabilities": f"{prefix}_transfer_capabilities",
+                "default_templates": f"{prefix}_default_templates",
             }
 
-            for field, env_name in field_mapping.items():
-                if data.get(field):
-                    value = data[field]
-                    if isinstance(value, (dict, list)):
-                        value = json.dumps(value)
-                    env_vars[env_name] = str(value)
+            for field, settings_key in field_mapping.items():
+                if data.get(field) is not None:
+                    settings[settings_key] = data[field]
 
         elif file_type == FileType.NODE_DEFINITION:
             if data.get("node_name"):
-                env_vars["NODE_NAME"] = data["node_name"]
+                settings["node_name"] = data["node_name"]
             if data.get("node_description"):
-                env_vars["NODE_DESCRIPTION"] = data["node_description"]
+                settings["node_description"] = data["node_description"]
             if data.get("module_name"):
-                env_vars["NODE_MODULE_NAME"] = data["module_name"]
+                settings["node_module_name"] = data["module_name"]
 
+        return settings
+
+    @staticmethod
+    def _settings_to_env_vars(settings: dict[str, Any]) -> dict[str, str]:
+        """Convert settings dict to environment variable format.
+
+        Converts keys to uppercase and serializes complex values as JSON.
+
+        Args:
+            settings: Dictionary of setting key to native value.
+
+        Returns:
+            Dictionary of environment variable name to string value.
+        """
+        env_vars: dict[str, str] = {}
+        for key, value in settings.items():
+            env_key = key.upper()
+            if isinstance(value, (dict, list)):
+                env_vars[env_key] = json.dumps(value)
+            else:
+                env_vars[env_key] = str(value)
         return env_vars

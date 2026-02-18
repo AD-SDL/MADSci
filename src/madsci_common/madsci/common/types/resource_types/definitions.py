@@ -8,7 +8,6 @@ from madsci.common.types.base_types import (
     ConfigDict,
     MadsciBaseModel,
     MadsciSQLModel,
-    PathLike,
     PositiveInt,
     PositiveNumber,
     prefixed_alias_generator,
@@ -61,11 +60,11 @@ class ResourceManagerSettings(
     )
     _accept_prefixed_keys = prefixed_model_validator("resource")
 
-    # Structural config override (from definition)
-    default_templates_file: Optional[PathLike] = Field(
+    # Structural config (inline in settings.yaml)
+    default_templates: Optional[list["TemplateDefinition"]] = Field(
         default=None,
-        title="Default Templates File",
-        description="Path to a YAML file containing default resource template definitions. When set, overrides default_templates from the definition file.",
+        title="Default Templates",
+        description="Default resource template definitions to create or update on manager startup.",
     )
 
     server_url: AnyUrl = Field(
@@ -73,10 +72,10 @@ class ResourceManagerSettings(
         description="The URL of the resource manager server.",
         default="http://localhost:8003",
     )
-    manager_definition: PathLike = Field(
-        title="Resource Manager Definition File",
-        description="Path to the resource manager definition file to use.",
-        default="resource.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.RESOURCE_MANAGER,
     )
     db_url: str = Field(
         title="Database URL",

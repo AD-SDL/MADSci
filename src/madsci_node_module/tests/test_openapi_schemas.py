@@ -10,7 +10,6 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.action_types import ActionFiles
 from madsci.common.types.location_types import LocationArgument
-from madsci.common.types.node_types import NodeDefinition
 from madsci.node_module.helpers import action
 from pydantic import BaseModel, Field
 
@@ -416,16 +415,11 @@ def openapi_test_node() -> Generator[OpenAPISchemaTestNode, None, None]:
     Uses module scope to avoid creating a new node for each test,
     significantly improving test performance.
     """
-    node_definition = NodeDefinition(
-        node_name="OpenAPI Schema Test Node",
-        module_name="openapi_schema_test_node",
-        description="Test node for OpenAPI schema validation.",
-    )
-
     node = OpenAPISchemaTestNode(
-        node_definition=node_definition,
         node_config=TestNodeConfig(
             test_required_param=1,
+            node_name="OpenAPI Schema Test Node",
+            module_name="openapi_schema_test_node",
             enable_rate_limiting=False,  # Disable rate limiting for tests
         ),
     )

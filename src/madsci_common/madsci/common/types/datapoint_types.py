@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union
 
 from bson.objectid import ObjectId
@@ -272,10 +271,10 @@ class DataManagerSettings(
         description="The URL of the data manager server.",
         default=AnyUrl("http://localhost:8004"),
     )
-    manager_definition: PathLike = Field(
-        title="Data Manager Definition File",
-        description="Path to the data manager definition file to use.",
-        default=Path("data.manager.yaml"),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.DATA_MANAGER,
     )
     database_name: str = Field(
         default="madsci_data",

@@ -84,10 +84,10 @@ class EventManagerSettings(
         description="The URL of the Event Manager server.",
         default=AnyUrl("http://localhost:8001"),
     )
-    manager_definition: PathLike = Field(
-        title="Event Manager Definition File",
-        description="Path to the event manager definition file to use.",
-        default=Path("event.manager.yaml"),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.EVENT_MANAGER,
     )
     mongo_db_url: AnyUrl = Field(
         default=AnyUrl("mongodb://localhost:27017"),

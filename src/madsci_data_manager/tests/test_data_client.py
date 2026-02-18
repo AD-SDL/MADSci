@@ -16,7 +16,7 @@ import pytest
 import requests
 from madsci.client.data_client import DataClient
 from madsci.common.types.datapoint_types import (
-    DataManagerDefinition,
+    DataManagerSettings,
     DataPointTypeEnum,
     FileDataPoint,
     ObjectStorageDataPoint,
@@ -42,9 +42,9 @@ mongo_client = create_mongo_fixture()
 @pytest.fixture
 def test_client(mongo_client: MongoClient) -> TestClient:
     """Data Server Test Client Fixture"""
-    data_manager_definition = DataManagerDefinition(name="Test Data Manager")
+    settings = DataManagerSettings(manager_name="Test Data Manager")
     manager = DataManager(
-        definition=data_manager_definition,
+        settings=settings,
         db_client=mongo_client,
     )
     app = manager.create_server()

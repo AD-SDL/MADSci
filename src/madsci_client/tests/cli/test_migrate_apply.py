@@ -17,7 +17,7 @@ import yaml
 from madsci.common.migration import MigrationConverter, MigrationScanner
 from madsci.common.migration.converter import MigrationRollback
 from madsci.common.registry import LocalRegistryManager
-from madsci.common.types.migration_types import MigrationStatus
+from madsci.common.types.migration_types import MigrationStatus, OutputFormat
 
 # Path to v0.6 fixture data (self-contained, decoupled from live example_lab)
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "migration" / "v0.6"
@@ -221,3 +221,164 @@ class TestMigrateConvertApply:
                 assert registered_id is not None, (
                     f"ID not registered for node '{m.name}'"
                 )
+
+
+class TestMigrateYamlOutput:
+    """Test that YAML output format generates settings.yaml files."""
+
+    def test_yaml_format_generates_settings_yaml_for_managers(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """YAML format should create <type>.settings.yaml for each manager."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        manager_files = [
+            m for m in plan.files if m.file_type.value == "manager_definition"
+        ]
+        for m in manager_files:
+            if m.status == MigrationStatus.MIGRATED:
+                assert len(m.output_files) > 0, (
+                    f"No output files for {m.source_path.name}"
+                )
+                output = m.output_files[0]
+                assert output.name.endswith(".settings.yaml"), (
+                    f"Expected .settings.yaml, got {output.name}"
+                )
+                assert output.exists(), f"Output file not created: {output}"
+                # Verify it's valid YAML
+                data = yaml.safe_load(output.read_text())
+                assert isinstance(data, dict)
+
+    def test_yaml_format_generates_per_node_directories(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """YAML format should create nodes/<node_name>/settings.yaml for each node."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        node_files = [m for m in plan.files if m.file_type.value == "node_definition"]
+        for m in node_files:
+            if m.status == MigrationStatus.MIGRATED:
+                assert len(m.output_files) > 0, f"No output files for node {m.name}"
+                output = m.output_files[0]
+                assert output.name == "settings.yaml", (
+                    f"Expected settings.yaml, got {output.name}"
+                )
+                # Should be in a per-node directory: nodes/<node_name>/settings.yaml
+                assert output.parent.name == m.name, (
+                    f"Expected node dir '{m.name}', got '{output.parent.name}'"
+                )
+                assert output.parent.parent.name == "nodes"
+                assert output.exists()
+                # Verify it's valid YAML with node-specific settings
+                data = yaml.safe_load(output.read_text())
+                assert isinstance(data, dict)
+                assert "node_name" in data
+
+    def test_per_node_directories_avoid_conflicts(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Each node should get its own directory with unique settings."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        node_files = [
+            m
+            for m in plan.files
+            if m.file_type.value == "node_definition"
+            and m.status == MigrationStatus.MIGRATED
+        ]
+        assert len(node_files) >= 2, "Need at least 2 nodes to test conflict avoidance"
+
+        # Collect all node settings
+        node_settings = {}
+        for m in node_files:
+            output = m.output_files[0]
+            data = yaml.safe_load(output.read_text())
+            node_settings[m.name] = data
+
+        # Verify each node has a distinct node_name
+        node_names = [s.get("node_name") for s in node_settings.values()]
+        assert len(set(node_names)) == len(node_names), (
+            f"Node names should be unique, got: {node_names}"
+        )
+
+    def test_yaml_settings_contain_lowercase_keys(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """YAML output should use lowercase keys."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        for m in plan.files:
+            if m.status == MigrationStatus.MIGRATED and m.output_files:
+                output = m.output_files[0]
+                data = yaml.safe_load(output.read_text())
+                for key in data:
+                    assert key == key.lower(), (
+                        f"Expected lowercase key, got '{key}' in {output}"
+                    )
+
+
+class TestMigrateEnvOutput:
+    """Test that env output format still works correctly."""
+
+    def test_env_format_generates_dotenv_for_managers(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Env format should create .env.<type> for each manager."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.ENV)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        manager_files = [
+            m for m in plan.files if m.file_type.value == "manager_definition"
+        ]
+        for m in manager_files:
+            if m.status == MigrationStatus.MIGRATED and m.output_files:
+                output = m.output_files[0]
+                assert output.name.startswith(".env."), (
+                    f"Expected .env.<type>, got {output.name}"
+                )
+                assert output.exists()
+
+    def test_env_format_generates_per_node_directories(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Env format should also create per-node directories with .env files."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.ENV)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        node_files = [m for m in plan.files if m.file_type.value == "node_definition"]
+        for m in node_files:
+            if m.status == MigrationStatus.MIGRATED and m.output_files:
+                output = m.output_files[0]
+                assert output.name == ".env", f"Expected .env, got {output.name}"
+                # Should be in a per-node directory
+                assert output.parent.name == m.name
+                assert output.parent.parent.name == "nodes"
+                assert output.exists()

@@ -27,7 +27,10 @@ from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
 )
 from madsci.common.types.step_types import Step, StepParameters
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import (
+    WorkcellManagerDefinition,
+    WorkcellManagerSettings,
+)
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -72,11 +75,11 @@ test_node = Node(
 @pytest.fixture
 def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
-    workcell_def = WorkcellManagerDefinition(
-        name="Test Workcell",
+    workcell_settings = WorkcellManagerSettings(
+        manager_name="Test Workcell",
     )
     return WorkcellStateHandler(
-        workcell_definition=workcell_def, redis_connection=redis_server
+        workcell_settings=workcell_settings, redis_connection=redis_server
     )
 
 
@@ -110,6 +113,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
         mock_location_client.return_value = mock_location_client_instance
 
         warnings.simplefilter("ignore", UserWarning)
+        state_handler.initialize_workcell_state()
         engine = Engine(state_handler=state_handler, data_client=DataClient())
         engine.state_handler.set_node(node_name="node1", node=test_node)
         return engine

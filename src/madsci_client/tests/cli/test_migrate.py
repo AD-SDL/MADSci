@@ -177,8 +177,8 @@ class TestMigrateConvertCommand:
 
             original_init = MigrationScanner.__init__
 
-            def patched_init(self, _project_dir=None):
-                original_init(self, Path(tmpdir))
+            def patched_init(self, _project_dir=None, **kwargs):
+                original_init(self, Path(tmpdir), **kwargs)
 
             with patch.object(MigrationScanner, "__init__", patched_init):
                 result = runner.invoke(
@@ -190,6 +190,16 @@ class TestMigrateConvertCommand:
         # Should report no files to convert
         assert result.exit_code == 0
         assert "No files to convert" in result.output
+
+    def test_convert_help_shows_format_option(self) -> None:
+        """Test that convert --help shows the --format option."""
+        runner = CliRunner()
+        result = runner.invoke(madsci, ["migrate", "convert", "--help"])
+
+        assert result.exit_code == 0
+        assert "--format" in result.output
+        assert "yaml" in result.output
+        assert "env" in result.output
 
 
 class TestMigrateStatusCommand:

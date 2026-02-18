@@ -103,7 +103,8 @@ services:
     <<: *madsci-service
     container_name: liquidhandler_1
     environment:
-      - NODE_DEFINITION=node_definitions/liquidhandler_1.node.yaml
+      - NODE_NAME=liquidhandler_1
+      - NODE_MODULE_NAME=liquidhandler
       - NODE_URL=http://localhost:2000
     command: python example_modules/liquidhandler.py
 
@@ -111,7 +112,8 @@ services:
     <<: *madsci-service
     container_name: liquidhandler_2
     environment:
-      - NODE_DEFINITION=node_definitions/liquidhandler_2.node.yaml
+      - NODE_NAME=liquidhandler_2
+      - NODE_MODULE_NAME=liquidhandler
       - NODE_URL=http://localhost:2001
     command: python example_modules/liquidhandler.py
 
@@ -119,7 +121,8 @@ services:
     <<: *madsci-service
     container_name: robotarm_1
     environment:
-      - NODE_DEFINITION=node_definitions/robotarm_1.node.yaml
+      - NODE_NAME=robotarm_1
+      - NODE_MODULE_NAME=robotarm
       - NODE_URL=http://localhost:2002
     command: python example_modules/robotarm.py
 
@@ -127,7 +130,8 @@ services:
     <<: *madsci-service
     container_name: platereader_1
     environment:
-      - NODE_DEFINITION=node_definitions/platereader_1.node.yaml
+      - NODE_NAME=platereader_1
+      - NODE_MODULE_NAME=platereader
       - NODE_URL=http://localhost:2003
     command: python example_modules/platereader.py
 
@@ -135,7 +139,8 @@ services:
     <<: *madsci-service
     container_name: advanced_example_node
     environment:
-      - NODE_DEFINITION=node_definitions/advanced_example_node.node.yaml
+      - NODE_NAME=advanced_example_node
+      - NODE_MODULE_NAME=advanced_example_node
       - NODE_URL=http://localhost:2004
     command: python example_modules/advanced_example_module.py
 

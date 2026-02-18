@@ -1,8 +1,8 @@
 "MADSci Node Types."
 
+import warnings
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Optional
 
 from madsci.common.types.action_types import ActionDefinition
@@ -12,7 +12,6 @@ from madsci.common.types.base_types import (
     Error,
     MadsciBaseModel,
     MadsciBaseSettings,
-    PathLike,
 )
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
@@ -52,24 +51,6 @@ class NodeConfig(
 ):
     """Basic Configuration for a MADSci Node."""
 
-    node_definition: Optional[PathLike] = Field(
-        title="Node Definition File",
-        description="Path to the node definition file to use. If set, the node will load the definition from this file on startup. Otherwise, a default configuration will be created.",
-        default=Path("default.node.yaml"),
-        alias="node_definition",  # * Don't double prefix
-    )
-    node_info_path: Optional[PathLike] = Field(
-        title="Node Info Path",
-        description="Path to export the generated node info file. If not set, will use the node name and the node_definition's path.",
-        default=None,
-    )
-    update_node_files: bool = Field(
-        title="Update Node Files",
-        description="Whether to update the node definition and info files on startup. "
-        "Deprecated as of v0.7.0: auto-writing of node files will be removed in v0.8.0. "
-        "Use 'madsci config export' to export node configuration explicitly.",
-        default=False,
-    )
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",
         description="The interval in seconds at which the node should update its status.",
@@ -81,34 +62,31 @@ class NodeConfig(
         default=2.0,
     )
 
-    # Identity fields (new in v0.7.0) — these allow specifying node identity
-    # via settings/env vars instead of a definition file. When set, these
-    # override the corresponding values from the definition file.
+    # Identity fields — these specify node identity via settings/env vars.
     node_name: Optional[str] = Field(
         default=None,
         title="Node Name",
-        description="Override the node name from the definition file. "
-        "Used for settings-based configuration without a definition file.",
+        description="Name for this node. If not set, defaults to the class name.",
     )
     node_id: Optional[str] = Field(
         default=None,
         title="Node ID",
-        description="Override the node ID from the definition file.",
+        description="Unique ID for this node. If not set, a new ULID is generated.",
     )
     node_type: Optional[NodeType] = Field(
         default=None,
         title="Node Type",
-        description="Override the node type from the definition file.",
+        description="The type of thing this node provides an interface for.",
     )
     module_name: Optional[str] = Field(
         default=None,
         title="Module Name",
-        description="Override the module name from the definition file.",
+        description="Name of the node module implementation.",
     )
     module_version: Optional[str] = Field(
         default=None,
         title="Module Version",
-        description="Override the module version from the definition file.",
+        description="Version of the node module implementation.",
     )
 
 
@@ -264,7 +242,11 @@ class NodeCapabilities(NodeClientCapabilities):
 
 
 class NodeDefinition(MadsciBaseModel):
-    """Definition of a MADSci Node, a unique instance of a MADSci Node Module."""
+    """Definition of a MADSci Node, a unique instance of a MADSci Node Module.
+
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`NodeConfig` instead.
+    """
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
     node_id: str = Field(
@@ -297,6 +279,21 @@ class NodeDefinition(MadsciBaseModel):
     )
 
     is_ulid = field_validator("node_id")(ulid_validator)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning when NodeDefinition is instantiated directly."""
+        # Only warn for NodeDefinition itself, not subclasses like NodeInfo
+        if type(self) is NodeDefinition:
+            from madsci.common.deprecation import (  # noqa: PLC0415
+                MadsciDeprecationWarning,
+            )
+
+            warnings.warn(
+                "NodeDefinition is deprecated as of v0.7.0 and will be removed in v0.8.0. "
+                "Use NodeConfig instead.",
+                MadsciDeprecationWarning,
+                stacklevel=4,
+            )
 
 
 class Node(MadsciBaseModel, arbitrary_types_allowed=True):

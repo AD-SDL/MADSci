@@ -110,7 +110,7 @@ settings = MyManagerSettings()
 
 ![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
 
-**Configuration options**: See [Configuration.md](../../Configuration.md) and [example_lab/managers/](../../examples/example_lab/managers/) for examples.
+**Configuration options**: See [Configuration.md](../../Configuration.md) and [example_lab/settings.yaml](../../examples/example_lab/settings.yaml) for examples.
 
 ### ULID Best Practices
 

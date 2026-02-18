@@ -266,7 +266,7 @@ Classes
 
     ### Class variables
 
-    `locations_file: str | pathlib.Path | None`
+    `locations: list['LocationDefinition'] | None`
     :
 
     `manager_definition: str | pathlib.Path`
@@ -284,7 +284,7 @@ Classes
     `server_url: pydantic.networks.AnyUrl`
     :
 
-    `transfer_capabilities_file: str | pathlib.Path | None`
+    `transfer_capabilities: madsci.common.types.location_types.LocationTransferCapabilities | None`
     :
 
 `LocationReservation(**data: Any)`

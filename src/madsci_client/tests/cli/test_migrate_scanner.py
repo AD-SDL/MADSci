@@ -134,9 +134,10 @@ class TestMigrationScannerAgainstFixtures:
             assert any("Register" in d for d in action_descriptions), (
                 f"{m.source_path.name} missing 'Register' action"
             )
-            assert any("environment variable" in d for d in action_descriptions), (
-                f"{m.source_path.name} missing env var generation action"
-            )
+            assert any(
+                "environment variable" in d or "settings.yaml" in d
+                for d in action_descriptions
+            ), f"{m.source_path.name} missing settings generation action"
 
 
 class TestMigrateScanCLIAgainstFixtures:

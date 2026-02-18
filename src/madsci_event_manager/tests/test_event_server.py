@@ -15,7 +15,6 @@ from fastapi.testclient import TestClient
 from madsci.common.types.event_types import (
     EmailAlertsConfig,
     Event,
-    EventManagerDefinition,
     EventManagerSettings,
     EventType,
 )
@@ -23,10 +22,8 @@ from madsci.event_manager.event_server import EventManager
 from pymongo.synchronous.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
-event_manager_def = EventManagerDefinition(
-    name="test_event_manager",
-)
 event_manager_settings = EventManagerSettings(
+    manager_name="test_event_manager",
     email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
 )
 
@@ -41,15 +38,14 @@ db_connection = create_mongo_fixture()
 
 
 @pytest.fixture
-def test_client(db_connection: Database, tmp_path: Path) -> TestClient:
+def test_client(db_connection: Database) -> TestClient:
     """Event Server Test Client Fixture"""
     settings = EventManagerSettings(
+        manager_name="test_event_manager",
         email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
-        manager_definition=tmp_path / "event.manager.yaml",
     )
     manager = EventManager(
         settings=settings,
-        definition=event_manager_def,
         db_connection=db_connection,
     )
     app = manager.create_server()
@@ -58,13 +54,12 @@ def test_client(db_connection: Database, tmp_path: Path) -> TestClient:
     client.close()
 
 
-def test_root(test_client: TestClient) -> None:
+def test_health(test_client: TestClient) -> None:
     """
-    Test the root endpoint for the Event_Manager's server.
-    Should return an EventManagerDefinition.
+    Test the health endpoint for the Event Manager's server.
     """
-    result = test_client.get("/").json()
-    EventManagerDefinition.model_validate(result)
+    result = test_client.get("/health")
+    assert result.status_code == 200
 
 
 def test_roundtrip_event(test_client: TestClient) -> None:
@@ -556,20 +551,17 @@ class TestTTLIndex:
 class TestBackgroundRetentionTask:
     """Test the background retention task functionality."""
 
-    def test_archive_old_events_method(
-        self, db_connection: Database, tmp_path: Path
-    ) -> None:
+    def test_archive_old_events_method(self, db_connection: Database) -> None:
         """Test that _archive_old_events correctly archives old events."""
         # Create manager with retention enabled and short soft_delete period for testing
         settings = EventManagerSettings(
+            manager_name="test_event_manager",
             retention_enabled=True,
             soft_delete_after_days=1,  # Archive events older than 1 day
             archive_batch_size=10,
-            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,
-            definition=event_manager_def,
             db_connection=db_connection,
         )
 
@@ -608,20 +600,19 @@ class TestBackgroundRetentionTask:
         assert doc["archived"] is False
 
     def test_archive_old_events_respects_batch_limit(
-        self, db_connection: Database, tmp_path: Path
+        self, db_connection: Database
     ) -> None:
         """Test that _archive_old_events respects max_batches_per_run limit."""
         # Create manager with small batch limits
         settings = EventManagerSettings(
+            manager_name="test_event_manager",
             retention_enabled=True,
             soft_delete_after_days=1,
             archive_batch_size=2,  # 2 events per batch
             max_batches_per_run=2,  # Max 2 batches = 4 events max
-            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,
-            definition=event_manager_def,
             db_connection=db_connection,
         )
 
@@ -651,17 +642,16 @@ class TestBackgroundRetentionTask:
         assert len(archived_docs) == 8
 
     def test_archive_old_events_no_events_to_archive(
-        self, db_connection: Database, tmp_path: Path
+        self, db_connection: Database
     ) -> None:
         """Test that _archive_old_events handles case with no events to archive."""
         settings = EventManagerSettings(
+            manager_name="test_event_manager",
             retention_enabled=True,
             soft_delete_after_days=30,
-            manager_definition=tmp_path / "event.manager.yaml",
         )
         manager = EventManager(
             settings=settings,
-            definition=event_manager_def,
             db_connection=db_connection,
         )
 

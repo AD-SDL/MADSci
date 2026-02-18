@@ -14,7 +14,7 @@ from madsci.common.types.resource_types import (
     ResourceDefinition,
     Stack,
 )
-from madsci.common.types.resource_types.definitions import ResourceManagerDefinition
+from madsci.common.types.resource_types.definitions import ResourceManagerSettings
 from madsci.common.types.resource_types.resource_enums import ContainerTypeEnum
 from madsci.common.utils import new_ulid_str
 from madsci.resource_manager.resource_interface import (
@@ -53,11 +53,11 @@ def interface(postgres_engine: Engine) -> ResourceInterface:
 @pytest.fixture
 def test_client(interface: ResourceInterface) -> TestClient:
     """Resource ServerTest Client Fixture"""
-    resource_manager_definition = ResourceManagerDefinition(
-        name="Test Resource Manager"
+    settings = ResourceManagerSettings(
+        manager_name="Test Resource Manager",
     )
     manager = ResourceManager(
-        definition=resource_manager_definition,
+        settings=settings,
         resource_interface=interface,
     )
     app = manager.create_server()

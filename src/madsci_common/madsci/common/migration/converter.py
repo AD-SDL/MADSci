@@ -4,14 +4,20 @@ Migration converter for MADSci.
 This module converts definition files to the new configuration format.
 """
 
+import json
 import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
+import yaml
 from madsci.common.registry import LocalRegistryManager
-from madsci.common.types.migration_types import FileMigration, MigrationStatus
+from madsci.common.types.migration_types import (
+    FileMigration,
+    MigrationStatus,
+    OutputFormat,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -116,32 +122,47 @@ class MigrationConverter:
                         "Registered ID: name=%s component_id=%s", name, component_id
                     )
 
-            # 3. Generate env file
+            # 3. Generate settings file (YAML or env)
             for action in migration.actions:
-                if action.action_type == "generate_env":
-                    env_vars = action.details["env_vars"]
+                if action.action_type in ("generate_settings", "generate_env"):
+                    output_format = OutputFormat(
+                        action.details.get("output_format", OutputFormat.ENV.value)
+                    )
 
-                    # Determine output file name
-                    env_file = self._get_env_output_path(migration)
+                    # Get settings data (native structure) or fall back to env_vars
+                    settings_data = action.details.get(
+                        "settings", action.details.get("env_vars", {})
+                    )
 
-                    # Append to existing or create new
+                    # Determine output path
+                    output_file = self._get_output_path(migration, output_format)
+
+                    # Ensure parent directory exists
+                    output_file.parent.mkdir(parents=True, exist_ok=True)
+
                     migration_ts = datetime.now(tz=timezone.utc).isoformat()
-                    with env_file.open("a") as f:
-                        f.write(f"\n# Migrated from {migration.source_path.name}\n")
-                        f.write(f"# Migration date: {migration_ts}\n")
-                        for key, value in env_vars.items():
-                            # Always double-quote values and escape
-                            # special characters to prevent injection
-                            escaped = (
-                                value.replace("\\", "\\\\")
-                                .replace('"', '\\"')
-                                .replace("$", "\\$")
-                                .replace("`", "\\`")
-                            )
-                            f.write(f'{key}="{escaped}"\n')
 
-                    migration.output_files.append(env_file)
-                    logger.info("Generated env file: env_file=%s", str(env_file))
+                    if output_format == OutputFormat.YAML:
+                        self._write_yaml_settings(
+                            output_file,
+                            settings_data,
+                            migration.source_path.name,
+                            migration_ts,
+                        )
+                    else:
+                        # For env format, convert to env var strings
+                        env_vars = self._to_env_vars(settings_data)
+                        self._write_env_file(
+                            output_file,
+                            env_vars,
+                            migration.source_path.name,
+                            migration_ts,
+                        )
+
+                    migration.output_files.append(output_file)
+                    logger.info(
+                        "Generated settings file: output_file=%s", str(output_file)
+                    )
 
             # 4. Mark original as deprecated
             for action in migration.actions:
@@ -169,24 +190,112 @@ class MigrationConverter:
 
         return migration
 
-    def _get_env_output_path(self, migration: FileMigration) -> Path:
-        """Get the output path for environment variables.
+    def _get_output_path(
+        self,
+        migration: FileMigration,
+        output_format: OutputFormat,
+    ) -> Path:
+        """Get the output path for a migration.
+
+        For managers, outputs go to the base directory with a per-manager name.
+        For nodes, outputs go to a per-node subdirectory to avoid conflicts.
 
         Args:
             migration: The migration being processed.
+            output_format: The output format (yaml or env).
 
         Returns:
-            Path to the env file.
+            Path to the output file.
         """
         # Go up from managers/ or node_definitions/
         base_dir = self.output_dir or migration.source_path.parent.parent
 
-        # Use component-specific env file
         if migration.component_type == "manager":
             manager_type = migration.original_data.get("manager_type", "manager")
             prefix = manager_type.replace("_manager", "")
+            if output_format == OutputFormat.YAML:
+                return base_dir / f"{prefix}.settings.yaml"
             return base_dir / f".env.{prefix}"
-        return base_dir / f".env.{migration.component_type}s"
+
+        # Nodes: create a per-node directory to avoid conflicting values
+        node_name = migration.name or migration.source_path.stem.replace(".node", "")
+        node_dir = base_dir / "nodes" / node_name
+        if output_format == OutputFormat.YAML:
+            return node_dir / "settings.yaml"
+        return node_dir / ".env"
+
+    def _write_yaml_settings(
+        self,
+        output_file: Path,
+        settings_data: dict[str, Any],
+        source_name: str,
+        migration_ts: str,
+    ) -> None:
+        """Write settings as a YAML file.
+
+        Preserves native data structures (dicts, lists) in YAML format.
+
+        Args:
+            output_file: Path to the output file.
+            settings_data: Settings key-value pairs with native types.
+            source_name: Name of the source file being migrated.
+            migration_ts: ISO timestamp of the migration.
+        """
+        header = f"# Migrated from {source_name}\n# Migration date: {migration_ts}\n"
+
+        with output_file.open("w") as f:
+            f.write(header)
+            yaml.dump(settings_data, f, default_flow_style=False, sort_keys=False)
+
+    @staticmethod
+    def _to_env_vars(settings_data: dict[str, Any]) -> dict[str, str]:
+        """Convert native settings dict to environment variable format.
+
+        Keys are uppercased. Complex values (dicts, lists) are JSON-serialized.
+
+        Args:
+            settings_data: Settings key-value pairs with native types.
+
+        Returns:
+            Dictionary of environment variable name to string value.
+        """
+        env_vars: dict[str, str] = {}
+        for key, value in settings_data.items():
+            env_key = key.upper()
+            if isinstance(value, (dict, list)):
+                env_vars[env_key] = json.dumps(value)
+            else:
+                env_vars[env_key] = str(value)
+        return env_vars
+
+    def _write_env_file(
+        self,
+        output_file: Path,
+        env_vars: dict[str, str],
+        source_name: str,
+        migration_ts: str,
+    ) -> None:
+        """Write settings as a .env file.
+
+        Args:
+            output_file: Path to the output file.
+            env_vars: Environment variable name-value pairs.
+            source_name: Name of the source file being migrated.
+            migration_ts: ISO timestamp of the migration.
+        """
+        with output_file.open("a") as f:
+            f.write(f"\n# Migrated from {source_name}\n")
+            f.write(f"# Migration date: {migration_ts}\n")
+            for key, value in env_vars.items():
+                # Always double-quote values and escape
+                # special characters to prevent injection
+                escaped = (
+                    value.replace("\\", "\\\\")
+                    .replace('"', '\\"')
+                    .replace("$", "\\$")
+                    .replace("`", "\\`")
+                )
+                f.write(f'{key}="{escaped}"\n')
 
     def _mark_deprecated(self, path: Path) -> None:
         """Add deprecation marker to file.
@@ -204,7 +313,7 @@ class MigrationConverter:
 # ║  DEPRECATED - This file format is deprecated                           ║
 # ║                                                                         ║
 # ║  This file has been migrated to the new configuration system.          ║
-# ║  Settings are now in environment variables or .env files.              ║
+# ║  Settings are now in settings.yaml files (or .env overrides).          ║
 # ║  Component ID is now in the registry (~/.madsci/registry.json).        ║
 # ║                                                                         ║
 # ║  Migration date: {migration_date:49}║

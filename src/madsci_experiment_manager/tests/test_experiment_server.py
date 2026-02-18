@@ -11,17 +11,13 @@ from fastapi.testclient import TestClient
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
-    ExperimentManagerDefinition,
+    ExperimentManagerSettings,
     ExperimentRegistration,
     ExperimentStatus,
 )
 from madsci.experiment_manager.experiment_server import ExperimentManager
 from pymongo.database import Database
 from pytest_mock_resources import MongoConfig, create_mongo_fixture
-
-experiment_manager_def = ExperimentManagerDefinition(
-    name="test_experiment_manager",
-)
 
 
 @pytest.fixture(scope="session")
@@ -36,8 +32,11 @@ db_connection = create_mongo_fixture()
 @pytest.fixture()
 def test_client(db_connection: Database) -> TestClient:
     """Test client fixture for the Experiment Manager's server."""
+    settings = ExperimentManagerSettings(
+        manager_name="test_experiment_manager",
+    )
     manager = ExperimentManager(
-        definition=experiment_manager_def,
+        settings=settings,
         db_connection=db_connection,
     )
     app = manager.create_server()
@@ -46,13 +45,15 @@ def test_client(db_connection: Database) -> TestClient:
     client.close()
 
 
-def test_experiment_definition(test_client: TestClient) -> None:
+def test_experiment_settings(test_client: TestClient) -> None:
     """
-    Test the definition endpoint for the Experiment Manager's server.
-    Should return an ExperimentManagerDefinition.
+    Test the settings endpoint for the Experiment Manager's server.
+    Should return manager settings.
     """
-    result = test_client.get("/definition").json()
-    ExperimentManagerDefinition.model_validate(result)
+    result = test_client.get("/settings")
+    assert result.status_code == 200
+    settings_data = result.json()
+    assert settings_data["settings"]["manager_name"] == "test_experiment_manager"
 
 
 def test_experiment_roundtrip(test_client: TestClient) -> None:

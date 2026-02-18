@@ -113,30 +113,26 @@ This lab uses the modern **dual-layer configuration** pattern:
 - **`.env`** contains secrets and environment-specific overrides (database credentials, OTEL settings). This file is gitignored.
 - **Environment variables** override both files with the highest precedence.
 
-All structural data that managers need is configured directly in `settings.yaml` or pointed at standalone YAML files:
+All structural data that managers need is configured directly in `settings.yaml`:
 
-| Setting | File / Value | Purpose |
-|---|---|---|
-| `location_locations_file` | `locations.yaml` | Lab location definitions (deck positions, storage, etc.) |
-| `location_transfer_capabilities_file` | `transfer_capabilities.yaml` | Transfer templates and routing configuration |
-| `resource_default_templates_file` | `resource_templates.yaml` | Default resource templates (plate_nest, storage_stack) |
-| `workcell_nodes` | *(inline dict)* | Node name → URL map for the workcell |
+| Setting | Purpose |
+|---|---|
+| `location_locations` | Lab location definitions (deck positions, storage, etc.) |
+| `location_transfer_capabilities` | Transfer templates and routing configuration |
+| `resource_default_templates` | Default resource templates (plate_nest, storage_stack) |
+| `workcell_nodes` | Node name → URL map for the workcell |
 
 See [Configuration.md](../../Configuration.md) for the full configuration reference.
 
-### Legacy Definition Files
-
-The `managers/*.manager.yaml` files represent the **legacy definition-file pattern**. They are kept as examples of the older format but are **not loaded** by the lab — all structural data is now sourced from the standalone files and settings listed above.
-
-See [Migration from Definitions](../../docs/guides/migration_from_definitions.md) for details on migrating from definition files to settings.
-
 ### Node Configuration
 
-Node definitions are located in `node_definitions/`:
+Nodes are configured via environment variables in `compose.yaml` (`NODE_NAME`, `NODE_MODULE_NAME`, `NODE_URL`). These can also be set in per-node `settings.yaml` files for local development. Node modules are implemented in `example_modules/`.
 
-- Each node has both a `.node.yaml` (configuration) and `.info.yaml` (metadata) file
-- Configurations specify node capabilities, resources, and network settings
-- Node modules are implemented in `example_modules/`
+### Legacy Definition Files
+
+The `managers/*.manager.yaml` and `node_definitions/*.node.yaml` files represent the **legacy definition-file pattern**. They are kept as historical examples of the older format but are **not loaded** by the lab — all configuration is now sourced from `settings.yaml`, `.env`, and environment variables.
+
+See [Migration from Definitions](../../docs/guides/migration_from_definitions.md) for details on migrating from definition files to settings.
 
 ## Usage Examples
 

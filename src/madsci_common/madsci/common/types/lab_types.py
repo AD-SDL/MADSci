@@ -41,15 +41,15 @@ class LabManagerSettings(
         description="The URL of the lab manager.",
         default=AnyUrl("http://localhost:8000"),
     )
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.LAB_MANAGER,
+    )
     dashboard_files_path: Optional[PathLike] = Field(
         default=Path("~") / "MADSci" / "ui" / "dist",
         title="Dashboard Static Files Path",
         description="Path to the static files for the dashboard. Set to None to disable the dashboard.",
-    )
-    manager_definition: PathLike = Field(
-        title="Lab Definition File",
-        description="Path to the lab definition file to use.",
-        default=Path("lab.manager.yaml"),
     )
 
 

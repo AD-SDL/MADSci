@@ -164,14 +164,11 @@ curl http://localhost:8005/nodes | jq '.[].node_id'
 
 1. **Node Configuration Issues:**
 ```bash
-# Verify node definition files exist
-ls -la ../../examples/example_lab/node_definitions/
-
-# Check YAML syntax
-python -c "import yaml; print(yaml.safe_load(open('node_definitions/liquidhandler_1.node.yaml')))"
-
-# Verify environment variables
+# Verify node environment variables
 docker compose exec liquidhandler_1 env | grep NODE_
+
+# Check settings.yaml if using file-based configuration
+cat settings.yaml
 ```
 
 2. **Network Connectivity:**

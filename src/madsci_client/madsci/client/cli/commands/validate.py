@@ -1,17 +1,21 @@
 """MADSci CLI validate command.
 
-Validates MADSci configuration files (manager, node, workflow definitions).
+Validates MADSci configuration files (settings, manager, node, workflow definitions).
 """
 
 from __future__ import annotations
 
 import fnmatch
 import json
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import click
+
+# Patterns for deprecated definition files — still validated but emit deprecation warnings
+_DEPRECATED_FILE_PATTERNS = {"*.manager.yaml", "*.node.yaml"}
 
 # Map file-name patterns to the Pydantic model class that validates them.
 _FILE_VALIDATORS: list[tuple[str, str, str]] = [
@@ -66,6 +70,14 @@ def _validate_file(
     """Validate a single YAML file against its expected Pydantic model."""
     result = ValidationResult(path=str(file_path), valid=False, file_type=file_type)
 
+    # Check if this is a deprecated definition file pattern
+    for deprecated_pattern in _DEPRECATED_FILE_PATTERNS:
+        if fnmatch.fnmatch(file_path.name, deprecated_pattern):
+            result.warnings.append(
+                "Definition files are deprecated. Run 'madsci migrate' to convert to settings."
+            )
+            break
+
     try:
         model_class = _import_model(model_path)
     except Exception as exc:
@@ -73,7 +85,10 @@ def _validate_file(
         return result
 
     try:
-        model_class.from_yaml(file_path)
+        # Suppress deprecation warnings from model instantiation during validation
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            model_class.from_yaml(file_path)
         result.valid = True
     except Exception as exc:
         result.errors.append(str(exc))

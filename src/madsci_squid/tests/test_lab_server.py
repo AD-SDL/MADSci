@@ -2,41 +2,43 @@
 
 import pytest
 from madsci.common.ownership import global_ownership_info
-from madsci.common.types.lab_types import LabManagerDefinition, LabManagerSettings
+from madsci.common.types.lab_types import LabManagerSettings
 from madsci.squid.lab_server import LabManager
 from starlette.testclient import TestClient
 
 
 @pytest.fixture
-def lab_manager_definition():
-    """Fixture providing a LabManagerDefinition instance for testing."""
-    return LabManagerDefinition(name="Test Lab Manager")
+def lab_manager_settings():
+    """Fixture providing LabManagerSettings for testing."""
+    return LabManagerSettings(manager_name="Test Lab Manager")
 
 
 @pytest.fixture
-def lab_manager(lab_manager_definition):
-    """Fixture providing a LabManager instance with a LabManagerDefinition."""
-    return LabManager(definition=lab_manager_definition)
+def lab_manager(lab_manager_settings):
+    """Fixture providing a LabManager instance with LabManagerSettings."""
+    return LabManager(settings=lab_manager_settings)
 
 
 def test_lab_manager_with_custom_settings():
     """Test LabManager creation with custom settings."""
     settings = LabManagerSettings(
-        server_url="http://localhost:9000", manager_definition="custom_lab.yaml"
+        server_url="http://localhost:9000",
+        manager_name="Custom Lab Manager",
     )
-    definition = LabManagerDefinition(name="Custom Lab Manager")
 
-    manager = LabManager(settings=settings, definition=definition)
+    manager = LabManager(settings=settings)
 
     assert str(manager.settings.server_url) == "http://localhost:9000/"
-    assert manager.definition.name == "Custom Lab Manager"
+    assert manager.settings.manager_name == "Custom Lab Manager"
 
 
-def test_lab_manager_server_creation(lab_manager_definition):
+def test_lab_manager_server_creation():
     """Test that the server can be created and has the expected endpoints."""
     # Disable dashboard files for this test to avoid static file conflicts
-    settings = LabManagerSettings(dashboard_files_path=None)
-    manager = LabManager(settings=settings, definition=lab_manager_definition)
+    settings = LabManagerSettings(
+        dashboard_files_path=None, manager_name="Test Lab Manager"
+    )
+    manager = LabManager(settings=settings)
     app = manager.create_server()
 
     assert app is not None
@@ -46,8 +48,8 @@ def test_lab_manager_server_creation(lab_manager_definition):
         response = client.get("/")
         assert response.status_code == 404
 
-        # Test the definition endpoint
-        response = client.get("/definition")
+        # Test the settings endpoint
+        response = client.get("/settings")
         assert response.status_code == 200
 
         # Test the context endpoint (lab-specific)
@@ -55,11 +57,13 @@ def test_lab_manager_server_creation(lab_manager_definition):
         assert response.status_code == 200
 
 
-def test_lab_manager_root_endpoint_disabled(lab_manager_definition):
+def test_lab_manager_root_endpoint_disabled():
     """Test that LabManager disables the root definition endpoint."""
     # Disable dashboard files for this test to avoid static file conflicts
-    settings = LabManagerSettings(dashboard_files_path=None)
-    manager = LabManager(settings=settings, definition=lab_manager_definition)
+    settings = LabManagerSettings(
+        dashboard_files_path=None, manager_name="Test Lab Manager"
+    )
+    manager = LabManager(settings=settings)
     app = manager.create_server()
 
     with TestClient(app) as client:
@@ -67,11 +71,11 @@ def test_lab_manager_root_endpoint_disabled(lab_manager_definition):
         response = client.get("/")
         assert response.status_code == 404
 
-        # But /definition should still work
-        response = client.get("/definition")
+        # /settings should work
+        response = client.get("/settings")
         assert response.status_code == 200
-        definition_data = response.json()
-        assert definition_data["name"] == "Test Lab Manager"
+        settings_data = response.json()
+        assert settings_data["settings"]["manager_name"] == "Test Lab Manager"
 
         # Other endpoints should still work
         response = client.get("/health")
@@ -81,28 +85,30 @@ def test_lab_manager_root_endpoint_disabled(lab_manager_definition):
         assert response.status_code == 200
 
 
-def test_lab_manager_dashboard_files_none(lab_manager_definition):
+def test_lab_manager_dashboard_files_none():
     """Test lab manager with dashboard files disabled."""
-    settings = LabManagerSettings(dashboard_files_path=None)
-    manager = LabManager(settings=settings, definition=lab_manager_definition)
+    settings = LabManagerSettings(
+        dashboard_files_path=None, manager_name="Test Lab Manager"
+    )
+    manager = LabManager(settings=settings)
     app = manager.create_server()
 
     # Should still create the app successfully
     assert app is not None
 
     with TestClient(app) as client:
-        response = client.get("/definition")
+        response = client.get("/settings")
         assert response.status_code == 200
 
 
-def test_lab_manager_ownership_setup(lab_manager_definition):
+def test_lab_manager_ownership_setup(lab_manager_settings):
     """Test that ownership information is properly set up."""
 
-    _ = LabManager(definition=lab_manager_definition)
+    _ = LabManager(settings=lab_manager_settings)
 
     # Lab manager should set both manager_id and lab_id
-    assert global_ownership_info.manager_id == lab_manager_definition.manager_id
-    assert global_ownership_info.lab_id == lab_manager_definition.manager_id
+    assert global_ownership_info.manager_id == lab_manager_settings.manager_id
+    assert global_ownership_info.lab_id == lab_manager_settings.manager_id
 
 
 def test_health_endpoint(lab_manager):

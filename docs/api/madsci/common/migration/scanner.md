@@ -7,7 +7,7 @@ This module scans a project for definition files that need migration.
 Classes
 -------
 
-`MigrationScanner(project_dir: pathlib.Path)`
+`MigrationScanner(project_dir: pathlib.Path, output_format: madsci.common.types.migration_types.OutputFormat = OutputFormat.YAML)`
 :   Scans for files that need migration.
 
     The scanner finds all definition files in a project directory and
@@ -26,6 +26,7 @@ Classes
 
     Args:
         project_dir: Root directory of the project to scan.
+        output_format: Output format for generated config files.
 
     ### Class variables
 

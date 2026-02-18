@@ -8,7 +8,6 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
-    PathLike,
     datetime,
     prefixed_alias_generator,
     prefixed_model_validator,
@@ -46,10 +45,10 @@ class ExperimentManagerSettings(
         description="The URL of the experiment manager server.",
         default=AnyUrl("http://localhost:8002"),
     )
-    manager_definition: PathLike = Field(
-        title="Experiment Manager Definition File",
-        description="Path to the experiment manager definition file to use.",
-        default="experiment.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.EXPERIMENT_MANAGER,
     )
     mongo_db_url: AnyUrl = Field(
         title="MongoDB URL",

@@ -24,30 +24,18 @@ my_instrument:
   <<: *madsci-service
   container_name: my_instrument_1
   environment:
-    - NODE_DEFINITION=node_definitions/my_instrument.node.yaml
+    - NODE_NAME=my_instrument_1
+    - NODE_MODULE_NAME=my_instrument
     - NODE_URL=http://localhost:2010
   command: python example_modules/my_instrument.py
 ```
 
-### Node Definition Files
-**`my_instrument.node.yaml`**:
+### Node Settings File
+**`settings.yaml`** (or set via environment variables):
 ```yaml
 node_name: my_instrument_1
-node_id: 01234567890123456789012345  # Use new_ulid_str()
-node_type: measurement_device
-module_path: example_modules/my_instrument.py
-node_class: MyInstrumentNode
-```
-
-**`my_instrument.info.yaml`**:
-```yaml
-name: "My Custom Instrument"
-description: "Custom laboratory measurement device"
-manufacturer: "Lab Equipment Inc."
-model: "Model-X1000"
-version: "1.0.0"
-capabilities: [optical_density_measurement, sample_transfer]
-resources: [sample_holder_slot, reagent_reservoir_pool]
+node_module_name: my_instrument
+node_url: http://localhost:2010
 ```
 
 ## Testing Patterns

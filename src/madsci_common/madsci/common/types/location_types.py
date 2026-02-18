@@ -6,7 +6,6 @@ from typing import Any, Literal, Optional
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
-    PathLike,
     prefixed_alias_generator,
     prefixed_model_validator,
 )
@@ -328,16 +327,16 @@ class LocationManagerSettings(
     )
     _accept_prefixed_keys = prefixed_model_validator("location")
 
-    # Structural config overrides (from definition)
-    locations_file: Optional[PathLike] = Field(
+    # Structural config (inline in settings.yaml)
+    locations: Optional[list["LocationDefinition"]] = Field(
         default=None,
-        title="Locations File",
-        description="Path to a YAML file containing location definitions. When set, overrides locations from the definition file.",
+        title="Locations",
+        description="Location definitions managed by this LocationManager.",
     )
-    transfer_capabilities_file: Optional[PathLike] = Field(
+    transfer_capabilities: Optional["LocationTransferCapabilities"] = Field(
         default=None,
-        title="Transfer Capabilities File",
-        description="Path to a YAML file containing transfer capabilities. When set, overrides transfer_capabilities from the definition file.",
+        title="Transfer Capabilities",
+        description="Transfer capabilities configuration for this LocationManager.",
     )
 
     server_url: AnyUrl = Field(
@@ -345,10 +344,10 @@ class LocationManagerSettings(
         description="The URL where this manager's server runs.",
         default="http://localhost:8006/",
     )
-    manager_definition: PathLike = Field(
-        title="Location Manager Definition File",
-        description="Path to the location manager definition file to use.",
-        default="location.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.LOCATION_MANAGER,
     )
     redis_host: str = Field(
         title="Redis Host",

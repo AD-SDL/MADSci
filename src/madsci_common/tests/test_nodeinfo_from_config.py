@@ -147,8 +147,3 @@ class TestNodeConfigIdentityFields:
         assert config.node_type == NodeType.DEVICE
         assert config.module_name == "my_mod"
         assert config.module_version == "1.2.3"
-
-    def test_update_node_files_default_false(self) -> None:
-        """update_node_files now defaults to False (G.3)."""
-        config = NodeConfig()
-        assert config.update_node_files is False

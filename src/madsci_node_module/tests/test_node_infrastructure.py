@@ -4,6 +4,7 @@ import contextlib
 import inspect
 import logging
 import time
+import warnings
 from pathlib import Path
 from typing import Annotated, Optional, Union, get_type_hints
 
@@ -54,15 +55,15 @@ def dummy_node():
         def __init__(self):
             """Initialize without calling parent __init__ to avoid file dependencies."""
             self.config = TestNodeConfig(test_required_param=42)
-            self.node_definition = NodeDefinition(
-                node_name="test_node",
-                node_id=new_ulid_str(),
-                module_name="test_module",
-                module_version="0.0.1",
-            )
-            self.node_info = NodeInfo.from_node_def_and_config(
-                self.node_definition, self.config
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _node_def = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+            self.node_info = NodeInfo.from_node_def_and_config(_node_def, self.config)
             self.action_handlers = {}
             self.action_history = {}
             self.node_state = {}
@@ -153,8 +154,8 @@ class TestNodeConfiguration:
             module_name="config_test",
             config_overrides={"test_required_param": 42},
         )
-        assert node.node_definition.node_name == "Config Test Node"
-        assert node.node_definition.module_name == "config_test"
+        assert node.node_info.node_name == "Config Test Node"
+        assert node.node_info.module_name == "config_test"
         assert node.config.test_required_param == 42
 
     def test_node_factory_with_optional_params(self, test_node_factory) -> None:
@@ -444,15 +445,15 @@ class MockNode(AbstractNode):
     def __init__(self):
         """Initialize without calling parent __init__ to avoid file dependencies."""
         self.config = LocalTestNodeConfig()
-        self.node_definition = NodeDefinition(
-            node_name="test_node",
-            node_id=new_ulid_str(),
-            module_name="test_module",
-            module_version="0.0.1",
-        )
-        self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition, self.config
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _node_def = NodeDefinition(
+                node_name="test_node",
+                node_id=new_ulid_str(),
+                module_name="test_module",
+                module_version="0.0.1",
+            )
+        self.node_info = NodeInfo.from_node_def_and_config(_node_def, self.config)
         self.action_handlers = {}
         self.action_history = {}
         self.node_state = {}
@@ -693,14 +694,16 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
@@ -744,14 +747,16 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
@@ -797,14 +802,16 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
@@ -850,14 +857,16 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
@@ -902,14 +911,16 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}

@@ -165,11 +165,10 @@ class WorkcellManagerSettings(
     )
     _accept_prefixed_keys = prefixed_model_validator("workcell")
 
-    # Structural config override (from definition)
     nodes: Optional[dict[str, AnyUrl]] = Field(
         default=None,
         title="Workcell Node URLs",
-        description="Node URLs for the workcell, as a JSON dict. When set, overrides the nodes from the definition file.",
+        description="Node URLs for the workcell, as a JSON dict mapping node names to their URLs.",
     )
 
     server_url: AnyUrl = Field(
@@ -177,13 +176,10 @@ class WorkcellManagerSettings(
         description="The URL of the workcell manager server.",
         default=AnyUrl("http://localhost:8005"),
     )
-    manager_definition: PathLike = Field(
-        title="Workcell Definition File",
-        description="Path to the workcell definition file to use.",
-        default=Path("workcell.manager.yaml"),
-        validation_alias=AliasChoices(
-            "workcell_manager_definition", "workcell_definition", "manager_definition"
-        ),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.WORKCELL_MANAGER,
     )
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",

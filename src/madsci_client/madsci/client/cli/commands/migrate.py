@@ -134,6 +134,13 @@ def scan(ctx: click.Context, directory: str, json_output: bool, verbose: bool) -
     type=click.Path(),
     help="Output directory for generated files.",
 )
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["yaml", "env"]),
+    default="yaml",
+    help="Output format for generated config files (default: yaml).",
+)
 @click.pass_context
 def convert(  # noqa: C901, PLR0912
     ctx: click.Context,
@@ -143,13 +150,14 @@ def convert(  # noqa: C901, PLR0912
     apply: bool,
     backup: bool,
     output: Optional[str],
+    output_format: str,
 ) -> None:
     """Convert definition files to new format."""
     from madsci.common.migration import (
         MigrationConverter,
         MigrationScanner,
     )
-    from madsci.common.types.migration_types import MigrationStatus
+    from madsci.common.types.migration_types import MigrationStatus, OutputFormat
 
     console = _get_console(ctx)
 
@@ -158,9 +166,11 @@ def convert(  # noqa: C901, PLR0912
         ctx.exit(1)
         return
 
+    fmt = OutputFormat(output_format)
+
     # Get files to convert
     if convert_all:
-        scanner = MigrationScanner(Path.cwd())
+        scanner = MigrationScanner(Path.cwd(), output_format=fmt)
         plan = scanner.scan()
         migrations = [m for m in plan.files if m.status == MigrationStatus.PENDING]
     else:
@@ -168,7 +178,7 @@ def convert(  # noqa: C901, PLR0912
             console.print("[red]Error: Specify files to convert or use --all[/red]")
             ctx.exit(1)
             return
-        scanner = MigrationScanner(Path.cwd())
+        scanner = MigrationScanner(Path.cwd(), output_format=fmt)
         plan = scanner.scan()
         migrations = [
             m

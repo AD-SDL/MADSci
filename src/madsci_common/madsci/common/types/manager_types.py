@@ -1,10 +1,10 @@
 """Types used primarily by MADSci Managers."""
 
+import warnings
 from enum import Enum
-from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from madsci.common.utils import new_ulid_str
 from pydantic import AnyUrl, ConfigDict, Field
 
@@ -27,7 +27,7 @@ class ManagerSettings(MadsciBaseSettings):
     """Base settings class for MADSci Manager services.
 
     This class provides common configuration fields that all managers need,
-    such as server URL and manager definition file path.
+    such as server URL, manager identity, and operational parameters.
 
     Manager-specific settings classes should inherit from this class and:
     1. Add their specific configuration parameters
@@ -40,10 +40,15 @@ class ManagerSettings(MadsciBaseSettings):
         description="The URL where this manager's server runs.",
         default="http://localhost:8000",
     )
-    manager_definition: PathLike = Field(
-        title="Manager Definition File",
-        description="Path to the manager definition file to use.",
-        default=Path("manager.yaml"),
+    manager_id: Optional[str] = Field(
+        title="Manager ID",
+        description="Unique identifier for this manager instance. If not set, a new ULID is generated at runtime. The registry system provides the stable ID thereafter.",
+        default=None,
+    )
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager, used by other components to find matching managers.",
+        default=None,
     )
 
     # Rate limiting settings
@@ -108,21 +113,21 @@ class ManagerSettings(MadsciBaseSettings):
         ge=1,
     )
 
-    # Registry resolution (opt-in)
+    # Registry resolution
     enable_registry_resolution: bool = Field(
-        default=False,
+        default=True,
         title="Enable Registry Resolution",
-        description="When true, resolve manager_id from the ID Registry at startup instead of from the definition YAML.",
+        description="When true, resolve manager_id from the ID Registry at startup for stable identity across restarts.",
     )
     manager_name: Optional[str] = Field(
         default=None,
         title="Manager Name",
-        description="Name for registry lookup. Overrides the name from the definition file when set.",
+        description="Name for this manager instance. Used for registry lookup and display.",
     )
     manager_description: Optional[str] = Field(
         default=None,
         title="Manager Description",
-        description="Override the description from the definition file.",
+        description="Human-readable description of this manager instance.",
     )
     lab_url: Optional[AnyUrl] = Field(
         default=None,
@@ -186,7 +191,11 @@ class ManagerHealth(MadsciBaseModel):
 
 
 class ManagerDefinition(MadsciBaseModel):
-    """Definition for a MADSci Manager."""
+    """Definition for a MADSci Manager.
+
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`ManagerSettings` instead.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -208,3 +217,14 @@ class ManagerDefinition(MadsciBaseModel):
         title="Manager Type",
         description="The type of the manager, used by other components or managers to find matching managers.",
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning on instantiation."""
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            f"{type(self).__name__} is deprecated as of v0.7.0 and will be removed in v0.8.0. "
+            "Use ManagerSettings instead.",
+            MadsciDeprecationWarning,
+            stacklevel=4,
+        )

@@ -191,3 +191,19 @@ Classes
 
     `REMOVED`
     :
+
+`OutputFormat(value, names=None, *, module=None, qualname=None, type=None, start=1)`
+:   Output format for migrated configuration files.
+
+    ### Ancestors (in MRO)
+
+    * builtins.str
+    * enum.Enum
+
+    ### Class variables
+
+    `ENV`
+    :
+
+    `YAML`
+    :

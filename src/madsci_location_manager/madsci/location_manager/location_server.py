@@ -14,10 +14,8 @@ from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
-    LocationManagerDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
-    LocationTransferCapabilities,
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -29,9 +27,7 @@ REPRESENTATION_VAL_BODY = Body(...)
 
 
 @ownership_class()
-class LocationManager(
-    AbstractManagerBase[LocationManagerSettings, LocationManagerDefinition]
-):
+class LocationManager(AbstractManagerBase[LocationManagerSettings]):
     """MADSci Location Manager using the new AbstractManagerBase pattern.
 
     This class is decorated with @ownership_class() which automatically
@@ -40,27 +36,25 @@ class LocationManager(
     """
 
     SETTINGS_CLASS = LocationManagerSettings
-    DEFINITION_CLASS = LocationManagerDefinition
 
     transfer_planner: Optional[TransferPlanner] = None
 
     def __init__(
         self,
         settings: Optional[LocationManagerSettings] = None,
-        definition: Optional[LocationManagerDefinition] = None,
         redis_connection: Optional[Any] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
         self.redis_connection = redis_connection
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
 
         self.state_handler = LocationStateHandler(
             settings=self.settings,
-            manager_id=self.definition.manager_id,
+            manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
         )
 
@@ -69,50 +63,18 @@ class LocationManager(
         resource_server_url = context.resource_server_url
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
-        # Override definition from settings files if provided
-        self._apply_settings_file_overrides()
-
-        self._initialize_locations_from_definition()
+        self._initialize_locations()
         self.transfer_planner = TransferPlanner(
-            self.state_handler, self.definition, self.resource_client
+            state_handler=self.state_handler,
+            transfer_capabilities=self.settings.transfer_capabilities,
+            resource_client=self.resource_client,
         )
 
-        # Sync any Redis-only locations to the definition file on startup
-        # This ensures locations added via API are persisted immediately
-        self._sync_locations_to_definition()
+    def _initialize_locations(self) -> None:
+        """Initialize locations from settings, creating or updating them in the state handler."""
+        locations = self.settings.locations or []
 
-    def _apply_settings_file_overrides(self) -> None:
-        """Override definition locations/transfer_capabilities from settings files if provided."""
-        from pathlib import Path  # noqa: PLC0415
-
-        import yaml  # noqa: PLC0415
-
-        if self.settings.locations_file is not None:
-            locations_path = Path(self.settings.locations_file)
-            if locations_path.exists():
-                data = yaml.safe_load(locations_path.read_text())
-                if isinstance(data, list):
-                    self.definition.locations = [
-                        LocationDefinition.model_validate(loc) for loc in data
-                    ]
-                elif isinstance(data, dict) and "locations" in data:
-                    self.definition.locations = [
-                        LocationDefinition.model_validate(loc)
-                        for loc in data["locations"]
-                    ]
-
-        if self.settings.transfer_capabilities_file is not None:
-            tc_path = Path(self.settings.transfer_capabilities_file)
-            if tc_path.exists():
-                data = yaml.safe_load(tc_path.read_text())
-                self.definition.transfer_capabilities = (
-                    LocationTransferCapabilities.model_validate(data)
-                )
-
-    def _initialize_locations_from_definition(self) -> None:
-        """Initialize locations from the definition, creating or updating them in the state handler."""
-
-        for location_def in self.definition.locations:
+        for location_def in locations:
             # Check if location already exists
             existing_location = self.state_handler.get_location(
                 location_def.location_id
@@ -235,78 +197,6 @@ class LocationManager(
         # Existing resource doesn't exist, create a new one
         return self._initialize_location_resource(location_def)
 
-    def _sync_locations_to_definition(self) -> None:
-        """Sync current runtime locations back to the definition file.
-
-        This method reads all locations from Redis state, converts them to
-        LocationDefinition objects, and writes them back to the YAML definition file.
-        It preserves other definition settings like transfer_capabilities.
-        It also preserves resource_template_name and resource_template_overrides for
-        locations that were originally defined with them.
-        """
-        try:
-            # Get current locations from state
-            runtime_locations = self.state_handler.get_locations()
-
-            # Create a map of original location definitions by ID to preserve template info
-            original_location_map = {
-                loc.location_id: loc for loc in self.definition.locations
-            }
-
-            # Convert runtime Location objects to LocationDefinition objects
-            location_definitions = []
-            for location in runtime_locations:
-                # Check if this location was originally defined with resource template info
-                original_location = original_location_map.get(location.location_id)
-
-                # Preserve resource_template_name and resource_template_overrides if they exist
-                resource_template_name = (
-                    original_location.resource_template_name
-                    if original_location
-                    else None
-                )
-                resource_template_overrides = (
-                    original_location.resource_template_overrides
-                    if original_location
-                    else None
-                )
-
-                # Create LocationDefinition from Location
-                # Note: We don't persist resource_id as it's runtime-only
-                location_def = LocationDefinition(
-                    location_id=location.location_id,
-                    location_name=location.location_name,
-                    description=location.description,
-                    representations=location.representations or {},
-                    allow_transfers=location.allow_transfers,
-                    resource_template_name=resource_template_name,
-                    resource_template_overrides=resource_template_overrides,
-                )
-                location_definitions.append(location_def)
-
-            # Update the definition with new locations
-            self.definition.locations = location_definitions
-
-            # Write to file, preserving other definition fields
-            definition_path = self.get_definition_path()
-            self.definition.to_yaml(definition_path)
-
-            self.logger.debug(
-                "Synced locations to definition file",
-                location_count=len(location_definitions),
-                definition_path=str(definition_path),
-            )
-
-        except Exception as e:
-            # Log error but don't fail the operation - persistence is best-effort
-            self.logger.warning(
-                "Failed to sync locations to definition file",
-                event_type=EventType.LOCATION_UPDATE,
-                definition_path=str(self.get_definition_path()),
-                error=str(e),
-                exc_info=True,
-            )
-
     def get_health(self) -> LocationManagerHealth:
         """Get the health status of the Location Manager."""
         health = LocationManagerHealth()
@@ -352,8 +242,7 @@ class LocationManager(
             result = self.state_handler.set_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
-            # Sync locations to definition file
-            self._sync_locations_to_definition()
+
             return result
 
     @get("/location", tags=["Locations"])
@@ -644,10 +533,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app(
     settings: Optional[LocationManagerSettings] = None,
-    definition: Optional[LocationManagerDefinition] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    manager = LocationManager(settings=settings, definition=definition)
+    manager = LocationManager(settings=settings)
     return manager.create_server(
         version="0.1.0",
         lifespan=lifespan,
