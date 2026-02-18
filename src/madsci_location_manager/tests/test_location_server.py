@@ -120,9 +120,6 @@ def test_get_nonexistent_location(client):
     assert response.status_code == 404
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_delete_location(client, sample_location):
     """Test deleting a location."""
     # First add the location
@@ -144,9 +141,6 @@ def test_delete_nonexistent_location(client):
     assert response.status_code == 404
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_set_representations(client, sample_location):
     """Test setting a representation for a location."""
     # First add the location
@@ -255,9 +249,6 @@ def test_multiple_locations(client):
     assert returned_ids == expected_ids
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_location_state_persistence(client, sample_location):
     """Test that location state persists in Redis."""
     # Add a location
@@ -2923,9 +2914,6 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
 # Remove Representation and Detach Resource Tests
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_remove_representation_success(redis_server: Redis):
     """Test successful removal of a representation from a location."""
     location_id = new_ulid_str()
@@ -3037,9 +3025,6 @@ def test_remove_representation_no_representations(redis_server: Redis):
     assert "Representation for node 'robot_1' not found" in response.json()["detail"]
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_remove_last_representation(redis_server: Redis):
     """Test removing the last representation from a location."""
     location_id = new_ulid_str()
@@ -3147,9 +3132,6 @@ def test_detach_resource_no_resource_attached(redis_server: Redis):
     assert "No resource attached" in response.json()["detail"]
 
 
-@pytest.mark.xfail(
-    reason="Source code still calls removed _sync_locations_to_definition method"
-)
 def test_remove_representation_rebuilds_transfer_graph(redis_server: Redis):
     """Test that removing representation rebuilds the transfer graph."""
     # Create template with transfer capabilities

@@ -295,8 +295,6 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
         # Rebuild transfer graph since deleted location affects transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
-        # Sync locations to definition file
-        self._sync_locations_to_definition()
         return {"message": f"Location {location_id} deleted successfully"}
 
     @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
@@ -321,8 +319,6 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         result = self.state_handler.update_location(location_id, location)
         # Rebuild transfer graph since representations affect transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
-        # Sync locations to definition file
-        self._sync_locations_to_definition()
         return result
 
     @delete(
@@ -360,8 +356,6 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         result = self.state_handler.update_location(location_id, location)
         # Rebuild transfer graph since representations affect transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
-        # Sync locations to definition file
-        self._sync_locations_to_definition()
         return result
 
     @post("/location/{location_id}/attach_resource", tags=["Locations"])
