@@ -72,12 +72,12 @@ class PlateReaderNode(RestNode):
             description="Template for plate reader deck slot. Represents the deck position where plates are placed for reading.",
             required_overrides=["resource_name"],
             tags=["plate_reader", "deck", "slot", "measurement"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize plate deck resource
-        deck_resource_name = "plate_reader_deck_" + str(self.node_definition.node_name)
+        deck_resource_name = "plate_reader_deck_" + str(self.node_info.node_name)
         self.plate_deck = self.resource_client.create_resource_from_template(
             template_name="plate_reader_deck_slot",
             resource_name=deck_resource_name,

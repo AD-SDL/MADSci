@@ -260,7 +260,7 @@ class LiquidHandlerNode(RestNode):
             description="Template for liquid handler deck slot. Represents deck positions where plates or labware can be placed.",
             required_overrides=["resource_name"],
             tags=["liquid_handler", "deck", "slot"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
@@ -284,12 +284,12 @@ class LiquidHandlerNode(RestNode):
             description="Template for liquid handler pipette pool. Tracks pipette tips and aspirated liquids.",
             required_overrides=["resource_name"],
             tags=["liquid_handler", "pipette", "pool", "consumable"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize deck 1
-        deck1_resource_name = f"liquid_handler_deck1_{self.node_definition.node_name}"
+        deck1_resource_name = f"liquid_handler_deck1_{self.node_info.node_name}"
         self.deck1 = self.resource_client.create_resource_from_template(
             template_name="liquid_handler_deck_slot",
             resource_name=deck1_resource_name,
@@ -300,7 +300,7 @@ class LiquidHandlerNode(RestNode):
         )
 
         # Initialize deck 2
-        deck2_resource_name = f"liquid_handler_deck2_{self.node_definition.node_name}"
+        deck2_resource_name = f"liquid_handler_deck2_{self.node_info.node_name}"
         self.deck2 = self.resource_client.create_resource_from_template(
             template_name="liquid_handler_deck_slot",
             resource_name=deck2_resource_name,
@@ -311,9 +311,7 @@ class LiquidHandlerNode(RestNode):
         )
 
         # Initialize pipette
-        pipette_resource_name = (
-            f"liquid_handler_pipette_{self.node_definition.node_name}"
-        )
+        pipette_resource_name = f"liquid_handler_pipette_{self.node_info.node_name}"
         self.pipette = self.resource_client.create_resource_from_template(
             template_name="liquid_handler_pipette_pool",
             resource_name=pipette_resource_name,
@@ -500,7 +498,7 @@ if __name__ == "__main__":
     4. Register with the lab manager and begin accepting requests
 
     Environment Variables:
-        NODE_DEFINITION: Path to node definition YAML file
+        NODE_NAME: Name of this node instance
         NODE_URL: URL for this node's HTTP server
         LIQUIDHANDLER_X_*: Node-specific configuration overrides
 

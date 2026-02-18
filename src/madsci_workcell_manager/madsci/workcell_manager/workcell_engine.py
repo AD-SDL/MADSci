@@ -61,8 +61,11 @@ class Engine:
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
-        self.workcell_definition = state_handler.get_workcell_definition()
         self.workcell_settings = self.state_handler.workcell_settings
+        # Initialize workcell state in Redis before reading the definition
+        with state_handler.wc_state_lock():
+            state_handler.initialize_workcell_state()
+        self.workcell_definition = state_handler.get_workcell_definition()
         self.logger = EventClient(name=f"workcell.{self.workcell_definition.name}")
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
@@ -73,8 +76,6 @@ class Engine:
         self.resource_client = ResourceClient()
         self.location_client = LocationClient()
         self._node_clients: dict[str, AbstractNodeClient] = {}
-        with state_handler.wc_state_lock():
-            state_handler.initialize_workcell_state()
         time.sleep(self.workcell_settings.cold_start_delay)
         self.logger.info(
             "Engine initialized, waiting for workflows",

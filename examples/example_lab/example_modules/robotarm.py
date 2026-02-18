@@ -74,11 +74,11 @@ class RobotArmNode(RestNode):
             description="Template for robot arm gripper slot. Used to track what the robot arm is currently holding.",
             required_overrides=["resource_name"],
             tags=["robot_arm", "gripper", "slot", "robot"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
-        resource_name = "robot_arm_gripper_" + str(self.node_definition.node_name)
+        resource_name = "robot_arm_gripper_" + str(self.node_info.node_name)
         self.gripper = self.resource_client.create_resource_from_template(
             template_name="robot_arm_gripper_slot",
             resource_name=resource_name,
