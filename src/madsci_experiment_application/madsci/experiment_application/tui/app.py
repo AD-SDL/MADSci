@@ -104,6 +104,7 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         self._is_running = False
         self._result: Optional[Any] = None
         self._status_timer: Optional[Any] = None
+        self._experiment_task: Optional[asyncio.Task] = None
 
     def compose(self) -> ComposeResult:
         """Compose the TUI layout."""
@@ -166,7 +167,11 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         status_text.update(self._get_status_text())
 
     async def action_start(self) -> None:
-        """Start the experiment."""
+        """Start the experiment.
+
+        Launches the experiment as a background task so the TUI remains
+        responsive to pause/cancel/quit interactions while it runs.
+        """
         if self._is_running:
             self._log("Experiment already running")
             return
@@ -180,9 +185,14 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         refresh_interval = getattr(self.experiment.config, "refresh_interval", 1.0)
         self._status_timer = self.set_interval(refresh_interval, self._update_status)
 
+        # Launch experiment as a background task so this handler returns
+        # immediately and the TUI stays responsive to other actions.
+        self._experiment_task = asyncio.create_task(self._run_experiment_task())
+
+    async def _run_experiment_task(self) -> None:
+        """Background task that runs the experiment and updates the TUI on completion."""
         try:
-            # Run experiment in a thread to not block the UI
-            self._result = await self._run_experiment_async()
+            self._result = await self._run_experiment_in_thread()
             self._log("Experiment completed successfully")
         except Exception as e:
             self._log(f"Experiment failed: {e}")
@@ -193,14 +203,15 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
                 self._status_timer = None
             self._update_status()
 
-    async def _run_experiment_async(self) -> Any:
-        """Run the experiment asynchronously."""
+    async def _run_experiment_in_thread(self) -> Any:
+        """Run the experiment in a thread to avoid blocking the event loop."""
+        loop = asyncio.get_event_loop()
 
         def run_sync() -> Any:
             with self.experiment.manage_experiment():
                 return self.experiment.run_experiment()
 
-        return await asyncio.get_event_loop().run_in_executor(None, run_sync)
+        return await loop.run_in_executor(None, run_sync)
 
     async def action_pause(self) -> None:
         """Pause or resume the experiment."""
