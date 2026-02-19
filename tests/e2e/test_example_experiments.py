@@ -1,4 +1,4 @@
-"""Tests for the example experiment script and notebook.
+"""Tests for the example experiment script, TUI, and notebook.
 
 Validates syntax, imports, linting compliance, and structural correctness
 of the example files without requiring a running lab.
@@ -14,6 +14,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_SCRIPT = REPO_ROOT / "examples" / "example_experiment.py"
+EXAMPLE_TUI = REPO_ROOT / "examples" / "example_experiment_tui.py"
 EXAMPLE_NOTEBOOK = REPO_ROOT / "examples" / "notebooks" / "experiment_notebook.ipynb"
 
 
@@ -92,6 +93,96 @@ class TestExampleExperimentScript:
                 )
                 return
         pytest.fail("ExampleExperiment class not found")
+
+
+class TestExampleExperimentTUI:
+    """Tests for examples/example_experiment_tui.py."""
+
+    def test_file_exists(self):
+        assert EXAMPLE_TUI.exists(), f"{EXAMPLE_TUI} not found"
+
+    def test_valid_python_syntax(self):
+        source = EXAMPLE_TUI.read_text()
+        ast.parse(source, filename=str(EXAMPLE_TUI))
+
+    def test_imports_successfully(self):
+        """Verify the TUI script can be imported without side effects."""
+        result = subprocess.run(  # noqa: S603
+            [
+                sys.executable,
+                "-c",
+                "import importlib.util; "
+                f"spec = importlib.util.spec_from_file_location('example_experiment_tui', '{EXAMPLE_TUI}'); "
+                "mod = importlib.util.module_from_spec(spec); "
+                "spec.loader.exec_module(mod); "
+                "assert hasattr(mod, 'ExampleExperimentTUI'); "
+                "assert hasattr(mod, 'WORKFLOW_DEFINITION'); "
+                "print('OK')",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            f"Import failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "OK" in result.stdout
+
+    def test_ruff_compliance(self):
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "ruff", "check", str(EXAMPLE_TUI)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        assert result.returncode == 0, f"ruff check failed:\n{result.stdout}"
+
+    def test_script_defines_tui_class(self):
+        source = EXAMPLE_TUI.read_text()
+        tree = ast.parse(source)
+        class_names = [
+            node.name for node in ast.walk(tree) if isinstance(node, ast.ClassDef)
+        ]
+        assert "ExampleExperimentTUI" in class_names
+
+    def test_script_uses_experiment_tui_base(self):
+        source = EXAMPLE_TUI.read_text()
+        assert "ExperimentTUI" in source
+        assert (
+            "from madsci.experiment_application.experiment_tui import ExperimentTUI"
+            in source
+        )
+
+    def test_script_has_main_block(self):
+        source = EXAMPLE_TUI.read_text()
+        assert 'if __name__ == "__main__"' in source
+
+    def test_script_overrides_run_experiment(self):
+        source = EXAMPLE_TUI.read_text()
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == "ExampleExperimentTUI":
+                method_names = [
+                    n.name
+                    for n in node.body
+                    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                ]
+                assert "run_experiment" in method_names, (
+                    "ExampleExperimentTUI must override run_experiment()"
+                )
+                return
+        pytest.fail("ExampleExperimentTUI class not found")
+
+    def test_script_calls_check_experiment_status(self):
+        """TUI experiments should call check_experiment_status() for pause/cancel support."""
+        source = EXAMPLE_TUI.read_text()
+        assert "check_experiment_status" in source
+
+    def test_script_calls_run_tui(self):
+        source = EXAMPLE_TUI.read_text()
+        assert "run_tui()" in source
 
 
 class TestExperimentNotebook:
