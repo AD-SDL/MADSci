@@ -103,6 +103,7 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         self.experiment = experiment
         self._is_running = False
         self._result: Optional[Any] = None
+        self._status_timer: Optional[Any] = None
 
     def compose(self) -> ComposeResult:
         """Compose the TUI layout."""
@@ -174,6 +175,11 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         self._update_status()
         self._log("Starting experiment...")
 
+        # Periodically refresh status while running so the ID and status
+        # are visible as soon as the experiment manager assigns them.
+        refresh_interval = getattr(self.experiment.config, "refresh_interval", 1.0)
+        self._status_timer = self.set_interval(refresh_interval, self._update_status)
+
         try:
             # Run experiment in a thread to not block the UI
             self._result = await self._run_experiment_async()
@@ -182,6 +188,9 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
             self._log(f"Experiment failed: {e}")
         finally:
             self._is_running = False
+            if self._status_timer is not None:
+                self._status_timer.stop()
+                self._status_timer = None
             self._update_status()
 
     async def _run_experiment_async(self) -> Any:
@@ -224,14 +233,14 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         self._update_status()
         self._log("Status refreshed")
 
-    def on_button_pressed(self, event: Any) -> None:
+    async def on_button_pressed(self, event: Any) -> None:
         """Handle button presses."""
         button_id = event.button.id
         if button_id == "start-btn":
-            self.action_start()
+            await self.action_start()
         elif button_id == "pause-btn":
-            self.action_pause()
+            await self.action_pause()
         elif button_id == "cancel-btn":
-            self.action_cancel()
+            await self.action_cancel()
         elif button_id == "quit-btn":
             self.exit(self._result)
