@@ -13,7 +13,7 @@ import contextlib
 import time
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, ClassVar, Generator, Optional, Union
+from typing import TYPE_CHECKING, Any, ClassVar, Generator, Optional, Union
 
 from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
@@ -30,6 +30,9 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from pydantic import AnyUrl, Field
+
+if TYPE_CHECKING:
+    from madsci.common.types.context_types import MadsciContext
 
 
 class ExperimentBaseConfig(
@@ -219,11 +222,43 @@ class ExperimentBase(MadsciClientMixin):
                 setattr(self, attr_name, str(url))
 
     def _setup_lab_context(self) -> None:
-        """Setup lab context if lab_server_url is available."""
+        """Setup lab context if lab_server_url is available.
+
+        When the lab server is reachable, this retrieves the lab context
+        (which includes all manager URLs) and:
+        1. Sets the global MadsciContext for context-based client creation
+        2. Propagates discovered URLs to instance attributes so client
+           factory methods can use them directly (more robust than relying
+           solely on the ContextVar, which may not persist across async
+           boundaries or Jupyter notebook cells)
+        """
         if hasattr(self, "lab_server_url") and self.lab_server_url:
             with contextlib.suppress(Exception):
-                # Lab server may not be available, continue without context
-                set_current_madsci_context(self.lab_client.get_lab_context())
+                context = self.lab_client.get_lab_context()
+                set_current_madsci_context(context)
+                # Propagate discovered URLs to instance attributes
+                self._propagate_context_urls(context)
+
+    def _propagate_context_urls(self, context: "MadsciContext") -> None:
+        """Propagate server URLs from a MadsciContext to instance attributes.
+
+        Only sets URLs that aren't already configured on the instance,
+        preserving any explicit overrides.
+
+        Args:
+            context: The MadsciContext containing discovered URLs.
+        """
+        url_mappings = [
+            ("event_server_url", context.event_server_url),
+            ("experiment_server_url", context.experiment_server_url),
+            ("workcell_server_url", context.workcell_server_url),
+            ("data_server_url", context.data_server_url),
+            ("resource_server_url", context.resource_server_url),
+            ("location_server_url", context.location_server_url),
+        ]
+        for attr_name, url in url_mappings:
+            if url and not getattr(self, attr_name, None):
+                setattr(self, attr_name, str(url))
 
     # =========================================================================
     # Lifecycle Methods
