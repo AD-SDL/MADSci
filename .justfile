@@ -95,7 +95,8 @@ coverage-xml:
 
 # Build docker images
 dcb: env
-  @docker compose --profile build build
+  @docker compose --profile build build madsci
+  @docker compose --profile build build madsci_dashboard
 
 # Start the example lab
 up *args: env
