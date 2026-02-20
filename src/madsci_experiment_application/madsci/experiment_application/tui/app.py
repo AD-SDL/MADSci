@@ -10,6 +10,8 @@ Install with: `pip install madsci[tui]` or `pip install textual`
 import asyncio
 from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
+from madsci.common.exceptions import ExperimentCancelledError
+
 try:
     from textual.app import App, ComposeResult
     from textual.binding import Binding
@@ -102,6 +104,7 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         super().__init__(*args, **kwargs)
         self.experiment = experiment
         self._is_running = False
+        self._is_cancelled = False
         self._result: Optional[Any] = None
         self._status_timer: Optional[Any] = None
         self._experiment_task: Optional[asyncio.Task] = None
@@ -143,7 +146,11 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
             else "Unknown"
         )
         status = "Not Started"
-        if self._is_running:
+        if self._is_cancelled:
+            status = "Cancelled"
+        elif self._is_running and self.experiment.is_pause_requested:
+            status = "Paused"
+        elif self._is_running:
             status = "Running"
         elif self.experiment.experiment:
             status = self.experiment.experiment.status.value
@@ -162,9 +169,11 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         log_widget.write_line(message)
 
     def _update_status(self) -> None:
-        """Update the status display."""
+        """Update the status display and button labels."""
         status_text = self.query_one("#status-text", Static)
         status_text.update(self._get_status_text())
+        pause_btn = self.query_one("#pause-btn", Button)
+        pause_btn.label = "Resume" if self.experiment.is_pause_requested else "Pause"
 
     async def action_start(self) -> None:
         """Start the experiment.
@@ -175,6 +184,10 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         if self._is_running:
             self._log("Experiment already running")
             return
+
+        # Reset pause/cancel events from any previous run
+        self.experiment.reset_events()
+        self._is_cancelled = False
 
         self._is_running = True
         self._update_status()
@@ -194,6 +207,10 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
         try:
             self._result = await self._run_experiment_in_thread()
             self._log("Experiment completed successfully")
+        except asyncio.CancelledError:
+            self._log("Experiment cancelled")
+        except ExperimentCancelledError:
+            self._log("Experiment cancelled")
         except Exception as e:
             self._log(f"Experiment failed: {e}")
         finally:
@@ -219,14 +236,13 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
             self._log("No experiment running")
             return
 
-        if self.experiment.experiment:
-            if self.experiment.experiment.status.value == "paused":
-                self._log("Resuming experiment...")
-                # Resume logic would go here
-            else:
-                self._log("Pausing experiment...")
-                self.experiment.pause_experiment()
-                self._update_status()
+        if self.experiment.is_pause_requested:
+            self._log("Resuming experiment...")
+            self.experiment.request_resume()
+        else:
+            self._log("Pausing experiment...")
+            self.experiment.request_pause()
+        self._update_status()
 
     async def action_cancel(self) -> None:
         """Cancel the experiment."""
@@ -235,9 +251,14 @@ class ExperimentTUIApp(App if TEXTUAL_AVAILABLE else object):  # type: ignore[mi
             return
 
         self._log("Cancelling experiment...")
-        self.experiment.cancel_experiment()
-        self._is_running = False
-        self._update_status()
+        self._is_cancelled = True
+        # Set the cancel event so the experiment thread exits at the next
+        # check_experiment_status() call.
+        self.experiment.request_cancel()
+        # Also cancel the asyncio task so the TUI stops waiting immediately,
+        # even if the thread is blocked in a long-running call.
+        if self._experiment_task is not None:
+            self._experiment_task.cancel()
 
     def action_refresh(self) -> None:
         """Refresh the status display."""

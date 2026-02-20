@@ -4,11 +4,14 @@ This module provides the ExperimentTUI class, designed for interactive
 experiment execution with a Textual-based terminal user interface.
 """
 
+import threading
+import time
 from typing import Any, ClassVar
 
 from madsci.experiment_application.experiment_base import (
     ExperimentBase,
     ExperimentBaseConfig,
+    ExperimentCancelledError,
 )
 from pydantic import Field
 
@@ -74,6 +77,56 @@ class ExperimentTUI(ExperimentBase):
 
     config: ExperimentTUIConfig  # type: ignore[assignment]
     config_model: ClassVar[type[ExperimentTUIConfig]] = ExperimentTUIConfig
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize with thread-safe pause/cancel events."""
+        super().__init__(*args, **kwargs)
+        self._pause_event = threading.Event()
+        self._cancel_event = threading.Event()
+
+    def request_pause(self) -> None:
+        """Request the experiment to pause (thread-safe, called from TUI)."""
+        self._pause_event.set()
+
+    def request_resume(self) -> None:
+        """Request the experiment to resume (thread-safe, called from TUI)."""
+        self._pause_event.clear()
+
+    def request_cancel(self) -> None:
+        """Request the experiment to cancel (thread-safe, called from TUI)."""
+        self._cancel_event.set()
+
+    def reset_events(self) -> None:
+        """Clear pause and cancel events for a fresh experiment run."""
+        self._pause_event.clear()
+        self._cancel_event.clear()
+
+    @property
+    def is_pause_requested(self) -> bool:
+        """Check if a pause has been requested."""
+        return self._pause_event.is_set()
+
+    def check_experiment_status(self) -> None:
+        """Check experiment status using in-process events.
+
+        Overrides the base class to use thread-safe events for direct
+        communication between the TUI and the experiment thread, avoiding
+        the need for a server round-trip.
+
+        When paused, blocks until resumed or cancelled.
+
+        Raises:
+            ExperimentCancelledError: If cancel was requested from the TUI.
+        """
+        if self._cancel_event.is_set():
+            raise ExperimentCancelledError("Experiment cancelled from TUI.")
+
+        while self._pause_event.is_set():
+            if self._cancel_event.is_set():
+                raise ExperimentCancelledError(
+                    "Experiment cancelled from TUI while paused."
+                )
+            time.sleep(0.5)
 
     def run_tui(self) -> Any:
         """Launch the TUI for this experiment.
