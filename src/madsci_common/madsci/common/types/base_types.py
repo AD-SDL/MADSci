@@ -2,11 +2,17 @@
 Base types for MADSci.
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Optional, TypeVar, Union
 
 import yaml
+from madsci.common.settings_dir import (
+    _settings_dir_var,
+    resolve_file_paths,
+    resolve_settings_dir,
+)
 from pydantic import (
     AliasGenerator,
     BaseModel,
@@ -18,6 +24,7 @@ from pydantic.config import ConfigDict
 from pydantic_settings import (
     BaseSettings,
     CliSettingsSource,
+    DotEnvSettingsSource,
     JsonConfigSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
@@ -94,6 +101,37 @@ class MadsciBaseSettings(BaseSettings):
     )
     """Configuration for the settings model."""
 
+    def __init__(
+        self,
+        _settings_dir: Union[str, Path, None] = None,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize settings, optionally with a settings directory.
+
+        When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+        configuration file paths are resolved via walk-up discovery from that
+        directory instead of the current working directory. Each filename walks
+        up independently, so ``node.settings.yaml`` can resolve in the node dir
+        while ``settings.yaml`` resolves in the lab root.
+
+        Without either, existing CWD-relative behavior is preserved exactly.
+
+        Args:
+            _settings_dir: Starting directory for walk-up file discovery.
+            **kwargs: Forwarded to ``BaseSettings.__init__``.
+        """
+        explicit_dir = _settings_dir or os.environ.get("MADSCI_SETTINGS_DIR")
+        if explicit_dir is not None:
+            settings_dir = resolve_settings_dir(_settings_dir)
+            token = _settings_dir_var.set(settings_dir)
+        else:
+            token = None
+        try:
+            super().__init__(**kwargs)
+        finally:
+            if token is not None:
+                _settings_dir_var.reset(token)
+
     @classmethod
     def settings_customise_sources(
         cls,
@@ -103,16 +141,53 @@ class MadsciBaseSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        """Sets the order of settings sources for the settings model."""
+        """Sets the order of settings sources for the settings model.
+
+        When a settings directory is active (via ``_settings_dir`` or
+        ``MADSCI_SETTINGS_DIR``), file paths are resolved with walk-up
+        discovery. Otherwise, default CWD-relative behavior is used.
+        """
+        settings_dir = _settings_dir_var.get()
+
+        if settings_dir is not None:
+            resolved_yaml = resolve_file_paths(
+                settings_cls.model_config.get("yaml_file"), settings_dir
+            )
+            resolved_json = resolve_file_paths(
+                settings_cls.model_config.get("json_file"), settings_dir
+            )
+            resolved_toml = resolve_file_paths(
+                settings_cls.model_config.get("toml_file"), settings_dir
+            )
+            resolved_env = resolve_file_paths(
+                settings_cls.model_config.get("env_file"), settings_dir
+            )
+
+            dotenv_source = DotEnvSettingsSource(settings_cls, env_file=resolved_env)
+            json_source = JsonConfigSettingsSource(
+                settings_cls, json_file=resolved_json
+            )
+            toml_source = TomlConfigSettingsSource(
+                settings_cls, toml_file=resolved_toml
+            )
+            yaml_source = YamlConfigSettingsSource(
+                settings_cls, yaml_file=resolved_yaml
+            )
+        else:
+            dotenv_source = dotenv_settings
+            json_source = JsonConfigSettingsSource(settings_cls)
+            toml_source = TomlConfigSettingsSource(settings_cls)
+            yaml_source = YamlConfigSettingsSource(settings_cls)
+
         return (
             CliSettingsSource(settings_cls, cli_parse_args=True),
             init_settings,
             env_settings,
-            dotenv_settings,
+            dotenv_source,
             file_secret_settings,
-            JsonConfigSettingsSource(settings_cls),
-            TomlConfigSettingsSource(settings_cls),
-            YamlConfigSettingsSource(settings_cls),
+            json_source,
+            toml_source,
+            yaml_source,
         )
 
     def model_dump_safe(

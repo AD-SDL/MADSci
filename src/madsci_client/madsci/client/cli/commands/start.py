@@ -287,6 +287,13 @@ def _remove_pid(name: str) -> None:
     default=60,
     help="Timeout in seconds for health check polling (default: 60).",
 )
+@click.option(
+    "--settings-dir",
+    "settings_dir",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Settings directory for walk-up config file discovery. Sets MADSCI_SETTINGS_DIR for child processes.",
+)
 @click.pass_context
 def start(
     ctx: click.Context,
@@ -297,6 +304,7 @@ def start(
     mode: str,
     wait: bool | None,
     wait_timeout: int,
+    settings_dir: str | None,
 ) -> None:
     """Start MADSci lab services.
 
@@ -312,6 +320,14 @@ def start(
         madsci start manager event -d    Start manager in background
         madsci start node ./node.py      Start a node module
     """
+    # Store settings_dir for subcommands to access.
+    ctx.ensure_object(dict)
+    ctx.obj["settings_dir"] = settings_dir
+
+    # Set env var so it's picked up by settings classes in this process.
+    if settings_dir:
+        os.environ["MADSCI_SETTINGS_DIR"] = str(Path(settings_dir).resolve())
+
     # Only run the default Docker/local flow when no subcommand is given.
     if ctx.invoked_subcommand is not None:
         return
@@ -331,13 +347,35 @@ def start(
             _wait_for_health(console, wait_timeout)
 
 
+def _build_child_env(settings_dir: str | None) -> dict[str, str] | None:
+    """Build environment dict for child processes with MADSCI_SETTINGS_DIR.
+
+    Returns ``None`` if no settings_dir is set, which tells subprocess to
+    inherit the current environment unmodified.
+    """
+    if not settings_dir:
+        return None
+    env = os.environ.copy()
+    env["MADSCI_SETTINGS_DIR"] = str(Path(settings_dir).resolve())
+    return env
+
+
 @start.command("manager")
 @click.argument("name", type=click.Choice(sorted(MANAGER_MODULES.keys())))
 @click.option(
     "-d", "--detach", is_flag=True, help="Run in the background with PID tracking."
 )
+@click.option(
+    "--settings-dir",
+    "settings_dir",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Settings directory for walk-up config file discovery.",
+)
 @click.pass_context
-def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
+def start_manager(
+    ctx: click.Context, name: str, detach: bool, settings_dir: str | None
+) -> None:
     """Start a single manager as a subprocess.
 
     \b
@@ -348,6 +386,10 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
     from madsci.client.cli.utils.output import get_console
 
     console = get_console(ctx)
+
+    # Inherit settings_dir from parent group if not set directly.
+    effective_settings_dir = settings_dir or (ctx.obj or {}).get("settings_dir")
+    child_env = _build_child_env(effective_settings_dir)
 
     module = MANAGER_MODULES[name]
 
@@ -369,6 +411,7 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
                 stdout=log_fh,
                 stderr=log_fh,
                 start_new_session=True,
+                env=child_env,
             )
         except Exception:
             log_fh.close()
@@ -383,7 +426,7 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
         console.print(f"Starting {name} manager...")
         console.print("[dim]Press Ctrl+C to stop.[/dim]")
         try:
-            subprocess.run(cmd, check=True)  # noqa: S603
+            subprocess.run(cmd, check=True, env=child_env)  # noqa: S603
         except subprocess.CalledProcessError as exc:
             raise click.ClickException(
                 f"Manager '{name}' exited with code {exc.returncode}."
@@ -401,9 +444,20 @@ def start_manager(ctx: click.Context, name: str, detach: bool) -> None:
 @click.option(
     "--name", "node_name", help="Name for PID tracking (default: filename stem)."
 )
+@click.option(
+    "--settings-dir",
+    "settings_dir",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Settings directory for walk-up config file discovery.",
+)
 @click.pass_context
 def start_node(
-    ctx: click.Context, path: str, detach: bool, node_name: str | None
+    ctx: click.Context,
+    path: str,
+    detach: bool,
+    node_name: str | None,
+    settings_dir: str | None,
 ) -> None:
     """Start a node module as a subprocess.
 
@@ -416,6 +470,10 @@ def start_node(
     from madsci.client.cli.utils.output import get_console
 
     console = get_console(ctx)
+
+    # Inherit settings_dir from parent group if not set directly.
+    effective_settings_dir = settings_dir or (ctx.obj or {}).get("settings_dir")
+    child_env = _build_child_env(effective_settings_dir)
 
     node_path = Path(path).resolve()
     name = node_name or node_path.stem
@@ -438,6 +496,7 @@ def start_node(
                 stdout=log_fh,
                 stderr=log_fh,
                 start_new_session=True,
+                env=child_env,
             )
         except Exception:
             log_fh.close()
@@ -452,7 +511,7 @@ def start_node(
         console.print(f"Starting node '{name}' from {node_path}...")
         console.print("[dim]Press Ctrl+C to stop.[/dim]")
         try:
-            subprocess.run(cmd, check=True)  # noqa: S603
+            subprocess.run(cmd, check=True, env=child_env)  # noqa: S603
         except subprocess.CalledProcessError as exc:
             raise click.ClickException(
                 f"Node '{name}' exited with code {exc.returncode}."

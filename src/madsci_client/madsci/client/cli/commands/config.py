@@ -54,6 +54,7 @@ def _export_settings(
     include_secrets: bool,
     include_defaults: bool,
     output_format: str,
+    settings_dir: str | None = None,
 ) -> str:
     """Export settings from a class, with optional secret redaction.
 
@@ -62,7 +63,10 @@ def _export_settings(
     which is correct for a shared settings.yaml file.
     """
     settings_cls = _import_class(settings_class_path)
-    settings = settings_cls()
+    init_kwargs: dict = {}
+    if settings_dir:
+        init_kwargs["_settings_dir"] = settings_dir
+    settings = settings_cls(**init_kwargs)
 
     if hasattr(settings, "model_dump_safe"):
         data = settings.model_dump_safe(include_secrets=include_secrets, by_alias=True)
@@ -136,6 +140,13 @@ def config() -> None:
     default=True,
     help="Include fields with default values.",
 )
+@click.option(
+    "--settings-dir",
+    "settings_dir",
+    type=click.Path(exists=True, file_okay=False),
+    default=None,
+    help="Settings directory for walk-up config file discovery.",
+)
 @click.pass_context
 def export(
     ctx: click.Context,
@@ -145,6 +156,7 @@ def export(
     output_format: str,
     include_secrets: bool,
     include_defaults: bool,
+    settings_dir: Optional[str],
 ) -> None:
     """Export current manager settings.
 
@@ -188,7 +200,11 @@ def export(
         class_path, friendly_name = _MANAGER_SETTINGS[mgr_type]
         try:
             result = _export_settings(
-                class_path, include_secrets, include_defaults, output_format
+                class_path,
+                include_secrets,
+                include_defaults,
+                output_format,
+                settings_dir=settings_dir,
             )
             if export_all:
                 separator = (

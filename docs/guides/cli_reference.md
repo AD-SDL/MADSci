@@ -92,6 +92,7 @@ madsci start -d --wait-timeout 120  # Custom health poll timeout
 | `--mode [docker\|local]` | Run mode (default: docker) |
 | `--wait/--no-wait` | Wait for services to become healthy (default: wait when `-d`) |
 | `--wait-timeout INT` | Timeout for health polling in seconds (default: 60) |
+| `--settings-dir PATH` | Settings directory for walk-up config file discovery (sets `MADSCI_SETTINGS_DIR` for child processes) |
 
 #### Subcommands
 
@@ -105,6 +106,8 @@ madsci start manager event       # Start event manager (foreground)
 madsci start manager event -d    # Start in background
 madsci start node ./my_node.py   # Start node (foreground)
 madsci start node ./my_node.py -d --name lh  # Background with custom name
+madsci start --settings-dir /opt/lab manager event  # With settings directory
+madsci start node ./node.py --settings-dir ./nodes/arm  # Node with settings dir
 ```
 
 ### `madsci stop`
@@ -198,6 +201,7 @@ Manage MADSci configuration files. Exports use prefixed keys by default (e.g., `
 madsci config export event                # Export Event Manager settings (prefixed keys)
 madsci config export --all                # Export all manager settings
 madsci config export event --format json  # Export as JSON
+madsci config export event --settings-dir /opt/lab  # Export from specific lab dir
 madsci config create manager event        # Create Event Manager settings file
 madsci config create manager event -o my-event.yaml  # Custom output path
 ```

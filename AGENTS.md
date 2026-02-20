@@ -115,6 +115,28 @@ Key configuration patterns:
 - Database connections default to MongoDB/PostgreSQL on localhost
 - File storage paths default to `~/.madsci/` subdirectories
 
+### Settings Directory (Walk-Up Discovery)
+
+By default, pydantic-settings resolves config file paths relative to the current working directory. The settings directory feature adds walk-up file discovery, so each filename is searched independently from a starting directory up through parent directories.
+
+**Activation** (opt-in only — CWD behavior is preserved without either):
+- `_settings_dir` keyword argument: `MySettings(_settings_dir="/opt/my-lab/nodes/arm")`
+- `MADSCI_SETTINGS_DIR` environment variable
+- `--settings-dir` CLI option on `madsci start` and `madsci config export`
+
+**How it works:** Each filename in `yaml_file`, `json_file`, `toml_file`, and `env_file` tuples is resolved independently via walk-up. This means `settings.yaml` can resolve to a shared lab root while `node.settings.yaml` resolves in the node-specific directory:
+
+```
+/opt/my-lab/                     # Shared config found via walk-up
+├── settings.yaml                # node_name, lab URLs, etc.
+├── .env                         # Shared secrets
+└── nodes/robot-arm/             # _settings_dir points here
+    ├── node.settings.yaml       # Node-specific settings
+    └── .env                     # Node-specific secrets
+```
+
+**Precedence** is unchanged: CLI args > init kwargs > env vars > .env > file secrets > JSON > TOML > YAML. Walk-up only affects *where* the files are found, not their priority.
+
 ## Development Patterns
 
 ### Manager Implementation

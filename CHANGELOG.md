@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Settings Directory with Walk-Up Discovery
+- `_settings_dir` keyword argument on all `MadsciBaseSettings` subclasses for walk-up config file resolution
+- `MADSCI_SETTINGS_DIR` environment variable for activating walk-up discovery
+- `--settings-dir` CLI option on `madsci start`, `madsci start manager`, `madsci start node`, and `madsci config export`
+- Walk-up resolves each filename independently: shared `settings.yaml` in a parent dir coexists with `node.settings.yaml` in a child dir
+- Backward compatible: without `_settings_dir` or `MADSCI_SETTINGS_DIR`, existing CWD-relative behavior is preserved exactly
+
 #### CLI (17 commands)
 - `madsci init` - Interactive lab initialization wizard
 - `madsci new` - Component scaffolding from templates (module, interface, node, experiment, workflow, workcell, lab subcommands)
