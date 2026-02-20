@@ -135,7 +135,7 @@ We're working on bringing the following additional components to MADSci:
 
 1. **[Example Lab](./examples/example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
 2. **[Example Notebooks](./examples/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
-3. **Configuration examples**: See [example_lab/managers/](./examples/example_lab/managers/) for manager configurations
+3. **Configuration examples**: See [example_lab/settings.yaml](./examples/example_lab/settings.yaml) and [example_lab/compose.yaml](./examples/example_lab/compose.yaml) for lab configuration
 
 ### CLI Overview
 
@@ -152,7 +152,7 @@ MADSci provides a unified CLI (`madsci`) with 17 commands:
 | `logs` | `l` | View and filter event logs |
 | `run` | | Run workflows or experiments |
 | `validate` | `val` | Validate configuration files |
-| `config` | `cfg` | Export, create, or inspect configuration |
+| `config` | `cfg` | Export or create configuration files |
 | `backup` | | Create database backups |
 | `registry` | | Manage service registry |
 | `migrate` | | Run database migrations |
@@ -197,9 +197,9 @@ Useful for development, testing, and environments without Docker. Data is epheme
 ### Configuration Management
 
 ```bash
-madsci config export           # Export current config to YAML
-madsci config create           # Create a new config file interactively
-madsci config show             # Display active configuration
+madsci config export event     # Export Event Manager settings to YAML
+madsci config export --all     # Export all manager settings
+madsci config create manager event  # Create a new manager config file
 ```
 
 ### Common Usage Patterns

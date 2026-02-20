@@ -69,11 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ephemeral data storage for development and testing
 
 #### Configuration Management
-- `madsci config export` for exporting configuration to YAML
-- `madsci config create` for interactive configuration creation
+- `madsci config export` for exporting configuration to YAML with secret redaction
+- `madsci config create` for generating configuration files from defaults
 - Secret classification with `json_schema_extra={"secret": True}`
 - `model_dump_safe()` method on MadsciBaseModel and MadsciBaseSettings for secret redaction
 - Explicit configuration management (no auto-writing of config files)
+
+#### Experiment Application
+- `ExperimentBase` propagates lab context URLs to instance attributes for robust client creation across async boundaries and Jupyter cells
+- `ExperimentTUI` thread-safe pause/cancel controls using `threading.Event` for safe cross-thread state management
+- Example experiments: `example_experiment.py` (ExperimentScript) and `example_experiment_tui.py` (ExperimentTUI) in `examples/`
 
 #### Node Module Framework
 - `NodeInfo.from_config()` for creating node info from configuration
@@ -81,7 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Service registry for dynamic service discovery
 
 #### Testing
-- 2427+ automated tests
+- 2600+ automated tests
 - 150+ template validation tests
 - CLI tests using Click's CliRunner
 - E2E test harness with tutorial validation
@@ -93,10 +98,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-manager OTEL configuration via environment variables
 
 ### Changed
+- Definition files fully purged from runtime code: all managers now use settings-only configuration (`AbstractManagerBase[Settings]` pattern)
 - `update_node_files` defaults to `False` (was `True`)
 - `load_definition()` replaces `load_or_create_definition()` as the primary API
 - Settings consolidation for structural config overrides
 - Opt-in registry resolution in manager base
+- Docker reorganization: Dockerfiles and entrypoint scripts moved to `docker/` directory; compose files split into `compose.yaml`, `compose.infra.yaml`, and `compose.otel.yaml`
 - Reorganized repository documentation and examples:
   - Moved `example_lab/` to `examples/example_lab/`
   - Moved example notebooks to `examples/notebooks/`
