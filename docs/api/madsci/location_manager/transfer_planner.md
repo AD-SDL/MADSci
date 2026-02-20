@@ -5,14 +5,14 @@ Transfer planning functionality for the Location Manager.
 Classes
 -------
 
-`TransferPlanner(state_handler: madsci.location_manager.location_state_handler.LocationStateHandler, definition: madsci.common.types.location_types.LocationManagerDefinition, resource_client: madsci.client.resource_client.ResourceClient | None = None)`
+`TransferPlanner(state_handler: madsci.location_manager.location_state_handler.LocationStateHandler, transfer_capabilities: madsci.common.types.location_types.LocationTransferCapabilities | None = None, resource_client: madsci.client.resource_client.ResourceClient | None = None)`
 :   Handles transfer planning and graph operations for the Location Manager.
 
     Initialize the TransferPlanner.
 
     Args:
         state_handler: LocationStateHandler instance for accessing location data
-        definition: LocationManagerDefinition containing transfer capabilities
+        transfer_capabilities: Transfer capabilities configuration
         resource_client: ResourceClient for capacity-aware transfer planning (optional)
 
     ### Methods

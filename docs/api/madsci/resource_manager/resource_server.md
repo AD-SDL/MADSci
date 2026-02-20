@@ -5,7 +5,7 @@ Resource Manager server implementation, extending th AbstractBaseManager class.
 Classes
 -------
 
-`ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, definition: madsci.common.types.resource_types.definitions.ResourceManagerDefinition | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, **kwargs: Any)`
+`ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, **kwargs: Any)`
 :   Resource Manager REST Server.
 
     This class is decorated with @ownership_class() which automatically
@@ -22,12 +22,6 @@ Classes
     * classy_fastapi.routable.Routable
 
     ### Class variables
-
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition for a Resource Manager's Configuration
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Settings for the MADSci Resource Manager.

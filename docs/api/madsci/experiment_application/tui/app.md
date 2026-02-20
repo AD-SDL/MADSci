@@ -59,6 +59,9 @@ Classes
     `action_start(self) ‑> None`
     :   Start the experiment.
 
+        Launches the experiment as a background task so the TUI remains
+        responsive to pause/cancel/quit interactions while it runs.
+
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the TUI layout.
 

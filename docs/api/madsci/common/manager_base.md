@@ -24,31 +24,27 @@ Functions
 Classes
 -------
 
-`AbstractManagerBase(settings: ~SettingsT | None = None, definition: ~DefinitionT | None = None, **kwargs: Any)`
+`AbstractManagerBase(settings: ~SettingsT | None = None, **kwargs: Any)`
 :   Abstract base class for MADSci manager services using classy-fastapi.
 
     This class provides common functionality for all managers including:
-    - Settings and definition management
+    - Settings management
     - Logging setup
     - FastAPI app configuration
-    - Standard endpoints (info, definition)
+    - Standard endpoints (health, settings)
     - CORS middleware
     - Server lifecycle management
 
     Type Parameters:
         SettingsT: The manager's settings class (must inherit from MadsciBaseSettings)
-        DefinitionT: The manager's definition class (must inherit from MadsciBaseModel)
 
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
-        DEFINITION_CLASS: The definition class for this manager (set by subclasses)
-        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
 
     Initialize the manager base.
 
     Args:
         settings: Manager settings instance
-        definition: Manager definition instance
         **kwargs: Additional arguments passed to subclasses
 
     ### Ancestors (in MRO)
@@ -69,19 +65,10 @@ Classes
 
     ### Class variables
 
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
-
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :
 
     ### Instance variables
-
-    `definition: ~DefinitionT`
-    :   Get the manager definition.
 
     `logger: madsci.client.event_client.EventClient`
     :   Get the logger instance.
@@ -100,9 +87,6 @@ Classes
         Args:
             app: The FastAPI application instance
 
-    `create_default_definition(self) ‑> ~DefinitionT`
-    :   Create a default definition instance for this manager.
-
     `create_default_settings(self) ‑> ~SettingsT`
     :   Create default settings instance for this manager.
 
@@ -114,25 +98,6 @@ Classes
 
         Returns:
             FastAPI: The configured FastAPI application
-
-    `get_definition_alt(self) ‑> ~DefinitionT`
-    :   Return the manager definition at the /definition endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
-
-    `get_definition_path(self) ‑> pathlib.Path`
-    :   Get the path to the definition file.
-
-    `get_definition_root(self) ‑> ~DefinitionT`
-    :   Return the manager definition at the root endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
 
     `get_health(self) ‑> madsci.common.types.manager_types.ManagerHealth`
     :   Get the health status of this manager.
@@ -202,24 +167,6 @@ Classes
 
         Args:
             **kwargs: Additional arguments from __init__
-
-    `load_definition(self) ‑> ~DefinitionT`
-    :   Load definition from file or create default.
-
-        .. deprecated:: 0.7.0
-            Definition files are deprecated. Use settings-based configuration
-            instead. This method will be removed in v0.8.0.
-
-        As of v0.7.0, this method no longer auto-writes definition files
-        to disk. To export a definition, use ``madsci config export``.
-
-    `load_or_create_definition(self) ‑> ~DefinitionT`
-    :   Load definition from file or create default.
-
-        .. deprecated:: 0.7.0
-            Renamed to :meth:`load_definition`. Definition files are no longer
-            auto-written to disk. Use ``madsci config export`` to export
-            configuration explicitly.
 
     `release_identity(self) ‑> None`
     :   Release the registry lock for this manager's identity.

@@ -9,17 +9,24 @@ and backoff algorithms.
 Classes
 -------
 
-`DataClientConfig(**values: Any)`
+`DataClientConfig(**kwargs: Any)`
 :   Configuration for the Data Manager client.
 
     The Data Manager handles data uploads and downloads that may require extended timeouts.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -28,15 +35,22 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
-`ExperimentClientConfig(**values: Any)`
+`ExperimentClientConfig(**kwargs: Any)`
 :   Configuration for the Experiment Manager client.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -45,15 +59,22 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
-`LabClientConfig(**values: Any)`
+`LabClientConfig(**kwargs: Any)`
 :   Configuration for the Lab (Squid) client.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -62,15 +83,22 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
-`LocationClientConfig(**values: Any)`
+`LocationClientConfig(**kwargs: Any)`
 :   Configuration for the Location Manager client.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -79,7 +107,7 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
-`MadsciClientConfig(**values: Any)`
+`MadsciClientConfig(**kwargs: Any)`
 :   Base configuration for MADSci HTTP clients.
 
     This class provides standardized configuration for requests library usage,
@@ -117,12 +145,19 @@ Classes
     rate_limit_respect_limits : bool
         Whether to proactively delay requests when approaching rate limits. Default: False.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -182,15 +217,22 @@ Classes
     `timeout_long_operations: float`
     :
 
-`ResourceClientConfig(**values: Any)`
+`ResourceClientConfig(**kwargs: Any)`
 :   Configuration for the Resource Manager client.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -199,18 +241,25 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
-`RestNodeClientConfig(**values: Any)`
+`RestNodeClientConfig(**kwargs: Any)`
 :   Configuration for Node REST clients.
 
     Node clients handle action operations (create, upload, start, download)
     that may require extended timeouts.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -224,17 +273,24 @@ Classes
     `timeout_data_operations: float`
     :
 
-`WorkcellClientConfig(**values: Any)`
+`WorkcellClientConfig(**kwargs: Any)`
 :   Configuration for the Workcell Manager client.
 
     The Workcell Manager handles workflow queries that may require extended timeouts.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 

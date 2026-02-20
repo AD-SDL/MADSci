@@ -68,15 +68,22 @@ Classes
     `name: str`
     :
 
-`LabManagerSettings(**values: Any)`
+`LabManagerSettings(**kwargs: Any)`
 :   Settings for the MADSci Lab.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -90,7 +97,7 @@ Classes
     `dashboard_files_path: str | pathlib.Path | None`
     :
 
-    `manager_definition: str | pathlib.Path`
+    `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
     `server_url: pydantic.networks.AnyUrl`

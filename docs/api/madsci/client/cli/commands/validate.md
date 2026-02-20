@@ -2,7 +2,7 @@ Module madsci.client.cli.commands.validate
 ==========================================
 MADSci CLI validate command.
 
-Validates MADSci configuration files (manager, node, workflow definitions).
+Validates MADSci configuration files (settings, manager, node, workflow definitions).
 
 Classes
 -------

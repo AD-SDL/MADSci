@@ -5,7 +5,7 @@ State management for the WorkcellManager
 Classes
 -------
 
-`WorkcellStateHandler(workcell_definition: madsci.common.types.workcell_types.WorkcellManagerDefinition | None = None, workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None)`
+`WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None)`
 :   Manages state for a MADSci Workcell, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
 
@@ -85,7 +85,7 @@ Classes
     :   Returns True if the state has changed since the last time this method was called
 
     `initialize_workcell_state(self) ‑> None`
-    :   Initializes the state of the workcell from the workcell definition.
+    :   Initializes the state of the workcell from settings.
 
     `mark_state_changed(self) ‑> int`
     :   Marks the state as changed and returns the current state change counter

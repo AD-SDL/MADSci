@@ -248,19 +248,26 @@ Classes
             ValueError: If experiment_design is not set.
             TypeError: If experiment_design is not an ExperimentDesign instance.
 
-`ExperimentBaseConfig(**values: Any)`
+`ExperimentBaseConfig(**kwargs: Any)`
 :   Base configuration for all experiment modalities.
 
     Contains only experiment-relevant settings, not server/node settings.
     This is intentionally simpler than the full RestNodeConfig used by
     the legacy ExperimentApplication.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 

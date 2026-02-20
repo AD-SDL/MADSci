@@ -16,7 +16,7 @@ Sub-modules
 Classes
 -------
 
-`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, definition: madsci.common.types.workcell_types.WorkcellManagerDefinition | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None, start_engine: bool = True, **kwargs: Any)`
+`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None, start_engine: bool = True, **kwargs: Any)`
 :   MADSci Workcell Manager using the new AbstractManagerBase pattern.
 
     This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
@@ -33,9 +33,6 @@ Classes
 
     ### Class variables
 
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition of a MADSci Workcell.
-
     `REQUIRED_CLIENTS: ClassVar[list[str]]`
     :
 
@@ -44,7 +41,7 @@ Classes
 
     ### Methods
 
-    `add_node(self, node_name: str, node_url: str, permanent: bool = False) ‑> madsci.common.types.node_types.Node | str`
+    `add_node(self, node_name: str, node_url: str) ‑> madsci.common.types.node_types.Node | str`
     :   Add a node to the workcell's node list
 
     `cancel_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`

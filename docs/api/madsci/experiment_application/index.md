@@ -156,18 +156,25 @@ Classes
     `start_experiment_run(self, run_name: str | None = None, run_description: str | None = None) ‑> None`
     :   Sends the ExperimentDesign to the server to register a new experimental run.
 
-`ExperimentApplicationConfig(**values: Any)`
+`ExperimentApplicationConfig(**kwargs: Any)`
 :   Configuration for the ExperimentApplication.
 
     This class is used to define the configuration for the ExperimentApplication node.
     It can be extended to add custom configurations.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -426,19 +433,26 @@ Classes
             ValueError: If experiment_design is not set.
             TypeError: If experiment_design is not an ExperimentDesign instance.
 
-`ExperimentBaseConfig(**values: Any)`
+`ExperimentBaseConfig(**kwargs: Any)`
 :   Base configuration for all experiment modalities.
 
     Contains only experiment-relevant settings, not server/node settings.
     This is intentionally simpler than the full RestNodeConfig used by
     the legacy ExperimentApplication.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -585,17 +599,24 @@ Classes
 
         The server runs until interrupted (Ctrl+C) or shut down.
 
-`ExperimentNodeConfig(**values: Any)`
+`ExperimentNodeConfig(**kwargs: Any)`
 :   Configuration for node-based experiments (server mode).
 
     Extends ExperimentBaseConfig with REST server settings.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -761,17 +782,24 @@ Classes
             exp = MyExperiment()
             exp.start(run_name="Run 1")  # Returns self
 
-`ExperimentNotebookConfig(**values: Any)`
+`ExperimentNotebookConfig(**kwargs: Any)`
 :   Configuration for notebook-based experiments.
 
     Extends ExperimentBaseConfig with notebook-specific display options.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -950,18 +978,25 @@ Classes
                 return {"sample_id": sample_id, "results": results}
             ```
 
-`ExperimentScriptConfig(**values: Any)`
+`ExperimentScriptConfig(**kwargs: Any)`
 :   Configuration for script-based experiments.
 
     Extends ExperimentBaseConfig with options for passing arguments
     to the run_experiment method.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -978,7 +1013,7 @@ Classes
     `run_kwargs: dict[str, typing.Any]`
     :
 
-`ExperimentTUI(experiment_design: madsci.common.types.experiment_types.ExperimentDesign | str | pathlib.Path | None = None, experiment: madsci.common.types.experiment_types.Experiment | None = None, config: madsci.experiment_application.experiment_base.ExperimentBaseConfig | None = None, lab_server_url: str | pydantic.networks.AnyUrl | None = None, **kwargs: Any)`
+`ExperimentTUI(*args: Any, **kwargs: Any)`
 :   Experiment modality with interactive terminal UI.
 
     Provides a Textual-based TUI for experiment control with:
@@ -1018,24 +1053,43 @@ Classes
         experiment_design: The design template for this experiment
         config: TUI-specific configuration
 
-    Initialize the experiment base.
-
-    Args:
-        experiment_design: Design for new experiments. Can be an ExperimentDesign
-            instance or a path to a YAML file.
-        experiment: Existing experiment to continue (optional).
-        config: Configuration settings. If not provided, will be created
-            from config_model with any kwargs as overrides.
-        lab_server_url: Override for lab server URL. Takes precedence over
-            config.lab_server_url.
-        **kwargs: Additional configuration overrides passed to config_model.
+    Initialize with thread-safe pause/cancel events.
 
     ### Ancestors (in MRO)
 
     * madsci.experiment_application.experiment_base.ExperimentBase
     * madsci.client.client_mixin.MadsciClientMixin
 
+    ### Instance variables
+
+    `is_pause_requested: bool`
+    :   Check if a pause has been requested.
+
     ### Methods
+
+    `check_experiment_status(self) ‑> None`
+    :   Check experiment status using in-process events.
+
+        Overrides the base class to use thread-safe events for direct
+        communication between the TUI and the experiment thread, avoiding
+        the need for a server round-trip.
+
+        When paused, blocks until resumed or cancelled.
+
+        Raises:
+            ExperimentCancelledError: If cancel was requested from the TUI.
+
+    `request_cancel(self) ‑> None`
+    :   Request the experiment to cancel (thread-safe, called from TUI).
+
+    `request_pause(self) ‑> None`
+    :   Request the experiment to pause (thread-safe, called from TUI).
+
+    `request_resume(self) ‑> None`
+    :   Request the experiment to resume (thread-safe, called from TUI).
+
+    `reset_events(self) ‑> None`
+    :   Clear pause and cancel events for a fresh experiment run.
 
     `run(self) ‑> Any`
     :   Alias for run_tui() for consistency with other modalities.
@@ -1082,17 +1136,24 @@ Classes
         Raises:
             ImportError: If textual is not installed.
 
-`ExperimentTUIConfig(**values: Any)`
+`ExperimentTUIConfig(**kwargs: Any)`
 :   Configuration for TUI-based experiments.
 
     Extends ExperimentBaseConfig with TUI-specific options.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 

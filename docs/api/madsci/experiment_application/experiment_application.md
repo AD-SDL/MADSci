@@ -130,18 +130,25 @@ Classes
     `start_experiment_run(self, run_name: str | None = None, run_description: str | None = None) ‑> None`
     :   Sends the ExperimentDesign to the server to register a new experimental run.
 
-`ExperimentApplicationConfig(**values: Any)`
+`ExperimentApplicationConfig(**kwargs: Any)`
 :   Configuration for the ExperimentApplication.
 
     This class is used to define the configuration for the ExperimentApplication node.
     It can be extended to add custom configurations.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 

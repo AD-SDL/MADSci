@@ -5,7 +5,7 @@ Lab Manager implementation using the new AbstractManagerBase class.
 Classes
 -------
 
-`LabManager(settings: madsci.common.types.lab_types.LabManagerSettings | None = None, definition: madsci.common.types.lab_types.LabManagerDefinition | None = None, **kwargs: Any)`
+`LabManager(settings: madsci.common.types.lab_types.LabManagerSettings | None = None, **kwargs: Any)`
 :   Lab Manager REST Server.
 
     Initialize the Lab Manager.
@@ -18,12 +18,6 @@ Classes
     * classy_fastapi.routable.Routable
 
     ### Class variables
-
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition for a MADSci Lab Manager.
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Settings for the MADSci Lab.

@@ -21,6 +21,7 @@ Sub-modules
 * madsci.common.ownership
 * madsci.common.registry
 * madsci.common.serializers
+* madsci.common.settings_dir
 * madsci.common.templates
 * madsci.common.testing
 * madsci.common.types
