@@ -2,6 +2,13 @@
 E2E Test Runner for MADSci.
 
 Executes test definitions and captures results.
+
+Trust boundary: test YAML files are trusted developer input (like Makefiles
+or CI configs).  ``skip_if`` expressions are evaluated with ``simpleeval``
+for defence-in-depth.  ``_execute_python()`` uses ``exec()`` and
+``_execute_foreground_command()``/``_execute_background_command()`` use
+``shell=True`` intentionally — they run commands authored by the test
+developer, analogous to ``make`` recipe lines.
 """
 
 import contextlib
@@ -17,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import simpleeval
 from madsci.common.testing.types import (
     E2ETestDefinition,
     E2ETestResult,
@@ -333,7 +341,16 @@ class E2ETestRunner:
             return None
 
         try:
-            should_skip = eval(step.skip_if, {"env": env, "os": os})  # noqa: S307
+            evaluator = simpleeval.EvalWithCompoundTypes(
+                names={
+                    "env": env,
+                    "os_name": os.name,
+                    "os_sep": os.sep,
+                    "platform": sys.platform,
+                },
+                functions={"get": lambda d, k, default=None: d.get(k, default)},
+            )
+            should_skip = evaluator.eval(step.skip_if)
             if should_skip:
                 return StepResult(
                     step_name=step.name,
@@ -500,7 +517,10 @@ class E2ETestRunner:
         working_dir: Path,
         env: dict[str, str],
     ) -> tuple[int | None, str, str, str | None]:
-        """Execute a command in the background."""
+        """Execute a command in the background.
+
+        Uses ``shell=True`` intentionally — test YAML files are trusted input.
+        """
         process = subprocess.Popen(  # noqa: S602
             command,
             shell=True,  # Required for running user-provided shell commands
@@ -532,7 +552,10 @@ class E2ETestRunner:
         env: dict[str, str],
         timeout: float,
     ) -> tuple[int, str, str, str | None]:
-        """Execute a command in the foreground."""
+        """Execute a command in the foreground.
+
+        Uses ``shell=True`` intentionally — test YAML files are trusted input.
+        """
         result = subprocess.run(  # noqa: S602
             command,
             check=False,
@@ -553,6 +576,8 @@ class E2ETestRunner:
     ) -> tuple[int, str, str, str | None]:
         """
         Execute Python code.
+
+        Uses ``exec()`` intentionally — test YAML files are trusted input.
 
         Returns:
             Tuple of (exit_code, stdout, stderr, error_message)

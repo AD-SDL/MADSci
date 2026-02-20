@@ -294,6 +294,9 @@ class MigrationConverter:
                     .replace('"', '\\"')
                     .replace("$", "\\$")
                     .replace("`", "\\`")
+                    .replace("\n", "\\n")
+                    .replace("\r", "\\r")
+                    .replace("\t", "\\t")
                 )
                 f.write(f'{key}="{escaped}"\n')
 
@@ -362,20 +365,33 @@ class MigrationRollback:
             # 1. Restore from backup
             if migration.backup_path and migration.backup_path.exists():
                 shutil.copy2(migration.backup_path, migration.source_path)
-                migration.backup_path.unlink()
-                logger.info(
-                    "Restored from backup: source_path=%s", str(migration.source_path)
-                )
+                # Verify the restore succeeded before removing the backup
+                if migration.source_path.exists():
+                    migration.backup_path.unlink()
+                    logger.info(
+                        "Restored from backup: source_path=%s",
+                        str(migration.source_path),
+                    )
+                else:
+                    logger.error(
+                        "Restore verification failed, preserving backup: backup_path=%s",
+                        str(migration.backup_path),
+                    )
 
             # 2. Remove generated files
             for output_file in migration.output_files:
                 if output_file.exists():
-                    # For env files, we should be more careful
-                    # For now, just log a warning
-                    logger.warning(
-                        "Generated file exists - manual cleanup may be needed: output_file=%s",
-                        str(output_file),
-                    )
+                    try:
+                        output_file.unlink()
+                        logger.info(
+                            "Removed generated file: output_file=%s",
+                            str(output_file),
+                        )
+                    except OSError:
+                        logger.warning(
+                            "Failed to remove generated file: output_file=%s",
+                            str(output_file),
+                        )
 
             # 3. Registry entries are not removed to avoid losing IDs
             # that may be in use

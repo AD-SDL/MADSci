@@ -122,6 +122,61 @@ class TestE2ETestRunner:
         assert result.passed is True
         assert result.step_results[0].skipped is True
 
+    def test_skip_if_env_dict_access(self, runner: E2ETestRunner):
+        """Test skip_if with env dict access via get helper."""
+        test_def = E2ETestDefinition(
+            name="Skip Env Test",
+            steps=[
+                E2ETestStep(
+                    name="Skipped via env",
+                    command="echo should not run",
+                    skip_if='get(env, "SKIP_ME") == "1"',
+                ),
+            ],
+        )
+
+        result = runner.run(test_def, env={"SKIP_ME": "1"})
+
+        assert result.passed is True
+        assert result.step_results[0].skipped is True
+
+    def test_skip_if_env_not_skipped(self, runner: E2ETestRunner):
+        """Test skip_if evaluates to False correctly."""
+        test_def = E2ETestDefinition(
+            name="No Skip Test",
+            steps=[
+                E2ETestStep(
+                    name="Not skipped",
+                    command="echo hello",
+                    skip_if='get(env, "SKIP_ME") == "1"',
+                ),
+            ],
+        )
+
+        result = runner.run(test_def, env={"SKIP_ME": "0"})
+
+        assert result.passed is True
+        assert result.step_results[0].skipped is False
+
+    def test_skip_if_rejects_dangerous_expression(self, runner: E2ETestRunner):
+        """Test that dangerous expressions are rejected by simpleeval."""
+        test_def = E2ETestDefinition(
+            name="Dangerous Skip Test",
+            steps=[
+                E2ETestStep(
+                    name="Dangerous skip",
+                    command="echo should not run",
+                    skip_if='__import__("os").system("echo pwned")',
+                ),
+            ],
+        )
+
+        result = runner.run(test_def)
+
+        # The step should fail because simpleeval blocks __import__
+        assert result.step_results[0].passed is False
+        assert result.step_results[0].error is not None
+
     def test_continue_on_error(self, runner: E2ETestRunner):
         """Test continue_on_error flag."""
         test_def = E2ETestDefinition(

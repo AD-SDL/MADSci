@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:8f269ec2d8543cf7b64fc6890aa507670f1e440fa7070396c24cdfdd8736166c"
+content_hash = "sha256:a3a1ed1296dc2e3af9385192fba2579e2989b77784223b722e5a9662ad5776c4"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -1567,7 +1567,6 @@ dependencies = [
     "opentelemetry-api",
     "rich",
     "structlog",
-    "toml",
     "trogon",
 ]
 
@@ -1599,6 +1598,7 @@ dependencies = [
     "requests",
     "rich",
     "semver",
+    "simpleeval",
     "sqlmodel",
     "uvicorn[standard]",
 ]
@@ -3941,6 +3941,15 @@ files = [
 ]
 
 [[package]]
+name = "simpleeval"
+version = "1.0.3"
+summary = ""
+files = [
+    {file = "simpleeval-1.0.3-py3-none-any.whl", hash = "sha256:e3bdbb8c82c26297c9a153902d0fd1858a6c3774bf53ff4f134788c3f2035c38"},
+    {file = "simpleeval-1.0.3.tar.gz", hash = "sha256:67bbf246040ac3b57c29cf048657b9cf31d4e7b9d6659684daa08ca8f1e45829"},
+]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 summary = ""
@@ -4093,15 +4102,6 @@ dependencies = [
 files = [
     {file = "tinycss2-1.4.0-py3-none-any.whl", hash = "sha256:3a49cf47b7675da0b15d0c6e1df8df4ebd96e9394bb905a5775adb0d884c5289"},
     {file = "tinycss2-1.4.0.tar.gz", hash = "sha256:10c0972f6fc0fbee87c3edb76549357415e94548c1ae10ebccdea16fb404a9b7"},
-]
-
-[[package]]
-name = "toml"
-version = "0.10.2"
-summary = ""
-files = [
-    {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
-    {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
 
 [[package]]

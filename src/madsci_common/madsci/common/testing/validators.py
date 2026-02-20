@@ -10,6 +10,7 @@ import contextlib
 import json
 import re
 import subprocess
+import threading
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -807,6 +808,7 @@ class ValidatorRegistry:
 
 
 # Global registry instance
+_registry_lock = threading.Lock()
 _default_registry: ValidatorRegistry | None = None
 
 
@@ -814,7 +816,9 @@ def get_validator_registry() -> ValidatorRegistry:
     """Get the default validator registry."""
     global _default_registry  # noqa: PLW0603
     if _default_registry is None:
-        _default_registry = ValidatorRegistry()
+        with _registry_lock:
+            if _default_registry is None:
+                _default_registry = ValidatorRegistry()
     return _default_registry
 
 

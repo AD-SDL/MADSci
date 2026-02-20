@@ -40,6 +40,23 @@ _MANAGER_SETTINGS: dict[str, tuple[str, str]] = {
 }
 
 
+def _validate_output_path(output: str) -> None:
+    """Warn if the output path is absolute or contains '..' components."""
+    path = Path(output)
+    if path.is_absolute():
+        click.echo(
+            f"Warning: output path '{output}' is absolute; "
+            "consider using a relative path.",
+            err=True,
+        )
+    if ".." in path.parts:
+        click.echo(
+            f"Warning: output path '{output}' contains '..'; "
+            "consider using a path without parent directory references.",
+            err=True,
+        )
+
+
 def _import_class(dotted_path: str) -> type:
     """Dynamically import a class from a dotted path."""
     import importlib
@@ -219,6 +236,7 @@ def export(
     combined = "\n".join(outputs)
 
     if output:
+        _validate_output_path(output)
         Path(output).parent.mkdir(parents=True, exist_ok=True)
         Path(output).write_text(combined)
         console.print(f"[green]Configuration written to {output}[/green]")
@@ -295,6 +313,7 @@ def create_manager(
         return
 
     output_path = output or f"{manager_type}.settings.{output_format}"
+    _validate_output_path(output_path)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     Path(output_path).write_text(result)
     console.print(
@@ -369,6 +388,7 @@ def create_node(
         return
 
     output_path = output or f"node.settings.{output_format}"
+    _validate_output_path(output_path)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     Path(output_path).write_text(result)
     console.print(

@@ -10,6 +10,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+from madsci.common.exceptions import ExperimentPauseTimeoutError
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -207,18 +208,19 @@ class TestExperimentScript:
 
     def test_main_class_method(self) -> None:
         """Test main() class method creates instance and runs."""
+        ran = False
 
         class TestScript(ExperimentScript):
             experiment_design = ExperimentDesign(experiment_name="Test")
-            ran = False
 
             def run(self, *args: Any, **kwargs: Any) -> Any:
-                TestScript.ran = True
+                nonlocal ran
+                ran = True
                 return "result"
 
         result = TestScript.main()
         assert result == "result"
-        assert TestScript.ran
+        assert ran
 
 
 # =============================================================================
@@ -443,3 +445,82 @@ class TestModuleImports:
         assert issubclass(ExperimentNotebook, ExperimentBase)
         assert issubclass(ExperimentTUI, ExperimentBase)
         assert issubclass(ExperimentNode, ExperimentBase)
+
+
+# =============================================================================
+# Pause Timeout Tests
+# =============================================================================
+
+
+class TestPauseTimeout:
+    """Tests for experiment pause timeout behavior."""
+
+    def test_max_pause_wait_config(self) -> None:
+        """Test that max_pause_wait can be set in config."""
+        config = ExperimentBaseConfig(max_pause_wait=300.0)
+        assert config.max_pause_wait == 300.0
+
+    def test_max_pause_wait_default_none(self) -> None:
+        """Test that max_pause_wait defaults to None (infinite wait)."""
+        config = ExperimentBaseConfig()
+        assert config.max_pause_wait is None
+
+    def test_pause_timeout_raises_error(
+        self,
+        mock_experiment_design: ExperimentDesign,
+        mock_experiment_client: MagicMock,
+        mock_event_client: MagicMock,
+    ) -> None:
+        """Test that exceeding max_pause_wait raises ExperimentPauseTimeoutError."""
+        config = ExperimentBaseConfig(max_pause_wait=0.1)
+        exp = ExperimentBase(
+            experiment_design=mock_experiment_design,
+            config=config,
+        )
+        exp._experiment_client = mock_experiment_client
+        exp._event_client = mock_event_client
+
+        # Set up the experiment as paused
+        paused_experiment = Experiment(
+            experiment_id="01JTEST123456789ABCDEFGH",
+            status=ExperimentStatus.PAUSED,
+            experiment_design=mock_experiment_design,
+        )
+        exp.experiment = paused_experiment
+        mock_experiment_client.get_experiment.return_value = paused_experiment
+
+        with pytest.raises(ExperimentPauseTimeoutError):
+            exp.check_experiment_status()
+
+    def test_no_timeout_when_none(
+        self,
+        mock_experiment_design: ExperimentDesign,
+        mock_experiment_client: MagicMock,
+        mock_event_client: MagicMock,
+    ) -> None:
+        """Test that None timeout allows the loop to continue (resumes normally)."""
+        config = ExperimentBaseConfig(max_pause_wait=None)
+        exp = ExperimentBase(
+            experiment_design=mock_experiment_design,
+            config=config,
+        )
+        exp._experiment_client = mock_experiment_client
+        exp._event_client = mock_event_client
+
+        # First call returns paused, second returns in_progress
+        paused = Experiment(
+            experiment_id="01JTEST123456789ABCDEFGH",
+            status=ExperimentStatus.PAUSED,
+            experiment_design=mock_experiment_design,
+        )
+        resumed = Experiment(
+            experiment_id="01JTEST123456789ABCDEFGH",
+            status=ExperimentStatus.IN_PROGRESS,
+            experiment_design=mock_experiment_design,
+        )
+        exp.experiment = paused
+        mock_experiment_client.get_experiment.side_effect = [resumed]
+
+        # Should not raise, should resume
+        exp.check_experiment_status()
+        assert exp.experiment.status == ExperimentStatus.IN_PROGRESS

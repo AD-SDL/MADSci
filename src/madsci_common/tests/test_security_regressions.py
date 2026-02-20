@@ -15,7 +15,7 @@ Covers:
 import shlex
 import threading
 from typing import ClassVar, List
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -29,6 +29,7 @@ from madsci.common.local_backends.inmemory_redis import (
     InMemoryRedlock,
     clear_all_registries,
 )
+from madsci.common.migration.converter import MigrationConverter, MigrationRollback
 from madsci.common.templates.engine import TemplateEngine, TemplateValidationError
 from madsci.common.templates.registry import TemplateRegistry
 from madsci.common.types.base_types import (
@@ -36,6 +37,7 @@ from madsci.common.types.base_types import (
     MadsciBaseModel,
     MadsciBaseSettings,
 )
+from madsci.common.types.migration_types import FileMigration, FileType
 from madsci.common.types.template_types import (
     ParameterType,
     TemplateFile,
@@ -541,3 +543,125 @@ class TestCLIContextLoading:
         runner = CliRunner()
         result = runner.invoke(madsci, ["version"])
         assert result.exit_code == 0
+
+
+# ------------------------------------------------------------------ #
+# .env file escaping for newlines/tabs                                #
+# ------------------------------------------------------------------ #
+
+
+class TestEnvFileEscaping:
+    """_write_env_file should properly escape newlines, carriage returns, and tabs."""
+
+    def test_newline_escaped(self, tmp_path) -> None:
+        converter = MigrationConverter()
+        output = tmp_path / ".env"
+        converter._write_env_file(
+            output, {"MY_VAR": "line1\nline2"}, "test.yaml", "2025-01-01"
+        )
+        text = output.read_text()
+        # Should be one entry per logical line (header lines + 1 var line)
+        lines = [
+            line
+            for line in text.strip().split("\n")
+            if not line.startswith("#") and line
+        ]
+        assert len(lines) == 1
+        assert "\\n" in lines[0]
+        assert "\n" not in lines[0].split("=", 1)[1].strip('"')
+
+    def test_tab_escaped(self, tmp_path) -> None:
+        converter = MigrationConverter()
+        output = tmp_path / ".env"
+        converter._write_env_file(
+            output, {"MY_VAR": "col1\tcol2"}, "test.yaml", "2025-01-01"
+        )
+        text = output.read_text()
+        lines = [
+            line
+            for line in text.strip().split("\n")
+            if not line.startswith("#") and line
+        ]
+        assert len(lines) == 1
+        assert "\\t" in lines[0]
+
+    def test_carriage_return_escaped(self, tmp_path) -> None:
+        converter = MigrationConverter()
+        output = tmp_path / ".env"
+        converter._write_env_file(output, {"MY_VAR": "a\rb"}, "test.yaml", "2025-01-01")
+        text = output.read_text()
+        lines = [
+            line
+            for line in text.strip().split("\n")
+            if not line.startswith("#") and line
+        ]
+        assert len(lines) == 1
+        assert "\\r" in lines[0]
+
+
+# ------------------------------------------------------------------ #
+# Migration rollback: files actually deleted                          #
+# ------------------------------------------------------------------ #
+
+
+class TestMigrationRollback:
+    """Rollback should delete generated files and verify restore."""
+
+    def test_rollback_deletes_output_files(self, tmp_path) -> None:
+        # Create source and backup
+        source = tmp_path / "source.yaml"
+        source.write_text("original")
+        backup = tmp_path / "source.yaml.bak"
+        backup.write_text("original")
+
+        # Create an output file
+        output = tmp_path / ".env"
+        output.write_text("GENERATED=true")
+
+        migration = FileMigration(
+            source_path=source,
+            backup_path=backup,
+            output_files=[output],
+            component_type="manager",
+            component_id="test-id",
+            file_type=FileType.MANAGER_DEFINITION,
+            name="test",
+        )
+
+        rollback = MigrationRollback()
+        rollback.rollback(migration)
+
+        # Output file should be deleted
+        assert not output.exists()
+        # Source should be restored
+        assert source.read_text() == "original"
+        # Backup should be removed
+        assert not backup.exists()
+
+    def test_rollback_preserves_backup_on_restore_failure(self, tmp_path) -> None:
+        source = tmp_path / "source.yaml"
+        source.write_text("original")
+        backup = tmp_path / "source.yaml.bak"
+        backup.write_text("original")
+
+        migration = FileMigration(
+            source_path=source,
+            backup_path=backup,
+            output_files=[],
+            component_type="manager",
+            component_id="test-id",
+            file_type=FileType.MANAGER_DEFINITION,
+            name="test",
+        )
+
+        # Mock copy2 to succeed but then make source_path.exists() return False
+        rollback = MigrationRollback()
+        with patch("shutil.copy2"):
+            # After copy2 is mocked (does nothing), source won't have correct content
+            # but exists() still returns True since we created it above.
+            # Instead, let's simulate by removing the source before rollback
+            source.unlink()
+            rollback.rollback(migration)
+
+        # Backup should be preserved because source doesn't exist after "copy"
+        assert backup.exists()

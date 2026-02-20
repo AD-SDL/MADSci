@@ -35,6 +35,7 @@ dependencies = [
     "click>=8.1.0",
     "rich>=13.0.0",
     "opentelemetry-api>=1.20.0",
+    "simpleeval>=1.0.0",
 ]
 
 [project.optional-dependencies]

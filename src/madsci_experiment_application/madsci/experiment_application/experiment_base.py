@@ -9,7 +9,7 @@ uses MadsciClientMixin for client management rather than inheriting from
 RestNode, making it lighter weight for non-server use cases.
 """
 
-import contextlib
+import logging
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -21,7 +21,11 @@ from madsci.common.context import (
     event_client_context,
     set_current_madsci_context,
 )
-from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.exceptions import (
+    ExperimentCancelledError,
+    ExperimentFailedError,
+    ExperimentPauseTimeoutError,
+)
 from madsci.common.types.base_types import MadsciBaseSettings, PathLike
 from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
@@ -89,6 +93,15 @@ class ExperimentBaseConfig(
         description="URL of the location manager.",
     )
 
+    max_pause_wait: Optional[float] = Field(
+        default=None,
+        title="Max Pause Wait (seconds)",
+        description=(
+            "Maximum time in seconds to wait while the experiment is paused. "
+            "If None, waits indefinitely."
+        ),
+    )
+
 
 class ExperimentBase(MadsciClientMixin):
     """Base class for all experiment modalities.
@@ -151,7 +164,7 @@ class ExperimentBase(MadsciClientMixin):
     experiment: Optional[Experiment] = None
     """The current experiment instance (populated after start_experiment_run)."""
 
-    config: ExperimentBaseConfig = None  # type: ignore[assignment]
+    config: Optional[ExperimentBaseConfig] = None
     """Configuration for this experiment."""
 
     config_model: ClassVar[type[ExperimentBaseConfig]] = ExperimentBaseConfig
@@ -233,11 +246,17 @@ class ExperimentBase(MadsciClientMixin):
            boundaries or Jupyter notebook cells)
         """
         if hasattr(self, "lab_server_url") and self.lab_server_url:
-            with contextlib.suppress(Exception):
+            try:
                 context = self.lab_client.get_lab_context()
                 set_current_madsci_context(context)
                 # Propagate discovered URLs to instance attributes
                 self._propagate_context_urls(context)
+            except Exception as e:
+                logging.getLogger(__name__).warning(
+                    "Failed to set up lab context from %s: %s",
+                    self.lab_server_url,
+                    e,
+                )
 
     def _propagate_context_urls(self, context: "MadsciContext") -> None:
         """Propagate server URLs from a MadsciContext to instance attributes.
@@ -561,25 +580,7 @@ class ExperimentBase(MadsciClientMixin):
 
         # Handle paused state - wait for resume
         if current_experiment.status == ExperimentStatus.PAUSED:
-            self.logger.warning(
-                "Experiment run paused; waiting for resume",
-                event_type=EventType.EXPERIMENT_PAUSE,
-                experiment_id=current_experiment.experiment_id,
-                experiment_name=_get_experiment_name(),
-            )
-            while True:
-                time.sleep(5)
-                _raw_exp = self.experiment_client.get_experiment(
-                    experiment_id=experiment_id
-                )
-                current_experiment = (
-                    _raw_exp
-                    if isinstance(_raw_exp, Experiment)
-                    else Experiment.model_validate(_raw_exp)
-                )
-                self.experiment = current_experiment
-                if current_experiment.status != ExperimentStatus.PAUSED:
-                    break
+            self._wait_for_resume(experiment_id, _get_experiment_name())
 
         # Handle terminal states
         if current_experiment.status == ExperimentStatus.CANCELLED:
@@ -605,6 +606,66 @@ class ExperimentBase(MadsciClientMixin):
                 experiment_name=_get_experiment_name(),
             )
             raise exc
+
+    def _wait_for_resume(self, experiment_id: str, experiment_name: str) -> None:
+        """Wait for a paused experiment to be resumed.
+
+        Polls the experiment manager with exponential backoff (5s to 60s).
+        Logs a status message every 5 minutes while waiting.
+
+        Args:
+            experiment_id: The ID of the paused experiment.
+            experiment_name: Display name for logging.
+
+        Raises:
+            ExperimentPauseTimeoutError: If max_pause_wait is exceeded.
+        """
+        self.logger.warning(
+            "Experiment run paused; waiting for resume",
+            event_type=EventType.EXPERIMENT_PAUSE,
+            experiment_id=experiment_id,
+            experiment_name=experiment_name,
+        )
+        pause_start = time.monotonic()
+        poll_interval = 5.0
+        last_log_time = pause_start
+        while True:
+            time.sleep(poll_interval)
+            elapsed = time.monotonic() - pause_start
+
+            # Check timeout
+            if (
+                self.config
+                and self.config.max_pause_wait is not None
+                and elapsed >= self.config.max_pause_wait
+            ):
+                raise ExperimentPauseTimeoutError(
+                    f"Experiment remained paused for {elapsed:.0f}s, "
+                    f"exceeding max_pause_wait of {self.config.max_pause_wait}s"
+                )
+
+            # Log "still waiting" every 5 minutes
+            if time.monotonic() - last_log_time >= 300:
+                self.logger.info(
+                    "Experiment still paused; waiting for resume (%.0fs elapsed)",
+                    elapsed,
+                )
+                last_log_time = time.monotonic()
+
+            _raw_exp = self.experiment_client.get_experiment(
+                experiment_id=experiment_id
+            )
+            current_experiment = (
+                _raw_exp
+                if isinstance(_raw_exp, Experiment)
+                else Experiment.model_validate(_raw_exp)
+            )
+            self.experiment = current_experiment
+            if current_experiment.status != ExperimentStatus.PAUSED:
+                break
+
+            # Backoff polling interval up to 60s
+            poll_interval = min(poll_interval * 1.5, 60.0)
 
     # =========================================================================
     # Convenience Properties
