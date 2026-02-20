@@ -115,9 +115,7 @@ class LocationStateHandler:
                 continue
         return valid_locations
 
-    def set_location(
-        self, location_id: str, location: Union[Location, dict[str, Any]]
-    ) -> Location:
+    def add_location(self, location: Union[Location, dict[str, Any]]) -> bool:
         """
         Sets a location by ID and returns the stored location
         """
@@ -127,26 +125,44 @@ class LocationStateHandler:
             location_obj = Location.model_validate(location)
             location_dump = location_obj.model_dump(mode="json")
             location = location_obj
-
-        self._locations[location_id] = location_dump
+        if location["location_name"] in self._locations:
+            return False
+        self._locations[location["location_name"]] = location_dump
         self.mark_state_changed()
-        return location
+        return True
 
-    def delete_location(self, location_id: str) -> bool:
+    def delete_location(self, location_name: str) -> bool:
         """
         Deletes a location by ID. Returns True if the location was deleted, False if it didn't exist.
         """
         try:
-            if location_id in self._locations:
-                del self._locations[location_id]
+            if location_name in self._locations:
+                del self._locations[location_name]
                 self.mark_state_changed()
                 return True
             return False
         except KeyError:
             return False
 
-    def update_location(self, location_id: str, location: Location) -> Location:
+    def update_location(self, location: Location) -> Location:
         """
         Updates a location and returns the updated location.
         """
-        return self.set_location(location_id, location)
+        if isinstance(location, Location):
+            location_dump = location.model_dump(mode="json")
+        else:
+            location_obj = Location.model_validate(location)
+            location_dump = location_obj.model_dump(mode="json")
+            location = location_obj
+        if location["location_name"] not in self._locations:
+            raise KeyError(f"Location {location['location_name']} does not exist")
+        if (
+            self.get_location(location["location_name"]).location_id
+            != location.location_id
+        ):
+            raise ValueError(
+                f"Location name {location['location_name']} is already in use by a different location. make sure to use the right id"
+            )
+        self._locations[location["location_name"]] = location_dump
+        self.mark_state_changed()
+        return Location

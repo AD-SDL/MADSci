@@ -99,7 +99,7 @@ class LocationManager(
                 allow_transfers=location_def.allow_transfers,
             )
 
-            self.state_handler.set_location(location.location_id, location)
+            self.state_handler.add_location(location.location_id, location)
 
     def _initialize_location_resource(
         self, location_def: LocationDefinition
@@ -284,7 +284,7 @@ class LocationManager(
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
         with ownership_context():
-            result = self.state_handler.set_location(location.location_id, location)
+            result = self.state_handler.add_location(location.location_id, location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
             # Sync locations to definition file
@@ -326,12 +326,16 @@ class LocationManager(
     def get_location_by_id(self, location_id: str) -> Location:
         """Get a specific location by ID."""
         with ownership_context():
-            location = self.state_handler.get_location(location_id)
+            locations = self.state_handler.get_locations()
+            final_location = None
+            for location in locations:
+                if location.location_id == location_id:
+                    final_location = location
             if location is None:
                 raise HTTPException(
                     status_code=404, detail=f"Location {location_id} not found"
                 )
-            return location
+            return final_location
 
     @delete("/location/{location_id}", tags=["Locations"])
     def delete_location(self, location_id: str) -> dict[str, str]:

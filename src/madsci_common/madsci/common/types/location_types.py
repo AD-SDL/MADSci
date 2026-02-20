@@ -156,11 +156,7 @@ class LocationReservation(MadsciBaseModel):
         title="Created Datetime",
         description="When the reservation was created.",
     )
-    start: datetime = Field(
-        title="Start Datetime",
-        description="When the reservation starts.",
-    )
-    end: datetime = Field(
+    expires: datetime = Field(
         title="End Datetime",
         description="When the reservation ends.",
     )
