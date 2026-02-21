@@ -8,12 +8,11 @@ from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
+from madsci.client.cli.tui.constants import DEFAULT_SERVICES
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
 
 # Status-to-color mapping used across the module
@@ -131,6 +130,41 @@ def _build_step_lines(steps: list, current_step: int, is_running: bool) -> list[
     if total_steps > 10:
         lines.append(f"    ... and {total_steps - 10} more steps")
     return lines
+
+
+def _add_workflow_row(table: DataTable, data: dict) -> None:
+    """Add a workflow row to a table.
+
+    Args:
+        table: The DataTable to add to.
+        data: Workflow data dictionary.
+    """
+    status = data.get("status", {})
+    name = data.get("name", "Unknown")
+    icon = _get_status_icon(status)
+
+    # Progress
+    steps = data.get("steps", [])
+    total_steps = len(steps)
+    completed = data.get("completed_steps", 0)
+    progress = f"{completed}/{total_steps}" if total_steps > 0 else "-"
+
+    # Current step
+    current_index = status.get("current_step_index", 0)
+    if steps and 0 <= current_index < total_steps:
+        current_step = steps[current_index]
+        step_name = current_step.get("name", current_step.get("action", "-"))
+    else:
+        step_name = "-"
+
+    # Timing
+    start_time = data.get("start_time")
+    started_str = _format_timestamp(start_time) if start_time else "-"
+
+    duration = data.get("duration_seconds")
+    duration_str = _format_duration(duration) if duration is not None else "-"
+
+    table.add_row(icon, name, progress, step_name, started_str, duration_str)
 
 
 class WorkflowDetailPanel(Static):
@@ -251,7 +285,6 @@ class WorkflowsScreen(Screen):
         self.workflows_data: dict[str, dict] = {}
         self.selected_workflow_id: str | None = None
         self.auto_refresh_enabled = True
-        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the workflows screen layout."""
@@ -262,6 +295,12 @@ class WorkflowsScreen(Screen):
             with Vertical(id="active-workflows-section"):
                 yield Label("[bold]Active Workflows[/bold]")
                 yield DataTable(id="workflows-table")
+
+            yield Label("")
+
+            with Vertical(id="archived-workflows-section"):
+                yield Label("[bold]Archived Workflows[/bold]")
+                yield DataTable(id="archived-table")
 
             yield Label("")
             yield WorkflowDetailPanel(id="workflow-detail-panel")
@@ -281,28 +320,13 @@ class WorkflowsScreen(Screen):
         )
         workflows_table.cursor_type = "row"
 
+        archived_table = self.query_one("#archived-table", DataTable)
+        archived_table.add_columns(
+            "Status", "Name", "Progress", "Step", "Started", "Duration"
+        )
+        archived_table.cursor_type = "row"
+
         await self.refresh_data()
-        self._start_auto_refresh()
-
-    def _start_auto_refresh(self) -> None:
-        """Start the auto-refresh timer."""
-        if self._auto_refresh_timer is None:
-            self._auto_refresh_timer = self.set_interval(
-                AUTO_REFRESH_INTERVAL,
-                self._auto_refresh,
-                name="workflows-auto-refresh",
-            )
-
-    def _stop_auto_refresh(self) -> None:
-        """Stop the auto-refresh timer."""
-        if self._auto_refresh_timer is not None:
-            self._auto_refresh_timer.stop()
-            self._auto_refresh_timer = None
-
-    async def _auto_refresh(self) -> None:
-        """Perform an auto-refresh cycle."""
-        if self.auto_refresh_enabled:
-            await self.refresh_data()
 
     def _update_footer(self) -> None:
         """Update the footer label with current auto-refresh state."""
@@ -320,26 +344,28 @@ class WorkflowsScreen(Screen):
 
     async def refresh_data(self) -> None:
         """Refresh workflow data from workcell manager."""
+        self.workflows_data.clear()
+        await self._refresh_active_workflows()
+        await self._refresh_archived_workflows()
+
+    async def _refresh_active_workflows(self) -> None:
+        """Refresh the active/queued workflows table."""
         table = self.query_one("#workflows-table", DataTable)
         table.clear()
-        self.workflows_data.clear()
 
-        # Fetch active workflows
         active = await self._fetch_workflows("/workflows/active")
-        # Fetch queued workflows
         queued = await self._fetch_workflows("/workflows/queue")
 
-        # Merge: active is dict, queued is list
         if isinstance(active, dict):
             for wf_id, wf_data in active.items():
                 self.workflows_data[wf_id] = wf_data
-                self._add_workflow_row(table, wf_data)
+                _add_workflow_row(table, wf_data)
         if isinstance(queued, list):
             for wf_data in queued:
                 wf_id = wf_data.get("workflow_id", "unknown")
                 if wf_id not in self.workflows_data:
                     self.workflows_data[wf_id] = wf_data
-                    self._add_workflow_row(table, wf_data)
+                    _add_workflow_row(table, wf_data)
 
         if not self.workflows_data:
             table.add_row(
@@ -350,6 +376,38 @@ class WorkflowsScreen(Screen):
                 "-",
                 "-",
             )
+
+    async def _refresh_archived_workflows(self) -> None:
+        """Refresh the archived workflows table."""
+        archived_table = self.query_one("#archived-table", DataTable)
+        archived_table.clear()
+
+        archived = await self._fetch_workflows("/workflows/archived?number=20")
+        rows = self._normalize_workflow_response(archived)
+
+        for wf_id, wf_data in rows:
+            if wf_id not in self.workflows_data:
+                self.workflows_data[wf_id] = wf_data
+            _add_workflow_row(archived_table, wf_data)
+
+        if not rows:
+            archived_table.add_row(
+                "[dim]\u25cb[/dim]",
+                "[dim]No archived workflows[/dim]",
+                "-",
+                "-",
+                "-",
+                "-",
+            )
+
+    @staticmethod
+    def _normalize_workflow_response(data: dict | list) -> list[tuple[str, dict]]:
+        """Normalize a workflow API response to a list of (id, data) pairs."""
+        if isinstance(data, dict):
+            return list(data.items())
+        if isinstance(data, list):
+            return [(d.get("workflow_id", "unknown"), d) for d in data]
+        return []
 
     async def _fetch_workflows(self, path: str) -> dict | list:
         """Fetch workflows from the workcell manager.
@@ -373,46 +431,12 @@ class WorkflowsScreen(Screen):
             pass
         return {}
 
-    def _add_workflow_row(self, table: DataTable, data: dict) -> None:
-        """Add a workflow row to the table.
-
-        Args:
-            table: The DataTable to add to.
-            data: Workflow data dictionary.
-        """
-        status = data.get("status", {})
-        name = data.get("name", "Unknown")
-        icon = _get_status_icon(status)
-
-        # Progress
-        steps = data.get("steps", [])
-        total_steps = len(steps)
-        completed = data.get("completed_steps", 0)
-        progress = f"{completed}/{total_steps}" if total_steps > 0 else "-"
-
-        # Current step
-        current_index = status.get("current_step_index", 0)
-        if steps and 0 <= current_index < total_steps:
-            current_step = steps[current_index]
-            step_name = current_step.get("name", current_step.get("action", "-"))
-        else:
-            step_name = "-"
-
-        # Timing
-        start_time = data.get("start_time")
-        started_str = _format_timestamp(start_time) if start_time else "-"
-
-        duration = data.get("duration_seconds")
-        duration_str = _format_duration(duration) if duration is not None else "-"
-
-        table.add_row(icon, name, progress, step_name, started_str, duration_str)
-
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the workflows table."""
         table = event.data_table
         row_key = event.row_key
 
-        if row_key and table.id == "workflows-table":
+        if row_key and table.id in ("workflows-table", "archived-table"):
             row = table.get_row(row_key)
             workflow_name = str(row[1])
 
@@ -464,12 +488,8 @@ class WorkflowsScreen(Screen):
     def action_toggle_auto_refresh(self) -> None:
         """Toggle auto-refresh on/off."""
         self.auto_refresh_enabled = not self.auto_refresh_enabled
-        if self.auto_refresh_enabled:
-            self._start_auto_refresh()
-            self.notify("Auto-refresh enabled", timeout=2)
-        else:
-            self._stop_auto_refresh()
-            self.notify("Auto-refresh disabled", timeout=2)
+        state = "enabled" if self.auto_refresh_enabled else "disabled"
+        self.notify(f"Auto-refresh {state}", timeout=2)
         self._update_footer()
 
     async def action_pause_workflow(self) -> None:
@@ -486,5 +506,4 @@ class WorkflowsScreen(Screen):
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""
-        self._stop_auto_refresh()
         self.app.switch_screen("dashboard")

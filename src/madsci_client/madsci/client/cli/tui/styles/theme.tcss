@@ -55,6 +55,12 @@ QuickActionsPanel {
     height: auto;
 }
 
+QuickActionsPanel Button {
+    width: 100%;
+    min-width: 16;
+    margin: 0 0;
+}
+
 RecentEventsPanel {
     border: solid $primary;
     padding: 1 2;
@@ -100,7 +106,7 @@ LogsScreen #log-view {
 
 /* ===== Nodes Screen ===== */
 
-NodeDetailPanel {
+NodeDetailScreen #node-detail-content {
     border: solid $primary;
     padding: 1 2;
     height: auto;

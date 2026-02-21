@@ -113,7 +113,7 @@ class LogsScreen(Screen):
 
         # Add new logs to display
         for entry in logs:
-            entry_id = entry.get("event_id", entry.get("id", str(hash(str(entry)))))
+            entry_id = entry.get("_id", entry.get("event_id", str(hash(str(entry)))))
             if entry_id not in self._seen_ids:
                 self._seen_ids[entry_id] = None
                 # Trim oldest entries when exceeding the bound
@@ -138,9 +138,9 @@ class LogsScreen(Screen):
             List of log entries.
         """
         try:
-            params: dict[str, str | int] = {"limit": limit}
+            params: dict[str, str | int] = {"number": limit}
             if level:
-                params["min_level"] = level.upper()
+                params["level"] = level.upper()
             if search:
                 params["search"] = search
 
@@ -156,8 +156,9 @@ class LogsScreen(Screen):
                     data = response.json()
                     if isinstance(data, list):
                         return data
-                    if isinstance(data, dict) and "events" in data:
-                        return data["events"]
+                    if isinstance(data, dict):
+                        # The Event Manager returns Dict[str, Event]
+                        return list(data.values())
                 return []
         except Exception:
             return []
@@ -171,8 +172,8 @@ class LogsScreen(Screen):
         Returns:
             Formatted string.
         """
-        # Timestamp
-        timestamp = entry.get("timestamp", entry.get("logged_at", ""))
+        # Timestamp (Event model uses event_timestamp)
+        timestamp = entry.get("event_timestamp", entry.get("timestamp", ""))
         if timestamp:
             if isinstance(timestamp, str):
                 try:
@@ -185,17 +186,46 @@ class LogsScreen(Screen):
         else:
             timestamp_str = "????????????"
 
-        # Level
-        level = entry.get("level", entry.get("log_level", "INFO")).upper()
+        # Level (Event model uses log_level, which is an int enum)
+        log_level = entry.get("log_level", entry.get("level", 20))
+        if isinstance(log_level, int):
+            level_names = {
+                0: "NOTSET",
+                10: "DEBUG",
+                20: "INFO",
+                30: "WARNING",
+                40: "ERROR",
+                50: "CRITICAL",
+            }
+            level = level_names.get(log_level, str(log_level))
+        else:
+            level = str(log_level).upper()
         level_color = LEVEL_COLORS.get(level, "")
 
-        # Source
-        source = entry.get("source", entry.get("service", entry.get("name", "")))[:12]
+        # Source: extract first meaningful ID from OwnershipInfo
+        source = self._extract_source(entry.get("source", {}))
 
-        # Message
-        message = entry.get("message", entry.get("msg", str(entry)))
+        # Message is in event_data dict
+        event_data = entry.get("event_data", {})
+        if isinstance(event_data, dict):
+            message = event_data.get("message", str(event_data) if event_data else "")
+        else:
+            message = (
+                str(event_data) if event_data else str(entry.get("event_type", ""))
+            )
 
         return f"[dim]{timestamp_str}[/dim]  [{level_color}]{level:8}[/{level_color}]  [cyan]{source:12}[/cyan]  {message}"
+
+    @staticmethod
+    def _extract_source(source_data: object) -> str:
+        """Extract a display-friendly source name from OwnershipInfo."""
+        if isinstance(source_data, dict):
+            for key in ("node_id", "manager_id", "workcell_id", "experiment_id"):
+                val = source_data.get(key)
+                if val:
+                    return str(val)[:12]
+            return ""
+        return str(source_data)[:12]
 
     async def action_refresh(self) -> None:
         """Refresh logs."""

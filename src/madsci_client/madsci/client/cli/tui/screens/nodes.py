@@ -7,45 +7,60 @@ by querying the Workcell Manager.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Vertical
+from textual.containers import Container, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
 
 
-class NodeDetailPanel(Static):
-    """Panel showing details for a selected node."""
+class NodeDetailScreen(Screen):
+    """Screen showing details for a single node, pushed on top of NodesScreen."""
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the panel."""
-        super().__init__(**kwargs)
-        self.selected_node: str | None = None
-        self.node_data: dict = {}
+    BINDINGS: ClassVar[list[BindingType]] = [
+        ("r", "refresh", "Refresh"),
+        ("escape", "go_back", "Back"),
+    ]
 
-    def compose(self) -> ComposeResult:
-        """Compose the panel."""
-        yield Label("[bold]Node Details[/bold]")
-        yield Label(
-            "[dim]Select a node from the table above[/dim]", id="node-detail-content"
-        )
-
-    def update_details(self, name: str, data: dict) -> None:
-        """Update the detail display.
+    def __init__(self, node_name: str, node_data: dict, **kwargs: Any) -> None:
+        """Initialize the detail screen.
 
         Args:
-            name: Node name.
-            data: Node data dictionary.
+            node_name: Name of the node.
+            node_data: Node data dictionary.
         """
-        self.selected_node = name
-        self.node_data = data
+        super().__init__(**kwargs)
+        self.node_name = node_name
+        self.node_data = node_data
 
-        content = self.query_one("#node-detail-content", Label)
+    def compose(self) -> ComposeResult:
+        """Compose the detail screen layout."""
+        with VerticalScroll(id="main-content"):
+            yield Label(f"[bold blue]Node: {self.node_name}[/bold blue]")
+            yield Label("")
+            yield Static(id="node-detail-content")
+            yield Label("")
+            yield Label("[dim]'r' refresh | 'Esc' back[/dim]")
 
-        # Determine status
-        node_status = data.get("status", {})
+    def on_mount(self) -> None:
+        """Render the detail content on mount."""
+        self._render_details()
+
+    def _render_details(self) -> None:
+        """Render the node detail content."""
+        content = self.query_one("#node-detail-content", Static)
+        data = self.node_data
+        node_status = data.get("status") or {}
+        info = data.get("info") or {}
+
+        lines = self._build_header_lines(data, node_status)
+        lines.extend(self._build_action_lines(info))
+        lines.extend(self._build_extra_lines(info, node_status, data))
+
+        content.update("\n".join(lines))
+
+    def _build_header_lines(self, data: dict, node_status: dict) -> list[str]:
+        """Build header lines with name, URL, and status."""
         errored = node_status.get("errored", False)
         disconnected = node_status.get("disconnected", False)
 
@@ -56,46 +71,79 @@ class NodeDetailPanel(Static):
         else:
             status_str = "[green]connected[/green]"
 
-        # Node info
-        info = data.get("info", {})
         node_url = str(data.get("node_url", "N/A"))
-
-        lines = [
-            f"[bold]{name}[/bold]",
+        return [
+            f"[bold]{self.node_name}[/bold]",
             "",
             f"  URL:      {node_url}",
             f"  Status:   {status_str}",
         ]
 
-        # Available actions
-        available_actions = info.get("available_actions", [])
-        if available_actions:
-            lines.append("")
-            lines.append("  [bold]Actions:[/bold]")
-            for action in available_actions:
-                lines.append(f"    - {action}")
+    @staticmethod
+    def _build_action_lines(info: dict) -> list[str]:
+        """Build action listing lines."""
+        actions = info.get("actions", {})
+        if not actions:
+            return []
+        lines = ["", "  [bold]Actions:[/bold]"]
+        for action_name, action_def in actions.items():
+            desc = ""
+            if isinstance(action_def, dict) and action_def.get("description"):
+                desc = f" - {action_def['description']}"
+            lines.append(f"    - {action_name}{desc}")
+        return lines
 
-        # Admin capabilities
-        capabilities = info.get("capabilities", {})
+    @staticmethod
+    def _build_extra_lines(info: dict, node_status: dict, data: dict) -> list[str]:
+        """Build admin, errors, and state lines."""
+        lines: list[str] = []
+
+        capabilities = info.get("capabilities") or {}
         admin_commands = capabilities.get("admin_commands", [])
         if admin_commands:
-            lines.append("")
-            lines.append(f"  [bold]Admin:[/bold] {', '.join(admin_commands)}")
+            lines.extend(["", f"  [bold]Admin:[/bold] {', '.join(admin_commands)}"])
 
-        # Errors
         errors = node_status.get("errors", [])
         if errors:
-            lines.append("")
-            lines.append("  [bold red]Errors:[/bold red]")
-            for error in errors[:3]:
+            lines.extend(["", "  [bold red]Errors:[/bold red]"])
+            for error in errors[:5]:
                 err_msg = (
                     error.get("message", str(error))
                     if isinstance(error, dict)
                     else str(error)
                 )
-                lines.append(f"    [red]{err_msg[:60]}[/red]")
+                lines.append(f"    [red]{err_msg[:80]}[/red]")
 
-        content.update("\n".join(lines))
+        state = data.get("state")
+        if state and isinstance(state, dict):
+            lines.extend(["", "  [bold]State:[/bold]"])
+            for key, value in state.items():
+                lines.append(f"    {key}: {value}")
+
+        return lines
+
+    async def action_refresh(self) -> None:
+        """Refresh node data by re-fetching from workcell manager."""
+        try:
+            workcell_url = self.app.service_urls.get(
+                "workcell_manager", "http://localhost:8005/"
+            )
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
+                if response.status_code == 200:
+                    nodes = response.json()
+                    if isinstance(nodes, dict) and self.node_name in nodes:
+                        self.node_data = nodes[self.node_name]
+                        self._render_details()
+                        self.notify("Node refreshed", timeout=2)
+                        return
+        except Exception:  # noqa: S110
+            pass
+        self.notify("Could not refresh node data", timeout=2)
+
+    def action_go_back(self) -> None:
+        """Go back to the nodes list."""
+        self.app.pop_screen()
 
 
 class NodesScreen(Screen):
@@ -112,7 +160,6 @@ class NodesScreen(Screen):
         super().__init__(**kwargs)
         self.nodes_data: dict[str, dict] = {}
         self.auto_refresh_enabled = True
-        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the nodes screen layout."""
@@ -125,11 +172,9 @@ class NodesScreen(Screen):
                 yield DataTable(id="nodes-table")
 
             yield Label("")
-            yield NodeDetailPanel(id="node-detail-panel")
-
-            yield Label("")
             yield Label(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | 'Esc' back[/dim]",
+                "[dim]Select a node to view details | "
+                "Auto-refresh: on (5s) | 'a' toggle | 'r' manual | 'Esc' back[/dim]",
                 id="nodes-footer",
             )
 
@@ -140,37 +185,15 @@ class NodesScreen(Screen):
         nodes_table.cursor_type = "row"
 
         await self.refresh_data()
-        self._start_auto_refresh()
-
-    def _start_auto_refresh(self) -> None:
-        """Start the auto-refresh timer."""
-        if self._auto_refresh_timer is None:
-            self._auto_refresh_timer = self.set_interval(
-                AUTO_REFRESH_INTERVAL, self._auto_refresh, name="nodes-auto-refresh"
-            )
-
-    def _stop_auto_refresh(self) -> None:
-        """Stop the auto-refresh timer."""
-        if self._auto_refresh_timer is not None:
-            self._auto_refresh_timer.stop()
-            self._auto_refresh_timer = None
-
-    async def _auto_refresh(self) -> None:
-        """Perform an auto-refresh cycle."""
-        if self.auto_refresh_enabled:
-            await self.refresh_data()
 
     def _update_footer(self) -> None:
         """Update the footer label with current auto-refresh state."""
         footer = self.query_one("#nodes-footer", Label)
-        if self.auto_refresh_enabled:
-            footer.update(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
-            )
-        else:
-            footer.update(
-                "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
-            )
+        state = "on (5s)" if self.auto_refresh_enabled else "off"
+        footer.update(
+            f"[dim]Select a node to view details | "
+            f"Auto-refresh: {state} | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
+        )
 
     async def refresh_data(self) -> None:
         """Refresh node data from workcell manager."""
@@ -226,14 +249,14 @@ class NodesScreen(Screen):
             state = "[green]connected[/green]"
 
         node_url = str(node_data.get("node_url", "N/A"))
-        info = node_data.get("info", {})
-        actions = info.get("available_actions", [])
+        info = node_data.get("info") or {}
+        actions = info.get("actions", {})
         action_count = str(len(actions)) if actions else "0"
 
         table.add_row(icon, name, node_url, action_count, state)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle row selection in the table."""
+        """Handle row selection - push detail screen."""
         table = event.data_table
         row_key = event.row_key
 
@@ -242,8 +265,9 @@ class NodesScreen(Screen):
             node_name = str(row[1])
 
             if node_name in self.nodes_data:
-                detail_panel = self.query_one("#node-detail-panel", NodeDetailPanel)
-                detail_panel.update_details(node_name, self.nodes_data[node_name])
+                self.app.push_screen(
+                    NodeDetailScreen(node_name, self.nodes_data[node_name])
+                )
 
     async def action_refresh(self) -> None:
         """Refresh node data."""
@@ -253,15 +277,10 @@ class NodesScreen(Screen):
     def action_toggle_auto_refresh(self) -> None:
         """Toggle auto-refresh on/off."""
         self.auto_refresh_enabled = not self.auto_refresh_enabled
-        if self.auto_refresh_enabled:
-            self._start_auto_refresh()
-            self.notify("Auto-refresh enabled", timeout=2)
-        else:
-            self._stop_auto_refresh()
-            self.notify("Auto-refresh disabled", timeout=2)
+        state = "enabled" if self.auto_refresh_enabled else "disabled"
+        self.notify(f"Auto-refresh {state}", timeout=2)
         self._update_footer()
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""
-        self._stop_auto_refresh()
         self.app.switch_screen("dashboard")

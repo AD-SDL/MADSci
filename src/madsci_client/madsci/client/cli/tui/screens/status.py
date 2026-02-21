@@ -7,12 +7,10 @@ import socket
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.timer import Timer
 from textual.widgets import DataTable, Label, Static
 
 INFRASTRUCTURE_SERVICES = {
@@ -86,7 +84,6 @@ class StatusScreen(Screen):
         super().__init__(**kwargs)
         self.service_status = {}
         self.auto_refresh_enabled = True
-        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the status screen layout."""
@@ -124,25 +121,6 @@ class StatusScreen(Screen):
         infra_table.cursor_type = "row"
 
         await self.refresh_data()
-        self._start_auto_refresh()
-
-    def _start_auto_refresh(self) -> None:
-        """Start the auto-refresh timer."""
-        if self._auto_refresh_timer is None:
-            self._auto_refresh_timer = self.set_interval(
-                AUTO_REFRESH_INTERVAL, self._auto_refresh, name="status-auto-refresh"
-            )
-
-    def _stop_auto_refresh(self) -> None:
-        """Stop the auto-refresh timer."""
-        if self._auto_refresh_timer is not None:
-            self._auto_refresh_timer.stop()
-            self._auto_refresh_timer = None
-
-    async def _auto_refresh(self) -> None:
-        """Perform an auto-refresh cycle."""
-        if self.auto_refresh_enabled:
-            await self.refresh_data()
 
     def _update_footer(self) -> None:
         """Update the footer label with current auto-refresh state."""
@@ -159,12 +137,8 @@ class StatusScreen(Screen):
     def action_toggle_auto_refresh(self) -> None:
         """Toggle auto-refresh on/off."""
         self.auto_refresh_enabled = not self.auto_refresh_enabled
-        if self.auto_refresh_enabled:
-            self._start_auto_refresh()
-            self.notify("Auto-refresh enabled", timeout=2)
-        else:
-            self._stop_auto_refresh()
-            self.notify("Auto-refresh disabled", timeout=2)
+        state = "enabled" if self.auto_refresh_enabled else "disabled"
+        self.notify(f"Auto-refresh {state}", timeout=2)
         self._update_footer()
 
     async def refresh_data(self) -> None:

@@ -5,10 +5,11 @@ Main Textual application for the MADSci terminal user interface.
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from madsci.client.cli.tui.constants import get_default_services
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, get_default_services
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
 from madsci.client.cli.tui.screens.nodes import NodesScreen
@@ -82,6 +83,20 @@ class MadsciApp(App):
     async def on_mount(self) -> None:
         """Handle application mount event."""
         await self.push_screen(self._initial_screen)
+        self.set_interval(
+            AUTO_REFRESH_INTERVAL,
+            self._auto_refresh_active_screen,
+            name="app-auto-refresh",
+        )
+
+    async def _auto_refresh_active_screen(self) -> None:
+        """Auto-refresh the active screen if it supports and enables auto-refresh."""
+        screen = self.screen
+        if getattr(screen, "auto_refresh_enabled", False) and hasattr(
+            screen, "refresh_data"
+        ):
+            with contextlib.suppress(Exception):
+                await screen.refresh_data()
 
     def action_switch_screen(self, screen: str) -> None:
         """Switch to a named screen.

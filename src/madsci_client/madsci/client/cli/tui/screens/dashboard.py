@@ -7,13 +7,11 @@ active workflows, and recent events.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
-from textual.timer import Timer
-from textual.widgets import Label, Static
+from textual.widgets import Button, Label, Static
 
 
 class ServiceStatusWidget(Static):
@@ -75,12 +73,53 @@ class QuickActionsPanel(Static):
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Quick Actions[/bold]")
-        yield Label("  [dim]s[/dim] View Status")
-        yield Label("  [dim]l[/dim] View Logs")
-        yield Label("  [dim]n[/dim] View Nodes")
-        yield Label("  [dim]w[/dim] View Workflows")
-        yield Label("  [dim]r[/dim] Refresh")
-        yield Label("  [dim]q[/dim] Quit")
+        yield Button("(s) Status", id="action-status", variant="default")
+        yield Button("(l) Logs", id="action-logs", variant="default")
+        yield Button("(n) Nodes", id="action-nodes", variant="default")
+        yield Button("(w) Workflows", id="action-workflows", variant="default")
+        yield Button("(r) Refresh", id="action-refresh", variant="default")
+        yield Button("(q) Quit", id="action-quit", variant="error")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle quick action button presses."""
+        action_map = {
+            "action-status": "status",
+            "action-logs": "logs",
+            "action-nodes": "nodes",
+            "action-workflows": "workflows",
+        }
+        button_id = event.button.id
+        if button_id in action_map:
+            self.app.switch_screen(action_map[button_id])
+        elif button_id == "action-refresh":
+            self.app.run_worker(self.app.action_refresh())
+        elif button_id == "action-quit":
+            self.app.exit()
+
+
+_LOG_LEVEL_NAMES = {
+    0: "NOTSET",
+    10: "DEBUG",
+    20: "INFO",
+    30: "WARN",
+    40: "ERROR",
+    50: "CRIT",
+}
+
+
+def _format_level(level: object) -> str:
+    """Convert a log_level (int enum or string) to a short display name."""
+    if isinstance(level, int):
+        return _LOG_LEVEL_NAMES.get(level, str(level))
+    return str(level)[:5]
+
+
+def _extract_message(event: dict) -> str:
+    """Extract the message string from an Event dict."""
+    event_data = event.get("event_data", {})
+    if isinstance(event_data, dict):
+        return event_data.get("message", str(event_data))[:50]
+    return str(event_data)[:50]
 
 
 class RecentEventsPanel(Static):
@@ -103,15 +142,22 @@ class RecentEventsPanel(Static):
                 )
                 response = await client.get(
                     f"{event_url.rstrip('/')}/events",
-                    params={"limit": 5},
+                    params={"number": 5},
                 )
                 if response.status_code == 200:
-                    events = response.json()
-                    if isinstance(events, list) and events:
+                    data = response.json()
+                    # Event Manager returns Dict[str, Event]
+                    if isinstance(data, dict) and data:
+                        events = list(data.values())
+                    elif isinstance(data, list):
+                        events = data
+                    else:
+                        events = []
+                    if events:
                         lines = []
                         for event in events[:5]:
-                            msg = event.get("message", str(event))[:50]
-                            level = event.get("level", "INFO")[:5]
+                            msg = _extract_message(event)
+                            level = _format_level(event.get("log_level", 20))
                             lines.append(f"  [{level}] {msg}")
                         content.update("\n".join(lines))
                     else:
@@ -134,7 +180,6 @@ class DashboardScreen(Screen):
         """Initialize the dashboard screen."""
         super().__init__(**kwargs)
         self.auto_refresh_enabled = True
-        self._auto_refresh_timer: Timer | None = None
 
     def compose(self) -> ComposeResult:
         """Compose the dashboard layout."""
@@ -156,27 +201,8 @@ class DashboardScreen(Screen):
             )
 
     async def on_mount(self) -> None:
-        """Handle screen mount - initial data load and start auto-refresh."""
+        """Handle screen mount - initial data load."""
         await self.refresh_data()
-        self._start_auto_refresh()
-
-    def _start_auto_refresh(self) -> None:
-        """Start the auto-refresh timer."""
-        if self._auto_refresh_timer is None:
-            self._auto_refresh_timer = self.set_interval(
-                AUTO_REFRESH_INTERVAL, self._auto_refresh, name="dashboard-auto-refresh"
-            )
-
-    def _stop_auto_refresh(self) -> None:
-        """Stop the auto-refresh timer."""
-        if self._auto_refresh_timer is not None:
-            self._auto_refresh_timer.stop()
-            self._auto_refresh_timer = None
-
-    async def _auto_refresh(self) -> None:
-        """Perform an auto-refresh cycle."""
-        if self.auto_refresh_enabled:
-            await self.refresh_data()
 
     def _update_footer(self) -> None:
         """Update the footer label with current auto-refresh state."""
@@ -206,10 +232,6 @@ class DashboardScreen(Screen):
     def action_toggle_auto_refresh(self) -> None:
         """Toggle auto-refresh on/off."""
         self.auto_refresh_enabled = not self.auto_refresh_enabled
-        if self.auto_refresh_enabled:
-            self._start_auto_refresh()
-            self.notify("Auto-refresh enabled", timeout=2)
-        else:
-            self._stop_auto_refresh()
-            self.notify("Auto-refresh disabled", timeout=2)
+        state = "enabled" if self.auto_refresh_enabled else "disabled"
+        self.notify(f"Auto-refresh {state}", timeout=2)
         self._update_footer()
