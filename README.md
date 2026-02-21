@@ -121,7 +121,7 @@ MADSci uses environment variables for configuration with hierarchical precedence
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
 
-See [Configuration.md](./Configuration.md) for comprehensive options, [example_lab/](./examples/example_lab/) for working configurations, and [OBSERVABILITY.md](./docs/guides/observability.md) for OpenTelemetry setup.
+See [Configuration.md](docs/Configuration.md) for comprehensive options, [example_lab/](./examples/example_lab/) for working configurations, and [OBSERVABILITY.md](./docs/guides/observability.md) for OpenTelemetry setup.
 
 ## Roadmap
 

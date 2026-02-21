@@ -82,7 +82,7 @@ Classes
     `OPTIONAL_CLIENTS: ClassVar[list[str]]`
     :
 
-    `config: madsci.experiment_application.experiment_base.ExperimentBaseConfig`
+    `config: madsci.experiment_application.experiment_base.ExperimentBaseConfig | None`
     :   Configuration for this experiment.
 
     `config_model: ClassVar[type[madsci.experiment_application.experiment_base.ExperimentBaseConfig]]`
@@ -297,6 +297,9 @@ Classes
     :
 
     `location_server_url: pydantic.networks.AnyUrl | None`
+    :
+
+    `max_pause_wait: float | None`
     :
 
     `resource_server_url: pydantic.networks.AnyUrl | None`

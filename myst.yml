@@ -34,8 +34,8 @@ project:
 
   toc:
     - file: README.md
-    - file: CHANGELOG.md
-    - file: Configuration.md
+    - file: docs/CHANGELOG.md
+    - file: docs/Configuration.md
 
     - title: Enabled By MADSci
       children:

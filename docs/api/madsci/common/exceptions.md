@@ -52,6 +52,16 @@ Classes
     * builtins.Exception
     * builtins.BaseException
 
+`ExperimentPauseTimeoutError(message: str)`
+:   Raised when an experiment remains paused longer than the configured timeout.
+
+    Initializes the exception
+
+    ### Ancestors (in MRO)
+
+    * builtins.Exception
+    * builtins.BaseException
+
 `LocationNotFoundError(message: str)`
 :   Raised when a location cannot be found by name or ID
 

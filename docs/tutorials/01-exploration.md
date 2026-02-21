@@ -378,5 +378,5 @@ You've completed the exploration tutorial! You now understand:
 ### Additional Resources
 
 - [MADSci Documentation](https://ad-sdl.github.io/MADSci/)
-- [Configuration Reference](../../Configuration.md)
+- [Configuration Reference](../../docs/Configuration.md)
 - [Example Lab](../../examples/example_lab/README.md)

@@ -62,7 +62,7 @@ default_settings = [
 
 # Generate Markdown docs
 [[tool.pydantic_settings_export.generators.markdown]]
-paths = ["Configuration.md"]
+paths = ["docs/Configuration.md"]
 
 # Generate .env example
 # Note: Default configuration should go in settings.yaml (version-controlled).

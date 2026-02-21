@@ -122,7 +122,7 @@ All structural data that managers need is configured directly in `settings.yaml`
 | `resource_default_templates` | Default resource templates (plate_nest, storage_stack) |
 | `workcell_nodes` | Node name → URL map for the workcell |
 
-See [Configuration.md](../../Configuration.md) for the full configuration reference.
+See [Configuration.md](../../docs/Configuration.md) for the full configuration reference.
 
 ### Node Configuration
 
@@ -289,7 +289,7 @@ See the [Observability Guide](../../docs/guides/observability.md) for detailed s
 - [Workflow Development Guide](../../docs/guides/workflow_development.md) - Workflow schema and advanced patterns
 - [Observability Guide](../../docs/guides/observability.md) - OpenTelemetry stack setup
 - [Troubleshooting Guide](../../docs/guides/troubleshooting.md) - Comprehensive problem-solving guide
-- [Configuration.md](../../Configuration.md) - Complete configuration reference
+- [Configuration.md](../../docs/Configuration.md) - Complete configuration reference
 - [Main README](../../README.md) - MADSci overview and installation
 - [Logging Guide](../../docs/guides/logging.md) - Structured logging and context management
 

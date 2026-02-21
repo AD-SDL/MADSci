@@ -78,7 +78,7 @@ Each manager service follows this structure:
 **Configuration:**
 - Environment variables with hierarchical precedence
 - Each manager has unique prefix (e.g., `WORKCELL_`, `EVENT_`)
-- See [Configuration.md](./Configuration.md) for full details
+- See [Configuration.md](docs/Configuration.md) for full details
 
 ### Dev Container Support
 
@@ -197,7 +197,7 @@ MADSci uses environment variables for configuration. The repository includes a `
    - **Development**: Most developers can use the defaults and don't need a `.env` file at all
    - **Production**: Create a `.env` file with only production-specific overrides
 
-For a complete list of available configuration options, see [Configuration.md](./Configuration.md).
+For a complete list of available configuration options, see [Configuration.md](docs/Configuration.md).
 
 ## Code of Conduct
 

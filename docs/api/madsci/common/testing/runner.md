@@ -4,6 +4,13 @@ E2E Test Runner for MADSci.
 
 Executes test definitions and captures results.
 
+Trust boundary: test YAML files are trusted developer input (like Makefiles
+or CI configs).  ``skip_if`` expressions are evaluated with ``simpleeval``
+for defence-in-depth.  ``_execute_python()`` uses ``exec()`` and
+``_execute_foreground_command()``/``_execute_background_command()`` use
+``shell=True`` intentionally — they run commands authored by the test
+developer, analogous to ``make`` recipe lines.
+
 Classes
 -------
 

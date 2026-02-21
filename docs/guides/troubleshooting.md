@@ -645,6 +645,6 @@ docker image prune -f
 
 For more help:
 - Check the main [README](../../README.md) for setup instructions
-- Review [Configuration.md](../../Configuration.md) for all available settings
+- Review [Configuration.md](../../docs/Configuration.md) for all available settings
 - Search issues in the [MADSci repository](https://github.com/AD-SDL/MADSci/issues)
 - Join the MADSci community discussions
