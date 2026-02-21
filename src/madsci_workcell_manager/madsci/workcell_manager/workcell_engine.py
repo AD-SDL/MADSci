@@ -62,15 +62,15 @@ class Engine:
         """Initialize the scheduler."""
         self.state_handler = state_handler
         self.workcell_settings = self.state_handler.workcell_settings
-        # Initialize workcell state in Redis before reading the definition
+        # Initialize workcell state in Redis before reading the info
         with state_handler.wc_state_lock():
             state_handler.initialize_workcell_state()
-        self.workcell_definition = state_handler.get_workcell_definition()
-        self.logger = EventClient(name=f"workcell.{self.workcell_definition.name}")
+        self.workcell_info = state_handler.get_workcell_info()
+        self.logger = EventClient(name=f"workcell.{self.workcell_info.name}")
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
         self.scheduler = scheduler_module.Scheduler(
-            self.workcell_definition, self.state_handler
+            self.workcell_info, self.state_handler
         )
         self.data_client = data_client
         self.resource_client = ResourceClient()
@@ -80,8 +80,8 @@ class Engine:
         self.logger.info(
             "Engine initialized, waiting for workflows",
             event_type=EventType.WORKCELL_START,
-            workcell_id=self.workcell_definition.manager_id,
-            workcell_name=self.workcell_definition.name,
+            workcell_id=self.workcell_info.manager_id,
+            workcell_name=self.workcell_info.name,
         )
 
     def _get_node_client(self, url: str) -> AbstractNodeClient:
@@ -106,7 +106,7 @@ class Engine:
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
-                self.workcell_definition = self.state_handler.get_workcell_definition()
+                self.workcell_info = self.state_handler.get_workcell_info()
 
                 # Check if it's time to update node info (less frequent)
                 should_update_info = (
@@ -164,8 +164,8 @@ class Engine:
                 self.logger.error(
                     "Unhandled exception in engine loop",
                     event_type=EventType.MANAGER_ERROR,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                     error=str(e),
                     exc_info=True,
                 )
@@ -173,8 +173,8 @@ class Engine:
                 self.logger.warning(
                     "Error in engine loop, delaying before retry",
                     event_type=EventType.MANAGER_ERROR,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                     retry_delay_s=retry_delay_s,
                 )
                 with self.state_handler.wc_state_lock():
@@ -226,8 +226,8 @@ class Engine:
                 self.logger.info(
                     "No workflows ready to run",
                     event_type=EventType.WORKCELL_STATUS_UPDATE,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                 )
         if next_wf:
             thread = self.run_step(next_wf.workflow_id)
@@ -253,7 +253,7 @@ class Engine:
             ):
                 step = prepare_workflow_step(
                     step=step,
-                    workcell=self.workcell_definition,
+                    workcell=self.workcell_info,
                     state_handler=self.state_handler,
                     workflow=wf,
                     data_client=self.data_client,
@@ -726,7 +726,7 @@ class Engine:
 
         # Set ownership context for all datapoint uploads
         with ownership_context(
-            workcell_id=self.workcell_definition.manager_id,
+            workcell_id=self.workcell_info.manager_id,
             workflow_id=wf.workflow_id,
             node_id=self.state_handler.get_node(step.node).info.node_id
             if self.state_handler.get_node(step.node).info
@@ -839,7 +839,7 @@ class Engine:
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
-                workcell_id=self.workcell_definition.manager_id,
+                workcell_id=self.workcell_info.manager_id,
                 node_id=node.info.node_id if node.info else None,
             ):
                 self.logger.warning(

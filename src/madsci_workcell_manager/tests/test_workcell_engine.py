@@ -28,7 +28,7 @@ from madsci.common.types.parameter_types import (
 )
 from madsci.common.types.step_types import Step, StepParameters
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerSettings,
 )
 from madsci.common.types.workflow_types import (
@@ -122,7 +122,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
 def test_engine_initialization(engine: Engine) -> None:
     """Test the initialization of the Engine."""
     assert engine.state_handler is not None
-    assert engine.workcell_definition.name == "Test Workcell"
+    assert engine.workcell_info.name == "Test Workcell"
 
 
 def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
@@ -1216,9 +1216,7 @@ class TestDatapointHandlingMethod:
             mock_engine = MagicMock()
             mock_engine.data_client = mock_data_client
             mock_engine.state_handler = mock_state_handler
-            mock_engine.workcell_definition = WorkcellManagerDefinition(
-                name="Test Workcell"
-            )
+            mock_engine.workcell_info = WorkcellInfo(name="Test Workcell")
 
             # Bind the method to our mock
             result = Engine.handle_data_and_files(mock_engine, step, workflow, response)

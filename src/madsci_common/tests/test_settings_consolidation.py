@@ -15,7 +15,7 @@ from madsci.common.types.resource_types.definitions import (
     TemplateDefinition,
 )
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerSettings,
 )
 from pydantic import AnyUrl
@@ -37,37 +37,33 @@ class TestWorkcellSettingsNodes:
         assert settings.nodes is not None
         assert "node1" in settings.nodes
 
-    def test_settings_nodes_override_definition(self) -> None:
-        """When settings.nodes is set, it should override definition.nodes."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            definition = WorkcellManagerDefinition(
-                name="Test Workcell",
-                nodes={"old_node": AnyUrl("http://localhost:3000/")},
-            )
+    def test_settings_nodes_override_workcell_info(self) -> None:
+        """When settings.nodes is set, it should override workcell info nodes."""
+        info = WorkcellInfo(
+            name="Test Workcell",
+            nodes={"old_node": AnyUrl("http://localhost:3000/")},
+        )
         settings_nodes = {"new_node": AnyUrl("http://localhost:4000/")}
 
-        # Simulate the override logic from workcell_server.initialize()
+        # Simulate the override logic
         if settings_nodes is not None:
-            definition.nodes = settings_nodes
+            info.nodes = settings_nodes
 
-        assert "new_node" in definition.nodes
-        assert "old_node" not in definition.nodes
+        assert "new_node" in info.nodes
+        assert "old_node" not in info.nodes
 
-    def test_none_settings_nodes_preserve_definition(self) -> None:
-        """When settings.nodes is None, definition.nodes should be preserved."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            definition = WorkcellManagerDefinition(
-                name="Test Workcell",
-                nodes={"original_node": AnyUrl("http://localhost:3000/")},
-            )
+    def test_none_settings_nodes_preserve_workcell_info(self) -> None:
+        """When settings.nodes is None, workcell info nodes should be preserved."""
+        info = WorkcellInfo(
+            name="Test Workcell",
+            nodes={"original_node": AnyUrl("http://localhost:3000/")},
+        )
         settings_nodes: Optional[dict] = None
 
         if settings_nodes is not None:
-            definition.nodes = settings_nodes
+            info.nodes = settings_nodes
 
-        assert "original_node" in definition.nodes
+        assert "original_node" in info.nodes
 
 
 class TestLocationSettingsInline:

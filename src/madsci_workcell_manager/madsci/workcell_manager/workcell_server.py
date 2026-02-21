@@ -24,7 +24,7 @@ from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerHealth,
     WorkcellManagerSettings,
     WorkcellState,
@@ -273,9 +273,9 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         return health
 
     @get("/workcell")
-    def get_workcell(self) -> WorkcellManagerDefinition:
-        """Get the currently running workcell (backward compatibility)."""
-        return self.state_handler.get_workcell_definition()
+    def get_workcell(self) -> WorkcellInfo:
+        """Get the currently running workcell info."""
+        return self.state_handler.get_workcell_info()
 
     @get("/state")
     def get_state(self) -> WorkcellState:
@@ -582,7 +582,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                     "workflow.execute",
                     attributes={"workflow.step_count": len(wf_def.steps)},
                 ):
-                    workcell = self.state_handler.get_workcell_definition()
+                    workcell = self.state_handler.get_workcell_info()
                     check_parameters(wf_def, json_inputs, file_input_paths)
                     wf = create_workflow(
                         workflow_def=wf_def,

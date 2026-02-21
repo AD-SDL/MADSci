@@ -11,11 +11,11 @@ from madsci.common.types.condition_types import (
     NoResourceInLocationCondition,
     ResourceInLocationCondition,
 )
-from madsci.common.types.location_types import Location, LocationDefinition
+from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import Node, NodeInfo, NodeStatus
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import WorkcellInfo
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -27,18 +27,8 @@ from madsci.workcell_manager.schedulers.default_scheduler import Scheduler
 @pytest.fixture
 def mock_scheduler() -> Generator[Scheduler, None, None]:
     """Fixture to create a mock scheduler"""
-    mock_workcell_definition = WorkcellManagerDefinition(
+    mock_workcell_info = WorkcellInfo(
         name="test workcell",
-        locations=[
-            LocationDefinition(
-                location_name="loc1",
-                resource_id=None,
-            ),
-            LocationDefinition(
-                location_name="loc2",
-                resource_id=None,
-            ),
-        ],
         nodes={"test_node": "http://test_node"},
     )
     mock_state_handler = MagicMock()
@@ -61,7 +51,7 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
     mock_lock.locked.return_value = False
     mock_state_handler.node_lock.return_value = mock_lock
 
-    scheduler = Scheduler(mock_workcell_definition, mock_state_handler)
+    scheduler = Scheduler(mock_workcell_info, mock_state_handler)
 
     # Mock the LocationClient
     scheduler.location_client = MagicMock()

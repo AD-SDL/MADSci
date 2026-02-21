@@ -1,5 +1,6 @@
 """Types for MADSci Workcell configuration."""
 
+import warnings
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
@@ -25,8 +26,40 @@ from pydantic.networks import AnyUrl
 from pydantic_settings import SettingsConfigDict
 
 
+class WorkcellInfo(MadsciBaseModel):
+    """Runtime info for a MADSci Workcell, stored in Redis for state sharing."""
+
+    name: str = Field(
+        title="Workcell Name",
+        description="The name of the workcell.",
+    )
+    manager_id: str = Field(
+        title="Workcell Manager ID",
+        description="The ID of the workcell manager.",
+        default_factory=new_ulid_str,
+    )
+    description: Optional[str] = Field(
+        default=None,
+        title="Workcell Description",
+        description="A description of the workcell.",
+    )
+    nodes: dict[str, AnyUrl] = Field(
+        default_factory=dict,
+        title="Workcell Node URLs",
+        description="The URL for each node in the workcell.",
+    )
+
+    is_ulid = field_validator("manager_id")(ulid_validator)
+
+
 class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
-    """Definition of a MADSci Workcell."""
+    """Definition of a MADSci Workcell.
+
+    .. deprecated:: 0.7.0
+        ``WorkcellManagerDefinition`` is removed in v0.7.0.
+        Use ``WorkcellInfo`` for runtime state or ``WorkcellManagerSettings``
+        for configuration.
+    """
 
     name: str = Field(
         title="Workcell Name",
@@ -56,6 +89,17 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
     )
 
     is_ulid = field_validator("manager_id")(ulid_validator)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning on instantiation."""
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            "WorkcellManagerDefinition is deprecated and removed in v0.7.0. "
+            "Use WorkcellInfo for runtime state or WorkcellManagerSettings for configuration.",
+            MadsciDeprecationWarning,
+            stacklevel=4,
+        )
 
 
 class WorkcellStatus(MadsciBaseModel):
@@ -138,9 +182,9 @@ class WorkcellState(MadsciBaseModel):
         title="Workflow Queue",
         description="The queue of workflows in non-terminal states.",
     )
-    workcell_definition: WorkcellManagerDefinition = Field(
-        title="Workcell Definition",
-        description="The definition of the workcell.",
+    workcell_info: WorkcellInfo = Field(
+        title="Workcell Info",
+        description="Runtime info for the workcell.",
     )
     nodes: dict[str, Node] = Field(
         default_factory=dict,

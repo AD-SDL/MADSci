@@ -113,7 +113,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example lab definition files fully deprecated: structural data (locations, transfer capabilities, resource templates, workcell nodes) extracted into standalone YAML files and inline settings; `*_manager_definition` keys removed from `settings.yaml`
 - Migration tests decoupled from the live example lab using versioned fixture data (`fixtures/migration/v0.6/`)
 
+### Removed
+- `WorkcellManagerDefinition` replaced by `WorkcellInfo` for runtime state and `WorkcellManagerSettings` for configuration
+- `example_app.py` removed (used deprecated `ExperimentApplication` and `NodeDefinition`)
+- `lab_definition_path` parameter removed from `LocalRunner` (was accepted but never used)
+
 ### Deprecated
-- Definition file auto-writing (use explicit `madsci config` commands instead)
+- Definition files hard-deprecated in v0.7.0 (previously soft-deprecated with removal planned for v0.8.0)
 - `NodeDefinition` files (use `NodeInfo.from_config()` instead)
+- `ManagerDefinition` files (use `ManagerSettings` instead)
 - `load_or_create_definition()` (use `load_definition()` instead)

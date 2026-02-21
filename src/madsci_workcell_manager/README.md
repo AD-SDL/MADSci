@@ -30,14 +30,9 @@ python -c "from madsci.workcell_manager.workcell_server import WorkcellManager; 
 
 ### Workcell Setup
 
-For custom deployments:
+For custom deployments, configure the workcell via `WorkcellManagerSettings` in a `settings.yaml` or `workcell.settings.yaml` file.
 
-```bash
-# Create a Workcell Definition
-madsci workcell create
-```
-
-See [example_workcell.manager.yaml](../../examples/example_lab/managers/example_workcell.manager.yaml) for configuration options.
+See the [Configuration](#configuration) section below for details.
 
 ### Workcell Client
 
@@ -108,17 +103,17 @@ elif analysis_result.datapoint_type == "file":
 
 ## Defining a Workcell
 
-You can create a new `WorkcellDefinition` file (typically a `.workcell.yaml`) using the command `madsci workcell create`
+Configure your workcell using `WorkcellManagerSettings` in a `settings.yaml` or `workcell.settings.yaml` file.
 
 ### Nodes
 
 Nodes are required to execute the action required by each step in a Workflow. Each Node typically corresponds to a physical device (robot, instrument, sensor, etc.) in your laboratory.
 
-In the workcell definition files `nodes` section, you can specify each node avaiable in the workcell as a mapping of node alias to the node's URL. When specifying the node to execute a step on in a Workflow, you should use the node alias defined here, rather than the node name according to the node itself.
+In the workcell settings `nodes` section, you can specify each node available in the workcell as a mapping of node alias to the node's URL. When specifying the node to execute a step on in a Workflow, you should use the node alias defined here, rather than the node name according to the node itself.
 
 ### Locations
 
-You can define important locations in your workcell, optionally linking them to container resources, using the `locations` list. This top-level element of the `WorkcellDefinition` allows you to provide a list of `LocationDefinition` objects.
+You can define important locations in your workcell, optionally linking them to container resources, using the Location Manager. Locations are managed via `LocationDefinition` objects.
 
 #### Location Properties
 
@@ -431,7 +426,6 @@ The Workcell Manager can be configured using environment variables with the `WOR
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WORKCELL_SERVER_URL` | `http://localhost:8005` | The URL where the workcell manager server will run |
-| `WORKCELL_MANAGER_DEFINITION` | `workcell.manager.yaml` | Path to the workcell definition file |
 | `WORKCELLS_DIRECTORY` | `~/.madsci/workcells` | Directory for storing workcell-related files |
 | `WORKCELL_REDIS_HOST` | `localhost` | Redis server hostname for state management |
 | `WORKCELL_REDIS_PORT` | `6379` | Redis server port |
@@ -455,12 +449,15 @@ Configuration can be loaded from multiple file formats (checked in order):
 ```yaml
 # workcell.settings.yaml
 server_url: "http://localhost:8005"
-manager_definition: "my_workcell.yaml"
+manager_name: "My Workcell"
 redis_host: "redis.example.com"
 redis_port: 6379
 scheduler_update_interval: 1.5
 node_update_interval: 0.5
 scheduler: "my_lab.custom_scheduler"
+nodes:
+  robot_arm: "http://localhost:6000"
+  liquid_handler: "http://localhost:6001"
 ```
 
 #### Example Environment File

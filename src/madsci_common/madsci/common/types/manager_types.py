@@ -223,7 +223,7 @@ class ManagerDefinition(MadsciBaseModel):
         from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
 
         warnings.warn(
-            f"{type(self).__name__} is deprecated as of v0.7.0 and will be removed in v0.8.0. "
+            f"{type(self).__name__} is deprecated and removed in v0.7.0. "
             "Use ManagerSettings instead.",
             MadsciDeprecationWarning,
             stacklevel=4,

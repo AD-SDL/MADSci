@@ -5,7 +5,7 @@ full MADSci stack to run without Docker, Redis, MongoDB, or PostgreSQL.
 
 Usage::
 
-    runner = LocalRunner(lab_definition_path="lab.manager.yaml")
+    runner = LocalRunner()
     runner.start()  # Blocks until Ctrl+C
 """
 
@@ -41,9 +41,6 @@ class LocalRunner:
 
     Parameters
     ----------
-    lab_definition_path:
-        Path to the lab manager YAML definition.  When *None*, the manager will
-        use its default definition discovery (current directory).
     scratch_dir:
         Directory for SQLite database and local file storage.
         Defaults to ``.madsci/`` in the current working directory.
@@ -51,11 +48,9 @@ class LocalRunner:
 
     def __init__(
         self,
-        lab_definition_path: Optional[str] = None,
         scratch_dir: Optional[Path] = None,
     ) -> None:
-        """Initialize the runner with optional definition path and scratch directory."""
-        self.lab_definition_path = lab_definition_path
+        """Initialize the runner with optional scratch directory."""
         self.scratch_dir = scratch_dir or Path.cwd() / ".madsci"
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
 

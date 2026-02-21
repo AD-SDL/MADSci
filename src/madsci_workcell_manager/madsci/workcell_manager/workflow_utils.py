@@ -20,7 +20,7 @@ from madsci.common.types.location_types import (
 )
 from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import WorkcellInfo
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -41,7 +41,7 @@ def validate_node_names(
                 state_handler.get_node(node_name)
         except KeyError as e:
             raise ValueError(
-                f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().name}"
+                f"Node {node_name} not in Workcell {state_handler.get_workcell_info().name}"
             ) from e
 
 
@@ -183,7 +183,7 @@ def validate_step(
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     state_handler: WorkcellStateHandler,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
@@ -256,7 +256,7 @@ def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
 
 
 def prepare_workflow_step(
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     state_handler: WorkcellStateHandler,
     step: Step,
     workflow: Workflow,
@@ -356,7 +356,7 @@ def prepare_workflow_files(
 
 
 def replace_locations(
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     step: Step,
     location_client: Optional[LocationClient] = None,
 ) -> None:

@@ -13,7 +13,7 @@ from madsci.common.types.parameter_types import (
 )
 from madsci.common.types.step_types import StepDefinition
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerSettings,
 )
 from madsci.common.types.workflow_types import (
@@ -72,7 +72,7 @@ def test_get_workcell(test_client: TestClient) -> None:
     with test_client as client:
         response = client.get("/workcell")
         assert response.status_code == 200
-        WorkcellManagerDefinition.model_validate(response.json())
+        WorkcellInfo.model_validate(response.json())
 
 
 def test_get_nodes(test_client: TestClient) -> None:

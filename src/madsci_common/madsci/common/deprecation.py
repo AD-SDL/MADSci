@@ -4,8 +4,7 @@ This module provides utilities for managing deprecation warnings and
 migration paths for deprecated features in MADSci.
 
 Deprecation Timeline:
-    - v0.7.0: Definition files deprecated, warnings emitted
-    - v0.8.0: Definition files removed, migration required
+    - v0.7.0: Definition files hard-deprecated and removed
 """
 
 import warnings
@@ -17,7 +16,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 # Deprecation version constants
 DEPRECATED_IN = "0.7.0"
-REMOVAL_IN = "0.8.0"
+REMOVAL_IN = "0.7.0"
 
 
 class MadsciDeprecationWarning(DeprecationWarning):

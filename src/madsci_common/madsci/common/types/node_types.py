@@ -289,7 +289,7 @@ class NodeDefinition(MadsciBaseModel):
             )
 
             warnings.warn(
-                "NodeDefinition is deprecated as of v0.7.0 and will be removed in v0.8.0. "
+                "NodeDefinition is deprecated and removed in v0.7.0. "
                 "Use NodeConfig instead.",
                 MadsciDeprecationWarning,
                 stacklevel=4,

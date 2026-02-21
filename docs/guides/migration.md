@@ -2,11 +2,9 @@
 
 ## Overview
 
-MADSci is transitioning from YAML definition files (`*.manager.yaml`, `*.node.yaml`) to a settings-based configuration system backed by environment variables and a local ID registry.
+MADSci has transitioned from YAML definition files (`*.manager.yaml`, `*.node.yaml`) to a settings-based configuration system backed by environment variables and a local ID registry.
 
-**Timeline**:
-- **v0.7.x (current)**: Definition files are deprecated but still work. New registry and settings-based configuration are available.
-- **v0.8.0 (planned)**: Definition files will no longer be auto-loaded. Managers will require explicit configuration via settings/environment variables.
+**As of v0.7.0, definition files are no longer supported.** Managers and nodes will not load, read, or write definition files. You must use the `madsci migrate` tool to convert your existing definition files to the new settings-based configuration before upgrading to v0.7.0.
 
 ## Why Migrate?
 
@@ -18,7 +16,6 @@ Definition files have several limitations:
 The new system provides:
 - **Environment variable configuration**: All structural config can be set via env vars or `.env` files.
 - **Stable ID registry**: Component IDs are tracked in `~/.madsci/registry.json`, surviving file changes.
-- **Backward compatibility**: Definition files still work during the transition period.
 
 ## Quick Start
 
@@ -58,7 +55,7 @@ madsci migrate status /path/to/your/lab
 
 Check that all files show as "migrated".
 
-### 5. Finalize (Optional)
+### 5. Finalize
 
 Once you've verified everything works:
 
@@ -110,7 +107,6 @@ When enabled, the manager will:
 1. Look up its ID in the registry by name
 2. If found, use the registered ID (ensuring consistency across restarts)
 3. If not found, generate a new ID and register it
-4. Fall back to the definition file ID if resolution fails
 
 ## Configuration Equivalents
 
@@ -150,18 +146,10 @@ Some definition fields can now be set as environment variables:
 | Location | `transfer_capabilities` | `LOCATION_TRANSFER_CAPABILITIES_FILE` (path to YAML) |
 | Resource | `default_templates` | `RESOURCE_DEFAULT_TEMPLATES_FILE` (path to YAML) |
 
-## Backward Compatibility
-
-During the transition:
-- Definition files still work and are loaded if present
-- Settings values override definition values when both exist
-- The registry is additive (existing IDs are preserved)
-- Deprecation warnings are emitted when definition files are loaded
-
 ## Troubleshooting
 
 ### "No manager configuration found"
-Ensure either a definition file exists at the configured path, or provide configuration via environment variables.
+Ensure configuration is provided via environment variables, `.env` files, or `settings.yaml`. Definition files are no longer loaded.
 
 ### "Registry lock conflict"
 Another process may be using the same component name. Check with `madsci registry list` and use `madsci registry clean` to remove stale entries.
