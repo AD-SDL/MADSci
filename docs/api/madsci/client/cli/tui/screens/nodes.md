@@ -8,19 +8,27 @@ by querying the Workcell Manager.
 Classes
 -------
 
-`NodeDetailPanel(**kwargs: Any)`
-:   Panel showing details for a selected node.
+`NodeDetailScreen(node_name: str, node_data: dict, **kwargs: Any)`
+:   Screen showing details for a single node, pushed on top of NodesScreen.
 
-    Initialize the panel.
+    Initialize the detail screen.
+
+    Args:
+        node_name: Name of the node.
+        node_data: Node data dictionary.
 
     ### Ancestors (in MRO)
 
-    * textual.widgets._static.Static
+    * textual.screen.Screen
+    * typing.Generic
     * textual.widget.Widget
     * textual.dom.DOMNode
     * textual.message_pump.MessagePump
 
     ### Class variables
+
+    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    :
 
     `can_focus`
     :
@@ -30,15 +38,17 @@ Classes
 
     ### Methods
 
+    `action_go_back(self) ‑> None`
+    :   Go back to the nodes list.
+
+    `action_refresh(self) ‑> None`
+    :   Refresh node data by re-fetching from workcell manager.
+
     `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the panel.
+    :   Compose the detail screen layout.
 
-    `update_details(self, name: str, data: dict) ‑> None`
-    :   Update the detail display.
-
-        Args:
-            name: Node name.
-            data: Node data dictionary.
+    `on_mount(self) ‑> None`
+    :   Render the detail content on mount.
 
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
@@ -79,7 +89,7 @@ Classes
     :   Compose the nodes screen layout.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the table.
+    :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up table and load data.

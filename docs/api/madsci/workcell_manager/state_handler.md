@@ -27,8 +27,8 @@ Classes
     `archive_workflow(self, workflow_id: str) ‑> None`
     :   Move a workflow from redis to mongo
 
-    `clear_workcell_definition(self) ‑> None`
-    :   Empty the workcell definition
+    `clear_workcell_info(self) ‑> None`
+    :   Empty the workcell info.
 
     `delete_active_workflow(self, workflow_id: str) ‑> None`
     :   Deletes an active workflow by ID
@@ -60,8 +60,8 @@ Classes
     `get_nodes(self) ‑> dict[str, madsci.common.types.node_types.Node]`
     :   Returns all nodes
 
-    `get_workcell_definition(self) ‑> madsci.common.types.workcell_types.WorkcellManagerDefinition`
-    :   Returns the current workcell definition as a WorkcellDefinition object
+    `get_workcell_info(self) ‑> madsci.common.types.workcell_types.WorkcellInfo`
+    :   Returns the current workcell info as a WorkcellInfo object.
 
     `get_workcell_state(self) ‑> madsci.common.types.workcell_types.WorkcellState`
     :   Return the current state of the workcell.
@@ -100,11 +100,11 @@ Classes
     `set_active_workflow(self, wf: madsci.common.types.workflow_types.Workflow, mark_state_changed: bool = True) ‑> None`
     :   Sets a workflow by ID
 
-    `set_node(self, node_name: str, node: madsci.common.types.node_types.Node | madsci.common.types.node_types.NodeDefinition | dict[str, typing.Any]) ‑> None`
+    `set_node(self, node_name: str, node: madsci.common.types.node_types.Node | dict[str, typing.Any]) ‑> None`
     :   Sets a node by name
 
-    `set_workcell_definition(self, workcell: madsci.common.types.workcell_types.WorkcellManagerDefinition) ‑> None`
-    :   Sets the active workcell
+    `set_workcell_info(self, workcell: madsci.common.types.workcell_types.WorkcellInfo) ‑> None`
+    :   Sets the active workcell info.
 
     `set_workcell_status(self, status: madsci.common.types.workcell_types.WorkcellStatus) ‑> None`
     :   Set the status of the workcell
@@ -115,8 +115,8 @@ Classes
     `update_node(self, node_name: str, func: Callable[..., Any], *args: Any, **kwargs: Any) ‑> None`
     :   Updates the state of a node.
 
-    `update_workcell_definition(self, func: Callable[..., Any], *args: Any, **kwargs: Any) ‑> None`
-    :   Updates the workcell definition
+    `update_workcell_info(self, func: Callable[..., Any], *args: Any, **kwargs: Any) ‑> None`
+    :   Updates the workcell info.
 
     `update_workcell_status(self, func: Callable[..., Any], *args: Any, **kwargs: Any) ‑> None`
     :   Update the status of the workcell

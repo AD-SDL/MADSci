@@ -6,13 +6,12 @@ This module provides utilities for managing deprecation warnings and
 migration paths for deprecated features in MADSci.
 
 Deprecation Timeline:
-    - v0.7.0: Definition files deprecated, warnings emitted
-    - v0.8.0: Definition files removed, migration required
+    - v0.7.0: Definition files hard-deprecated and removed
 
 Functions
 ---------
 
-`deprecated(reason: str, deprecated_in: str = '0.7.0', removal_in: str = '0.8.0', replacement: str | None = None) ‑> Callable[[~F], ~F]`
+`deprecated(reason: str, deprecated_in: str = '0.7.0', removal_in: str = '0.7.0', replacement: str | None = None) ‑> Callable[[~F], ~F]`
 :   Decorator to mark a function or method as deprecated.
 
     Args:
@@ -32,7 +31,7 @@ Functions
         def old_function():
             pass
 
-`deprecated_parameter(param_name: str, reason: str, deprecated_in: str = '0.7.0', removal_in: str = '0.8.0', replacement: str | None = None) ‑> Callable[[~F], ~F]`
+`deprecated_parameter(param_name: str, reason: str, deprecated_in: str = '0.7.0', removal_in: str = '0.7.0', replacement: str | None = None) ‑> Callable[[~F], ~F]`
 :   Decorator to mark a function parameter as deprecated.
 
     The decorated function will emit a warning if the deprecated parameter

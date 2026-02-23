@@ -185,6 +185,7 @@ Classes
     * madsci.common.types.template_types.TemplateInfo
     * madsci.common.types.template_types.TemplateManifest
     * madsci.common.types.template_types.TemplateParameter
+    * madsci.common.types.workcell_types.WorkcellInfo
     * madsci.common.types.workcell_types.WorkcellManagerDefinition
     * madsci.common.types.workcell_types.WorkcellState
     * madsci.common.types.workcell_types.WorkcellStatus

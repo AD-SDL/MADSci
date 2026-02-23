@@ -44,7 +44,7 @@ Classes
     :   Compose the dashboard layout.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - initial data load and start auto-refresh.
+    :   Handle screen mount - initial data load.
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
@@ -81,6 +81,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the panel.
+
+    `on_button_pressed(self, event: textual.widgets._button.Button.Pressed) ‑> None`
+    :   Handle quick action button presses.
 
 `RecentEventsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing recent events.

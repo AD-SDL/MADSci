@@ -5,7 +5,7 @@ the abstract class for schedulers
 Classes
 -------
 
-`AbstractScheduler(workcell_definition: madsci.common.types.workcell_types.WorkcellManagerDefinition, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler)`
+`AbstractScheduler(workcell_info: madsci.common.types.workcell_types.WorkcellInfo, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler)`
 :   Abstract Implementation of a MADSci Workcell Scheduler.
 
     All schedulers should:
@@ -16,7 +16,7 @@ Classes
 
     The run_iteration method will be called by the WorkcellManager at a regular interval to determine which workflows are ready to run and in what order they should be run. It will then be up to the WorkcellManager to actually run the workflows in the order determined by the scheduler. The scheduler should not actually run the workflows itself. The scheduler should also not modify the workflows or other state.
 
-    sets the state handler and workcell definition
+    sets the state handler and workcell info
 
     ### Descendants
 
@@ -39,7 +39,7 @@ Classes
     `state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler`
     :
 
-    `workcell_definition: ClassVar[madsci.common.types.workcell_types.WorkcellManagerDefinition]`
+    `workcell_info: ClassVar[madsci.common.types.workcell_types.WorkcellInfo]`
     :
 
     ### Methods

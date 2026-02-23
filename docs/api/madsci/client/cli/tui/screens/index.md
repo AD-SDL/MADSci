@@ -52,7 +52,7 @@ Classes
     :   Compose the dashboard layout.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - initial data load and start auto-refresh.
+    :   Handle screen mount - initial data load.
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
@@ -149,7 +149,7 @@ Classes
     :   Compose the nodes screen layout.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the table.
+    :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up table and load data.

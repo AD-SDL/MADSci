@@ -57,8 +57,8 @@ Classes
     `get_state(self) ‑> madsci.common.types.workcell_types.WorkcellState`
     :   Get the current state of the workcell.
 
-    `get_workcell(self) ‑> madsci.common.types.workcell_types.WorkcellManagerDefinition`
-    :   Get the currently running workcell (backward compatibility).
+    `get_workcell(self) ‑> madsci.common.types.workcell_types.WorkcellInfo`
+    :   Get the currently running workcell info.
 
     `get_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Get info on a specific workflow.
