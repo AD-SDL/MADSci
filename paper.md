@@ -98,8 +98,8 @@ An experiment run represents a single execution of an experimental procedure, tr
 The Experiment Manager enables users to define experiments, initiate runs, and link MADSci objects (workflows, resources, datapoints) with those runs.
 It supports experiment designs specifying properties and conditions under which experiments are conducted.
 
-The included `ExperimentApplication` class provides a foundation for defining experimental applications in Python with client libraries and helper methods for common tasks.
-This class runs as a Python script or MADSci node, enabling experiment-specific actions within workflows monitored from the Lab Dashboard.
+The `madsci.experiment_application` provides classes for defining experimental applications in Python, with client libraries and helper methods for common tasks.
+There are helper classes available for writing and running experiment applications as scripts, jupyter notebooks, terminal user interfaces, or even as MADSci nodes themselves, enabling experiment-specific actions within workflows, which can be monitored and managed from the Lab Dashboard.
 This design makes laboratory capabilities accessible to domain scientists while remaining flexible for integration with other Python tools.
 
 ### Data Management
@@ -114,7 +114,6 @@ Many laboratories, particularly in chemistry and biology, require tracking physi
 The Resource Manager provides optional capabilities to define, validate, track, and manage these assets across their lifecycle.
 Built on PostgreSQL, it supports diverse asset types and hierarchical organization with customizable properties and standardized operations.
 It maintains automated histories and locking mechanisms for provenance and reliability.
-Laboratories without such needs can utilize other MADSci components independently.
 
 ### Location Management
 
@@ -125,12 +124,10 @@ This manager integrates with the Resource Manager to enable attachment of resour
 Workflows can reference locations symbolically, with the Workcell Manager resolving these references at runtime based on current attachments and states.
 This abstraction separates physical laboratory layout from workflow logic, improving workflow portability across different laboratory configurations.
 
-Laboratories not requiring location tracking can utilize other MADSci components independently.
-
 ### Event Management and Logging
 
 The Event Manager enables nodes and managers to log JSON events to a central MongoDB-backed system supporting advanced queries.
-The EventClient can also log to terminals or files using Python's standard logging library, facilitating reuse of existing logging code.
+The EventClient also optionally supports OpenTelemetry-based tracing, metrics, and logging, as well as console- and file-based logging via the `structlog` Python package, enabling multiple different logging and observability modalities.
 
 ### Lab Management
 
