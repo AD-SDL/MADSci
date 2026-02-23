@@ -49,6 +49,15 @@ class ExperimentFailedError(Exception):
         self.message = message
 
 
+class ExperimentPauseTimeoutError(Exception):
+    """Raised when an experiment remains paused longer than the configured timeout."""
+
+    def __init__(self, message: str) -> "ExperimentPauseTimeoutError":
+        """Initializes the exception"""
+        super().__init__(message)
+        self.message = message
+
+
 class LocationNotFoundError(Exception):
     """Raised when a location cannot be found by name or ID"""
 

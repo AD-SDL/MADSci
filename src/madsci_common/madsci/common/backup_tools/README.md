@@ -460,7 +460,7 @@ class MongoDBBackupTool(AbstractBackupTool):
 ## Related Documentation
 
 - [Database Migrations](./MIGRATIONS.md) - MADSci database migration tools
-- [Configuration Guide](../Configuration.md) - Environment variable configuration
+- [Configuration Guide](../docs/Configuration.md) - Environment variable configuration
 - [Architecture Overview](./ARCHITECTURE.md) - MADSci system architecture
 
 ## Support

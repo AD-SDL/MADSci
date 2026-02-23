@@ -69,6 +69,10 @@ pdm-install-all:
 pdm-build:
   @pdm build
 
+# Run the full UX verification suite
+verify-ux: checks test
+  @echo "UX verification complete"
+
 # Run automated tests
 test *args:
   @pytest {{args}}
@@ -91,8 +95,8 @@ coverage-xml:
 
 # Build docker images
 dcb: env
-  @docker compose build workcell_manager
-  @docker compose build lab_manager
+  @docker compose --profile build build madsci
+  @docker compose --profile build build madsci_dashboard
 
 # Start the example lab
 up *args: env
@@ -189,17 +193,21 @@ show-version:
 
 # Run the node notebook
 node_e2e_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/node_notebook.ipynb
+  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/node_notebook.ipynb
 
 # Run the experiment notebook
 experiment_e2e_tests:
-  docker compose run --rm workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+  docker compose --profile testing run --rm e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/experiment_notebook.ipynb
 
 backup_e2e_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb
+  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/backup_and_migration.ipynb
 
 # Run the integration tests
 e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
+
+# Start with observability stack
+otel *args: env
+  @docker compose --profile otel up {{args}}
 
 # Run the full pipeline including e2e tests
 all: down pipeupd e2e_tests down

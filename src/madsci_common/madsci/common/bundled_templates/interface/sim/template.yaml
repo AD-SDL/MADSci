@@ -1,0 +1,34 @@
+name: "Simulator Interface"
+version: "1.0.0"
+description: "An interface for connecting to an external device simulator"
+category: "interface"
+tags: ["simulator", "testing", "development"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (must match existing module)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_module"
+
+  - name: simulator_url
+    type: string
+    description: "Default URL for the simulator service"
+    required: false
+    default: "http://localhost:9000"
+
+files:
+  - source: "{{module_name}}_sim_interface.py.j2"
+    destination: "src/{{module_name}}_sim_interface.py"
+
+hooks:
+  post_generate:
+    - command: "ruff format src/{{module_name}}_sim_interface.py"
+      description: "Format generated code"
+      continue_on_error: true

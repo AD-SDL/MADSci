@@ -110,7 +110,7 @@ settings = MyManagerSettings()
 
 ![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
 
-**Configuration options**: See [Configuration.md](../../Configuration.md) and [example_lab/managers/](../../example_lab/managers/) for examples.
+**Configuration options**: See [Configuration.md](../../docs/Configuration.md) and [example_lab/settings.yaml](../../examples/example_lab/settings.yaml) for examples.
 
 ### ULID Best Practices
 
@@ -597,4 +597,4 @@ instrument_fastapi(app, enabled=True)
 instrument_requests(enabled=True)
 ```
 
-See [example_lab/OBSERVABILITY.md](../../example_lab/OBSERVABILITY.md) for the full observability stack setup.
+See [Observability Guide](../../docs/guides/observability.md) for the full observability stack setup.

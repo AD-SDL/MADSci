@@ -8,8 +8,9 @@ from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import (
     MadsciBaseModel,
-    PathLike,
     datetime,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.condition_types import Conditions
 from madsci.common.types.manager_types import (
@@ -20,6 +21,7 @@ from madsci.common.types.manager_types import (
 )
 from madsci.common.utils import new_ulid_str
 from pydantic import AliasChoices, AnyUrl, Field, computed_field, field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class ExperimentManagerSettings(
@@ -32,21 +34,28 @@ class ExperimentManagerSettings(
 ):
     """Settings for the MADSci Experiment Manager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("experiment"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("experiment")
+
     server_url: AnyUrl = Field(
         title="Experiment Manager Server URL",
         description="The URL of the experiment manager server.",
         default=AnyUrl("http://localhost:8002"),
     )
-    manager_definition: PathLike = Field(
-        title="Experiment Manager Definition File",
-        description="Path to the experiment manager definition file to use.",
-        default="experiment.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.EXPERIMENT_MANAGER,
     )
     mongo_db_url: AnyUrl = Field(
         title="MongoDB URL",
         description="The URL of the MongoDB database for the experiment manager.",
         default=AnyUrl("mongodb://localhost:27017"),
         validation_alias=AliasChoices("mongo_db_url", "EXPERIMENT_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_experiments",

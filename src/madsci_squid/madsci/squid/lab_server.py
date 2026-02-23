@@ -14,27 +14,23 @@ from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.event_types import EventType
 from madsci.common.types.lab_types import (
     LabHealth,
-    LabManagerDefinition,
     LabManagerSettings,
 )
 from madsci.common.types.manager_types import ManagerHealth
 
 
-class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
+class LabManager(AbstractManagerBase[LabManagerSettings]):
     """Lab Manager REST Server."""
 
     SETTINGS_CLASS = LabManagerSettings
-    DEFINITION_CLASS = LabManagerDefinition
-    ENABLE_ROOT_DEFINITION_ENDPOINT = False
 
     def __init__(
         self,
         settings: Optional[LabManagerSettings] = None,
-        definition: Optional[LabManagerDefinition] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Lab Manager."""
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Set up additional ownership context for lab
         self._setup_lab_ownership()
@@ -42,7 +38,7 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
     def _setup_lab_ownership(self) -> None:
         """Setup lab-specific ownership information."""
         # Lab Manager also sets the lab_id in global ownership
-        global_ownership_info.lab_id = self.definition.manager_id
+        global_ownership_info.lab_id = self.settings.manager_id
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with proper route order."""

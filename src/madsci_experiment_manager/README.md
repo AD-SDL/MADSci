@@ -16,15 +16,15 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.experiment_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_experiment.manager.yaml](../../example_lab/managers/example_experiment.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_experiment.manager.yaml](../../examples/example_lab/managers/example_experiment.manager.yaml)
 
-**Dependencies**: MongoDB database (see [example_lab](../../example_lab/))
+**Dependencies**: MongoDB database (see [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -37,7 +37,7 @@ python src/madsci_experiment_manager/madsci/experiment_manager/experiment_server
 
 ### Manager Setup
 
-For custom deployments, see [example_experiment.manager.yaml](../../example_lab/managers/example_experiment.manager.yaml) for configuration options.
+For custom deployments, see [example_experiment.manager.yaml](../../examples/example_lab/managers/example_experiment.manager.yaml) for configuration options.
 
 ### Environment Variables
 
@@ -172,7 +172,7 @@ The Experiment Manager coordinates with other MADSci components:
 - **Event Manager**: Log experimental events and milestones
 - **Resource Manager**: Track samples and consumables used
 
-**Example**: See [example_lab/](../../example_lab/) for complete integration examples with all managers working together.
+**Example**: See [example_lab/](../../examples/example_lab/) for complete integration examples with all managers working together.
 
 ## Database Migration Tools
 

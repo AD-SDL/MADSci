@@ -8,6 +8,9 @@ Classes
 `ManagerDefinition(**data: Any)`
 :   Definition for a MADSci Manager.
 
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`ManagerSettings` instead.
+
     Create a new model by parsing and validating input data from keyword arguments.
 
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
@@ -45,6 +48,11 @@ Classes
 
     `name: str`
     :
+
+    ### Methods
+
+    `model_post_init(self, _ManagerDefinition__context: Any) ‑> None`
+    :   Emit deprecation warning on instantiation.
 
 `ManagerHealth(**data: Any)`
 :   Base health status for MADSci Manager services.
@@ -86,23 +94,33 @@ Classes
     `model_config`
     :
 
-`ManagerSettings(**values: Any)`
+    `version: str | None`
+    :
+
+`ManagerSettings(**kwargs: Any)`
 :   Base settings class for MADSci Manager services.
 
     This class provides common configuration fields that all managers need,
-    such as server URL and manager definition file path.
+    such as server URL, manager identity, and operational parameters.
 
     Manager-specific settings classes should inherit from this class and:
     1. Add their specific configuration parameters
     2. Set appropriate env_prefix, env_file, toml_file, etc. parameters
     3. Override default values as needed (especially server_url default port)
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -122,7 +140,22 @@ Classes
 
     ### Class variables
 
-    `manager_definition: str | pathlib.Path`
+    `enable_registry_resolution: bool`
+    :
+
+    `lab_url: pydantic.networks.AnyUrl | None`
+    :
+
+    `manager_description: str | None`
+    :
+
+    `manager_id: str | None`
+    :
+
+    `manager_name: str | None`
+    :
+
+    `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
     `otel_enabled: bool`

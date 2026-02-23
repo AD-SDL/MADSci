@@ -5,7 +5,7 @@ MADSci Location Manager using AbstractManagerBase.
 Functions
 ---------
 
-`create_app(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, definition: madsci.common.types.location_types.LocationManagerDefinition | None = None) ‑> fastapi.applications.FastAPI`
+`create_app(settings: madsci.common.types.location_types.LocationManagerSettings | None = None) ‑> fastapi.applications.FastAPI`
 :   Create and configure the FastAPI application.
 
 `lifespan(app: fastapi.applications.FastAPI) ‑> AsyncGenerator[None, None]`
@@ -14,7 +14,7 @@ Functions
 Classes
 -------
 
-`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, definition: madsci.common.types.location_types.LocationManagerDefinition | None = None, **kwargs: Any)`
+`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, **kwargs: Any)`
 :   MADSci Location Manager using the new AbstractManagerBase pattern.
 
     This class is decorated with @ownership_class() which automatically
@@ -31,9 +31,6 @@ Classes
     * classy_fastapi.routable.Routable
 
     ### Class variables
-
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition for a LocationManager.
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Settings for the LocationManager.

@@ -4,7 +4,9 @@
     "python@3.10",
     "uv@latest",
     "pdm@latest",
-    "just@latest"
+    "just@latest",
+    "yarn@latest",
+    "pre-commit@latest"
   ],
   "env": {
     "PDM_USE_UV": "True"

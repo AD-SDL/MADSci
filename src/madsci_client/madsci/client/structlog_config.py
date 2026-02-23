@@ -5,6 +5,7 @@ to ensure multiple EventClient instances can have isolated configurations.
 """
 
 import logging
+import re
 from typing import Any, Literal
 
 import structlog
@@ -45,7 +46,23 @@ def add_event_client_hierarchy(
     return event_dict
 
 
+class AnsiStrippingFormatter(logging.Formatter):
+    """Logging formatter that strips ANSI escape codes for clean file output.
+
+    Use this on file handlers to prevent color codes from polluting log files
+    when structlog's ConsoleRenderer is used with colors=True.
+    """
+
+    _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+    def format(self, record: logging.LogRecord) -> str:
+        """Format the log record, stripping any ANSI escape codes."""
+        formatted = super().format(record)
+        return self._ANSI_RE.sub("", formatted)
+
+
 __all__ = [
+    "AnsiStrippingFormatter",
     "add_event_client_hierarchy",
     "add_otel_context",
     "build_processors",

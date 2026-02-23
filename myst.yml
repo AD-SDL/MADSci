@@ -30,27 +30,75 @@ project:
     - 'AGENTS.md'
     - '**/AGENTS.md'
     - 'skills/**'
+    - '.scratch/**'
 
   toc:
     - file: README.md
-    - file: Configuration.md
+    - file: docs/CHANGELOG.md
+    - file: docs/Configuration.md
+
     - title: Enabled By MADSci
       children:
         - pattern: docs/madsci_powered/*.md
 
+    - title: Tutorials
+      children:
+        - file: docs/tutorials/01-exploration.md
+        - file: docs/tutorials/02-first-node.md
+        - file: docs/tutorials/03-first-experiment.md
+        - file: docs/tutorials/04-first-workcell.md
+        - file: docs/tutorials/05-full-lab.md
+
     - title: Guides
       children:
+        - file: docs/guides/cli_reference.md
+        - file: docs/guides/template_catalog.md
         - file: docs/guides/logging.md
+        - file: docs/guides/migration.md
+        - file: docs/guides/migration_from_definitions.md
+        - file: docs/guides/node_development.md
+        - file: docs/guides/workflow_development.md
+        - file: docs/guides/observability.md
+        - file: docs/guides/troubleshooting.md
+
+    - title: Equipment Integrator Guide
+      children:
+        - file: docs/guides/integrator/README.md
+        - file: docs/guides/integrator/01-understanding-modules.md
+        - file: docs/guides/integrator/02-creating-a-module.md
+        - file: docs/guides/integrator/03-developing-interfaces.md
+        - file: docs/guides/integrator/04-fake-interfaces.md
+        - file: docs/guides/integrator/05-wiring-the-node.md
+        - file: docs/guides/integrator/06-testing-strategies.md
+        - file: docs/guides/integrator/07-debugging.md
+        - file: docs/guides/integrator/08-packaging-deployment.md
+        - file: docs/guides/integrator/09-publishing.md
+
+    - title: Lab Operator Guide
+      children:
+        - file: docs/guides/operator/README.md
+        - file: docs/guides/operator/01-daily-operations.md
+        - file: docs/guides/operator/02-monitoring.md
+        - file: docs/guides/operator/03-backup-recovery.md
+        - file: docs/guides/operator/04-troubleshooting.md
+        - file: docs/guides/operator/05-updates-maintenance.md
+
+    - title: Experimentalist Guide
+      children:
+        - file: docs/guides/experimentalist/README.md
+        - file: docs/guides/experimentalist/01-running-experiments.md
+        - file: docs/guides/experimentalist/02-working-with-data.md
+        - file: docs/guides/experimentalist/03-managing-resources.md
+        - file: docs/guides/experimentalist/04-experiment-design.md
+        - file: docs/guides/experimentalist/05-jupyter-notebooks.md
 
     - title: Example Lab
       children:
-        - file: example_lab/README.md
-        - file: example_lab/NODE_DEVELOPMENT_GUIDE.md
-        - file: example_lab/WORKFLOW_GUIDE.md
-        - file: example_lab/OBSERVABILITY.md
-        - file: example_lab/TROUBLESHOOTING.md
-        # Automatically include all notebooks
-        - pattern: example_lab/notebooks/*.ipynb
+        - file: examples/example_lab/README.md
+
+    - title: Example Notebooks
+      children:
+        - pattern: examples/notebooks/*.ipynb
 
     - title: Core Packages
       children:
@@ -91,6 +139,18 @@ project:
           children:
             - pattern: docs/api/madsci/client/*.md
             - pattern: docs/api/madsci/client/node/*.md
+            - file: docs/api/madsci/client/cli/index.md
+              children:
+                - pattern: docs/api/madsci/client/cli/commands/*.md
+                - file: docs/api/madsci/client/cli/tui/index.md
+                  children:
+                    - pattern: docs/api/madsci/client/cli/tui/*.md
+                    - pattern: docs/api/madsci/client/cli/tui/screens/*.md
+                    - pattern: docs/api/madsci/client/cli/tui/styles/*.md
+                    - pattern: docs/api/madsci/client/cli/tui/widgets/*.md
+                - file: docs/api/madsci/client/cli/utils/index.md
+                  children:
+                    - pattern: docs/api/madsci/client/cli/utils/*.md
 
         # Common utilities and types
         - file: docs/api/madsci/common/index.md
@@ -108,7 +168,7 @@ project:
                 - pattern: docs/api/madsci/node_module/*.md
             - file: docs/api/madsci/experiment_application/index.md
               children:
-                - pattern: docs/api/madsci/experiment_application/*.md
+                - pattern: docs/api/madsci/experiment_application/**/*.md
 
         # Manager Services
         - title: Manager Services

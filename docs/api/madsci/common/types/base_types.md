@@ -2,6 +2,63 @@ Module madsci.common.types.base_types
 =====================================
 Base types for MADSci.
 
+Variables
+---------
+
+`REDACTED_PLACEHOLDER`
+:   Placeholder string used when redacting secret field values.
+
+Functions
+---------
+
+`prefixed_alias_generator(prefix: str) ‑> pydantic.aliases.AliasGenerator`
+:   Create an AliasGenerator that adds prefixed serialization aliases.
+
+    This enables ``model_dump(by_alias=True)`` to produce prefixed keys
+    (e.g., ``event_server_url``) while code still uses unprefixed field
+    names (e.g., ``server_url``).
+
+    Note:
+        Only ``serialization_alias`` is set here.  Setting ``validation_alias``
+        would override pydantic-settings' ``env_prefix``, causing ``.env`` files
+        to lose their per-manager prefixes.  Instead, use
+        :func:`prefixed_model_validator` on the settings class to accept
+        prefixed keys from YAML or keyword arguments.
+
+    Args:
+        prefix: The prefix to add (e.g., "event"). Trailing underscores are stripped.
+
+    Returns:
+        An AliasGenerator that serializes with the prefixed name.
+
+`prefixed_model_validator(prefix: str) ‑> Any`
+:   Create a ``model_validator(mode='before')`` that accepts prefixed keys.
+
+    When a shared ``settings.yaml`` uses prefixed keys (e.g.,
+    ``event_server_url``), this validator strips the prefix so that the
+    model can validate them against unprefixed field names (``server_url``).
+
+    The validator preserves precedence: if both ``server_url`` and
+    ``event_server_url`` are present, the unprefixed value wins (since env
+    vars, which have higher priority, are resolved to unprefixed names by
+    pydantic-settings' ``env_prefix``).
+
+    Usage::
+
+        class EventManagerSettings(ManagerSettings, env_prefix="EVENT_", ...):
+            model_config = SettingsConfigDict(
+                alias_generator=prefixed_alias_generator("event"),
+                populate_by_name=True,
+            )
+            _accept_prefixed_keys = prefixed_model_validator("event")
+
+    Args:
+        prefix: The prefix to strip (e.g., "event"). Trailing underscores
+            are stripped; matching is case-insensitive.
+
+    Returns:
+        A decorated classmethod suitable for use as a Pydantic model validator.
+
 Classes
 -------
 
@@ -56,6 +113,15 @@ Classes
     ### Descendants
 
     * madsci.common.backup_tools.base_backup.BackupInfo
+    * madsci.common.testing.types.E2ETestCleanup
+    * madsci.common.testing.types.E2ETestDefinition
+    * madsci.common.testing.types.E2ETestRequirements
+    * madsci.common.testing.types.E2ETestResult
+    * madsci.common.testing.types.E2ETestStep
+    * madsci.common.testing.types.StepResult
+    * madsci.common.testing.types.ValidationConfig
+    * madsci.common.testing.types.ValidationResult
+    * madsci.common.testing.types.WaitConfig
     * madsci.common.types.action_types.ActionDatapoints
     * madsci.common.types.action_types.ActionDefinition
     * madsci.common.types.action_types.ActionFiles
@@ -91,6 +157,9 @@ Classes
     * madsci.common.types.location_types.TransferTemplateOverrides
     * madsci.common.types.manager_types.ManagerDefinition
     * madsci.common.types.manager_types.ManagerHealth
+    * madsci.common.types.migration_types.FileMigration
+    * madsci.common.types.migration_types.MigrationAction
+    * madsci.common.types.migration_types.MigrationPlan
     * madsci.common.types.node_types.Node
     * madsci.common.types.node_types.NodeClientCapabilities
     * madsci.common.types.node_types.NodeDefinition
@@ -98,6 +167,10 @@ Classes
     * madsci.common.types.node_types.NodeSetConfigResponse
     * madsci.common.types.node_types.NodeStatus
     * madsci.common.types.parameter_types.WorkflowParameter
+    * madsci.common.types.registry_types.LocalRegistry
+    * madsci.common.types.registry_types.RegistryEntry
+    * madsci.common.types.registry_types.RegistryLock
+    * madsci.common.types.registry_types.RegistryResolveResult
     * madsci.common.types.resource_types.custom_types.CustomResourceAttributeDefinition
     * madsci.common.types.resource_types.custom_types.ResourceTypeDefinition
     * madsci.common.types.resource_types.definitions.TemplateDefinition
@@ -105,6 +178,13 @@ Classes
     * madsci.common.types.resource_types.server_types.ResourceRequestBase
     * madsci.common.types.step_types.StepDefinition
     * madsci.common.types.step_types.StepParameters
+    * madsci.common.types.template_types.GeneratedProject
+    * madsci.common.types.template_types.ParameterChoice
+    * madsci.common.types.template_types.TemplateFile
+    * madsci.common.types.template_types.TemplateHook
+    * madsci.common.types.template_types.TemplateInfo
+    * madsci.common.types.template_types.TemplateManifest
+    * madsci.common.types.template_types.TemplateParameter
     * madsci.common.types.workcell_types.WorkcellManagerDefinition
     * madsci.common.types.workcell_types.WorkcellState
     * madsci.common.types.workcell_types.WorkcellStatus
@@ -126,8 +206,31 @@ Classes
 
     ### Methods
 
-    `model_dump_yaml(self) ‑> str`
+    `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Dump model data with secret fields redacted by default.
+
+        This method provides a safe way to export model data without
+        accidentally exposing sensitive values. Secret fields are identified
+        by:
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+        - Fields with ``json_schema_extra={"secret": True}`` metadata
+
+        Args:
+            include_secrets: If True, include actual secret values.
+                Defaults to False (secrets are replaced with
+                ``***REDACTED***``).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump(mode="json", ...)``.
+
+        Returns:
+            dict: Model data with secrets redacted unless
+                ``include_secrets=True``.
+
+    `model_dump_yaml(self, include_secrets: bool = True) ‑> str`
     :   Convert the model to a YAML string.
+
+        Args:
+            include_secrets: If False, redact secret field values.
 
         Returns:
             YAML string representation of the model
@@ -135,20 +238,33 @@ Classes
     `to_mongo(self) ‑> dict[str, typing.Any]`
     :   Convert the model to a MongoDB-compatible dictionary.
 
-    `to_yaml(self, path: str | pathlib.Path, **kwargs: Any) ‑> None`
-    :   Allows all derived data models to be exported into yaml.
+    `to_yaml(self, path: str | pathlib.Path, include_secrets: bool = True, **kwargs: Any) ‑> None`
+    :   Export the model to a YAML file.
 
-        kwargs are passed to model_dump
+        Args:
+            path: File path to write to.
+            include_secrets: If False, redact secret field values.
+                Defaults to True for backwards compatibility with
+                internal serialization (e.g., definition file round-trips).
+            **kwargs: Additional keyword arguments forwarded to
+                ``model_dump``.
 
-`MadsciBaseSettings(**values: Any)`
+`MadsciBaseSettings(**kwargs: Any)`
 :   Base class for all MADSci settings.
 
-    Create a new model by parsing and validating input data from keyword arguments.
+    Initialize settings, optionally with a settings directory.
 
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
+    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
+    configuration file paths are resolved via walk-up discovery from that
+    directory instead of the current working directory. Each filename walks
+    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
 
-    `self` is explicitly positional-only to allow `self` as a field name.
+    Without either, existing CWD-relative behavior is preserved exactly.
+
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -162,9 +278,12 @@ Classes
     * madsci.common.types.context_types.MadsciContext
     * madsci.common.types.datapoint_types.ObjectStorageSettings
     * madsci.common.types.docker_types.DockerComposeSettings
+    * madsci.common.types.interface_types.InterfaceSettings
     * madsci.common.types.manager_types.ManagerSettings
+    * madsci.common.types.module_types.ModuleSettings
     * madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings
     * madsci.common.types.node_types.NodeConfig
+    * madsci.experiment_application.experiment_base.ExperimentBaseConfig
     * madsci.resource_manager.migration_tool.DatabaseMigrationSettings
 
     ### Class variables
@@ -176,6 +295,26 @@ Classes
 
     `settings_customise_sources(settings_cls: type[pydantic_settings.main.BaseSettings], init_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, env_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, dotenv_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, file_secret_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource) ‑> tuple[pydantic_settings.sources.base.PydanticBaseSettingsSource, ...]`
     :   Sets the order of settings sources for the settings model.
+
+        When a settings directory is active (via ``_settings_dir`` or
+        ``MADSCI_SETTINGS_DIR``), file paths are resolved with walk-up
+        discovery. Otherwise, default CWD-relative behavior is used.
+
+    ### Methods
+
+    `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Dump settings data with secret fields redacted by default.
+
+        Secret fields are identified by ``json_schema_extra={"secret": True}``
+        or ``SecretStr`` / ``SecretBytes`` type annotations. Nested models
+        are recursively redacted.
+
+        Args:
+            include_secrets: If True, include actual secret values.
+            **kwargs: Additional keyword arguments forwarded to ``model_dump``.
+
+        Returns:
+            dict: Settings with secrets redacted unless ``include_secrets=True``.
 
 `MadsciDeveloperSettings(**values: Any)`
 :   Developer-focused settings for MADSci behavior.

@@ -11,7 +11,6 @@ from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
     Experiment,
-    ExperimentManagerDefinition,
     ExperimentManagerHealth,
     ExperimentManagerSettings,
     ExperimentRegistration,
@@ -22,18 +21,14 @@ from pymongo import MongoClient
 from pymongo.database import Database
 
 
-class ExperimentManager(
-    AbstractManagerBase[ExperimentManagerSettings, ExperimentManagerDefinition]
-):
+class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
     """Experiment Manager REST Server."""
 
     SETTINGS_CLASS = ExperimentManagerSettings
-    DEFINITION_CLASS = ExperimentManagerDefinition
 
     def __init__(
         self,
         settings: Optional[ExperimentManagerSettings] = None,
-        definition: Optional[ExperimentManagerDefinition] = None,
         db_client: Optional[MongoClient] = None,
         db_connection: Optional[Database] = None,
         **kwargs: Any,
@@ -43,7 +38,7 @@ class ExperimentManager(
         self._db_client = db_client
         self._db_connection = db_connection
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Initialize database connection
         self._setup_database()

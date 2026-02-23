@@ -30,7 +30,7 @@ Functions
 Classes
 -------
 
-`AbstractNode(node_definition: madsci.common.types.node_types.NodeDefinition | None = None, node_config: madsci.common.types.node_types.NodeConfig | None = None)`
+`AbstractNode(node_config: madsci.common.types.node_types.NodeConfig | None = None)`
 :   Base Node implementation, protocol agnostic, all node class definitions should inherit from or be based on this.
 
     Note that this class is abstract: it is intended to be inherited from, not used directly.
@@ -67,9 +67,6 @@ Classes
 
     `module_version: ClassVar[str]`
     :   The version of the module. Should match the version in the node definition.
-
-    `node_definition: ClassVar[madsci.common.types.node_types.NodeDefinition]`
-    :   The node definition.
 
     `node_state: ClassVar[dict[str, Any]]`
     :   The state of the node.

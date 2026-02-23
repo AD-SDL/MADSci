@@ -24,7 +24,7 @@ class TestEventClientContext:
 
     def test_context_stores_client(self):
         """Test that EventClientContext stores an EventClient."""
-        client = EventClient(name="test")
+        client = EventClient(name="test", event_server_url=None)
         ctx = EventClientContext(client=client)
 
         assert ctx.client is client
@@ -168,7 +168,7 @@ class TestEventClientContextManager:
 
     def test_context_with_explicit_client(self):
         """Test that explicit client is used when provided."""
-        explicit_client = EventClient(name="explicit")
+        explicit_client = EventClient(name="explicit", event_server_url=None)
 
         with event_client_context(client=explicit_client) as client:
             assert client is explicit_client
@@ -341,7 +341,7 @@ class TestWithEventClientDecorator:
     def test_decorator_does_not_override_explicit_event_client(self):
         """Test that explicit event_client parameter is not overridden."""
         _event_client_context.set(None)
-        explicit_client = EventClient(name="explicit")
+        explicit_client = EventClient(name="explicit", event_server_url=None)
 
         @with_event_client(name="test")
         def my_function(event_client: EventClient = None):
@@ -530,7 +530,7 @@ class TestEventClientClassDecorator:
     def test_class_decorator_preserves_existing_event_client_property(self):
         """Test that existing event_client property is not overwritten."""
         _event_client_context.set(None)
-        custom_client = EventClient(name="custom")
+        custom_client = EventClient(name="custom", event_server_url=None)
 
         @event_client_class()
         class MyComponent:

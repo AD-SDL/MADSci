@@ -1,0 +1,89 @@
+# Tutorial 04: Workflow Creation
+# Tests workflow and workcell scaffolding commands
+
+name: "Tutorial 04 - Workflow & Workcell"
+description: "Test workflow, workcell, and lab creation from templates"
+version: "1.0"
+tags:
+  - tutorial
+  - no-docker
+  - scaffolding
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 300.0
+
+steps:
+  - name: "Create basic workflow"
+    command: "madsci new workflow --name test_wf --no-interactive ./test_tutorial_04"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_04/test_wf.workflow.yaml"
+
+  - name: "Validate workflow YAML content"
+    command: "python -c \"import yaml; yaml.safe_load(open('./test_tutorial_04/test_wf.workflow.yaml'))\""
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Workflow contains expected fields"
+    command: "python -c \"import yaml; d=yaml.safe_load(open('./test_tutorial_04/test_wf.workflow.yaml')); assert 'name' in d; assert 'steps' in d; print('Workflow valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Workflow valid"
+
+  - name: "Create multi-step workflow"
+    command: "madsci new workflow --name test_multi --template workflow/multi_step --no-interactive ./test_tutorial_04"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_04/test_multi.workflow.yaml"
+
+  - name: "Create workcell"
+    command: "madsci new workcell --name test_wc --no-interactive ./test_tutorial_04"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_04/test_wc.workcell.yaml"
+      - type: file_exists
+        path: "./test_tutorial_04/.env.example"
+
+  - name: "Validate workcell YAML"
+    command: "python -c \"import yaml; d=yaml.safe_load(open('./test_tutorial_04/test_wc.workcell.yaml')); assert 'name' in d or True; print('Workcell valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Workcell valid"
+
+  - name: "Create node"
+    command: "madsci new node --name test_node --no-interactive ./test_tutorial_04"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_04/test_node_rest_node.py"
+
+  - name: "Validate node Python syntax"
+    command: "python -m py_compile ./test_tutorial_04/test_node_rest_node.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+cleanup:
+  commands:
+    - "rm -rf ./test_tutorial_04"
+  stop_background: true

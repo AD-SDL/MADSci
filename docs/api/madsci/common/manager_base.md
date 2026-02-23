@@ -24,31 +24,27 @@ Functions
 Classes
 -------
 
-`AbstractManagerBase(settings: ~SettingsT | None = None, definition: ~DefinitionT | None = None, **kwargs: Any)`
+`AbstractManagerBase(settings: ~SettingsT | None = None, **kwargs: Any)`
 :   Abstract base class for MADSci manager services using classy-fastapi.
 
     This class provides common functionality for all managers including:
-    - Settings and definition management
+    - Settings management
     - Logging setup
     - FastAPI app configuration
-    - Standard endpoints (info, definition)
+    - Standard endpoints (health, settings)
     - CORS middleware
     - Server lifecycle management
 
     Type Parameters:
         SettingsT: The manager's settings class (must inherit from MadsciBaseSettings)
-        DefinitionT: The manager's definition class (must inherit from MadsciBaseModel)
 
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
-        DEFINITION_CLASS: The definition class for this manager (set by subclasses)
-        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
 
     Initialize the manager base.
 
     Args:
         settings: Manager settings instance
-        definition: Manager definition instance
         **kwargs: Additional arguments passed to subclasses
 
     ### Ancestors (in MRO)
@@ -69,19 +65,10 @@ Classes
 
     ### Class variables
 
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
-
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :
 
     ### Instance variables
-
-    `definition: ~DefinitionT`
-    :   Get the manager definition.
 
     `logger: madsci.client.event_client.EventClient`
     :   Get the logger instance.
@@ -100,9 +87,6 @@ Classes
         Args:
             app: The FastAPI application instance
 
-    `create_default_definition(self) ‑> ~DefinitionT`
-    :   Create a default definition instance for this manager.
-
     `create_default_settings(self) ‑> ~SettingsT`
     :   Create default settings instance for this manager.
 
@@ -115,25 +99,6 @@ Classes
         Returns:
             FastAPI: The configured FastAPI application
 
-    `get_definition_alt(self) ‑> ~DefinitionT`
-    :   Return the manager definition at the /definition endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
-
-    `get_definition_path(self) ‑> pathlib.Path`
-    :   Get the path to the definition file.
-
-    `get_definition_root(self) ‑> ~DefinitionT`
-    :   Return the manager definition at the root endpoint.
-
-        This endpoint is automatically inherited by all manager subclasses.
-
-        Returns:
-            DefinitionT: The manager definition
-
     `get_health(self) ‑> madsci.common.types.manager_types.ManagerHealth`
     :   Get the health status of this manager.
 
@@ -143,6 +108,46 @@ Classes
 
         Returns:
             ManagerHealth: The current health status
+
+    `get_settings_endpoint(self, include_defaults: bool = True, include_schema: bool = False) ‑> dict[str, typing.Any]`
+    :   Export current settings for backup/replication.
+
+        This endpoint allows exporting the current manager settings in a format
+        suitable for backup, documentation, or replicating the configuration
+        to another environment. Secrets are always redacted from the API
+        endpoint for safety.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+
+        Returns:
+            dict: Settings as a dictionary with sensitive fields redacted.
+
+    `get_settings_export(self, include_defaults: bool = True, include_schema: bool = False, include_secrets: bool = False) ‑> dict[str, typing.Any]`
+    :   Export current settings for backup/replication.
+
+        This method allows programmatic access to the current manager settings
+        in a format suitable for backup, documentation, or replicating the
+        configuration to another environment.
+
+        Sensitive fields are identified via field-level metadata:
+        - Fields with ``json_schema_extra={"secret": True}``
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+            include_secrets: If True, include actual secret values.
+                            Defaults to False (secrets are redacted).
+
+        Returns:
+            dict: Settings as a dictionary with the following structure:
+                - "settings": The settings values (secrets redacted by default)
+                - "schema" (optional): JSON schema if include_schema is True
+                - "schema_title" (optional): Settings class name if include_schema is True
 
     `health_endpoint(self) ‑> madsci.common.types.manager_types.ManagerHealth`
     :   Health check endpoint for the manager.
@@ -163,8 +168,11 @@ Classes
         Args:
             **kwargs: Additional arguments from __init__
 
-    `load_or_create_definition(self) ‑> ~DefinitionT`
-    :   Load definition from file or create default.
+    `release_identity(self) ‑> None`
+    :   Release the registry lock for this manager's identity.
+
+        Should be called during shutdown to allow other instances to
+        acquire the same name.
 
     `run_server(self, host: str | None = None, port: int | None = None, **uvicorn_kwargs: Any) ‑> None`
     :   Run the server using uvicorn.

@@ -22,7 +22,11 @@ from threading import Lock, Thread
 from typing import Any, Optional, Union
 
 import requests
-from madsci.client.structlog_config import create_instance_logger, get_log_level_value
+from madsci.client.structlog_config import (
+    AnsiStrippingFormatter,
+    create_instance_logger,
+    get_log_level_value,
+)
 from madsci.common.context import get_current_madsci_context
 from madsci.common.otel import (
     OtelBootstrapConfig,
@@ -138,6 +142,7 @@ class EventClient:
         for handler in self.logger.handlers:
             self.logger.removeHandler(handler)
         file_handler = self._create_file_handler()
+        file_handler.setFormatter(AnsiStrippingFormatter())
         self.logger.addHandler(file_handler)
         # Add a simple StreamHandler for console output - structlog handles formatting
         console_handler = logging.StreamHandler()

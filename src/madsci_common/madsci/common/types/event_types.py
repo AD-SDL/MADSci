@@ -12,7 +12,12 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Union, get_args
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.client_types import MadsciClientConfig
 from madsci.common.types.manager_types import (
     ManagerDefinition,
@@ -68,21 +73,28 @@ class EventManagerSettings(
 ):
     """Handles settings and configuration for the Event Manager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("event"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("event")
+
     server_url: AnyUrl = Field(
         title="Event Server URL",
         description="The URL of the Event Manager server.",
         default=AnyUrl("http://localhost:8001"),
     )
-    manager_definition: PathLike = Field(
-        title="Event Manager Definition File",
-        description="Path to the event manager definition file to use.",
-        default=Path("event.manager.yaml"),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.EVENT_MANAGER,
     )
     mongo_db_url: AnyUrl = Field(
         default=AnyUrl("mongodb://localhost:27017"),
         title="MongoDB URL",
         description="The URL of the MongoDB database used by the Event Manager.",
         validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_events",
@@ -646,11 +658,13 @@ class EmailAlertsConfig(MadsciBaseModel):
         default=None,
         title="SMTP Username",
         description="The username for authenticating with the SMTP server.",
+        json_schema_extra={"secret": True},
     )
     smtp_password: Optional[str] = Field(
         default=None,
         title="SMTP Password",
         description="The password for authenticating with the SMTP server.",
+        json_schema_extra={"secret": True},
     )
     use_tls: bool = Field(
         default=True,

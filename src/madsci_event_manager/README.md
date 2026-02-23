@@ -18,15 +18,15 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.event_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../example_lab/managers/example_event.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../examples/example_lab/managers/example_event.manager.yaml)
 
-**Dependencies**: MongoDB database (see the [example_lab](../../example_lab/))
+**Dependencies**: MongoDB database (see the [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -45,7 +45,7 @@ For custom deployments, create an Event Manager definition:
 madsci manager add -t event_manager
 ```
 
-See [example_event.manager.yaml](../../example_lab/managers/example_event.manager.yaml) for configuration options.
+See [example_event.manager.yaml](../../examples/example_lab/managers/example_event.manager.yaml) for configuration options.
 
 ### Client
 
@@ -136,7 +136,7 @@ client = EventClient(name="traced_component", config=config)
 client.info("Traced event")  # Correlated with distributed traces
 ```
 
-See [OBSERVABILITY.md](../../example_lab/OBSERVABILITY.md) for the full observability stack setup.
+See the [Observability Guide](../../docs/guides/observability.md) for the full observability stack setup.
 
 ### Alerts
 
@@ -306,7 +306,7 @@ The Event Manager requires MongoDB for event storage. For local development:
    ```
 
 2. **Using the example lab**:
-   The [example_lab](../../example_lab/) includes a pre-configured MongoDB instance.
+   The [example_lab](../../examples/example_lab/) includes a pre-configured MongoDB instance.
 
 3. **Configuration**:
    Set the database URL in your environment or manager configuration:

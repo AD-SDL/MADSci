@@ -140,7 +140,7 @@ Classes
     `model_config`
     :
 
-`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, definition: madsci.common.types.event_types.EventManagerDefinition | None = None, db_connection: pymongo.synchronous.database.Database | None = None, **kwargs: Any)`
+`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, db_connection: pymongo.synchronous.database.Database | None = None, **kwargs: Any)`
 :   Event Manager REST Server.
 
     Initialize the Event Manager.
@@ -153,12 +153,6 @@ Classes
     * classy_fastapi.routable.Routable
 
     ### Class variables
-
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition for a Squid Event Manager
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Handles settings and configuration for the Event Manager.

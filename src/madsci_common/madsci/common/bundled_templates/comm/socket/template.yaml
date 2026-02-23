@@ -1,0 +1,40 @@
+name: "Socket Communication"
+version: "1.0.0"
+description: "A TCP/UDP socket communication interface"
+category: "comm"
+tags: ["socket", "tcp", "udp", "communication"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: interface_name
+    type: string
+    description: "Interface name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_socket"
+
+  - name: interface_description
+    type: string
+    description: "Human-readable description of the interface"
+    required: true
+    default: "A socket communication interface"
+
+files:
+  - source: "{{interface_name}}_interface.py.j2"
+    destination: "{{interface_name}}_interface.py"
+  - source: "{{interface_name}}_fake_interface.py.j2"
+    destination: "{{interface_name}}_fake_interface.py"
+  - source: "test_{{interface_name}}.py.j2"
+    destination: "test_{{interface_name}}.py"
+  - source: "README.md.j2"
+    destination: "README.md"
+
+hooks:
+  post_generate:
+    - command: "ruff format {{interface_name}}_interface.py {{interface_name}}_fake_interface.py test_{{interface_name}}.py"
+      description: "Format generated code"
+      continue_on_error: true

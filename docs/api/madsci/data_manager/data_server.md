@@ -5,7 +5,7 @@ Data Manager implementation using the new AbstractManagerBase class.
 Classes
 -------
 
-`DataManager(settings: madsci.common.types.datapoint_types.DataManagerSettings | None = None, definition: madsci.common.types.datapoint_types.DataManagerDefinition | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, **kwargs: Any)`
+`DataManager(settings: madsci.common.types.datapoint_types.DataManagerSettings | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, **kwargs: Any)`
 :   Data Manager REST Server.
 
     Initialize the Data Manager.
@@ -18,18 +18,6 @@ Classes
     * classy_fastapi.routable.Routable
 
     ### Class variables
-
-    `DEFINITION_CLASS: type[madsci.common.types.base_types.MadsciBaseModel] | None`
-    :   Definition for a Squid Data Manager.
-
-        Attributes:
-            manager_type: The type of the event manager.
-            host: The hostname or IP address of the Data Manager server.
-            port: The port number of the Data Manager server.
-            db_url: The URL of the database used by the Data Manager.
-
-    `ENABLE_ROOT_DEFINITION_ENDPOINT: bool`
-    :
 
     `SETTINGS_CLASS: type[madsci.common.types.base_types.MadsciBaseSettings] | None`
     :   Settings for the MADSci Data Manager.

@@ -1,7 +1,6 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
 import json
-import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
@@ -25,7 +24,7 @@ from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerHealth,
     WorkcellManagerSettings,
     WorkcellState,
@@ -51,9 +50,7 @@ from ulid import ULID
 LOOKUP_VAL_BODY = Body(...)
 
 
-class WorkcellManager(
-    AbstractManagerBase[WorkcellManagerSettings, WorkcellManagerDefinition]
-):
+class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
     """
     MADSci Workcell Manager using the new AbstractManagerBase pattern.
 
@@ -62,7 +59,6 @@ class WorkcellManager(
     """
 
     SETTINGS_CLASS = WorkcellManagerSettings
-    DEFINITION_CLASS = WorkcellManagerDefinition
 
     # Declare required clients for the mixin
     REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "data", "location"]
@@ -70,7 +66,6 @@ class WorkcellManager(
     def __init__(
         self,
         settings: Optional[WorkcellManagerSettings] = None,
-        definition: Optional[WorkcellManagerDefinition] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
         start_engine: bool = True,
@@ -81,12 +76,7 @@ class WorkcellManager(
         self.mongo_connection = mongo_connection
         self.start_engine = start_engine
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
-
-    def create_default_definition(self) -> WorkcellManagerDefinition:
-        """Create a default definition instance for this manager."""
-        name = str(self.get_definition_path().name).split(".")[0]
-        return WorkcellManagerDefinition(name=name)
+        super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -97,6 +87,9 @@ class WorkcellManager(
         """
         super().initialize(**kwargs)
 
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
+
         # Skip version validation if external mongo_connection was provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
         if self.mongo_connection is not None:
@@ -104,19 +97,20 @@ class WorkcellManager(
             self.logger.info(
                 "External mongo_connection provided, skipping MongoDB version validation",
                 event_type=EventType.MANAGER_START,
-                manager_name=self.definition.name,
-                manager_id=self.definition.manager_id,
+                manager_name=manager_name,
+                manager_id=manager_id,
                 manager_type="workcell",
                 mongo_external_connection=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
-            global_ownership_info.workcell_id = self.definition.manager_id
-            global_ownership_info.manager_id = self.definition.manager_id
+            global_ownership_info.workcell_id = manager_id
+            global_ownership_info.manager_id = manager_id
 
             # Initialize state handler
             self.state_handler = WorkcellStateHandler(
-                self.definition,
                 workcell_settings=self.settings,
+                workcell_id=manager_id,
+                nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
             )
@@ -130,8 +124,8 @@ class WorkcellManager(
         self.logger.info(
             "Validating MongoDB schema version",
             event_type=EventType.MANAGER_START,
-            manager_name=self.definition.name,
-            manager_id=self.definition.manager_id,
+            manager_name=manager_name,
+            manager_id=manager_id,
             manager_type="workcell",
             mongo_db=str(self.settings.mongo_db_url),
             database_name=self.settings.database_name,
@@ -152,8 +146,8 @@ class WorkcellManager(
             self.logger.info(
                 "MongoDB version validation completed successfully",
                 event_type=EventType.MANAGER_START,
-                manager_name=self.definition.name,
-                manager_id=self.definition.manager_id,
+                manager_name=manager_name,
+                manager_id=manager_id,
                 manager_type="workcell",
                 database_name=self.settings.database_name,
             )
@@ -161,8 +155,8 @@ class WorkcellManager(
             self.logger.error(
                 "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
                 event_type=EventType.MANAGER_ERROR,
-                manager_name=self.definition.name,
-                manager_id=self.definition.manager_id,
+                manager_name=manager_name,
+                manager_id=manager_id,
                 manager_type="workcell",
                 database_name=self.settings.database_name,
                 exc_info=True,
@@ -170,13 +164,14 @@ class WorkcellManager(
             raise
 
         # Set up global ownership
-        global_ownership_info.workcell_id = self.definition.manager_id
-        global_ownership_info.manager_id = self.definition.manager_id
+        global_ownership_info.workcell_id = manager_id
+        global_ownership_info.manager_id = manager_id
 
         # Initialize state handler
         self.state_handler = WorkcellStateHandler(
-            self.definition,
             workcell_settings=self.settings,
+            workcell_id=manager_id,
+            nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
         )
@@ -190,20 +185,22 @@ class WorkcellManager(
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
 
         # Set up lifespan context manager
         @asynccontextmanager
         async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             """Start the REST server and initialize the state handler and engine"""
             _ = app  # Mark app as used to avoid lint warning
-            global_ownership_info.workcell_id = self.definition.manager_id
-            global_ownership_info.manager_id = self.definition.manager_id
+            global_ownership_info.workcell_id = manager_id
+            global_ownership_info.manager_id = manager_id
 
             # LOG WORKCELL START EVENT
             self.logger.log(
                 Event(
                     event_type=EventType.WORKCELL_START,
-                    event_data=self.definition.model_dump(mode="json"),
+                    event_data=self.settings.model_dump_safe(),
                 )
             )
 
@@ -220,15 +217,14 @@ class WorkcellManager(
                 self.logger.log(
                     Event(
                         event_type=EventType.WORKCELL_STOP,
-                        event_data=self.definition.model_dump(mode="json"),
+                        event_data=self.settings.model_dump_safe(),
                     )
                 )
 
         # Create app with lifespan
         app = FastAPI(
-            title=self._definition.name,
-            description=self._definition.description
-            or f"{self._definition.name} Manager",
+            title=manager_name,
+            description=self.settings.manager_description or f"{manager_name} Manager",
             lifespan=lifespan,
             **kwargs,
         )
@@ -259,7 +255,7 @@ class WorkcellManager(
                 health.redis_connected = None
 
             # Count nodes and check their reachability
-            total_nodes = len(self.definition.nodes)
+            total_nodes = len(self.settings.nodes or {})
             health.total_nodes = total_nodes
 
             # TODO: Implement actual node reachability checks
@@ -277,9 +273,9 @@ class WorkcellManager(
         return health
 
     @get("/workcell")
-    def get_workcell(self) -> WorkcellManagerDefinition:
-        """Get the currently running workcell (backward compatibility)."""
-        return self.state_handler.get_workcell_definition()
+    def get_workcell(self) -> WorkcellInfo:
+        """Get the currently running workcell info."""
+        return self.state_handler.get_workcell_info()
 
     @get("/state")
     def get_state(self) -> WorkcellState:
@@ -305,21 +301,12 @@ class WorkcellManager(
         self,
         node_name: str,
         node_url: str,
-        permanent: bool = False,
     ) -> Union[Node, str]:
         """Add a node to the workcell's node list"""
         if node_name in self.state_handler.get_nodes():
             return "Node name exists, node names must be unique!"
         node = Node(node_url=node_url)
         self.state_handler.set_node(node_name, node)
-        if permanent:
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.nodes[node_name] = node_url
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-            self.state_handler.set_workcell_definition(workcell)
-
         return self.state_handler.get_node(node_name)
 
     @post("/admin/{command}")
@@ -483,7 +470,6 @@ class WorkcellManager(
                 wf_def = WorkflowDefinition.model_validate(workflow_definition)
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
             return self.state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
@@ -497,7 +483,6 @@ class WorkcellManager(
                 error=str(e),
                 exc_info=True,
             )
-            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
@@ -524,7 +509,6 @@ class WorkcellManager(
         try:
             return self.state_handler.get_workflow_definition(workflow_definition_id)
         except Exception as e:
-            traceback.print_exc()
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @post("/workflow")
@@ -563,7 +547,6 @@ class WorkcellManager(
                 wf_def = self.state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
             ownership_info = (
@@ -599,7 +582,7 @@ class WorkcellManager(
                     "workflow.execute",
                     attributes={"workflow.step_count": len(wf_def.steps)},
                 ):
-                    workcell = self.state_handler.get_workcell_definition()
+                    workcell = self.state_handler.get_workcell_info()
                     check_parameters(wf_def, json_inputs, file_input_paths)
                     wf = create_workflow(
                         workflow_def=wf_def,
@@ -618,11 +601,12 @@ class WorkcellManager(
                         self.state_handler.set_active_workflow(wf)
                         self.state_handler.enqueue_workflow(wf.workflow_id)
 
-                    self.logger.log(
-                        Event(
-                            event_type=EventType.WORKFLOW_START,
-                            event_data=wf.model_dump(mode="json"),
-                        )
+                    self.logger.info(
+                        "Workflow start successful",
+                        event_type=EventType.WORKFLOW_START,
+                        workflow_name=wf.name,
+                        workflow_id=wf.workflow_id,
+                        workflow_definition_id=workflow_definition_id,
                     )
                     return wf
 
@@ -636,7 +620,6 @@ class WorkcellManager(
                 error=str(e),
                 exc_info=True,
             )
-            traceback.print_exc()
             raise HTTPException(
                 status_code=500,
                 detail=f"Error starting workflow: {e}",

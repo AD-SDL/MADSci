@@ -12,7 +12,10 @@ from madsci.common.types.parameter_types import (
     ParameterInputJson,
 )
 from madsci.common.types.step_types import StepDefinition
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import (
+    WorkcellInfo,
+    WorkcellManagerSettings,
+)
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -49,25 +52,19 @@ mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
-def workcell() -> WorkcellManagerDefinition:
-    """Fixture for creating a WorkcellDefinition."""
-    # TODO: Add node(s) to this workcell for testing purposes
-    return WorkcellManagerDefinition(name="Test Workcell")
-
-
-@pytest.fixture
-def test_client(
-    workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
-) -> TestClient:
+def test_client(redis_server: Redis, mongo_server: Database) -> TestClient:
     """Workcell Server Test Client Fixture"""
+    settings = WorkcellManagerSettings(manager_name="Test Workcell")
     manager = WorkcellManager(
-        definition=workcell,
+        settings=settings,
         redis_connection=redis_server,
         mongo_connection=mongo_server,
         start_engine=False,
     )
     app = manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
 def test_get_workcell(test_client: TestClient) -> None:
@@ -75,7 +72,7 @@ def test_get_workcell(test_client: TestClient) -> None:
     with test_client as client:
         response = client.get("/workcell")
         assert response.status_code == 200
-        WorkcellManagerDefinition.model_validate(response.json())
+        WorkcellInfo.model_validate(response.json())
 
 
 def test_get_nodes(test_client: TestClient) -> None:

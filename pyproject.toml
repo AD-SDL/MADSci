@@ -62,9 +62,13 @@ default_settings = [
 
 # Generate Markdown docs
 [[tool.pydantic_settings_export.generators.markdown]]
-paths = ["Configuration.md"]
+paths = ["docs/Configuration.md"]
 
 # Generate .env example
+# Note: Default configuration should go in settings.yaml (version-controlled).
+# The .env file is for secrets and environment-specific overrides only (gitignored).
+# Manager settings support prefixed keys in YAML (e.g., event_server_url) via
+# the alias_generator. Use `madsci config export` to generate settings.yaml content.
 [[tool.pydantic_settings_export.generators.dotenv]]
 paths = [".env.example"]
 

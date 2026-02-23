@@ -18,7 +18,6 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.common.types.location_types import Location
-from madsci.common.types.node_types import NodeDefinition
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import new_ulid_str
 from madsci.experiment_application import (
@@ -55,9 +54,7 @@ def mock_all_clients():
 class TestExperimentApplication(ExperimentApplication):
     """Test subclass of ExperimentApplication."""
 
-    config = ExperimentApplicationConfig(
-        update_node_files=False,
-    )
+    config = ExperimentApplicationConfig()
 
     experiment_design = ExperimentDesign(
         experiment_name="Test_Experiment",
@@ -135,14 +132,16 @@ def app_config() -> ExperimentApplicationConfig:
         server_mode=False,
         run_args=[1, 2],
         run_kwargs={"test_param": "value"},
-        update_node_files=False,
+        node_name="test_experiment_app",
+        module_name="test_experiment_application",
+        description="Test experiment application node",
     )
 
 
 @pytest.fixture
-def node_definition() -> NodeDefinition:
-    """Create a test node definition."""
-    return NodeDefinition(
+def node_config_fixture() -> ExperimentApplicationConfig:
+    """Create a test node config with identity info."""
+    return ExperimentApplicationConfig(
         node_name="test_experiment_app",
         module_name="test_experiment_application",
         description="Test experiment application node",
@@ -151,14 +150,12 @@ def node_definition() -> NodeDefinition:
 
 @pytest.fixture
 def experiment_app(
-    node_definition: NodeDefinition,
     app_config: ExperimentApplicationConfig,
     experiment_design: ExperimentDesign,
 ) -> TestExperimentApplication:
     """Create a test ExperimentApplication instance."""
     with mock_all_clients():
         app = TestExperimentApplication(
-            node_definition=node_definition,
             node_config=app_config,
             experiment_design=experiment_design,
         )
@@ -266,10 +263,10 @@ class TestExperimentApplicationInit:
                 f"{client_name} should have {expected_method} method"
             )
 
-    def test_init_basic(self, node_definition: NodeDefinition) -> None:
+    def test_init_basic(self, node_config_fixture: ExperimentApplicationConfig) -> None:
         """Test basic initialization."""
         with mock_all_clients():
-            app = TestExperimentApplication(node_definition=node_definition)
+            app = TestExperimentApplication(node_config=node_config_fixture)
 
             assert app.experiment is None
             assert app.experiment_design is not None
@@ -278,19 +275,21 @@ class TestExperimentApplicationInit:
             assert app.event_client is not None
 
     def test_init_with_experiment_design_dict(
-        self, node_definition: NodeDefinition, experiment_design: ExperimentDesign
+        self,
+        node_config_fixture: ExperimentApplicationConfig,
+        experiment_design: ExperimentDesign,
     ) -> None:
         """Test initialization with experiment design."""
         with mock_all_clients():
             app = TestExperimentApplication(
-                node_definition=node_definition,
+                node_config=node_config_fixture,
                 experiment_design=experiment_design,
             )
 
             assert app.experiment_design == experiment_design
 
     def test_init_with_experiment_design_yaml_path(
-        self, node_definition: NodeDefinition, tmp_path: Any
+        self, node_config_fixture: ExperimentApplicationConfig, tmp_path: Any
     ) -> None:
         """Test initialization with YAML file path."""
         # Create a temporary YAML file
@@ -311,7 +310,7 @@ resource_conditions: []
             mock_from_yaml.return_value = mock_design
 
             app = TestExperimentApplication(
-                node_definition=node_definition,
+                node_config=node_config_fixture,
                 experiment_design=str(yaml_file),
             )
 
@@ -319,12 +318,14 @@ resource_conditions: []
             assert app.experiment_design == mock_design
 
     def test_init_with_existing_experiment(
-        self, node_definition: NodeDefinition, mock_experiment: Experiment
+        self,
+        node_config_fixture: ExperimentApplicationConfig,
+        mock_experiment: Experiment,
     ) -> None:
         """Test initialization with existing experiment."""
         with mock_all_clients():
             app = TestExperimentApplication(
-                node_definition=node_definition,
+                node_config=node_config_fixture,
                 experiment=mock_experiment,
             )
 
@@ -336,7 +337,6 @@ resource_conditions: []
             server_mode=True,
             run_args=[1, 2, 3],
             run_kwargs={"param1": "value1", "param2": "value2"},
-            update_node_files=False,
         )
 
         assert config.server_mode is True
@@ -345,7 +345,7 @@ resource_conditions: []
 
     def test_config_defaults(self) -> None:
         """Test ExperimentApplicationConfig default values."""
-        config = ExperimentApplicationConfig(update_node_files=False)
+        config = ExperimentApplicationConfig()
 
         assert config.server_mode is False
         assert config.run_args == []

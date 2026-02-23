@@ -61,26 +61,37 @@ class Engine:
     ) -> None:
         """Initialize the scheduler."""
         self.state_handler = state_handler
-        self.workcell_definition = state_handler.get_workcell_definition()
         self.workcell_settings = self.state_handler.workcell_settings
-        self.logger = EventClient(name=f"workcell.{self.workcell_definition.name}")
+        # Initialize workcell state in Redis before reading the info
+        with state_handler.wc_state_lock():
+            state_handler.initialize_workcell_state()
+        self.workcell_info = state_handler.get_workcell_info()
+        self.logger = EventClient(name=f"workcell.{self.workcell_info.name}")
         cancel_active_workflows(state_handler)
         scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
         self.scheduler = scheduler_module.Scheduler(
-            self.workcell_definition, self.state_handler
+            self.workcell_info, self.state_handler
         )
         self.data_client = data_client
         self.resource_client = ResourceClient()
         self.location_client = LocationClient()
-        with state_handler.wc_state_lock():
-            state_handler.initialize_workcell_state()
+        self._node_clients: dict[str, AbstractNodeClient] = {}
         time.sleep(self.workcell_settings.cold_start_delay)
         self.logger.info(
             "Engine initialized, waiting for workflows",
             event_type=EventType.WORKCELL_START,
-            workcell_id=self.workcell_definition.manager_id,
-            workcell_name=self.workcell_definition.name,
+            workcell_id=self.workcell_info.manager_id,
+            workcell_name=self.workcell_info.name,
         )
+
+    def _get_node_client(self, url: str) -> AbstractNodeClient:
+        """Get a cached node client for the given URL, creating one if needed."""
+        url_str = str(url)
+        if url_str not in self._node_clients:
+            self._node_clients[url_str] = find_node_client(
+                url, event_client=self.logger
+            )
+        return self._node_clients[url_str]
 
     @threaded_daemon
     def spin(self) -> None:
@@ -95,7 +106,7 @@ class Engine:
         scheduler_tick = time.time()
         while True and not self.state_handler.shutdown:
             try:
-                self.workcell_definition = self.state_handler.get_workcell_definition()
+                self.workcell_info = self.state_handler.get_workcell_info()
 
                 # Check if it's time to update node info (less frequent)
                 should_update_info = (
@@ -153,8 +164,8 @@ class Engine:
                 self.logger.error(
                     "Unhandled exception in engine loop",
                     event_type=EventType.MANAGER_ERROR,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                     error=str(e),
                     exc_info=True,
                 )
@@ -162,8 +173,8 @@ class Engine:
                 self.logger.warning(
                     "Error in engine loop, delaying before retry",
                     event_type=EventType.MANAGER_ERROR,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                     retry_delay_s=retry_delay_s,
                 )
                 with self.state_handler.wc_state_lock():
@@ -200,7 +211,7 @@ class Engine:
                     )
                     next_wf.status.completed = True
                     self.state_handler.set_active_workflow(next_wf)
-                    self._log_workflow_completion(next_wf, "completed")
+                    self._log_completion_event(next_wf)
                     sorted_ready_workflows.pop(0)
                     next_wf = None
                     continue
@@ -215,8 +226,8 @@ class Engine:
                 self.logger.info(
                     "No workflows ready to run",
                     event_type=EventType.WORKCELL_STATUS_UPDATE,
-                    workcell_id=self.workcell_definition.manager_id,
-                    workcell_name=self.workcell_definition.name,
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
                 )
         if next_wf:
             thread = self.run_step(next_wf.workflow_id)
@@ -242,7 +253,7 @@ class Engine:
             ):
                 step = prepare_workflow_step(
                     step=step,
-                    workcell=self.workcell_definition,
+                    workcell=self.workcell_info,
                     state_handler=self.state_handler,
                     workflow=wf,
                     data_client=self.data_client,
@@ -262,7 +273,7 @@ class Engine:
                     step = self.run_workcell_action(step)
                 else:
                     node = self.state_handler.get_node(step.node)
-                    client = find_node_client(node.node_url)
+                    client = self._get_node_client(node.node_url)
                     wf = self.update_step(wf, step)
 
                     # * Send the action request
@@ -548,13 +559,6 @@ class Engine:
             self.state_handler.set_active_workflow(wf)
 
             if wf.status.terminal:
-                self.logger.log_info(
-                    "Workflow reached terminal state",
-                    event_type=EventType.WORKFLOW_COMPLETE,
-                    workflow_id=wf.workflow_id,
-                    workflow_name=wf.name,
-                    workflow_status=wf.status.model_dump(mode="json"),
-                )
                 self._log_completion_event(wf)
 
     def _feed_data_forward(self, step: Step, wf: Workflow) -> Workflow:
@@ -610,30 +614,58 @@ class Engine:
         return wf
 
     def _log_completion_event(self, workflow: Workflow) -> None:
-        """Log the completion event and info message."""
+        """Log the workflow completion event with structured data."""
         try:
-            event_data = workflow.model_dump(mode="json")
+            if workflow.status.completed:
+                status = "completed"
+            elif workflow.status.failed:
+                status = "failed"
+            elif workflow.status.cancelled:
+                status = "cancelled"
+            else:
+                status = "unknown"
+
+            author = (
+                workflow.definition_metadata.author
+                if workflow.definition_metadata
+                else None
+            )
+
+            event_data = {
+                "workflow_id": workflow.workflow_id,
+                "name": workflow.name,
+                "status": status,
+                "author": author,
+                "duration_seconds": workflow.duration_seconds,
+                "start_time": workflow.start_time.isoformat()
+                if workflow.start_time
+                else None,
+                "end_time": workflow.end_time.isoformat()
+                if workflow.end_time
+                else None,
+                "step_count": len(workflow.steps),
+                "current_step_index": workflow.status.current_step_index,
+                "step_statistics": workflow.step_statistics,
+            }
+
             self.logger.log(
                 Event(event_type=EventType.WORKFLOW_COMPLETE, event_data=event_data)
             )
 
             duration_text = (
-                f"Duration: {event_data['duration_seconds']:.1f}s"
-                if event_data["duration_seconds"]
-                else "Duration: Unknown"
+                f"{workflow.duration_seconds:.1f}s"
+                if workflow.duration_seconds
+                else "Unknown"
             )
 
             self.logger.info(
-                "Logged workflow completion",
+                "Workflow completed",
                 event_type=EventType.WORKFLOW_COMPLETE,
                 workflow_id=workflow.workflow_id,
                 workflow_name=workflow.name,
-                workflow_status=event_data.get("status"),
-                workflow_author=(event_data.get("definition_metadata") or {}).get(
-                    "author"
-                )
-                or "Unknown",
-                workflow_duration_text=duration_text,
+                workflow_status=status,
+                workflow_author=author or "Unknown",
+                workflow_duration=duration_text,
             )
         except Exception as e:
             self.logger.error(
@@ -694,7 +726,7 @@ class Engine:
 
         # Set ownership context for all datapoint uploads
         with ownership_context(
-            workcell_id=self.workcell_definition.manager_id,
+            workcell_id=self.workcell_info.manager_id,
             workflow_id=wf.workflow_id,
             node_id=self.state_handler.get_node(step.node).info.node_id
             if self.state_handler.get_node(step.node).info
@@ -794,7 +826,7 @@ class Engine:
                         infrequently, so it's updated less often to reduce network overhead.
         """
         try:
-            client = find_node_client(node.node_url)
+            client = self._get_node_client(node.node_url)
             node.status = client.get_status()
             if update_info or node.info is None:
                 node.info = client.get_info()
@@ -807,7 +839,7 @@ class Engine:
             with state_manager.wc_state_lock():
                 state_manager.set_node(node_name, node)
             with ownership_context(
-                workcell_id=self.workcell_definition.manager_id,
+                workcell_id=self.workcell_info.manager_id,
                 node_id=node.info.node_id if node.info else None,
             ):
                 self.logger.warning(

@@ -8,9 +8,10 @@ from madsci.common.types.base_types import (
     ConfigDict,
     MadsciBaseModel,
     MadsciSQLModel,
-    PathLike,
     PositiveInt,
     PositiveNumber,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.manager_types import (
     ManagerDefinition,
@@ -23,6 +24,7 @@ from madsci.common.utils import new_name_str, new_ulid_str
 from pydantic import AfterValidator, AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
+from pydantic_settings import SettingsConfigDict
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field as SQLField
 
@@ -52,20 +54,34 @@ class ResourceManagerSettings(
 ):
     """Settings for the MADSci Resource Manager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("resource"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("resource")
+
+    # Structural config (inline in settings.yaml)
+    default_templates: Optional[list["TemplateDefinition"]] = Field(
+        default=None,
+        title="Default Templates",
+        description="Default resource template definitions to create or update on manager startup.",
+    )
+
     server_url: AnyUrl = Field(
         title="Resource Server URL",
         description="The URL of the resource manager server.",
         default="http://localhost:8003",
     )
-    manager_definition: PathLike = Field(
-        title="Resource Manager Definition File",
-        description="Path to the resource manager definition file to use.",
-        default="resource.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.RESOURCE_MANAGER,
     )
     db_url: str = Field(
         title="Database URL",
         description="The URL of the database for the resource manager.",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+        json_schema_extra={"secret": True},
     )
 
 

@@ -1,10 +1,89 @@
 """Shared test fixtures for MADSci client tests."""
 
+import contextlib
+import gc
+import logging
+import shutil
+import tempfile
+from pathlib import Path
 from typing import Optional
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 import requests
+
+
+@pytest.fixture(autouse=True)
+def mock_madsci_context_no_event_server():
+    """Ensure no EventClient tries to connect to a real event server during tests.
+
+    This fixture patches get_current_madsci_context to return a context with
+    event_server_url=None, preventing any EventClient from attempting to connect
+    to a real event server at localhost:8001.
+    """
+    mock_context = MagicMock()
+    mock_context.event_server_url = None
+
+    with patch(
+        "madsci.client.event_client.get_current_madsci_context",
+        return_value=mock_context,
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True, scope="module")
+def cleanup_temp_files():
+    """Clean up temporary files created during tests to prevent file descriptor leaks.
+
+    Uses module scope to reduce overhead while still preventing "too many open files"
+    errors. Temp files are cleaned up after each test module completes rather than
+    after every individual test.
+    """
+    temp_dir = Path(tempfile.gettempdir())
+
+    # Get the set of temp files before the module runs
+    before_files = set(temp_dir.glob("tmp*"))
+
+    yield
+
+    # Get temp files after the module and clean up new ones
+    after_files = set(temp_dir.glob("tmp*"))
+    new_files = after_files - before_files
+
+    for filepath in new_files:
+        with contextlib.suppress(Exception):
+            if filepath.is_file():
+                filepath.unlink()
+            elif filepath.is_dir():
+                shutil.rmtree(filepath, ignore_errors=True)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def cleanup_logging_handlers():
+    """Clean up logging handlers after each test module to prevent file descriptor leaks.
+
+    EventClient creates file handlers that need to be explicitly closed.
+    Uses module scope to reduce overhead while still preventing "too many open files"
+    errors.
+    """
+    yield
+
+    # Close and remove all handlers from all loggers to prevent file descriptor leaks
+    # Get all loggers including the root
+    loggers = [logging.getLogger()]
+    loggers.extend(
+        [logging.getLogger(name) for name in logging.Logger.manager.loggerDict]
+    )
+
+    for logger in loggers:
+        handlers = logger.handlers[:]
+        for handler in handlers:
+            with contextlib.suppress(Exception):
+                handler.close()
+                logger.removeHandler(handler)
+
+    # Force garbage collection to clean up any remaining file handles
+    gc.collect()
 
 
 @pytest.fixture

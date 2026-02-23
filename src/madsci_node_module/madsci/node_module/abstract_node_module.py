@@ -47,7 +47,6 @@ from madsci.common.types.node_types import (
     NodeCapabilities,
     NodeClientCapabilities,
     NodeConfig,
-    NodeDefinition,
     NodeInfo,
     NodeSetConfigResponse,
     NodeStatus,
@@ -60,7 +59,6 @@ from madsci.common.utils import (
 )
 from madsci.node_module.type_analyzer import analyze_type
 from pydantic import BaseModel, ValidationError
-from semver import Version
 
 
 class AbstractNode(MadsciClientMixin):
@@ -73,8 +71,6 @@ class AbstractNode(MadsciClientMixin):
     # Client configuration for MadsciClientMixin
     REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "resource", "data"]
 
-    node_definition: ClassVar[NodeDefinition] = None
-    """The node definition."""
     node_status: ClassVar[NodeStatus] = NodeStatus(
         initializing=True,
     )
@@ -102,7 +98,6 @@ class AbstractNode(MadsciClientMixin):
 
     def __init__(
         self,
-        node_definition: Optional[NodeDefinition] = None,
         node_config: Optional[NodeConfig] = None,
     ) -> "AbstractNode":
         """Initialize the node class."""
@@ -110,54 +105,20 @@ class AbstractNode(MadsciClientMixin):
         self.config = node_config or self.config
         if not self.config:
             self.config = self.config_model()
-        self.node_definition = node_definition
-        if self.node_definition is None:
-            node_definition_path = getattr(
-                self.config, "node_definition", "default.node.yaml"
-            )
-            if not Path(node_definition_path).exists():
-                module_name = to_snake_case(self.__class__.__name__)
-                node_name = str(Path(node_definition_path).stem)
-                self.node_definition = NodeDefinition(
-                    node_name=node_name, module_name=module_name
-                )
-            else:
-                self.node_definition = NodeDefinition.from_yaml(node_definition_path)
-        global_ownership_info.node_id = self.node_definition.node_id
-        self._configure_clients()
 
-        # Log warning about missing node definition file after logger is configured
-        if node_definition is None:
-            node_definition_path = getattr(
-                self.config, "node_definition", "default.node.yaml"
-            )
-            if not Path(node_definition_path).exists():
-                self.logger.warning(
-                    "Node definition file not found; using default node definition",
-                    event_type=EventType.NODE_CONFIG_UPDATE,
-                    node_definition_path=str(node_definition_path),
-                )
-
-        # * Check Node Version
-        if (
-            Version.parse(self.module_version).compare(
-                self.node_definition.module_version
-            )
-            < 0
-        ):
-            self.logger.warning(
-                "Node module version does not match NodeDefinition version",
-                event_type=EventType.NODE_CONFIG_UPDATE,
-                node_module_version=self.module_version,
-                node_definition_version=str(self.node_definition.module_version),
-            )
-
-        # * Synthesize the node info
-        self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition, self.config
+        # * Synthesize the node info from config
+        module_name = self.config.module_name or to_snake_case(self.__class__.__name__)
+        node_name = self.config.node_name or module_name
+        self.node_info = NodeInfo.from_config(
+            self.config,
+            node_name=node_name,
+            module_name=module_name,
         )
 
-        # * Combine the node definition and classes's capabilities
+        global_ownership_info.node_id = self.node_info.node_id
+        self._configure_clients()
+
+        # * Combine the config and class's capabilities
         self._populate_capabilities()
 
         # * Add the action decorators to the node (and node info)
@@ -171,10 +132,6 @@ class AbstractNode(MadsciClientMixin):
                     result_definitions=action_callable.__madsci_action_result_definitions__,
                 )
 
-        # * Save the node info and update definition, if possible
-        if self.config.update_node_files:
-            self._update_node_info_and_definition()
-
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
@@ -186,14 +143,14 @@ class AbstractNode(MadsciClientMixin):
         Establishes node context for hierarchical logging. All logging
         within this node will include node-specific context (node_name, node_id).
         """
-        global_ownership_info.node_id = self.node_definition.node_id
+        global_ownership_info.node_id = self.node_info.node_id
         # * Update EventClient with logging parameters
         self._configure_clients()
 
         # * Log startup info
         self.logger.debug(
-            "Node definition",
-            node_definition=self.node_definition.model_dump(mode="json"),
+            "Node info",
+            node_info=self.node_info.model_dump(mode="json"),
         )
 
         # * Kick off the startup logic in a separate thread
@@ -385,7 +342,7 @@ class AbstractNode(MadsciClientMixin):
         self.logger.info(
             "Node locked",
             event_type=EventType.NODE_STATUS_UPDATE,
-            node_id=self.node_definition.node_id,
+            node_id=self.node_info.node_id,
         )
         return True
 
@@ -395,7 +352,7 @@ class AbstractNode(MadsciClientMixin):
         self.logger.info(
             "Node unlocked",
             event_type=EventType.NODE_STATUS_UPDATE,
-            node_id=self.node_definition.node_id,
+            node_id=self.node_info.node_id,
         )
         return True
 
@@ -413,8 +370,8 @@ class AbstractNode(MadsciClientMixin):
         - DataClient for data storage
         """
         # Set the name for the EventClient
-        if hasattr(self, "node_definition") and self.node_definition:
-            self.name = f"node.{self.node_definition.node_name}"
+        if hasattr(self, "node_info") and self.node_info:
+            self.name = f"node.{self.node_info.node_name}"
 
         # Initialize all required clients using the mixin
         self.setup_clients()
@@ -1099,13 +1056,13 @@ class AbstractNode(MadsciClientMixin):
         """
         # Build context metadata for this action execution
         node_name = (
-            self.node_definition.node_name
-            if hasattr(self, "node_definition") and self.node_definition
+            self.node_info.node_name
+            if hasattr(self, "node_info") and self.node_info
             else "unknown_node"
         )
         node_id = (
-            self.node_definition.node_id
-            if hasattr(self, "node_definition") and self.node_definition
+            self.node_info.node_id
+            if hasattr(self, "node_info") and self.node_info
             else None
         )
 
@@ -1204,23 +1161,6 @@ class AbstractNode(MadsciClientMixin):
                 and callable(self.__getattribute__(admin_command.value))
             },
         )
-
-    def _update_node_info_and_definition(self) -> None:
-        """Update the node info and definition files, if possible."""
-        try:
-            self.node_definition.to_yaml(self.config.node_definition)
-            if not self.config.node_info_path:
-                self.node_info_path = Path(self.config.node_definition).with_name(
-                    f"{self.node_definition.node_name}.info.yaml"
-                )
-            self.node_info.to_yaml(self.node_info_path, exclude={"config_values"})
-        except Exception as e:
-            self.logger.warning(
-                "Failed to update node info file",
-                event_type=EventType.NODE_CONFIG_UPDATE,
-                error=str(e),
-                exc_info=True,
-            )
 
     def _check_required_args(self, action_request: ActionRequest) -> None:
         """Check that all required arguments are present in the action request."""
@@ -1331,7 +1271,7 @@ class AbstractNode(MadsciClientMixin):
             self.logger.info(
                 "Node started",
                 event_type=EventType.NODE_START,
-                node_definition=self.node_definition.model_dump(mode="json"),
+                node_info=self.node_info.model_dump(mode="json"),
             )
         finally:
             # * Mark the node as no longer initializing

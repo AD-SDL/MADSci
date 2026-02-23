@@ -97,7 +97,7 @@ class RestNode(AbstractNode):
 
     def start_node(self, testing: bool = False) -> None:
         """Start the node."""
-        global_ownership_info.node_id = self.node_definition.node_id
+        global_ownership_info.node_id = self.node_info.node_id
         url = AnyUrl(getattr(self.config, "node_url", "http://127.0.0.1:2000"))
 
         # Create FastAPI app metadata from node info
@@ -123,7 +123,7 @@ class RestNode(AbstractNode):
             async def ownership_middleware(
                 request: Request, call_next: Callable
             ) -> Response:
-                global_ownership_info.node_id = self.node_definition.node_id
+                global_ownership_info.node_id = self.node_info.node_id
                 return await call_next(request)
 
             self._configure_routes()
@@ -308,20 +308,7 @@ class RestNode(AbstractNode):
                 and self.node_info.module_version
             ):
                 metadata["version"] = str(self.node_info.module_version)
-        elif hasattr(self, "node_definition") and self.node_definition:
-            # Fallback to node definition if node_info is not available yet
-            metadata["title"] = self.node_definition.node_name or "MADSci Node"
-
-            if self.node_definition.node_description:
-                metadata["description"] = self.node_definition.node_description
-
-            if (
-                hasattr(self.node_definition, "module_version")
-                and self.node_definition.module_version
-            ):
-                metadata["version"] = str(self.node_definition.module_version)
         else:
-            # Ultimate fallback
             metadata["title"] = "MADSci Node"
 
         # Set default values if not provided

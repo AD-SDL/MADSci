@@ -66,7 +66,7 @@ status = client.get_status()
 - Support for complex return types (JSON, files, datapoint IDs)
 - Node capability checking and schema introspection
 
-**Examples**: See [example_lab/notebooks/node_notebook.ipynb](../../example_lab/notebooks/node_notebook.ipynb) for detailed usage.
+**Examples**: See [node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb) for detailed usage.
 
 ## Event Client
 

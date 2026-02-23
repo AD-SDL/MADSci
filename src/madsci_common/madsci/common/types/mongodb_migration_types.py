@@ -26,6 +26,7 @@ class MongoDBMigrationSettings(
         validation_alias=AliasChoices(
             "mongo_db_url", "MONGODB_URL", "MONGO_URL", "DATABASE_URL", "db_url"
         ),
+        json_schema_extra={"secret": True},
     )
     database: Optional[str] = Field(
         title="Database Name",
