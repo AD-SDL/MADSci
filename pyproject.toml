@@ -1,6 +1,6 @@
 [project]
 name = "madsci"
-version = "0.6.2"
+version = "0.7.0-rc.1"
 dependencies = ["pre-commit>=4.3.0", "structlog>=25.5.0", "colorama>=0.4.6"]
 readme="README.md"
 requires-python = ">=3.10.0"
