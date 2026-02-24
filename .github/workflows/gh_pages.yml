@@ -41,6 +41,10 @@ jobs:
         run: pdm install -G:all
       - name: Generate API documentation
         run: pdm run pdoc --output-dir docs/api/ --force madsci
+      - name: Export OpenAPI specs
+        run: python scripts/export_openapi.py
+      - name: Generate REST API docs
+        run: python scripts/generate_redoc.py
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -48,6 +52,10 @@ jobs:
         run: npm install -g mystmd
       - name: Build HTML Assets
         run: myst build --html
+      - name: Copy REST API static pages into build
+        run: |
+          mkdir -p _build/html/docs/rest-api/
+          cp docs/rest-api/*.html _build/html/docs/rest-api/ 2>/dev/null || true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

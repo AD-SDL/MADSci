@@ -31,6 +31,8 @@ project:
     - '**/AGENTS.md'
     - 'skills/**'
     - '.scratch/**'
+    - 'docs/rest-api/*.html'
+    - 'docs/api-specs/*.json'
 
   toc:
     - file: README.md
@@ -120,6 +122,10 @@ project:
         - file: src/madsci_data_manager/README.md
         - file: src/madsci_workcell_manager/README.md
         - file: src/madsci_location_manager/README.md
+
+    - title: REST API Reference
+      children:
+        - file: docs/rest-api/index.md
 
     - title: User Interface
       children:

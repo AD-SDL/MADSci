@@ -1,0 +1,885 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LocationManager",
+    "description": "LocationManager Manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/location": {
+      "post": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Add Location",
+        "description": "Add a new location.",
+        "operationId": "add_location_location_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Location"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Get Location By Query",
+        "description": "Get a specific location by ID or name.",
+        "operationId": "get_location_by_query_location_get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}/attach_resource": {
+      "post": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Attach Resource",
+        "description": "Attach a resource to a location.",
+        "operationId": "attach_resource_location__location_id__attach_resource_post",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "resource_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}": {
+      "delete": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Delete Location",
+        "description": "Delete a specific location by ID.",
+        "operationId": "delete_location_location__location_id__delete",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Get Location By Id",
+        "description": "Get a specific location by ID.",
+        "operationId": "get_location_by_id_location__location_id__get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}/detach_resource": {
+      "delete": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Detach Resource",
+        "description": "Detach the resource from a location.",
+        "operationId": "detach_resource_location__location_id__detach_resource_delete",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}/resources": {
+      "get": {
+        "tags": [
+          "Resources"
+        ],
+        "summary": "Get Location Resources",
+        "description": "Get the resource hierarchy for resources currently at a specific location.\n\nArgs:\n    location_id: Location ID to query\n\nReturns:\n    ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource\n\nRaises:\n    HTTPException: If location not found",
+        "operationId": "get_location_resources_location__location_id__resources_get",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/locations": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Get Locations",
+        "description": "Get all locations.",
+        "operationId": "get_locations_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Get Settings Endpoint",
+        "description": "Export current settings for backup/replication.\n\nThis endpoint allows exporting the current manager settings in a format\nsuitable for backup, documentation, or replicating the configuration\nto another environment. Secrets are always redacted from the API\nendpoint for safety.\n\nArgs:\n    include_defaults: If True, include fields with default values.\n                     If False, only include non-default settings.\n    include_schema: If True, include JSON schema for documentation.\n\nReturns:\n    dict: Settings as a dictionary with sensitive fields redacted.",
+        "operationId": "get_settings_endpoint_settings_get",
+        "parameters": [
+          {
+            "name": "include_defaults",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Defaults"
+            }
+          },
+          {
+            "name": "include_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Schema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transfer/graph": {
+      "get": {
+        "tags": [
+          "Transfer"
+        ],
+        "summary": "Get Transfer Graph",
+        "description": "Get the current transfer graph as adjacency list.\n\nReturns:\n    Dict mapping location IDs to lists of reachable location IDs",
+        "operationId": "get_transfer_graph_transfer_graph_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Endpoint",
+        "description": "Health check endpoint for the manager.\n\nThis endpoint is automatically inherited by all manager subclasses.\nManagers that override get_health() will automatically have their\ncustom health checks exposed through this endpoint.\n\nReturns:\n    ManagerHealth: The current health status",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/transfer/plan": {
+      "post": {
+        "tags": [
+          "Transfer"
+        ],
+        "summary": "Plan Transfer",
+        "description": "Plan a transfer workflow from source to target.\n\nArgs:\n    source_location_id: Source location ID\n    target_location_id: Target location ID\n\nReturns:\n    Composite workflow definition to execute the transfer\n\nRaises:\n    HTTPException: If no transfer path exists",
+        "operationId": "plan_transfer_transfer_plan_post",
+        "parameters": [
+          {
+            "name": "source_location_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Source Location Id"
+            }
+          },
+          {
+            "name": "target_location_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Target Location Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}/remove_representation/{node_name}": {
+      "delete": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Remove Representation",
+        "description": "Remove representations for a location for a specific node.",
+        "operationId": "remove_representation_location__location_id__remove_representation__node_name__delete",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "node_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_id}/set_representation/{node_name}": {
+      "post": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Set Representations",
+        "description": "Set representations for a location for a specific node.",
+        "operationId": "set_representations_location__location_id__set_representation__node_name__post",
+        "parameters": [
+          {
+            "name": "location_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Location Id"
+            }
+          },
+          {
+            "name": "node_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Name"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Representation Val"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Location": {
+        "properties": {
+          "location_id": {
+            "type": "string",
+            "title": "Location ID",
+            "description": "The ID of the location."
+          },
+          "location_name": {
+            "type": "string",
+            "title": "Location Name",
+            "description": "The name of the location."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Description",
+            "description": "A description of the location."
+          },
+          "representations": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Representations",
+            "description": "A dictionary of node-specific representations for the location."
+          },
+          "reservation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocationReservation"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Reservation",
+            "description": "The reservation for the location."
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The ID of an existing Resource associated with the location, if any (deprecated, use resource_ids)."
+          },
+          "allow_transfers": {
+            "type": "boolean",
+            "title": "Allow Transfers",
+            "description": "Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_name"
+        ],
+        "title": "Location",
+        "description": "A location in the lab."
+      },
+      "LocationReservation": {
+        "properties": {
+          "owned_by": {
+            "$ref": "#/components/schemas/OwnershipInfo",
+            "title": "Owned By",
+            "description": "Who has ownership of the reservation."
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created Datetime",
+            "description": "When the reservation was created."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Datetime",
+            "description": "When the reservation starts."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End Datetime",
+            "description": "When the reservation ends."
+          }
+        },
+        "type": "object",
+        "required": [
+          "owned_by",
+          "created",
+          "start",
+          "end"
+        ],
+        "title": "LocationReservation",
+        "description": "Reservation of a MADSci Location."
+      },
+      "OwnershipInfo": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User ID",
+            "description": "The ID of the user who owns the object."
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment ID",
+            "description": "The ID of the experiment that owns the object."
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign ID",
+            "description": "The ID of the campaign that owns the object."
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project ID",
+            "description": "The ID of the project that owns the object."
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node ID",
+            "description": "The ID of the node that owns the object."
+          },
+          "workcell_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workcell ID",
+            "description": "The ID of the workcell that owns the object."
+          },
+          "lab_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lab ID",
+            "description": "The ID of the lab that owns the object."
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step ID",
+            "description": "The ID of the step that owns the object."
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow ID",
+            "description": "The ID of the workflow that owns the object."
+          },
+          "manager_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager ID",
+            "description": "The ID of the manager that owns the object."
+          }
+        },
+        "type": "object",
+        "title": "OwnershipInfo",
+        "description": "Information about the ownership of a MADSci object."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

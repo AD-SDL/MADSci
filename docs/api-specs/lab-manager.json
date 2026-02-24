@@ -1,0 +1,167 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LabManager",
+    "description": "LabManager Manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/context": {
+      "get": {
+        "summary": "Get Context",
+        "description": "Get the context of the lab server.",
+        "operationId": "get_context_context_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Get Settings Endpoint",
+        "description": "Export current settings for backup/replication.\n\nThis endpoint allows exporting the current manager settings in a format\nsuitable for backup, documentation, or replicating the configuration\nto another environment. Secrets are always redacted from the API\nendpoint for safety.\n\nArgs:\n    include_defaults: If True, include fields with default values.\n                     If False, only include non-default settings.\n    include_schema: If True, include JSON schema for documentation.\n\nReturns:\n    dict: Settings as a dictionary with sensitive fields redacted.",
+        "operationId": "get_settings_endpoint_settings_get",
+        "parameters": [
+          {
+            "name": "include_defaults",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Defaults"
+            }
+          },
+          {
+            "name": "include_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Schema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Endpoint",
+        "description": "Health check endpoint for the manager.\n\nThis endpoint is automatically inherited by all manager subclasses.\nManagers that override get_health() will automatically have their\ncustom health checks exposed through this endpoint.\n\nReturns:\n    ManagerHealth: The current health status",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/lab_health": {
+      "get": {
+        "summary": "Lab Health Endpoint",
+        "description": "Health check endpoint for the entire lab.",
+        "operationId": "lab_health_endpoint_lab_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

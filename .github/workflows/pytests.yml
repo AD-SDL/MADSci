@@ -39,6 +39,9 @@ jobs:
       - uses: extractions/setup-just@v2
         name: Setup Just
 
+      - name: Check OpenAPI spec freshness
+        run: python scripts/export_openapi.py --check
+
       - name: Test with pytest
         run: pdm run pytest --cov --cov-report=term-missing
 

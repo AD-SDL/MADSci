@@ -39,8 +39,22 @@ check: checks
 ruff-unsafe:
   @ruff check . --fix --unsafe-fixes
 
+# Export OpenAPI specs from all managers
+api-specs:
+  @python scripts/export_openapi.py
+  @echo "✅ OpenAPI specs exported to docs/api-specs/"
+
+# Generate REST API documentation (Redoc HTML pages)
+rest-api-docs: api-specs
+  @python scripts/generate_redoc.py
+  @echo "✅ Redoc pages generated in docs/rest-api/"
+
+# Check that committed OpenAPI specs are up-to-date
+api-specs-check:
+  @python scripts/export_openapi.py --check
+
 # Generate API documentation with pdoc
-docs:
+docs: rest-api-docs
   @pdm run pdoc --output-dir docs/api/ --force madsci
   @echo "✅ API documentation generated in docs/api/"
 
@@ -210,4 +224,4 @@ otel *args: env
   @docker compose --profile otel up {{args}}
 
 # Run the full pipeline including e2e tests
-all: down pipeupd e2e_tests down
+all: down pipeupd e2e_tests down docs checks
