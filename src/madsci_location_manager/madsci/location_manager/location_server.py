@@ -74,6 +74,16 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         """Initialize locations from settings, creating or updating them in the state handler."""
         locations = self.settings.locations or []
 
+        if not locations:
+            self.logger.warning(
+                "No locations configured in settings. "
+                "Ensure 'location_locations' is defined in settings.yaml "
+                "or location.settings.yaml, and that these files are "
+                "accessible from the current working directory or via "
+                "MADSCI_SETTINGS_DIR.",
+                event_type=EventType.LOCATION_UPDATE,
+            )
+
         for location_def in locations:
             # Check if location already exists
             existing_location = self.state_handler.get_location(
@@ -103,6 +113,13 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
             self.state_handler.set_location(location.location_id, location)
+
+        if locations:
+            self.logger.info(
+                "Initialized locations from settings",
+                event_type=EventType.LOCATION_UPDATE,
+                num_locations=len(locations),
+            )
 
     def _initialize_location_resource(
         self, location_def: LocationDefinition

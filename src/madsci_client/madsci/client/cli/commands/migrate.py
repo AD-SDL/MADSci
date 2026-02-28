@@ -142,7 +142,7 @@ def scan(ctx: click.Context, directory: str, json_output: bool, verbose: bool) -
     help="Output format for generated config files (default: yaml).",
 )
 @click.pass_context
-def convert(  # noqa: C901, PLR0912
+def convert(  # noqa: C901, PLR0912, PLR0915
     ctx: click.Context,
     files: tuple[str, ...],
     convert_all: bool,
@@ -226,6 +226,30 @@ def convert(  # noqa: C901, PLR0912
         console.print("\n[bold]Results:[/bold]")
         console.print(f"  Successful: {success_count}")
         console.print(f"  Failed: {error_count}")
+
+        if success_count > 0:
+            console.print("\n[bold]Next steps:[/bold]")
+            console.print(
+                "  Settings files have been generated alongside your definition files."
+            )
+            console.print(
+                "  Managers and nodes resolve settings via walk-up file discovery"
+            )
+            console.print("  from the working directory. To ensure settings are found:")
+            console.print("    1. Start managers/nodes from your project directory, or")
+            console.print(
+                "    2. Set [bold]MADSCI_SETTINGS_DIR[/bold] to your project path, or"
+            )
+            console.print(
+                "    3. Use [bold]--settings-dir[/bold] with [bold]madsci start[/bold]"
+            )
+            console.print("\n  Consider merging generated settings into your shared")
+            console.print(
+                "  [bold]settings.yaml[/bold] for a single-file configuration."
+            )
+            console.print(
+                "\n  Run [bold]madsci migrate status[/bold] to check progress."
+            )
 
 
 @migrate.command()

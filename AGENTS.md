@@ -117,20 +117,25 @@ Key configuration patterns:
 
 ### Settings Directory (Walk-Up Discovery)
 
-By default, pydantic-settings resolves config file paths relative to the current working directory. The settings directory feature adds walk-up file discovery, so each filename is searched independently from a starting directory up through parent directories.
+Walk-up file discovery is **always active**, starting from the current working directory by default. Each filename in `yaml_file`, `json_file`, `toml_file`, and `env_file` tuples is searched independently by walking up the directory tree, so `settings.yaml` can resolve to a shared lab root while `node.settings.yaml` resolves in the node-specific directory.
 
-**Activation** (opt-in only — CWD behavior is preserved without either):
+**Starting directory override:**
 - `_settings_dir` keyword argument: `MySettings(_settings_dir="/opt/my-lab/nodes/arm")`
 - `MADSCI_SETTINGS_DIR` environment variable
 - `--settings-dir` CLI option on `madsci start` and `madsci config export`
 
-**How it works:** Each filename in `yaml_file`, `json_file`, `toml_file`, and `env_file` tuples is resolved independently via walk-up. This means `settings.yaml` can resolve to a shared lab root while `node.settings.yaml` resolves in the node-specific directory:
+**Walk-up boundaries** — walk-up stops at the first boundary encountered:
+- A `.madsci/` directory (project root sentinel). The directory containing `.madsci/` is searched, but parents above it are not.
+- The user's home directory (`Path.home()`). The home directory itself is searched, but parents above it are not.
+- The filesystem root.
+- The `max_levels` limit (default: 10).
 
 ```
 /opt/my-lab/                     # Shared config found via walk-up
+├── .madsci/                     # Sentinel — walk-up stops here
 ├── settings.yaml                # node_name, lab URLs, etc.
 ├── .env                         # Shared secrets
-└── nodes/robot-arm/             # _settings_dir points here
+└── nodes/robot-arm/             # _settings_dir or CWD points here
     ├── node.settings.yaml       # Node-specific settings
     └── .env                     # Node-specific secrets
 ```

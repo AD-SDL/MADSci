@@ -207,8 +207,17 @@ class MigrationConverter:
         Returns:
             Path to the output file.
         """
-        # Go up from managers/ or node_definitions/
-        base_dir = self.output_dir or migration.source_path.parent.parent
+        # Determine the project-level base directory.
+        # If the source is in a recognized subdirectory (managers/,
+        # node_definitions/, nodes/), go up one level. Otherwise, use the
+        # source file's own parent to avoid writing outside the project.
+        base_dir = self.output_dir
+        if base_dir is None:
+            parent_name = migration.source_path.parent.name.lower()
+            if parent_name in ("managers", "node_definitions", "nodes"):
+                base_dir = migration.source_path.parent.parent
+            else:
+                base_dir = migration.source_path.parent
 
         if migration.component_type == "manager":
             manager_type = migration.original_data.get("manager_type", "manager")

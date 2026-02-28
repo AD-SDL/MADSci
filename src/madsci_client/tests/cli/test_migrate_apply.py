@@ -382,3 +382,122 @@ class TestMigrateEnvOutput:
                 assert output.parent.name == m.name
                 assert output.parent.parent.name == "nodes"
                 assert output.exists()
+
+
+class TestMigrationLocationData:
+    """Regression tests for location data preservation during migration."""
+
+    def test_location_data_preserved_in_yaml_output(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Location definitions should appear in migrated YAML settings."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        # Find the location manager output
+        location_migrations = [
+            m
+            for m in plan.files
+            if m.original_data.get("manager_type") == "location_manager"
+        ]
+        assert len(location_migrations) == 1
+
+        migration = location_migrations[0]
+        assert migration.status == MigrationStatus.MIGRATED
+        assert len(migration.output_files) > 0
+
+        output = migration.output_files[0]
+        data = yaml.safe_load(output.read_text())
+
+        # Locations should be preserved with the prefixed key
+        assert "location_locations" in data, (
+            f"location_locations missing from migrated YAML. Keys: {list(data.keys())}"
+        )
+        locations = data["location_locations"]
+        assert len(locations) == 2
+        assert locations[0]["location_name"] == "deck_1"
+        assert locations[1]["location_name"] == "deck_2"
+
+        # Transfer capabilities should also be preserved
+        assert "location_transfer_capabilities" in data
+        tc = data["location_transfer_capabilities"]
+        assert len(tc["transfer_templates"]) == 1
+        assert tc["transfer_templates"][0]["node_name"] == "robot_arm"
+
+    def test_manager_name_preserved_in_yaml_output(
+        self, lab_copy: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Manager name and description should map to correct prefixed settings keys."""
+        scanner = MigrationScanner(lab_copy, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry, output_dir=lab_copy)
+
+        for migration in plan.files:
+            converter.convert(migration, dry_run=False, create_backup=True)
+
+        # Check all manager migrations produce correct name/description keys
+        manager_files = [
+            m
+            for m in plan.files
+            if m.file_type.value == "manager_definition"
+            and m.status == MigrationStatus.MIGRATED
+        ]
+
+        for m in manager_files:
+            manager_type = m.original_data.get("manager_type", "")
+            prefix = manager_type.replace("_manager", "")
+            output = m.output_files[0]
+            data = yaml.safe_load(output.read_text())
+
+            # Name should be mapped to {prefix}_manager_name, not {prefix}_name
+            expected_name_key = f"{prefix}_manager_name"
+            wrong_name_key = f"{prefix}_name"
+
+            assert expected_name_key in data, (
+                f"{m.source_path.name}: expected key '{expected_name_key}' "
+                f"in output, got keys: {list(data.keys())}"
+            )
+            assert wrong_name_key not in data, (
+                f"{m.source_path.name}: found incorrect key '{wrong_name_key}' "
+                f"(should be '{expected_name_key}')"
+            )
+
+    def test_output_stays_within_project_for_root_definitions(
+        self, tmp_path: Path, temp_registry: LocalRegistryManager
+    ) -> None:
+        """Migration output should stay within the project directory even for root-level definitions."""
+        # Create a definition file at the project root (not in a subdirectory)
+        definition = {
+            "name": "Root Location Manager",
+            "description": "A location manager at project root",
+            "manager_id": "01JK7069DXAKAMWE0PDX6EY1PD",
+            "manager_type": "location_manager",
+            "locations": [
+                {
+                    "location_name": "deck_1",
+                    "location_id": "01K5HDZZCF27YHD2WDGSXFPPKF",
+                    "description": "Test deck 1",
+                    "representations": {"robot_arm": {"position": [10, 15, 5]}},
+                }
+            ],
+        }
+
+        def_path = tmp_path / "location.manager.yaml"
+        with def_path.open("w") as f:
+            yaml.dump(definition, f, default_flow_style=False, sort_keys=False)
+
+        scanner = MigrationScanner(tmp_path, output_format=OutputFormat.YAML)
+        plan = scanner.scan()
+        converter = MigrationConverter(registry=temp_registry)
+
+        for migration in plan.files:
+            result = converter.convert(migration, dry_run=False, create_backup=True)
+            # Output file must be inside the project directory
+            for output_file in result.output_files:
+                assert str(output_file).startswith(str(tmp_path)), (
+                    f"Output file {output_file} is outside project dir {tmp_path}"
+                )

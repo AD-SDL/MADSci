@@ -2,7 +2,7 @@
 
 import warnings
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, ClassVar, Literal, Optional
 
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from madsci.common.utils import new_ulid_str
@@ -33,7 +33,18 @@ class ManagerSettings(MadsciBaseSettings):
     1. Add their specific configuration parameters
     2. Set appropriate env_prefix, env_file, toml_file, etc. parameters
     3. Override default values as needed (especially server_url default port)
+
+    By default, manager settings also search ``managers/`` and ``config/``
+    subdirectories under the settings directory when walk-up discovery does
+    not find a configuration file.  This allows lab layouts like::
+
+        my-lab/
+        ├── settings.yaml              # shared settings
+        └── managers/
+            └── events.settings.yaml   # manager-specific overrides
     """
+
+    _extra_search_dirs: ClassVar[tuple[str, ...]] = ("managers", "config")
 
     server_url: AnyUrl = Field(
         title="Server URL",

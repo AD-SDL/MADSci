@@ -253,15 +253,17 @@ Classes
 `MadsciBaseSettings(**kwargs: Any)`
 :   Base class for all MADSci settings.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -297,9 +299,9 @@ Classes
     `settings_customise_sources(settings_cls: type[pydantic_settings.main.BaseSettings], init_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, env_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, dotenv_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, file_secret_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource) ‑> tuple[pydantic_settings.sources.base.PydanticBaseSettingsSource, ...]`
     :   Sets the order of settings sources for the settings model.
 
-        When a settings directory is active (via ``_settings_dir`` or
-        ``MADSCI_SETTINGS_DIR``), file paths are resolved with walk-up
-        discovery. Otherwise, default CWD-relative behavior is used.
+        File paths are resolved with walk-up discovery from the settings
+        directory (defaulting to CWD). Each filename walks up independently,
+        so shared configs in parent directories are found automatically.
 
     ### Methods
 

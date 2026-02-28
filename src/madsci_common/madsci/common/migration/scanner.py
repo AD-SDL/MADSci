@@ -242,10 +242,13 @@ class MigrationScanner:
             # Remove _manager suffix for prefix
             prefix = manager_type.replace("_manager", "") if manager_type else "manager"
 
-            # Map definition fields to prefixed settings keys
+            # Map definition fields to prefixed settings keys.
+            # Note: the old definition 'name' and 'description' fields
+            # correspond to 'manager_name' and 'manager_description' in
+            # ManagerSettings, so the prefixed keys must include 'manager_'.
             field_mapping = {
-                "name": f"{prefix}_name",
-                "description": f"{prefix}_description",
+                "name": f"{prefix}_manager_name",
+                "description": f"{prefix}_manager_description",
                 "nodes": f"{prefix}_nodes",
                 "locations": f"{prefix}_locations",
                 "transfer_capabilities": f"{prefix}_transfer_capabilities",

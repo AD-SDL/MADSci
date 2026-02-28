@@ -162,15 +162,17 @@ Classes
     This class is used to define the configuration for the ExperimentApplication node.
     It can be extended to add custom configurations.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -440,15 +442,17 @@ Classes
     This is intentionally simpler than the full RestNodeConfig used by
     the legacy ExperimentApplication.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -607,15 +611,17 @@ Classes
 
     Extends ExperimentBaseConfig with REST server settings.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -790,15 +796,17 @@ Classes
 
     Extends ExperimentBaseConfig with notebook-specific display options.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -987,15 +995,17 @@ Classes
     Extends ExperimentBaseConfig with options for passing arguments
     to the run_experiment method.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
@@ -1144,15 +1154,17 @@ Classes
 
     Extends ExperimentBaseConfig with TUI-specific options.
 
-    Initialize settings, optionally with a settings directory.
+    Initialize settings with walk-up file discovery.
 
-    When ``_settings_dir`` is provided (or ``MADSCI_SETTINGS_DIR`` is set),
-    configuration file paths are resolved via walk-up discovery from that
-    directory instead of the current working directory. Each filename walks
-    up independently, so ``node.settings.yaml`` can resolve in the node dir
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
 
-    Without either, existing CWD-relative behavior is preserved exactly.
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
 
     Args:
         _settings_dir: Starting directory for walk-up file discovery.

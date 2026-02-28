@@ -192,6 +192,60 @@ class TestWalkUpFind:
         result = walk_up_find("settings.yaml", child)
         assert result == (child / "settings.yaml").resolve()
 
+    def test_stops_at_madsci_sentinel(self, tmp_path: Path) -> None:
+        """Walk-up should not find files above a .madsci/ sentinel directory."""
+        # tmp_path/settings.yaml  <- should NOT be found
+        # tmp_path/project/       <- has .madsci/ sentinel
+        # tmp_path/project/child/ <- start here
+        project = tmp_path / "project"
+        child = project / "child"
+        child.mkdir(parents=True)
+        (project / ".madsci").mkdir()
+        (tmp_path / "settings.yaml").write_text("greeting: above-sentinel\n")
+
+        result = walk_up_find("settings.yaml", child)
+        assert result is None
+
+    def test_searches_sentinel_directory_itself(self, tmp_path: Path) -> None:
+        """The directory containing .madsci/ should still be searched."""
+        project = tmp_path / "project"
+        child = project / "child"
+        child.mkdir(parents=True)
+        (project / ".madsci").mkdir()
+        (project / "settings.yaml").write_text("greeting: at-sentinel\n")
+
+        result = walk_up_find("settings.yaml", child)
+        assert result == (project / "settings.yaml").resolve()
+
+    def test_stops_at_home_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Walk-up should not find files above the home directory."""
+        # tmp_path/settings.yaml     <- should NOT be found
+        # tmp_path/fakehome/         <- monkeypatched as home
+        # tmp_path/fakehome/child/   <- start here
+        fakehome = tmp_path / "fakehome"
+        child = fakehome / "child"
+        child.mkdir(parents=True)
+        (tmp_path / "settings.yaml").write_text("greeting: above-home\n")
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        result = walk_up_find("settings.yaml", child)
+        assert result is None
+
+    def test_searches_home_directory_itself(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The home directory itself should be searched before stopping."""
+        fakehome = tmp_path / "fakehome"
+        child = fakehome / "child"
+        child.mkdir(parents=True)
+        (fakehome / "settings.yaml").write_text("greeting: at-home\n")
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        result = walk_up_find("settings.yaml", child)
+        assert result == (fakehome / "settings.yaml").resolve()
+
 
 # ---------------------------------------------------------------------------
 # TestResolveFilePaths
@@ -451,3 +505,260 @@ class TestBackwardCompatibility:
 
         settings = SimpleSettings(greeting="custom")
         assert settings.greeting == "custom"
+
+
+# ---------------------------------------------------------------------------
+# Extra search dirs — test helpers
+# ---------------------------------------------------------------------------
+
+
+class ManagerLikeSettings(MadsciBaseSettings):
+    """Settings class that searches managers/ and config/ subdirs."""
+
+    _extra_search_dirs = ("managers", "config")
+
+    model_config = SettingsConfigDict(
+        yaml_file="mgr.settings.yaml",
+        env_prefix="MGRLIKE_",
+        env_file=None,
+        validate_default=True,
+        extra="ignore",
+        cli_parse_args=False,
+    )
+
+    port: int = Field(default=8000)
+
+
+class NoExtraDirsSettings(MadsciBaseSettings):
+    """Settings class without extra search dirs (default behaviour)."""
+
+    model_config = SettingsConfigDict(
+        yaml_file="mgr.settings.yaml",
+        env_prefix="NOEXTRA_",
+        env_file=None,
+        validate_default=True,
+        extra="ignore",
+        cli_parse_args=False,
+    )
+
+    port: int = Field(default=8000)
+
+
+class ExtraJsonSettings(MadsciBaseSettings):
+    """Settings class with extra dirs reading JSON."""
+
+    _extra_search_dirs = ("managers",)
+
+    model_config = SettingsConfigDict(
+        json_file="mgr.settings.json",
+        yaml_file=None,
+        env_file=None,
+        env_prefix="EXTRAJSON_",
+        validate_default=True,
+        extra="ignore",
+        cli_parse_args=False,
+    )
+
+    port: int = Field(default=8000)
+
+
+class ExtraTomlSettings(MadsciBaseSettings):
+    """Settings class with extra dirs reading TOML."""
+
+    _extra_search_dirs = ("managers",)
+
+    model_config = SettingsConfigDict(
+        toml_file="mgr.settings.toml",
+        yaml_file=None,
+        env_file=None,
+        env_prefix="EXTRATOML_",
+        validate_default=True,
+        extra="ignore",
+        cli_parse_args=False,
+    )
+
+    port: int = Field(default=8000)
+
+
+class ExtraEnvSettings(MadsciBaseSettings):
+    """Settings class with extra dirs reading .env."""
+
+    _extra_search_dirs = ("managers",)
+
+    model_config = SettingsConfigDict(
+        env_file="mgr.env",
+        yaml_file=None,
+        env_prefix="EXTRAENV_",
+        validate_default=True,
+        extra="ignore",
+        cli_parse_args=False,
+    )
+
+    port: int = Field(default=8000)
+
+
+# ---------------------------------------------------------------------------
+# TestExtraSearchDirs
+# ---------------------------------------------------------------------------
+
+
+class TestExtraSearchDirs:
+    """Tests for the extra_search_dirs parameter on resolve_file_paths
+    and its integration with MadsciBaseSettings._extra_search_dirs."""
+
+    # ---- Unit tests on resolve_file_paths ----
+
+    def test_file_found_in_extra_subdir(self, tmp_path: Path) -> None:
+        """File in settings_dir/managers/ is found via extra_search_dirs."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.settings.yaml").write_text("port: 9000\n")
+
+        result = resolve_file_paths(
+            "mgr.settings.yaml", tmp_path, extra_search_dirs=("managers",)
+        )
+        assert result is not None
+        assert result[0] == (mgr_dir / "mgr.settings.yaml").resolve()
+
+    def test_first_extra_dir_wins(self, tmp_path: Path) -> None:
+        """When file exists in multiple extra dirs, first match wins."""
+        mgr_dir = tmp_path / "managers"
+        cfg_dir = tmp_path / "config"
+        mgr_dir.mkdir()
+        cfg_dir.mkdir()
+        (mgr_dir / "settings.yaml").write_text("port: 1111\n")
+        (cfg_dir / "settings.yaml").write_text("port: 2222\n")
+
+        result = resolve_file_paths(
+            "settings.yaml", tmp_path, extra_search_dirs=("managers", "config")
+        )
+        assert result is not None
+        assert result[0] == (mgr_dir / "settings.yaml").resolve()
+
+    def test_walk_up_takes_priority_over_extra_dirs(self, tmp_path: Path) -> None:
+        """Walk-up discovery wins over extra_search_dirs."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (tmp_path / "settings.yaml").write_text("port: 5555\n")
+        (mgr_dir / "settings.yaml").write_text("port: 6666\n")
+
+        result = resolve_file_paths(
+            "settings.yaml", tmp_path, extra_search_dirs=("managers",)
+        )
+        assert result is not None
+        # Walk-up finds it in tmp_path itself, so extra dirs are skipped
+        assert result[0] == (tmp_path / "settings.yaml").resolve()
+
+    def test_extra_dirs_ignored_when_walk_up_finds(self, tmp_path: Path) -> None:
+        """Extra dirs are only consulted when walk-up returns None."""
+        child = tmp_path / "child"
+        child.mkdir()
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (tmp_path / "settings.yaml").write_text("port: 7777\n")
+        (mgr_dir / "settings.yaml").write_text("port: 8888\n")
+
+        # Start from child; walk-up will find settings.yaml in tmp_path
+        result = resolve_file_paths(
+            "settings.yaml", child, extra_search_dirs=("managers",)
+        )
+        assert result is not None
+        assert result[0] == (tmp_path / "settings.yaml").resolve()
+
+    def test_empty_extra_dirs_unchanged(self, tmp_path: Path) -> None:
+        """Empty extra_search_dirs = current behaviour (fallback to settings_dir / name)."""
+        result = resolve_file_paths("missing.yaml", tmp_path, extra_search_dirs=())
+        assert result is not None
+        assert result[0] == tmp_path / "missing.yaml"
+
+    def test_extra_dir_does_not_exist(self, tmp_path: Path) -> None:
+        """Non-existent extra dir is silently skipped."""
+        result = resolve_file_paths(
+            "missing.yaml", tmp_path, extra_search_dirs=("nonexistent",)
+        )
+        assert result is not None
+        assert result[0] == tmp_path / "missing.yaml"
+
+    # ---- Integration tests with settings classes ----
+
+    def test_manager_like_settings_finds_subdir(self, tmp_path: Path) -> None:
+        """Settings class with _extra_search_dirs finds file in managers/."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.settings.yaml").write_text("port: 9001\n")
+
+        settings = ManagerLikeSettings(_settings_dir=tmp_path)
+        assert settings.port == 9001
+
+    def test_no_extra_dirs_does_not_find_subdir(self, tmp_path: Path) -> None:
+        """Settings class without _extra_search_dirs does NOT find subdir files."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.settings.yaml").write_text("port: 9002\n")
+
+        settings = NoExtraDirsSettings(_settings_dir=tmp_path)
+        # Falls back to default because the file is not discovered
+        assert settings.port == 8000
+
+    def test_shared_yaml_plus_subdir_both_loaded(self, tmp_path: Path) -> None:
+        """Shared settings.yaml in CWD + manager-specific file in managers/."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+
+        class CombinedSettings(MadsciBaseSettings):
+            _extra_search_dirs = ("managers",)
+
+            model_config = SettingsConfigDict(
+                yaml_file=("settings.yaml", "mgr.settings.yaml"),
+                env_prefix="COMBINED_",
+                env_file=None,
+                validate_default=True,
+                extra="ignore",
+                cli_parse_args=False,
+            )
+
+            greeting: str = Field(default="hello")
+            port: int = Field(default=8000)
+
+        (tmp_path / "settings.yaml").write_text("greeting: shared\n")
+        (mgr_dir / "mgr.settings.yaml").write_text("port: 9003\n")
+
+        settings = CombinedSettings(_settings_dir=tmp_path)
+        assert settings.greeting == "shared"
+        assert settings.port == 9003
+
+    def test_config_subdir_works(self, tmp_path: Path) -> None:
+        """Second extra_search_dir 'config' is found when managers/ has no file."""
+        cfg_dir = tmp_path / "config"
+        cfg_dir.mkdir()
+        (cfg_dir / "mgr.settings.yaml").write_text("port: 9004\n")
+
+        settings = ManagerLikeSettings(_settings_dir=tmp_path)
+        assert settings.port == 9004
+
+    def test_extra_dirs_json(self, tmp_path: Path) -> None:
+        """Extra search dirs work for JSON config files."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.settings.json").write_text('{"port": 9005}\n')
+
+        settings = ExtraJsonSettings(_settings_dir=tmp_path)
+        assert settings.port == 9005
+
+    def test_extra_dirs_toml(self, tmp_path: Path) -> None:
+        """Extra search dirs work for TOML config files."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.settings.toml").write_text("port = 9006\n")
+
+        settings = ExtraTomlSettings(_settings_dir=tmp_path)
+        assert settings.port == 9006
+
+    def test_extra_dirs_env(self, tmp_path: Path) -> None:
+        """Extra search dirs work for .env files."""
+        mgr_dir = tmp_path / "managers"
+        mgr_dir.mkdir()
+        (mgr_dir / "mgr.env").write_text("EXTRAENV_PORT=9007\n")
+
+        settings = ExtraEnvSettings(_settings_dir=tmp_path)
+        assert settings.port == 9007
