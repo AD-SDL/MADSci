@@ -4,33 +4,52 @@ This module centralizes OpenTelemetry SDK/provider setup so MADSci services and
 clients share one consistent initialization behavior.
 """
 
+from __future__ import annotations
+
 import contextlib
 import logging
 from dataclasses import dataclass
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import (
-    BatchLogRecordProcessor,
-    ConsoleLogRecordExporter,
-    SimpleLogRecordProcessor,
-)
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import (
-    ConsoleMetricExporter,
-    InMemoryMetricReader,
-    PeriodicExportingMetricReader,
-)
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import (
-    BatchSpanProcessor,
-    ConsoleSpanExporter,
-    SimpleSpanProcessor,
-)
-from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+try:
+    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs.export import (
+        BatchLogRecordProcessor,
+        ConsoleLogRecordExporter,
+        SimpleLogRecordProcessor,
+    )
+    from opentelemetry.sdk.metrics import MeterProvider
+    from opentelemetry.sdk.metrics.export import (
+        ConsoleMetricExporter,
+        InMemoryMetricReader,
+        PeriodicExportingMetricReader,
+    )
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import (
+        BatchSpanProcessor,
+        ConsoleSpanExporter,
+        SimpleSpanProcessor,
+    )
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+        InMemorySpanExporter,
+    )
+
+    _SDK_AVAILABLE = True
+except ImportError:
+    _SDK_AVAILABLE = False
+
+    if TYPE_CHECKING:
+        from opentelemetry.sdk._logs import LoggerProvider
+        from opentelemetry.sdk.metrics import MeterProvider
+        from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+        from opentelemetry.sdk.trace import TracerProvider
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
+        )
 
 ExporterType = Literal["console", "otlp", "none"]
 OtlpProtocol = Literal["grpc", "http"]
@@ -94,6 +113,14 @@ def configure_otel(config: OtelBootstrapConfig) -> OtelRuntime:
     global _configured, _runtime  # noqa: PLW0603
 
     if not config.enabled:
+        _runtime = OtelRuntime(enabled=False)
+        return _runtime
+
+    if not _SDK_AVAILABLE:
+        _logger.warning(
+            "OpenTelemetry SDK not installed; telemetry disabled. "
+            "Install with: pip install 'madsci.common[otel]'"
+        )
         _runtime = OtelRuntime(enabled=False)
         return _runtime
 

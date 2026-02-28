@@ -28,13 +28,13 @@ Functions
         add_span_event("cache_hit", {"key": cache_key})
         add_span_event("validation_complete", {"items_validated": 100})
 
-`collect_metrics(runtime: madsci.common.otel.bootstrap.OtelRuntime) ‑> Any | None`
+`collect_metrics(runtime: OtelRuntime) ‑> Any | None`
 :   Force a synchronous metrics collection for test assertions.
 
     OpenTelemetry's metrics SDK is pull-based; in tests we want deterministic
     reads without background threads.
 
-`configure_otel(config: madsci.common.otel.bootstrap.OtelBootstrapConfig) ‑> madsci.common.otel.bootstrap.OtelRuntime`
+`configure_otel(config: OtelBootstrapConfig) ‑> madsci.common.otel.bootstrap.OtelRuntime`
 :   Configure OpenTelemetry SDK providers.
 
     This function is idempotent: the first successful configuration wins.
@@ -239,7 +239,7 @@ Functions
 Classes
 -------
 
-`OtelBootstrapConfig(enabled: bool, service_name: str, service_version: str = 'unknown', exporter: Literal['console', 'otlp', 'none'] = 'console', otlp_endpoint: str | None = None, otlp_protocol: Literal['grpc', 'http'] = 'grpc', metric_export_interval_ms: int = 10000, test_mode: bool = False)`
+`OtelBootstrapConfig(enabled: bool, service_name: str, service_version: str = 'unknown', exporter: ExporterType = 'console', otlp_endpoint: Optional[str] = None, otlp_protocol: OtlpProtocol = 'grpc', metric_export_interval_ms: int = 10000, test_mode: bool = False)`
 :   Settings for `configure_otel`.
 
     ### Instance variables
@@ -268,7 +268,7 @@ Classes
     `test_mode: bool`
     :
 
-`OtelRuntime(enabled: bool, tracer_provider: opentelemetry.sdk.trace.TracerProvider | None = None, meter_provider: opentelemetry.sdk.metrics._internal.MeterProvider | None = None, logger_provider: opentelemetry.sdk._logs._internal.LoggerProvider | None = None, otel_log_handler: logging.Handler | None = None, in_memory_span_exporter: opentelemetry.sdk.trace.export.in_memory_span_exporter.InMemorySpanExporter | None = None, in_memory_metric_reader: opentelemetry.sdk.metrics._internal.export.InMemoryMetricReader | None = None)`
+`OtelRuntime(enabled: bool, tracer_provider: Optional[TracerProvider] = None, meter_provider: Optional[MeterProvider] = None, logger_provider: Optional[LoggerProvider] = None, otel_log_handler: Optional[logging.Handler] = None, in_memory_span_exporter: Optional[InMemorySpanExporter] = None, in_memory_metric_reader: Optional[InMemoryMetricReader] = None)`
 :   Runtime handles returned by `configure_otel`.
 
     ### Instance variables
@@ -285,7 +285,7 @@ Classes
     `logger_provider: opentelemetry.sdk._logs._internal.LoggerProvider | None`
     :
 
-    `meter: opentelemetry.metrics.Meter`
+    `meter: metrics.Meter`
     :   Return a meter bound to this module.
 
     `meter_provider: opentelemetry.sdk.metrics._internal.MeterProvider | None`
@@ -294,7 +294,7 @@ Classes
     `otel_log_handler: logging.Handler | None`
     :
 
-    `tracer: opentelemetry.trace.Tracer`
+    `tracer: trace.Tracer`
     :   Return a tracer bound to this module.
 
     `tracer_provider: opentelemetry.sdk.trace.TracerProvider | None`
