@@ -46,10 +46,10 @@ GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
 
 class ResourceManagerSettings(
     ManagerSettings,
-    env_file=(".env", "resources.env"),
-    toml_file=("settings.toml", "resources.settings.toml"),
-    yaml_file=("settings.yaml", "resources.settings.yaml"),
-    json_file=("settings.json", "resources.settings.json"),
+    env_file=(".env", "resource.env", "resources.env"),
+    toml_file=("settings.toml", "resource.settings.toml", "resources.settings.toml"),
+    yaml_file=("settings.yaml", "resource.settings.yaml", "resources.settings.yaml"),
+    json_file=("settings.json", "resource.settings.json", "resources.settings.json"),
     env_prefix="RESOURCE_",
 ):
     """Settings for the MADSci Resource Manager."""

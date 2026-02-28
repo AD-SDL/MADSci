@@ -65,10 +65,10 @@ class EventLogLevel(int, Enum):
 
 class EventManagerSettings(
     ManagerSettings,
-    env_file=(".env", "events.env"),
-    toml_file=("settings.toml", "events.settings.toml"),
-    yaml_file=("settings.yaml", "events.settings.yaml"),
-    json_file=("settings.json", "events.settings.json"),
+    env_file=(".env", "event.env", "events.env"),
+    toml_file=("settings.toml", "event.settings.toml", "events.settings.toml"),
+    yaml_file=("settings.yaml", "event.settings.yaml", "events.settings.yaml"),
+    json_file=("settings.json", "event.settings.json", "events.settings.json"),
     env_prefix="EVENT_",
 ):
     """Handles settings and configuration for the Event Manager."""

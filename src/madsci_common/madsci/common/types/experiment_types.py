@@ -26,10 +26,22 @@ from pydantic_settings import SettingsConfigDict
 
 class ExperimentManagerSettings(
     ManagerSettings,
-    env_file=(".env", "experiments.env"),
-    toml_file=("settings.toml", "experiments.settings.toml"),
-    yaml_file=("settings.yaml", "experiments.settings.yaml"),
-    json_file=("settings.json", "experiments.settings.json"),
+    env_file=(".env", "experiment.env", "experiments.env"),
+    toml_file=(
+        "settings.toml",
+        "experiment.settings.toml",
+        "experiments.settings.toml",
+    ),
+    yaml_file=(
+        "settings.yaml",
+        "experiment.settings.yaml",
+        "experiments.settings.yaml",
+    ),
+    json_file=(
+        "settings.json",
+        "experiment.settings.json",
+        "experiments.settings.json",
+    ),
     env_prefix="EXPERIMENT_",
 ):
     """Settings for the MADSci Experiment Manager."""

@@ -13,7 +13,20 @@ from rich.table import Table
 
 
 @click.group()
-def registry() -> None:
+@click.option(
+    "--registry-path",
+    "-r",
+    "registry_path",
+    type=click.Path(),
+    envvar="MADSCI_REGISTRY_PATH",
+    default=None,
+    help=(
+        "Path to the registry JSON file. "
+        "Overrides MADSCI_REGISTRY_PATH and walk-up auto-detection."
+    ),
+)
+@click.pass_context
+def registry(ctx: click.Context, registry_path: Optional[str]) -> None:
     """ID Registry management commands.
 
     The registry maps component names to unique IDs (ULIDs) and tracks
@@ -25,6 +38,10 @@ def registry() -> None:
         madsci registry resolve mynode    Get ID for a component name
         madsci registry clean             Remove stale entries
     """
+    ctx.ensure_object(dict)
+    ctx.obj["registry_path"] = (
+        Path(registry_path).expanduser() if registry_path else None
+    )
 
 
 @registry.command("list")
@@ -58,7 +75,7 @@ def list_entries(
     from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
     entries = registry_mgr.list_entries(
         component_type=component_type,  # type: ignore[arg-type]
         include_stale=include_stale,
@@ -117,7 +134,7 @@ def resolve(ctx: click.Context, name: str, json_output: bool) -> None:
     from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
     entry = registry_mgr.get_entry(name)
 
     if entry is None:
@@ -165,7 +182,7 @@ def rename(ctx: click.Context, old_name: str, new_name: str, force: bool) -> Non
     from madsci.common.registry.lock_manager import RegistryLockError
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
 
     try:
         component_id = registry_mgr.rename(old_name, new_name, force=force)
@@ -206,7 +223,7 @@ def clean(ctx: click.Context, older_than: int, dry_run: bool, force: bool) -> No
     from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
 
     # First, preview
     stale = registry_mgr.clean_stale(older_than_days=older_than, dry_run=True)
@@ -244,7 +261,7 @@ def export_registry(ctx: click.Context, output: Optional[str]) -> None:
     from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
     data = registry_mgr.export()
 
     if output:
@@ -274,7 +291,7 @@ def import_registry(ctx: click.Context, file: str, merge: bool, force: bool) -> 
     from madsci.common.registry import LocalRegistryManager
 
     console = _get_console(ctx)
-    registry_mgr = LocalRegistryManager()
+    registry_mgr = LocalRegistryManager(registry_path=ctx.obj.get("registry_path"))
 
     with Path(file).open() as f:
         data = json.load(f)

@@ -326,7 +326,7 @@ class MigrationConverter:
 # ║                                                                         ║
 # ║  This file has been migrated to the new configuration system.          ║
 # ║  Settings are now in settings.yaml files (or .env overrides).          ║
-# ║  Component ID is now in the registry (~/.madsci/registry.json).        ║
+# ║  Component ID is now in the local .madsci/registry.json.               ║
 # ║                                                                         ║
 # ║  Migration date: {migration_date:49}║
 # ║                                                                         ║
