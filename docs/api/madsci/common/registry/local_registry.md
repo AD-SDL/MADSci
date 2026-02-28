@@ -11,8 +11,13 @@ Classes
 `LocalRegistryManager(registry_path: pathlib.Path | None = None, lock_manager: madsci.common.registry.lock_manager.LockManager | None = None)`
 :   Manages the local registry file.
 
-    The local registry is stored at ~/.madsci/registry.json and provides
-    persistent name-to-ID mapping for components.
+    The local registry provides persistent name-to-ID mapping for components.
+    By default the registry file is discovered via walk-up from the current
+    working directory (or ``MADSCI_SETTINGS_DIR``), stopping at the first
+    ``.madsci/`` sentinel directory found, then falling back to
+    ``~/.madsci/registry.json``.  The path can also be overridden explicitly
+    via the ``MADSCI_REGISTRY_PATH`` environment variable or the
+    ``registry_path`` constructor argument.
 
     Attributes:
         FILE_LOCK_TIMEOUT: Timeout for acquiring file lock (default: 5 seconds)
@@ -32,7 +37,8 @@ Classes
     Initialize the local registry manager.
 
     Args:
-        registry_path: Path to the registry file. Defaults to ~/.madsci/registry.json.
+        registry_path: Path to the registry file. When ``None`` the path
+            is resolved via walk-up discovery (see ``_default_path``).
         lock_manager: Lock manager instance. Creates one if not provided.
 
     ### Class variables

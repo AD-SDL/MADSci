@@ -137,17 +137,7 @@ class EventClient:
         self.logfile = self.log_dir / f"{safe_name}.log"
 
         # Create the stdlib logger for file handling and console output
-        self.logger = logging.getLogger(self.name)
-        self.logger.setLevel(get_log_level_value(self.config.log_level))
-        for handler in self.logger.handlers:
-            self.logger.removeHandler(handler)
-        file_handler = self._create_file_handler()
-        file_handler.setFormatter(AnsiStrippingFormatter())
-        self.logger.addHandler(file_handler)
-        # Add a simple StreamHandler for console output - structlog handles formatting
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(logging.Formatter("%(message)s"))
-        self.logger.addHandler(console_handler)
+        self._setup_stdlib_logger()
 
         # Create structlog logger for structured logging
         self._structlog_logger = create_instance_logger(
@@ -288,6 +278,29 @@ class EventClient:
             python_version=platform.python_version(),
             platform=platform.platform(),
         )
+
+    def _setup_stdlib_logger(self) -> None:
+        """Set up the stdlib logger with file and console handlers."""
+        self.logger = logging.getLogger(self.name)
+        self.logger.setLevel(get_log_level_value(self.config.log_level))
+        for handler in self.logger.handlers:
+            self.logger.removeHandler(handler)
+        _file_handler_error = None
+        try:
+            file_handler = self._create_file_handler()
+            file_handler.setFormatter(AnsiStrippingFormatter())
+            self.logger.addHandler(file_handler)
+        except OSError as e:
+            _file_handler_error = e
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(logging.Formatter("%(message)s"))
+        self.logger.addHandler(console_handler)
+        if _file_handler_error is not None:
+            self.logger.warning(
+                "Could not create log file %s: %s. File logging disabled.",
+                self.logfile,
+                _file_handler_error,
+            )
 
     def _create_file_handler(self) -> logging.Handler:
         """Create the appropriate file handler based on rotation config.

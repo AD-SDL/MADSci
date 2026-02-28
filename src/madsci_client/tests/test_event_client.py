@@ -53,6 +53,7 @@ def config_without_server(temp_log_dir):
         name="test_client",
         log_level=EventLogLevel.DEBUG,
         log_dir=temp_log_dir,
+        event_server_url=None,
     )
 
 

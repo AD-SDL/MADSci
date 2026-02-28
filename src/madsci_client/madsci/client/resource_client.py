@@ -233,6 +233,7 @@ class ResourceClient:
         self.config = config if config is not None else ResourceClientConfig()
         self.session = create_http_session(config=self.config)
 
+        _configured_url = self.resource_server_url
         if self.resource_server_url is not None:
             start_time = time.time()
             while time.time() - start_time < 20:
@@ -245,9 +246,7 @@ class ResourceClient:
                 except Exception:
                     time.sleep(1)
             else:
-                raise ConnectionError(
-                    f"Could not connect to the resource manager at {self.resource_server_url}."
-                )
+                self.resource_server_url = None  # Fall back to local-only mode
         self.local_resources = {}
         # Use injected client, context client, or create new
         if event_client is not None:
@@ -255,16 +254,22 @@ class ResourceClient:
         else:
             self.logger = get_event_client(
                 component_type="ResourceClient",
-                resource_server=str(self.resource_server_url)
-                if self.resource_server_url
-                else None,
+                resource_server=str(_configured_url) if _configured_url else None,
             )
         if self.resource_server_url is None:
-            self.logger.warning(
-                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
-                event_type=EventType.LOG_WARNING,
-                warning_category=MadsciLocalOnlyWarning,
-            )
+            if _configured_url is not None:
+                self.logger.warning(
+                    "Could not connect to the resource manager at %s. Falling back to local-only mode. Resource operations will not be persisted to a server.",
+                    _configured_url,
+                    event_type=EventType.LOG_WARNING,
+                    warning_category=MadsciLocalOnlyWarning,
+                )
+            else:
+                self.logger.warning(
+                    "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
+                    event_type=EventType.LOG_WARNING,
+                    warning_category=MadsciLocalOnlyWarning,
+                )
         self._client_id = new_ulid_str()
 
     def _wrap_resource(
