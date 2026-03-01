@@ -57,7 +57,7 @@ api-specs-check:
 docs: rest-api-docs
   @pdm run pdoc --output-dir docs/api/ --force madsci
   @# Strip machine-specific pointer addresses from generated docs to avoid noisy diffs
-  @python -c "import re, pathlib; [f.write_text(re.sub(r' at 0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
+  @python -c "import re, pathlib; [f.write_text(re.sub(r'[\s\xa0]at[\s\xa0]0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
   @echo "✅ API documentation generated in docs/api/"
 
 # Build the project
