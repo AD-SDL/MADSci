@@ -8,6 +8,13 @@ from pydantic import AliasChoices, AnyUrl, BaseModel, Field, field_validator
 from pydantic_extra_types.semantic_version import SemanticVersion
 
 
+def _default_mongodb_backup_dir() -> Path:
+    """Default MongoDB backup directory, resolved via sentry."""
+    from madsci.common.sentry import SUBDIR_BACKUPS, get_madsci_subdir  # noqa: PLC0415
+
+    return get_madsci_subdir(SUBDIR_BACKUPS, create=False) / "mongodb"
+
+
 class MongoDBMigrationSettings(
     MadsciBaseSettings,
     env_file=(".env", "mongodb.env", "migration.env"),
@@ -40,9 +47,9 @@ class MongoDBMigrationSettings(
         validation_alias=AliasChoices("schema_file", "MONGODB_SCHEMA_FILE"),
     )
     backup_dir: PathLike = Field(
-        default=Path(".madsci/mongodb/backups"),
+        default_factory=_default_mongodb_backup_dir,
         title="Backup Directory",
-        description="Directory where database backups will be stored. Relative to CWD unless absolute is provided.",
+        description="Directory where database backups will be stored.",
     )
     target_version: Optional[str] = Field(
         default=None,

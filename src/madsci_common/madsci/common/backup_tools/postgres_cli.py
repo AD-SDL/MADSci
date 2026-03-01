@@ -18,8 +18,8 @@ from .postgres_backup import PostgreSQLBackupTool
 )
 @click.option(
     "--backup-dir",
-    default=".madsci/postgresql/backups",
-    help="Backup directory (default: .madsci/postgresql/backups)",
+    default=None,
+    help="Backup directory (default: .madsci/backups/postgresql)",
     type=click.Path(),
 )
 @click.option(
@@ -47,6 +47,15 @@ def postgres_backup(
     """PostgreSQL backup management commands."""
     # Ensure context object exists
     ctx.ensure_object(dict)
+
+    # Resolve backup_dir default via sentry
+    if backup_dir is None:
+        from madsci.common.sentry import (  # noqa: PLC0415
+            SUBDIR_BACKUPS,
+            get_madsci_subdir,
+        )
+
+        backup_dir = str(get_madsci_subdir(SUBDIR_BACKUPS) / "postgresql")
 
     # Store common settings for subcommands
     ctx.obj["settings"] = PostgreSQLBackupSettings(

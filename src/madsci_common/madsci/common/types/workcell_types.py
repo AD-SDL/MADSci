@@ -193,6 +193,16 @@ class WorkcellState(MadsciBaseModel):
     )
 
 
+def _default_workcells_dir() -> Path:
+    """Default workcells directory, resolved via sentry."""
+    from madsci.common.sentry import (  # noqa: PLC0415
+        SUBDIR_WORKCELLS,
+        get_madsci_subdir,
+    )
+
+    return get_madsci_subdir(SUBDIR_WORKCELLS, create=False)
+
+
 class WorkcellManagerSettings(
     ManagerSettings,
     env_file=(".env", "workcell.env"),
@@ -227,8 +237,8 @@ class WorkcellManagerSettings(
     )
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",
-        description="Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name.",
-        default_factory=lambda: Path("~") / ".madsci" / "workcells",
+        description="Directory used to store workcell-related files in. Defaults to .madsci/workcells. Workcell-related files will be stored in a sub-folder with the workcell name.",
+        default_factory=_default_workcells_dir,
         alias="workcells_directory",  # * Don't double prefix
     )
     redis_host: str = Field(

@@ -126,6 +126,7 @@ Walk-up file discovery is **always active**, starting from the current working d
 
 **Walk-up boundaries** — walk-up stops at the first boundary encountered:
 - A `.madsci/` directory (project root sentinel). The directory containing `.madsci/` is searched, but parents above it are not.
+- A `.git/` directory (secondary project root boundary). The directory containing `.git/` is searched, but parents above it are not.
 - The user's home directory (`Path.home()`). The home directory itself is searched, but parents above it are not.
 - The filesystem root.
 - The `max_levels` limit (default: 10).
@@ -141,6 +142,23 @@ Walk-up file discovery is **always active**, starting from the current working d
 ```
 
 **Precedence** is unchanged: CLI args > init kwargs > env vars > .env > file secrets > JSON > TOML > YAML. Walk-up only affects *where* the files are found, not their priority.
+
+### `.madsci/` Sentry Directory (`sentry.py`)
+
+All `.madsci/` directory path resolution is centralized in `madsci.common.sentry`. This module is the canonical place for resolving where PIDs, logs, backups, and other runtime state should be stored.
+
+**Resolution algorithm** (`find_madsci_dir`):
+1. Walk up from start directory looking for an existing `.madsci/` directory
+2. If none found, look for `.git/` as a secondary boundary and return `{git_parent}/.madsci/`
+3. Fall back to `~/.madsci/`
+
+**Key functions:**
+- `find_madsci_dir(start_dir, auto_create)` — canonical resolution
+- `get_madsci_subdir(name, start_dir, create)` — get a subdirectory within `.madsci/`
+- `get_global_madsci_subdir(name, create)` — always uses `~/.madsci/` (for user-level resources like templates)
+- `ensure_madsci_dir(path)` — scaffold a `.madsci/` directory with standard subdirs
+
+When adding new code that reads/writes from `.madsci/`, always use `sentry.py` functions instead of constructing paths manually.
 
 ## Development Patterns
 

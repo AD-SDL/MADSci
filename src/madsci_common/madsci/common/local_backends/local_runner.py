@@ -51,7 +51,11 @@ class LocalRunner:
         scratch_dir: Optional[Path] = None,
     ) -> None:
         """Initialize the runner with optional scratch directory."""
-        self.scratch_dir = scratch_dir or Path.cwd() / ".madsci"
+        if scratch_dir is None:
+            from madsci.common.sentry import find_madsci_dir  # noqa: PLC0415
+
+            scratch_dir = find_madsci_dir(auto_create=True)
+        self.scratch_dir = scratch_dir
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
 
         # Shared in-memory backends

@@ -63,6 +63,20 @@ class EventLogLevel(int, Enum):
         raise ValueError(f"Invalid EventLogLevel: {value!r}")
 
 
+def _default_event_backup_dir() -> Path:
+    """Default backup directory for events, resolved via sentry."""
+    from madsci.common.sentry import SUBDIR_BACKUPS, get_madsci_subdir  # noqa: PLC0415
+
+    return get_madsci_subdir(SUBDIR_BACKUPS, create=False) / "events"
+
+
+def _default_log_dir() -> Path:
+    """Default log directory, resolved via sentry."""
+    from madsci.common.sentry import SUBDIR_LOGS, get_madsci_subdir  # noqa: PLC0415
+
+    return get_madsci_subdir(SUBDIR_LOGS, create=False)
+
+
 class EventManagerSettings(
     ManagerSettings,
     env_file=(".env", "event.env", "events.env"),
@@ -169,7 +183,7 @@ class EventManagerSettings(
         description="Cron expression for backup schedule (e.g., '0 2 * * *' for 2am daily).",
     )
     backup_dir: PathLike = Field(
-        default_factory=lambda: Path("~") / ".madsci" / "backups" / "events",
+        default_factory=_default_event_backup_dir,
         title="Backup Directory",
         description="Directory for event backups.",
     )
@@ -325,7 +339,7 @@ class EventClientConfig(MadsciClientConfig):
     log_dir: PathLike = Field(
         title="Log Directory",
         description="The directory to store logs in.",
-        default_factory=lambda: Path("~") / ".madsci" / "logs",
+        default_factory=_default_log_dir,
     )
 
     # Log rotation settings

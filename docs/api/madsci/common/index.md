@@ -20,6 +20,7 @@ Sub-modules
 * madsci.common.otel
 * madsci.common.ownership
 * madsci.common.registry
+* madsci.common.sentry
 * madsci.common.serializers
 * madsci.common.settings_dir
 * madsci.common.templates

@@ -81,17 +81,8 @@ class LocalRegistryManager:
         Resolution order:
         1. ``MADSCI_REGISTRY_PATH`` environment variable (if set)
         2. Walk up from ``MADSCI_SETTINGS_DIR`` or CWD looking for a
-           ``.madsci/`` sentinel directory (consistent with settings file
-           walk-up discovery in ``settings_dir.py``).
+           ``.madsci/`` sentinel directory (via ``sentry.find_madsci_dir``).
         3. Fall back to ``~/.madsci/registry.json``.
-
-        This ensures that running ``madsci migrate`` or ``madsci registry``
-        from a project directory with a local ``.madsci/`` sentinel uses the
-        project-local registry rather than the user's home registry.  Docker
-        deployments that mount a project-local ``.madsci/`` directory as
-        ``~/.madsci/`` inside the container continue to work unchanged because
-        the walk-up will find the ``.madsci/`` directory at the home-directory
-        boundary.
 
         Returns:
             Path to the registry JSON file.
@@ -100,31 +91,9 @@ class LocalRegistryManager:
         if env_path:
             return Path(env_path).expanduser().resolve()
 
-        home = Path.home().resolve()
+        from madsci.common.sentry import REGISTRY_FILE, find_madsci_dir  # noqa: PLC0415
 
-        # Start from MADSCI_SETTINGS_DIR if set, otherwise from CWD.
-        settings_dir_env = os.environ.get("MADSCI_SETTINGS_DIR")
-        start = (
-            Path(settings_dir_env).expanduser().resolve()
-            if settings_dir_env
-            else Path.cwd().resolve()
-        )
-
-        current = start
-        for _ in range(11):  # max_levels = 10, plus the initial directory
-            madsci_dir = current / ".madsci"
-            if madsci_dir.is_dir():
-                return madsci_dir / "registry.json"
-            # Stop at the home directory boundary (same as settings walk-up)
-            if current == home:
-                break
-            parent = current.parent
-            if parent == current:
-                # Reached filesystem root
-                break
-            current = parent
-
-        return home / ".madsci" / "registry.json"
+        return find_madsci_dir(auto_create=True) / REGISTRY_FILE
 
     def _ensure_directory(self) -> None:
         """Ensure the registry directory exists."""

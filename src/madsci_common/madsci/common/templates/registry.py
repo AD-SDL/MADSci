@@ -67,10 +67,18 @@ class TemplateRegistry:
     def _default_user_dir() -> Path:
         """Get default user template directory.
 
+        Templates are user-level resources shared across projects, so this
+        always uses ``~/.madsci/templates/``.
+
         Returns:
             Path to ~/.madsci/templates/
         """
-        return Path.home() / ".madsci" / "templates"
+        from madsci.common.sentry import (  # noqa: PLC0415
+            SUBDIR_TEMPLATES,
+            get_global_madsci_subdir,
+        )
+
+        return get_global_madsci_subdir(SUBDIR_TEMPLATES, create=False)
 
     def _bundled_template_dir(self) -> Optional[Path]:
         """Get bundled template directory from package.

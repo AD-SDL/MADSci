@@ -16,6 +16,9 @@ similar to how tools like git, npm, and cargo find their configuration files.
 Walk-up stops when any of the following boundaries are reached:
 - A ``.madsci/`` directory is found (project root sentinel). The directory
   containing the sentinel is still searched, but parents above it are not.
+- A ``.git/`` directory is found (secondary project root boundary). The
+  directory containing ``.git/`` is still searched, but parents above it
+  are not.
 - The user's home directory (``Path.home()``). The home directory itself is
   searched, but parents above it are not.
 - The filesystem root.
@@ -82,6 +85,7 @@ Functions
 
     Walk-up stops at the first boundary encountered:
     - A ``.madsci/`` sentinel directory (project root marker)
+    - A ``.git/`` directory (secondary project root boundary)
     - The user's home directory
     - The filesystem root
     - The ``max_levels`` limit
