@@ -40,7 +40,10 @@ jobs:
       - name: Install dependencies
         run: pdm install -G:all
       - name: Generate API documentation
-        run: pdm run pdoc --output-dir docs/api/ --force madsci
+        run: |
+          pdm run pdoc --output-dir docs/api/ --force madsci
+          # Strip machine-specific pointer addresses to keep docs deterministic
+          python -c "import re, pathlib; [f.write_text(re.sub(r' at 0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
       - name: Export OpenAPI specs
         run: python scripts/export_openapi.py
       - name: Generate REST API docs
