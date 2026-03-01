@@ -32,26 +32,26 @@ Classes
 
 `ModuleSettings(**kwargs: Any)`
 :   Base settings for MADSci node modules.
-
+    
     Contains module-level metadata that applies to the entire module,
     not just a single node instance. This includes version information,
     repository URLs, and interface variant selection.
-
+    
     Module developers should inherit from this class and customize
     the module_name and other fields as needed.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -85,27 +85,27 @@ Classes
 
 `NodeModuleSettings(**kwargs: Any)`
 :   Settings for a node instance within a module.
-
+    
     Combines module-level settings with node-specific runtime configuration.
     This class bridges the gap between ModuleSettings and NodeConfig,
     providing a unified configuration surface for node modules.
-
+    
     Node developers typically don't use this directly; instead, they
     create a custom settings class that inherits from RestNodeConfig
     or NodeConfig and adds module-specific fields.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.

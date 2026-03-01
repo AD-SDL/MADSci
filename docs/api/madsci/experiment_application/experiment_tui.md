@@ -10,26 +10,26 @@ Classes
 
 `ExperimentTUI(*args: Any, **kwargs: Any)`
 :   Experiment modality with interactive terminal UI.
-
+    
     Provides a Textual-based TUI for experiment control with:
     - Status display
     - Log viewer
     - Action controls
     - Real-time updates
-
+    
     Note: This modality requires the `textual` package to be installed.
     Install with: `pip install madsci[tui]` or `pip install textual`
-
+    
     Example:
         ```python
         from madsci.common.types.experiment_types import ExperimentDesign
         from madsci.experiment_application import ExperimentTUI
-
+    
         class MyExperiment(ExperimentTUI):
             experiment_design = ExperimentDesign(
                 experiment_name="Interactive Experiment"
             )
-
+    
             def run_experiment(self):
                 # Your experiment logic
                 for step in range(10):
@@ -39,15 +39,15 @@ Classes
                         parameters={"step_num": step}
                     )
                 return {"steps_completed": 10}
-
+    
         if __name__ == "__main__":
             MyExperiment().run_tui()
         ```
-
+    
     Attributes:
         experiment_design: The design template for this experiment
         config: TUI-specific configuration
-
+    
     Initialize with thread-safe pause/cancel events.
 
     ### Ancestors (in MRO)
@@ -64,13 +64,13 @@ Classes
 
     `check_experiment_status(self) ‑> None`
     :   Check experiment status using in-process events.
-
+        
         Overrides the base class to use thread-safe events for direct
         communication between the TUI and the experiment thread, avoiding
         the need for a server round-trip.
-
+        
         When paused, blocks until resumed or cancelled.
-
+        
         Raises:
             ExperimentCancelledError: If cancel was requested from the TUI.
 
@@ -88,26 +88,26 @@ Classes
 
     `run(self) ‑> Any`
     :   Alias for run_tui() for consistency with other modalities.
-
+        
         Returns:
             Experiment results after TUI exits.
 
     `run_experiment(self, *args: Any, **kwargs: Any) ‑> Any`
     :   Override this method with your experiment logic.
-
+        
         This method is called by the TUI when the user starts the experiment.
         It should contain the core experiment implementation.
-
+        
         For long-running experiments, call check_experiment_status()
         periodically to respond to user pause/cancel requests.
-
+        
         Args:
             *args: Positional arguments.
             **kwargs: Keyword arguments.
-
+        
         Returns:
             Experiment results.
-
+        
         Example:
             ```python
             def run_experiment(self):
@@ -121,33 +121,33 @@ Classes
 
     `run_tui(self) ‑> Any`
     :   Launch the TUI for this experiment.
-
+        
         This starts the Textual application with experiment controls.
         The TUI will handle starting, monitoring, and stopping the experiment.
-
+        
         Returns:
             Experiment results after TUI exits.
-
+        
         Raises:
             ImportError: If textual is not installed.
 
 `ExperimentTUIConfig(**kwargs: Any)`
 :   Configuration for TUI-based experiments.
-
+    
     Extends ExperimentBaseConfig with TUI-specific options.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.

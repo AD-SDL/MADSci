@@ -7,18 +7,11 @@ from madsci.common.types.base_types import MadsciBaseSettings
 from pydantic import AnyUrl, Field, field_validator
 
 
-def _default_backup_dir() -> Path:
-    """Default backup directory, resolved via sentry."""
-    from madsci.common.sentry import SUBDIR_BACKUPS, get_madsci_subdir  # noqa: PLC0415
-
-    return get_madsci_subdir(SUBDIR_BACKUPS, create=False)
-
-
 class BaseBackupSettings(MadsciBaseSettings):
     """Common backup configuration settings."""
 
     backup_dir: Path = Field(
-        default_factory=_default_backup_dir,
+        default=Path(".madsci/backups"),
         title="Backup Directory",
         description="Directory for storing backups",
     )

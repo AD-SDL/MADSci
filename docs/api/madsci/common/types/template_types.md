@@ -10,12 +10,12 @@ Classes
 
 `GeneratedProject(**data: Any)`
 :   Result of template generation.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -51,12 +51,12 @@ Classes
 
 `ParameterChoice(**data: Any)`
 :   A choice option for choice/multi_choice parameters.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -148,12 +148,12 @@ Classes
 
 `TemplateFile(**data: Any)`
 :   A file to be generated from template.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -177,12 +177,12 @@ Classes
 
 `TemplateHook(**data: Any)`
 :   A hook to run after generation.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -209,12 +209,12 @@ Classes
 
 `TemplateInfo(**data: Any)`
 :   Information about an available template.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -253,12 +253,12 @@ Classes
 
 `TemplateManifest(**data: Any)`
 :   The template.yaml manifest file.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -309,12 +309,12 @@ Classes
 
 `TemplateParameter(**data: Any)`
 :   Definition of a template parameter.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

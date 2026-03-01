@@ -7,12 +7,12 @@ Classes
 
 `Node(**data: Any)`
 :   A runtime representation of a MADSci Node used in a Workcell.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -42,12 +42,12 @@ Classes
 
 `NodeCapabilities(**data: Any)`
 :   Capabilities of a MADSci Node.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -77,12 +77,12 @@ Classes
 
 `NodeClientCapabilities(**data: Any)`
 :   Capabilities of a MADSci Node Client. Default values are None, meaning the capability is not explicitly set. If a capability is set to False, it is explicitly not supported.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -142,19 +142,19 @@ Classes
 
 `NodeConfig(**kwargs: Any)`
 :   Basic Configuration for a MADSci Node.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -194,15 +194,15 @@ Classes
 
 `NodeDefinition(**data: Any)`
 :   Definition of a MADSci Node, a unique instance of a MADSci Node Module.
-
+    
     .. deprecated:: 0.7.0
         Definition files are removed. Use :class:`NodeConfig` instead.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -250,12 +250,12 @@ Classes
 
 `NodeInfo(**data: Any)`
 :   Information about a MADSci Node.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -285,29 +285,29 @@ Classes
 
     `from_config(config: madsci.common.types.node_types.NodeConfig, *, node_name: str | None = None, module_name: str | None = None, module_version: str | None = None, node_definition: madsci.common.types.node_types.NodeDefinition | None = None) ‑> madsci.common.types.node_types.NodeInfo`
     :   Create a NodeInfo from settings and optional module metadata.
-
+        
         This factory builds a NodeInfo from ``NodeConfig`` settings fields
         without requiring a separate ``NodeDefinition`` file.  Identity
         fields are resolved with the following priority:
-
+        
         1. Explicit keyword arguments (``node_name``, ``module_name``, etc.)
         2. Values from ``config`` identity fields (if set)
         3. Values from ``node_definition`` (if provided, for backwards compat)
         4. Sensible defaults
-
+        
         Args:
             config: The node's configuration settings.
             node_name: Explicit node name override.
             module_name: Explicit module name override.
             module_version: Explicit module version override.
             node_definition: Optional legacy definition for backwards compat.
-
+        
         Returns:
             NodeInfo: A new NodeInfo instance.
 
     `from_node_def_and_config(node: madsci.common.types.node_types.NodeDefinition, config: madsci.common.types.node_types.NodeConfig | None = None) ‑> madsci.common.types.node_types.NodeInfo`
     :   Create a NodeInfo from a NodeDefinition and config.
-
+        
         .. deprecated:: 0.7.0
             Use :meth:`from_config` when possible. This method is maintained
             for backwards compatibility with existing code that passes a
@@ -315,12 +315,12 @@ Classes
 
 `NodeReservation(**data: Any)`
 :   Reservation of a MADSci Node.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -352,12 +352,12 @@ Classes
 
 `NodeSetConfigResponse(**data: Any)`
 :   Response from a Node Set Config Request
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -375,12 +375,12 @@ Classes
 
 `NodeStatus(**data: Any)`
 :   Status of a MADSci Node.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -467,19 +467,19 @@ Classes
 
 `RestNodeConfig(**kwargs: Any)`
 :   Default Configuration for a MADSci Node that communicates over REST.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.

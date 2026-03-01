@@ -13,13 +13,13 @@ Functions
 
 `wait_for_condition(config: madsci.common.testing.types.ValidationConfig, context: dict[str, typing.Any], timeout: float = 60.0, poll_interval: float = 1.0) ‑> bool`
 :   Wait for a validation condition to be met.
-
+    
     Args:
         config: Validation configuration (type and parameters)
         context: Execution context
         timeout: Maximum time to wait
         poll_interval: Time between checks
-
+    
     Returns:
         True if condition was met, False if timeout
 
@@ -28,7 +28,7 @@ Classes
 
 `CommandValidator(command: str)`
 :   Runs a command and checks its exit code as validation.
-
+    
     Initialize the validator with the command to run.
 
     ### Ancestors (in MRO)
@@ -332,7 +332,7 @@ Classes
 
     `validate(self, config: madsci.common.testing.types.ValidationConfig, context: dict[str, typing.Any]) ‑> madsci.common.testing.types.ValidationResult`
     :   Perform the validation.
-
+        
         Args:
             config: The validation configuration
             context: Execution context containing:
@@ -340,13 +340,13 @@ Classes
                 - stdout: Standard output of the last command
                 - stderr: Standard error of the last command
                 - working_dir: Current working directory
-
+        
         Returns:
             ValidationResult with pass/fail status and details
 
 `ValidatorRegistry()`
 :   Registry of available validators.
-
+    
     Initialize the validator registry with default validators.
 
     ### Methods

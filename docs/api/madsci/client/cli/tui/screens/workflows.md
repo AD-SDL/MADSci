@@ -10,7 +10,7 @@ Classes
 
 `WorkflowDetailPanel(**kwargs: Any)`
 :   Panel showing details for a selected workflow.
-
+    
     Initialize the panel.
 
     ### Ancestors (in MRO)
@@ -35,14 +35,14 @@ Classes
 
     `update_details(self, workflow_id: str, data: dict) ‑> None`
     :   Update the detail display.
-
+        
         Args:
             workflow_id: Workflow ID.
             data: Workflow data dictionary.
 
 `WorkflowsScreen(**kwargs: Any)`
 :   Screen showing workflow visualization and management.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)

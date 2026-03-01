@@ -10,7 +10,7 @@ Classes
 
 `DashboardScreen(**kwargs: Any)`
 :   Main dashboard screen showing lab overview.
-
+    
     Initialize the dashboard screen.
 
     ### Ancestors (in MRO)
@@ -51,9 +51,9 @@ Classes
 
 `QuickActionsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing quick action shortcuts.
-
+    
     Initialize a Widget.
-
+    
     Args:
         *children: Child widgets.
         name: The name of the widget.
@@ -87,9 +87,9 @@ Classes
 
 `RecentEventsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing recent events.
-
+    
     Initialize a Widget.
-
+    
     Args:
         *children: Child widgets.
         name: The name of the widget.
@@ -123,9 +123,9 @@ Classes
 
 `ServiceStatusWidget(name: str, url: str, **kwargs: Any)`
 :   Widget displaying status of a single service.
-
+    
     Initialize the service status widget.
-
+    
     Args:
         name: Service name.
         url: Service URL.
@@ -155,9 +155,9 @@ Classes
 
 `ServicesPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing all service statuses.
-
+    
     Initialize a Widget.
-
+    
     Args:
         *children: Child widgets.
         name: The name of the widget.

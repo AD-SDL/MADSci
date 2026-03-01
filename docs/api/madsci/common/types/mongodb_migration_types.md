@@ -7,12 +7,12 @@ Classes
 
 `CollectionDefinition(**data: Any)`
 :   MongoDB collection definition.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -42,12 +42,12 @@ Classes
 
 `IndexDefinition(**data: Any)`
 :   MongoDB index definition.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -92,12 +92,12 @@ Classes
 
 `IndexKey(**data: Any)`
 :   Represents a single key in a MongoDB index.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -133,19 +133,19 @@ Classes
 
 `MongoDBMigrationSettings(**kwargs: Any)`
 :   Configuration settings for MongoDB migration operations.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -192,12 +192,12 @@ Classes
 
 `MongoDBSchema(**data: Any)`
 :   Complete MongoDB database schema definition using Pydantic models
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -228,12 +228,12 @@ Classes
 
     `from_mongodb_database(database_name: str, mongo_client: Any, schema_version: str = '0.0.0') ‑> madsci.common.types.mongodb_migration_types.MongoDBSchema`
     :   Extract schema from an existing MongoDB database.
-
+        
         Args:
             database_name: Name of the database
             mongo_client: PyMongo MongoClient instance
             schema_version: Version to assign to the extracted schema
-
+        
         Returns:
             MongoDBSchema instance representing the database's current schema
 
@@ -247,7 +247,7 @@ Classes
 
     `compare_with_database_schema(self, db_schema: MongoDBSchema) ‑> Dict[str, Any]`
     :   Compare this schema with a database schema and return differences.
-
+        
         Returns:
             Dictionary with differences:
             - missing_collections: Collections in expected schema but not in DB

@@ -2,6 +2,12 @@ Module madsci.common.types.resource_types.definitions
 =====================================================
 Pydantic Models for Resource Definitions, used to define default resources for a node or workcell.
 
+Variables
+---------
+
+`LetterOrDigitStr: TypeAlias`
+:   A string constrained to a single letter or digit.
+
 Functions
 ---------
 
@@ -13,12 +19,12 @@ Classes
 
 `AssetResourceDefinition(**data: Any)`
 :   Definition for an asset resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -35,12 +41,12 @@ Classes
 
 `CollectionResourceDefinition(**data: Any)`
 :   Definition for a collection resource. Collections are used for resources that have a number of children, each with a unique key, which can be randomly accessed.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -69,12 +75,12 @@ Classes
 
 `ConsumableResourceDefinition(**data: Any)`
 :   Definition for a consumable resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -105,12 +111,12 @@ Classes
 
 `ContainerResourceDefinition(**data: Any)`
 :   Definition for a container resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -145,12 +151,12 @@ Classes
 
 `ContinuousConsumableResourceDefinition(**data: Any)`
 :   Definition for a continuous consumable resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -168,12 +174,12 @@ Classes
 
 `CustomResourceAttributeDefinition(**data: Any)`
 :   Definition for a MADSci Custom Resource Attribute.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -198,12 +204,12 @@ Classes
 
 `DiscreteConsumableResourceDefinition(**data: Any)`
 :   Definition for a discrete consumable resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -227,12 +233,12 @@ Classes
 
 `GridResourceDefinition(**data: Any)`
 :   Definition for a grid resource. Grids are 2D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Resource]]).
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -261,12 +267,12 @@ Classes
 
 `PoolResourceDefinition(**data: Any)`
 :   Definition for a pool resource. Pool resources are collections of consumables with no structure (used for wells, reservoirs, etc.).
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -290,12 +296,12 @@ Classes
 
 `QueueResourceDefinition(**data: Any)`
 :   Definition for a queue resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -316,12 +322,12 @@ Classes
 
 `ResourceDefinition(**data: Any)`
 :   Definition for a MADSci Resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -367,12 +373,12 @@ Classes
 
 `ResourceManagerDefinition(**data: Any)`
 :   Definition for a Resource Manager's Configuration
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -400,12 +406,12 @@ Classes
 
 `ResourceManagerHealth(**data: Any)`
 :   Health status for Resource Manager including database connectivity.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -427,19 +433,19 @@ Classes
 
 `ResourceManagerSettings(**kwargs: Any)`
 :   Settings for the MADSci Resource Manager.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -467,12 +473,12 @@ Classes
 
 `RowResourceDefinition(**data: Any)`
 :   Definition for a row resource. Rows are 1D collections of resources. They are treated as single collections (i.e. Collection[Resource]).
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -506,12 +512,12 @@ Classes
 
 `SlotResourceDefinition(**data: Any)`
 :   Definition for a slot resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -535,12 +541,12 @@ Classes
 
 `StackResourceDefinition(**data: Any)`
 :   Definition for a stack resource.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -561,12 +567,12 @@ Classes
 
 `TemplateDefinition(**data: Any)`
 :   Definition for a Resource Template to be created on manager startup.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -599,12 +605,12 @@ Classes
 
 `VoxelGridResourceDefinition(**data: Any)`
 :   Definition for a voxel grid resource. Voxel grids are 3D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Collection[Resource]]]).
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

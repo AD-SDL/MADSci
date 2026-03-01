@@ -23,7 +23,7 @@ Classes
 
 `CommandValidator(command: str)`
 :   Runs a command and checks its exit code as validation.
-
+    
     Initialize the validator with the command to run.
 
     ### Ancestors (in MRO)
@@ -43,12 +43,12 @@ Classes
 
 `E2ETestDefinition(**data: Any)`
 :   Complete definition of an E2E test.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -93,12 +93,12 @@ Classes
 
 `E2ETestResult(**data: Any)`
 :   Complete result of an E2E test run.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -162,11 +162,11 @@ Classes
 
 `E2ETestRunner(working_dir: pathlib.Path | None = None, mode: madsci.common.testing.types.TestMode | None = None, console: rich.console.Console | None = None, verbose: bool = False, capture_logs: bool = True)`
 :   Executes E2E test definitions.
-
+    
     Supports both pure Python mode (no Docker) and Docker mode.
-
+    
     Initialize the test runner.
-
+    
     Args:
         working_dir: Base directory for test execution. If None, uses a temp dir.
         mode: Test execution mode (PYTHON, DOCKER, HYBRID). If None, uses test's mode.
@@ -178,32 +178,32 @@ Classes
 
     `run(self, test_definition: madsci.common.testing.types.E2ETestDefinition, env: dict[str, str] | None = None) ‑> madsci.common.testing.types.E2ETestResult`
     :   Run an E2E test.
-
+        
         Args:
             test_definition: The test to run
             env: Additional environment variables
-
+        
         Returns:
             E2ETestResult with the test outcome
 
     `run_from_yaml(self, yaml_path: pathlib.Path, **kwargs: Any) ‑> madsci.common.testing.types.E2ETestResult`
     :   Load and run a test from a YAML file.
-
+        
         Args:
             yaml_path: Path to the test definition YAML file
             **kwargs: Additional arguments passed to run()
-
+        
         Returns:
             E2ETestResult with the test outcome
 
 `E2ETestStep(**data: Any)`
 :   A single step in an E2E test.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -344,12 +344,12 @@ Classes
 
 `StepResult(**data: Any)`
 :   Result of executing a single test step.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -400,15 +400,15 @@ Classes
 
 `TemplateValidator(console: rich.console.Console | None = None, verbose: bool = False)`
 :   Validates MADSci templates by instantiating them and checking output.
-
+    
     Performs the following validations:
     - Template renders without errors
     - Generated Python files have valid syntax
     - Generated code passes ruff linting
     - (Optional) Generated code can be imported
-
+    
     Initialize the template validator.
-
+    
     Args:
         console: Rich console for output. If None, creates one.
         verbose: If True, print verbose output.
@@ -420,24 +420,24 @@ Classes
 
     `validate_all_templates(self, templates_dir: pathlib.Path, **kwargs: Any) ‑> list[madsci.common.testing.template_validator.TemplateValidationResult]`
     :   Validate all templates in a directory.
-
+        
         Args:
             templates_dir: Directory containing template subdirectories
             **kwargs: Additional arguments passed to validate_template
-
+        
         Returns:
             List of validation results
 
     `validate_template(self, template_path: pathlib.Path, test_values: dict[str, typing.Any] | None = None, output_dir: pathlib.Path | None = None, check_ruff: bool = True, check_imports: bool = False) ‑> madsci.common.testing.template_validator.TemplateValidationResult`
     :   Validate a template by instantiating it with test values.
-
+        
         Args:
             template_path: Path to the template directory (containing template.yaml)
             test_values: Values to use for template parameters. If None, uses defaults.
             output_dir: Directory for generated output. If None, uses temp dir.
             check_ruff: If True, run ruff check on generated code.
             check_imports: If True, attempt to import generated Python modules.
-
+        
         Returns:
             TemplateValidationResult with details of the validation.
 
@@ -462,12 +462,12 @@ Classes
 
 `ValidationResult(**data: Any)`
 :   Result of a single validation.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -584,7 +584,7 @@ Classes
 
     `validate(self, config: madsci.common.testing.types.ValidationConfig, context: dict[str, typing.Any]) ‑> madsci.common.testing.types.ValidationResult`
     :   Perform the validation.
-
+        
         Args:
             config: The validation configuration
             context: Execution context containing:
@@ -592,13 +592,13 @@ Classes
                 - stdout: Standard output of the last command
                 - stderr: Standard error of the last command
                 - working_dir: Current working directory
-
+        
         Returns:
             ValidationResult with pass/fail status and details
 
 `ValidatorRegistry()`
 :   Registry of available validators.
-
+    
     Initialize the validator registry with default validators.
 
     ### Methods

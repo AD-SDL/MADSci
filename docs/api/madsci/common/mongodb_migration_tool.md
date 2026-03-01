@@ -16,9 +16,9 @@ Classes
 
 `MongoDBMigrator(settings: madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings, logger: madsci.client.event_client.EventClient | None = None)`
 :   Handles MongoDB schema migrations for MADSci with backup and restore capabilities.
-
+    
     Initialize the MongoDB migrator.
-
+    
     Args:
         settings: Migration configuration settings
         logger: Optional logger instance
@@ -44,6 +44,6 @@ Classes
 
     `validate_schema(self) ‑> Dict[str, Any]`
     :   Validate current database schema against expected schema.
-
+        
         Returns:
             Dictionary with validation results and differences

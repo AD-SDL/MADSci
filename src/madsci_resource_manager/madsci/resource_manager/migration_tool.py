@@ -28,13 +28,6 @@ from sqlalchemy import inspect
 from sqlmodel import Session, create_engine, select
 
 
-def _default_postgresql_backup_dir() -> Path:
-    """Default PostgreSQL backup directory, resolved via sentry."""
-    from madsci.common.sentry import SUBDIR_BACKUPS, get_madsci_subdir  # noqa: PLC0415
-
-    return get_madsci_subdir(SUBDIR_BACKUPS, create=False) / "postgresql"
-
-
 class DatabaseMigrationSettings(
     MadsciBaseSettings,
     env_file=(".env", "resources.env", "migration.env"),
@@ -57,7 +50,7 @@ class DatabaseMigrationSettings(
         description="Target version to migrate to (defaults to current MADSci version)",
     )
     backup_dir: PathLike = Field(
-        default_factory=_default_postgresql_backup_dir,
+        default=Path(".madsci/backups/postgresql"),
         title="Backup Directory",
         description="Directory where database backups will be stored.",
     )

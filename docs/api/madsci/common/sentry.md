@@ -41,13 +41,13 @@ Functions
 
 `ensure_madsci_dir(path: str | Path | None = None) ‑> pathlib.Path`
 :   Initialize a ``.madsci/`` directory with standard subdirectories.
-
+    
     Parameters
     ----------
     path:
         Parent directory in which to create ``.madsci/``.
         Defaults to ``Path.cwd()``.
-
+    
     Returns
     -------
     Path
@@ -55,7 +55,7 @@ Functions
 
 `find_madsci_dir(start_dir: str | Path | None = None, *, auto_create: bool = False, max_levels: int = 10) ‑> pathlib.Path`
 :   Resolve the canonical ``.madsci/`` directory.
-
+    
     Parameters
     ----------
     start_dir:
@@ -66,7 +66,7 @@ Functions
         create it and log an INFO message suggesting ``madsci init``.
     max_levels:
         Maximum number of parent directories to check.
-
+    
     Returns
     -------
     Path
@@ -74,17 +74,17 @@ Functions
 
 `get_global_madsci_subdir(subdir_name: str, *, create: bool = True) ‑> pathlib.Path`
 :   Return a subdirectory within ``~/.madsci/``.
-
+    
     Use this for user-level resources shared across all projects (e.g.
     templates).
-
+    
     Parameters
     ----------
     subdir_name:
         Name of the subdirectory.
     create:
         If ``True``, create the subdirectory if it does not exist.
-
+    
     Returns
     -------
     Path
@@ -92,7 +92,7 @@ Functions
 
 `get_madsci_subdir(subdir_name: str, start_dir: str | Path | None = None, *, create: bool = True) ‑> pathlib.Path`
 :   Return a subdirectory within the resolved ``.madsci/`` directory.
-
+    
     Parameters
     ----------
     subdir_name:
@@ -102,7 +102,7 @@ Functions
     create:
         If ``True``, create the subdirectory (and parent ``.madsci/``) if
         they do not exist.
-
+    
     Returns
     -------
     Path

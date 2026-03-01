@@ -34,22 +34,22 @@ Classes
 
 `HTTPInterfaceSettings(**kwargs: Any)`
 :   Settings for HTTP/REST API interfaces.
-
+    
     Provides configuration for equipment that exposes HTTP APIs,
     including authentication and request configuration.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -92,26 +92,26 @@ Classes
 
 `InterfaceSettings(**kwargs: Any)`
 :   Base settings for hardware interfaces.
-
+    
     These settings are used by interface classes, independent of whether
     they're used in a MADSci node or standalone (e.g., in a Jupyter notebook).
-
+    
     Interface developers should inherit from this class (or one of its
     specialized subclasses like SerialInterfaceSettings) and add
     device-specific configuration fields.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -154,22 +154,22 @@ Classes
 
 `SerialInterfaceSettings(**kwargs: Any)`
 :   Settings for serial port (RS-232, RS-485, USB-serial) interfaces.
-
+    
     Provides configuration for pyserial-based communication with
     laboratory equipment that uses serial protocols.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -215,22 +215,22 @@ Classes
 
 `SocketInterfaceSettings(**kwargs: Any)`
 :   Settings for TCP/IP socket interfaces.
-
+    
     Provides configuration for network-based communication with
     laboratory equipment that uses TCP/IP protocols.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -273,23 +273,23 @@ Classes
 
 `USBInterfaceSettings(**kwargs: Any)`
 :   Settings for direct USB device interfaces.
-
+    
     Provides configuration for USB-based communication using
     libraries like pyusb. This is for devices that don't use
     USB-serial bridges but communicate directly via USB.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.

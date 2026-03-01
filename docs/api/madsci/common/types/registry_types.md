@@ -17,15 +17,15 @@ Classes
 
 `LocalRegistry(**data: Any)`
 :   The local registry file structure.
-
+    
     This represents the contents of ~/.madsci/registry.json,
     the local cache of component identities.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -52,15 +52,15 @@ Classes
 
 `RegistryEntry(**data: Any)`
 :   A single entry in the registry.
-
+    
     Each entry maps a human-readable component name to a unique ULID,
     with optional lock information for conflict prevention.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -101,24 +101,24 @@ Classes
 
     `is_locked_by(self, instance_id: str) ‑> bool`
     :   Check if entry is locked by a specific instance.
-
+        
         Args:
             instance_id: The instance ID to check
-
+        
         Returns:
             True if the entry is locked by this instance
 
 `RegistryLock(**data: Any)`
 :   Lock information for a registry entry.
-
+    
     Locks prevent multiple processes from claiming the same component name.
     They use a heartbeat mechanism to detect stale locks from crashed processes.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -151,12 +151,12 @@ Classes
 
 `RegistryResolveResult(**data: Any)`
 :   Result from resolving a name in the registry.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

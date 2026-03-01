@@ -13,18 +13,18 @@ Functions
 
 `create_dynamic_model(action_name: str, json_result_type: Optional[type] = None, action_function: Optional[Any] = None) ‑> type[madsci.common.types.action_types.RestActionResult]`
 :   Create a dynamic RestActionResult model for a specific action.
-
+    
     Args:
         action_name: Name of the action
         json_result_type: Type to use for the json_result field (None for file-only actions)
         action_function: Optional action function for extracting additional metadata
-
+    
     Returns:
         Dynamic RestActionResult subclass with properly typed json_result field
 
 `extract_file_parameters(action_function: Any) ‑> dict[str, dict[str, typing.Any]]`
 :   Extract file parameter information from action function signature.
-
+    
     Returns:
         Dictionary mapping parameter names to their metadata including:
         - required: bool indicating if the parameter is required
@@ -34,7 +34,7 @@ Functions
 
 `extract_file_result_definitions(action_function: Any) ‑> dict[str, str]`
 :   Extract file result information from action function metadata.
-
+    
     Returns:
         Dictionary mapping result labels to their descriptions for file results
 
@@ -43,12 +43,12 @@ Classes
 
 `ActionCancelled(**data: Any)`
 :   Response from an action that was cancelled.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -67,19 +67,19 @@ Classes
 
 `ActionDatapoints(**data: Any)`
 :   Datapoint IDs returned from an action.
-
+    
     This class stores only ULID strings (datapoint IDs) for efficient storage and workflow management.
     Full DataPoint objects can be fetched just-in-time when needed using the data client.
-
+    
     Values can be:
     - str: Single datapoint ID (ULID)
     - list[str]: List of datapoint IDs (ULIDs)
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -99,12 +99,12 @@ Classes
 
 `ActionDefinition(**data: Any)`
 :   Definition of an action.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -177,12 +177,12 @@ Classes
 
 `ActionFailed(**data: Any)`
 :   Response from an action that failed.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -201,12 +201,12 @@ Classes
 
 `ActionFiles(**data: Any)`
 :   Files returned from an action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -226,12 +226,12 @@ Classes
 
 `ActionJSON(**data: Any)`
 :   Data returned from an action as JSON
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -253,12 +253,12 @@ Classes
 
 `ActionNotReady(**data: Any)`
 :   Response from an action that is not ready to be run.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -277,12 +277,12 @@ Classes
 
 `ActionNotStarted(**data: Any)`
 :   Response from an action that has not started.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -301,12 +301,12 @@ Classes
 
 `ActionPaused(**data: Any)`
 :   Response from an action that is paused.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -325,12 +325,12 @@ Classes
 
 `ActionRequest(**data: Any)`
 :   Request to perform an action on a node
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -389,12 +389,12 @@ Classes
 
 `ActionResult(**data: Any)`
 :   Result of an action.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -447,12 +447,12 @@ Classes
 
 `ActionResultDefinition(**data: Any)`
 :   Defines a result for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -482,12 +482,12 @@ Classes
 
 `ActionRunning(**data: Any)`
 :   Response from an action that is running.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -545,12 +545,12 @@ Classes
 
 `ActionSucceeded(**data: Any)`
 :   Response from an action that succeeded.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -569,12 +569,12 @@ Classes
 
 `ActionUnknown(**data: Any)`
 :   Response from an action that has an unknown status.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -593,12 +593,12 @@ Classes
 
 `ArgumentDefinition(**data: Any)`
 :   Defines an argument for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -633,12 +633,12 @@ Classes
 
 `DatapointActionResultDefinition(**data: Any)`
 :   Defines a file result for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -657,12 +657,12 @@ Classes
 
 `FileActionResultDefinition(**data: Any)`
 :   Defines a file result for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -681,12 +681,12 @@ Classes
 
 `FileArgumentDefinition(**data: Any)`
 :   Defines a file for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -705,12 +705,12 @@ Classes
 
 `JSONActionResultDefinition(**data: Any)`
 :   Defines a JSON result for a node action
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -732,12 +732,12 @@ Classes
 
 `LocationArgumentDefinition(**data: Any)`
 :   Location Argument Definition for use in NodeInfo
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -756,12 +756,12 @@ Classes
 
 `RestActionRequest(**data: Any)`
 :   Base REST action request model with nested args structure.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -785,12 +785,12 @@ Classes
 
 `RestActionResult(**data: Any)`
 :   Result of an action, returned over REST API.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

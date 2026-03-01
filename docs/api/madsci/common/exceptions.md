@@ -34,7 +34,7 @@ Classes
 
 `ExperimentCancelledError(message: str)`
 :   Raised in an experiment application when an experiment is cancelled
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)
@@ -44,7 +44,7 @@ Classes
 
 `ExperimentFailedError(message: str)`
 :   Raised in an experiment application when an experiment fails.
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)
@@ -54,7 +54,7 @@ Classes
 
 `ExperimentPauseTimeoutError(message: str)`
 :   Raised when an experiment remains paused longer than the configured timeout.
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)
@@ -64,7 +64,7 @@ Classes
 
 `LocationNotFoundError(message: str)`
 :   Raised when a location cannot be found by name or ID
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)
@@ -74,7 +74,7 @@ Classes
 
 `WorkflowCanceledError(message: str)`
 :   Raised when a workflow is canceled
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)
@@ -84,7 +84,7 @@ Classes
 
 `WorkflowFailedError(message: str)`
 :   Raised when a workflow fails
-
+    
     Initializes the exception
 
     ### Ancestors (in MRO)

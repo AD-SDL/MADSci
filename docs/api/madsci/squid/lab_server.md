@@ -7,7 +7,7 @@ Classes
 
 `LabManager(settings: madsci.common.types.lab_types.LabManagerSettings | None = None, **kwargs: Any)`
 :   Lab Manager REST Server.
-
+    
     Initialize the Lab Manager.
 
     ### Ancestors (in MRO)

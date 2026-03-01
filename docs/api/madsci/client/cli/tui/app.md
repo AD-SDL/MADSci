@@ -9,12 +9,12 @@ Classes
 
 `MadsciApp(lab_url: str = 'http://localhost:8000/', initial_screen: str = 'dashboard', context: MadsciContext | None = None)`
 :   MADSci Terminal User Interface Application.
-
+    
     Provides an interactive terminal interface for managing and
     monitoring MADSci labs.
-
+    
     Initialize the MADSci TUI application.
-
+    
     Args:
         lab_url: URL of the Lab Manager.
         initial_screen: Name of the screen to show on launch.
@@ -57,7 +57,7 @@ Classes
 
     `action_switch_screen(self, screen: str) ‑> None`
     :   Switch to a named screen.
-
+        
         Args:
             screen: Name of the screen to switch to.
 

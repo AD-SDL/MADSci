@@ -7,12 +7,12 @@ Classes
 
 `EmailAlertsConfig(**data: Any)`
 :   Configuration for sending emails.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -51,12 +51,12 @@ Classes
 
 `Event(**data: Any)`
 :   An event in the MADSci system.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -109,25 +109,25 @@ Classes
 
 `EventClientConfig(**kwargs: Any)`
 :   Configuration for an Event Client.
-
+    
     Inherits all HTTP client configuration from MadsciClientConfig including:
     - Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
     - Timeout configuration (timeout_default, timeout_data_operations, etc.)
     - Connection pooling (pool_connections, pool_maxsize)
     - Rate limiting (rate_limit_tracking_enabled, rate_limit_warning_threshold, etc.)
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -211,15 +211,15 @@ Classes
 
 `EventClientContext(client: EventClient, hierarchy: list[str] = <factory>, metadata: dict[str, typing.Any] = <factory>)`
 :   Holds the current EventClient and its hierarchical context.
-
+    
     This dataclass is used internally by the context management system
     to track the current EventClient and accumulated context metadata.
-
+    
     Attributes:
         client: The actual EventClient instance for logging.
         hierarchy: The naming hierarchy, e.g., ["experiment", "workflow", "step"].
         metadata: Accumulated context metadata (experiment_id, workflow_id, etc.).
-
+    
     Example:
         ctx = EventClientContext(
             client=event_client,
@@ -241,7 +241,7 @@ Classes
 
     `name: str`
     :   Get the full hierarchical name.
-
+        
         Returns:
             Dot-separated hierarchy string, or "madsci" if empty.
 
@@ -249,16 +249,16 @@ Classes
 
     `child(self, name: str, client: ForwardRef('EventClient') | None = None, **metadata: Any) ‑> EventClientContext`
     :   Create a child context with extended hierarchy.
-
+        
         Args:
             name: Name for this context level, added to hierarchy.
             client: Optional explicit EventClient. If None, creates a bound
                    child from the parent's client.
             **metadata: Additional context metadata to merge.
-
+        
         Returns:
             New EventClientContext with extended hierarchy and metadata.
-
+        
         Example:
             parent_ctx = EventClientContext(client=client, hierarchy=["experiment"])
             child_ctx = parent_ctx.child("workflow", workflow_id="wf-123")
@@ -295,12 +295,12 @@ Classes
 
 `EventManagerDefinition(**data: Any)`
 :   Definition for a Squid Event Manager
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -325,12 +325,12 @@ Classes
 
 `EventManagerHealth(**data: Any)`
 :   Health status for Event Manager including database connectivity.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -352,19 +352,19 @@ Classes
 
 `EventManagerSettings(**kwargs: Any)`
 :   Handles settings and configuration for the Event Manager.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -434,7 +434,7 @@ Classes
 
 `EventType(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   The type of an event.
-
+    
     Notes:
     - Prefer the most specific type available.
     - The LOG_* types are for general logging; prefer domain-specific types when
@@ -638,12 +638,12 @@ Classes
 
 `NodeUtilizationData(**data: Any)`
 :   Utilization data for a single node.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -697,12 +697,12 @@ Classes
 
 `SystemUtilizationData(**data: Any)`
 :   System-wide utilization data.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

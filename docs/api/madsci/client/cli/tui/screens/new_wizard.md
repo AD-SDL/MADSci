@@ -11,7 +11,7 @@ Classes
 
 `CategoryTreeWidget(categories: dict[str, list[dict[str, str]]], **kwargs: Any)`
 :   Tree widget showing template categories.
-
+    
     Initialize with template categories grouped by name.
 
     ### Ancestors (in MRO)
@@ -36,11 +36,11 @@ Classes
 
 `TemplateBrowserScreen(**kwargs: Any)`
 :   Interactive template browser screen.
-
+    
     Shows categories in a tree on the left, a searchable table of
     templates on the right, and details for the selected template
     at the bottom.
-
+    
     Initialize the template browser screen.
 
     ### Ancestors (in MRO)
@@ -96,9 +96,9 @@ Classes
 
 `TemplateDetailPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing details for the selected template.
-
+    
     Initialize a Widget.
-
+    
     Args:
         *children: Child widgets.
         name: The name of the widget.
@@ -132,7 +132,7 @@ Classes
 
 `TemplateSelected(template_id: str)`
 :   Message sent when a template is selected.
-
+    
     Initialize with the selected template ID.
 
     ### Ancestors (in MRO)

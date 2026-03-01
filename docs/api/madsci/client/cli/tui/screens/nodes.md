@@ -10,9 +10,9 @@ Classes
 
 `NodeDetailScreen(node_name: str, node_data: dict, **kwargs: Any)`
 :   Screen showing details for a single node, pushed on top of NodesScreen.
-
+    
     Initialize the detail screen.
-
+    
     Args:
         node_name: Name of the node.
         node_data: Node data dictionary.
@@ -52,7 +52,7 @@ Classes
 
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)

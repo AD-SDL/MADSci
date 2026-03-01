@@ -11,5 +11,5 @@ Functions
 
 `instrument_requests(*, enabled: bool = True) ‑> bool`
 :   Enable OpenTelemetry auto-instrumentation for `requests`.
-
+    
     Returns True when instrumentation was applied, otherwise False.

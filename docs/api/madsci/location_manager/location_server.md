@@ -16,11 +16,11 @@ Classes
 
 `LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, **kwargs: Any)`
 :   MADSci Location Manager using the new AbstractManagerBase pattern.
-
+    
     This class is decorated with @ownership_class() which automatically
     establishes ownership context for all public methods, eliminating the
     need for manual `with ownership_context():` blocks in each endpoint.
-
+    
     Initialize the LocationManager.
 
     ### Ancestors (in MRO)
@@ -68,13 +68,13 @@ Classes
 
     `get_location_resources(self, location_id: str) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
     :   Get the resource hierarchy for resources currently at a specific location.
-
+        
         Args:
             location_id: Location ID to query
-
+        
         Returns:
             ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource
-
+        
         Raises:
             HTTPException: If location not found
 
@@ -83,7 +83,7 @@ Classes
 
     `get_transfer_graph(self) ‑> dict[str, list[str]]`
     :   Get the current transfer graph as adjacency list.
-
+        
         Returns:
             Dict mapping location IDs to lists of reachable location IDs
 
@@ -92,14 +92,14 @@ Classes
 
     `plan_transfer(self, source_location_id: str, target_location_id: str) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Plan a transfer workflow from source to target.
-
+        
         Args:
             source_location_id: Source location ID
             target_location_id: Target location ID
-
+        
         Returns:
             Composite workflow definition to execute the transfer
-
+        
         Raises:
             HTTPException: If no transfer path exists
 

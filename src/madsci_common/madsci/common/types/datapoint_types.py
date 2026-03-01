@@ -250,16 +250,6 @@ class ObjectStorageSettings(
     )
 
 
-def _default_datapoints_dir() -> str:
-    """Default file storage path for datapoints, resolved via sentry."""
-    from madsci.common.sentry import (  # noqa: PLC0415
-        SUBDIR_DATAPOINTS,
-        get_madsci_subdir,
-    )
-
-    return str(get_madsci_subdir(SUBDIR_DATAPOINTS, create=False))
-
-
 class DataManagerSettings(
     ManagerSettings,
     env_file=(".env", "data.env"),
@@ -306,7 +296,7 @@ class DataManagerSettings(
     file_storage_path: PathLike = Field(
         title="File Storage Path",
         description="The path where files are stored on the server.",
-        default_factory=_default_datapoints_dir,
+        default=".madsci/datapoints",
     )
 
 

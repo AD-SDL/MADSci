@@ -1,6 +1,6 @@
 """Pydantic Models for Resource Definitions, used to define default resources for a node or workcell."""
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, TypeAlias, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
@@ -36,12 +36,14 @@ def single_letter_or_digit_validator(value: str) -> str:
     return value
 
 
-GridIndex = Union[
-    int,
-    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
+LetterOrDigitStr: TypeAlias = Annotated[
+    str, AfterValidator(single_letter_or_digit_validator)
 ]
-GridIndex2D = tuple[GridIndex, GridIndex]
-GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
+"""A string constrained to a single letter or digit."""
+
+GridIndex: TypeAlias = Union[int, LetterOrDigitStr]
+GridIndex2D: TypeAlias = tuple[GridIndex, GridIndex]
+GridIndex3D: TypeAlias = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class ResourceManagerSettings(
