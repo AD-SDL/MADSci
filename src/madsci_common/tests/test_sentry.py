@@ -5,6 +5,7 @@ Tests cover:
 - get_madsci_subdir creation and delegation
 - ensure_madsci_dir scaffolding
 - get_global_madsci_subdir home-only behaviour
+- _resolve_sentry_paths model validator on MadsciBaseSettings
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ from madsci.common.sentry import (
     get_global_madsci_subdir,
     get_madsci_subdir,
 )
+from madsci.common.types.base_types import MadsciBaseSettings
+from pydantic_settings import SettingsConfigDict
 
 # ---------------------------------------------------------------------------
 # find_madsci_dir
@@ -171,6 +174,21 @@ class TestFindMadsciDir:
         assert result == project / SENTRY_DIR_NAME
         assert result.is_dir()
 
+    def test_git_file_boundary(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A .git *file* (worktree) is treated the same as a .git/ directory."""
+        fakehome = tmp_path / "fakehome"
+        project = fakehome / "project"
+        child = project / "sub"
+        child.mkdir(parents=True)
+        # .git as a file (git worktree format)
+        (project / ".git").write_text("gitdir: /some/path\n")
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        result = find_madsci_dir(child)
+        assert result == project / SENTRY_DIR_NAME
+
 
 # ---------------------------------------------------------------------------
 # get_madsci_subdir
@@ -271,3 +289,84 @@ class TestGetGlobalMadsciSubdir:
         result = get_global_madsci_subdir("templates", create=False)
         assert result == fakehome / SENTRY_DIR_NAME / "templates"
         assert not result.is_dir()
+
+
+# ---------------------------------------------------------------------------
+# _resolve_sentry_paths model validator
+# ---------------------------------------------------------------------------
+
+
+class TestResolveSentryPaths:
+    """Tests for the _resolve_sentry_paths model validator on MadsciBaseSettings."""
+
+    def test_path_field_resolved_to_absolute(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A Path field with a .madsci/ default is resolved to an absolute path."""
+        fakehome = tmp_path / "fakehome"
+        fakehome.mkdir()
+        (tmp_path / SENTRY_DIR_NAME).mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        class MySettings(MadsciBaseSettings):
+            model_config = SettingsConfigDict(env_prefix="TESTSENTRY_")
+            log_dir: Path = Path(".madsci/logs")
+
+        settings = MySettings()
+        assert settings.log_dir == tmp_path / ".madsci" / "logs"
+        assert settings.log_dir.is_absolute()
+
+    def test_str_field_preserves_type(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A str field with a .madsci/ default is resolved but stays str."""
+        fakehome = tmp_path / "fakehome"
+        fakehome.mkdir()
+        (tmp_path / SENTRY_DIR_NAME).mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        class MySettings(MadsciBaseSettings):
+            model_config = SettingsConfigDict(env_prefix="TESTSENTRY2_")
+            backup_dir: str = ".madsci/backups"
+
+        settings = MySettings()
+        assert isinstance(settings.backup_dir, str)
+        assert settings.backup_dir == str(tmp_path / ".madsci" / "backups")
+
+    def test_non_sentry_path_untouched(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A field with a non-.madsci/ path remains unchanged."""
+        fakehome = tmp_path / "fakehome"
+        fakehome.mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        class MySettings(MadsciBaseSettings):
+            model_config = SettingsConfigDict(env_prefix="TESTSENTRY3_")
+            data_dir: Path = Path("/usr/local/data")
+
+        settings = MySettings()
+        assert settings.data_dir == Path("/usr/local/data")
+
+    def test_git_boundary_resolution(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When no .madsci/ exists but .git/ does, resolve via git boundary."""
+        fakehome = tmp_path / "fakehome"
+        fakehome.mkdir()
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".git").mkdir()
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(Path, "home", classmethod(lambda _cls: fakehome))
+
+        class MySettings(MadsciBaseSettings):
+            model_config = SettingsConfigDict(env_prefix="TESTSENTRY4_")
+            log_dir: Path = Path(".madsci/logs")
+
+        settings = MySettings()
+        assert settings.log_dir == project / ".madsci" / "logs"
+        assert settings.log_dir.is_absolute()

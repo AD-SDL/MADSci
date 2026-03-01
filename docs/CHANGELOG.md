@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### `.madsci/` Sentry Directory
+- Canonical `madsci.common.sentry` module for all `.madsci/` directory path resolution
+- Walk-up resolution: `.madsci/` sentinel -> `.git/` boundary -> `~/.madsci/` fallback
+- `madsci init` scaffolds `.madsci/` with standard subdirs and `registry.json`
+- `.git/` now acts as a walk-up boundary for settings file discovery
+
 #### Settings Directory with Walk-Up Discovery
 - `_settings_dir` keyword argument on all `MadsciBaseSettings` subclasses for walk-up config file resolution
 - `MADSCI_SETTINGS_DIR` environment variable for activating walk-up discovery
@@ -98,6 +104,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-manager OTEL configuration via environment variables
 
 ### Changed
+- Default paths for manager runtime data (PIDs, logs, backups, workcell files, datapoints) now resolve to a project-local `.madsci/` directory via walk-up instead of always `~/.madsci/`. If no `.madsci/` or `.git/` directory is found in the directory tree, `~/.madsci/` is still used as the fallback. Set `MADSCI_SETTINGS_DIR` to override the resolution start directory.
+- Backup subdirectory layout changed: `.madsci/mongodb/backups` -> `.madsci/backups/mongodb`, `.madsci/postgresql/backups` -> `.madsci/backups/postgresql`
 - Definition files fully purged from runtime code: all managers now use settings-only configuration (`AbstractManagerBase[Settings]` pattern)
 - `update_node_files` defaults to `False` (was `True`)
 - `load_definition()` replaces `load_or_create_definition()` as the primary API

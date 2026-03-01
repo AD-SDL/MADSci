@@ -195,7 +195,7 @@ class DatabaseVersionChecker:
             )
             # Optional: explain default backup location without printing a user path
             self.logger.info(
-                "Backups default to .madsci/postgresql/backups relative to the working directory.",
+                "Backups default to .madsci/backups/postgresql, resolved via sentry walk-up.",
                 event_type=EventType.MANAGER_START,
             )
             return True, current_version, None
@@ -268,7 +268,7 @@ class DatabaseVersionChecker:
                 "Run one of:\n"
                 f"  • Bare metal:     {cmds['bare_metal']}\n"
                 f"  • Docker Compose: {cmds['docker_compose']}\n"
-                "Note: backups default to .madsci/postgresql/backups relative to the working directory."
+                "Note: backups default to .madsci/backups/postgresql, resolved via sentry walk-up."
             )
             self.logger.error(
                 "Database schema version mismatch detected",
