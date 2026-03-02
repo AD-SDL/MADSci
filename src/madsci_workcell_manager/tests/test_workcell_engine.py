@@ -21,7 +21,7 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageDataPoint,
     ValueDataPoint,
 )
-from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
+from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo, NodeStatus
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardFile,
     ParameterFeedForwardJson,
@@ -132,7 +132,7 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
 
 
 def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
-    """Test run_next_step when no workflows are ready."""
+    """Test that nodes are marked disconnected on connection failure."""
     with patch(
         "madsci.client.node.rest_node_client.RestNodeClient.get_status",
         side_effect=Exception("Connection failed"),
@@ -140,10 +140,34 @@ def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
         engine.update_active_nodes(engine.state_handler)
         for node in engine.state_handler.get_nodes().values():
             assert node.status.disconnected is True
-        engine.reset_disconnects()
-        for node in engine.state_handler.get_nodes().values():
-            assert node.status.initializing is True
-            assert node.status.disconnected is False
+
+
+def test_reconnect_disconnected_node(engine: Engine) -> None:
+    """Test that a disconnected node is reconnected when update_node succeeds."""
+    # First disconnect the node
+    with patch(
+        "madsci.client.node.rest_node_client.RestNodeClient.get_status",
+        side_effect=Exception("Connection failed"),
+    ):
+        engine.update_active_nodes(engine.state_handler)
+    for node in engine.state_handler.get_nodes().values():
+        assert node.status.disconnected is True
+
+    # Now let the node respond successfully — update_node() should restore status
+    with (
+        patch(
+            "madsci.client.node.rest_node_client.RestNodeClient.get_status",
+            return_value=NodeStatus(),
+        ),
+        patch(
+            "madsci.client.node.rest_node_client.RestNodeClient.get_state",
+            return_value={},
+        ),
+    ):
+        for name, node in engine.state_handler.get_nodes().items():
+            engine.update_node(name, node, engine.state_handler)
+    for node in engine.state_handler.get_nodes().values():
+        assert node.status.disconnected is False
 
 
 def test_run_next_step_with_ready_workflow(

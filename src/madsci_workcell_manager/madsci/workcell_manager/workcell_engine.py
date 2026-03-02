@@ -102,8 +102,8 @@ class Engine:
         self.update_active_nodes(self.state_handler, update_info=True)
         node_tick = time.time()
         info_tick = time.time()
-        reconnect_tick = time.time()
         scheduler_tick = time.time()
+        self.reconnect_disconnected_nodes()
         while True and not self.state_handler.shutdown:
             try:
                 self.workcell_info = self.state_handler.get_workcell_info()
@@ -124,12 +124,6 @@ class Engine:
                     node_tick = time.time()
                     if should_update_info:
                         info_tick = time.time()
-                if (
-                    time.time() - reconnect_tick
-                    > self.workcell_settings.reconnect_attempt_interval
-                ):
-                    self.reset_disconnects()
-                    reconnect_tick = time.time()
 
                 if (
                     time.time() - scheduler_tick
@@ -851,10 +845,36 @@ class Engine:
                     exc_info=True,
                 )
 
-    def reset_disconnects(self) -> None:
-        """Reset all disconnected nodes to initializing state."""
-        with self.state_handler.wc_state_lock():
-            for name, node in self.state_handler.get_nodes().items():
-                node.status = NodeStatus()
-                node.status.initializing = True
-                self.state_handler.set_node(name, node)
+    @threaded_daemon
+    def reconnect_disconnected_nodes(self) -> None:
+        """Periodically retry connecting to disconnected nodes.
+
+        Runs as a separate daemon thread so it does not block the main engine loop.
+        Only disconnected nodes are retried — connected nodes are unaffected.
+        On success, update_node() naturally restores the node's status from the
+        node's own response. On failure, the node remains disconnected and is
+        retried on the next interval.
+        """
+        while not self.state_handler.shutdown:
+            time.sleep(self.workcell_settings.reconnect_attempt_interval)
+            disconnected_nodes = {
+                name: node
+                for name, node in self.state_handler.get_nodes().items()
+                if node.status is not None and node.status.disconnected
+            }
+            if disconnected_nodes:
+                self.logger.info(
+                    "Retrying connection to disconnected nodes",
+                    event_type=EventType.NODE_STATUS_UPDATE,
+                    node_names=list(disconnected_nodes.keys()),
+                    workcell_id=self.workcell_info.manager_id,
+                    workcell_name=self.workcell_info.name,
+                )
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    futures = [
+                        executor.submit(
+                            self.update_node, name, node, self.state_handler
+                        )
+                        for name, node in disconnected_nodes.items()
+                    ]
+                    concurrent.futures.wait(futures)

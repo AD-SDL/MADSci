@@ -104,6 +104,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-manager OTEL configuration via environment variables
 
 ### Changed
+
+#### Workcell Node Reconnect Behavior
+- Replaced disruptive `reset_disconnects()` (which reset **all** nodes to `initializing`) with a non-disruptive `reconnect_disconnected_nodes()` daemon thread that retries only disconnected nodes
+- Reconnect attempts run in a separate background thread, so the main engine loop is never blocked by reconnect activity
+- On a successful reconnect, `update_node()` naturally restores the node's status from the node's own response; on failure, the node stays disconnected and is retried on the next interval
+- Default `reconnect_attempt_interval` reduced from 1200 s → 30 s, safe now that retries are non-disruptive
+
 - Default paths for manager runtime data (PIDs, logs, backups, workcell files, datapoints) now resolve to a project-local `.madsci/` directory via walk-up instead of always `~/.madsci/`. If no `.madsci/` or `.git/` directory is found in the directory tree, `~/.madsci/` is still used as the fallback. Set `MADSCI_SETTINGS_DIR` to override the resolution start directory.
 - Backup subdirectory layout changed: `.madsci/mongodb/backups` -> `.madsci/backups/mongodb`, `.madsci/postgresql/backups` -> `.madsci/backups/postgresql`
 - Definition files fully purged from runtime code: all managers now use settings-only configuration (`AbstractManagerBase[Settings]` pattern)

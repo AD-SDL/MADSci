@@ -29,8 +29,14 @@ Classes
     `monitor_action_progress(self, wf: madsci.common.types.workflow_types.Workflow, step: madsci.common.types.step_types.Step, node: madsci.common.types.node_types.Node, client: madsci.client.node.abstract_node_client.AbstractNodeClient, response: madsci.common.types.action_types.ActionResult, request: madsci.common.types.action_types.ActionRequest, action_id: str) ‑> None`
     :   Monitor the progress of the action, querying the action result until it is terminal
 
-    `reset_disconnects(self) ‑> None`
-    :   Reset all disconnected nodes to initializing state.
+    `reconnect_disconnected_nodes(self) ‑> None`
+    :   Periodically retry connecting to disconnected nodes.
+        
+        Runs as a separate daemon thread so it does not block the main engine loop.
+        Only disconnected nodes are retried — connected nodes are unaffected.
+        On success, update_node() naturally restores the node's status from the
+        node's own response. On failure, the node remains disconnected and is
+        retried on the next interval.
 
     `run_next_step(self, await_step_completion: bool = False) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Runs the next step in the workflow with the highest priority. Returns information about the workflow it ran, if any.
