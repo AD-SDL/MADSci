@@ -26,7 +26,9 @@ def load_config_file(config_path: str) -> dict:
 @click.option("--mongo-url", help="MongoDB connection URL")
 @click.option("--database", help="Database name")
 @click.option(
-    "--backup-dir", default=".madsci/mongodb/backups", help="Backup directory"
+    "--backup-dir",
+    default=None,
+    help="Backup directory (default: .madsci/backups/mongodb)",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
@@ -40,6 +42,15 @@ def mongodb_backup(
 ) -> None:
     """MongoDB backup management commands."""
     ctx.ensure_object(dict)
+
+    # Resolve backup_dir default via sentry
+    if backup_dir is None:
+        from madsci.common.sentry import (  # noqa: PLC0415
+            SUBDIR_BACKUPS,
+            get_madsci_subdir,
+        )
+
+        backup_dir = str(get_madsci_subdir(SUBDIR_BACKUPS) / "mongodb")
 
     # Load configuration from file if provided
     if config_file:

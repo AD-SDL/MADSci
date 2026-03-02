@@ -31,6 +31,7 @@ from pydantic_settings import (
     YamlConfigSettingsSource,
 )
 from sqlmodel import SQLModel
+from typing_extensions import Self
 
 REDACTED_PLACEHOLDER = "***REDACTED***"
 """Placeholder string used when redacting secret field values."""
@@ -230,6 +231,39 @@ class MadsciBaseSettings(BaseSettings):
                         for item in values
                     ]
         return data
+
+    @model_validator(mode="after")
+    def _resolve_sentry_paths(self) -> Self:
+        """Resolve ``.madsci/``-prefixed path defaults via sentry walk-up.
+
+        Fields whose current value starts with ``.madsci/`` (or equals
+        ``.madsci``) are treated as relative sentinels.  The model validator
+        resolves them to absolute paths using :func:`find_madsci_dir` so that
+        static defaults (e.g. ``Path(".madsci/backups")``) work correctly at
+        runtime while remaining stable for documentation-generation tools like
+        ``pydantic-settings-export``.
+        """
+        from madsci.common.sentry import find_madsci_dir  # noqa: PLC0415
+
+        sentry_prefix = ".madsci/"
+        sentry_exact = ".madsci"
+        madsci_dir: Path | None = None  # lazy — only resolve if needed
+
+        for field_name in type(self).model_fields:
+            value = getattr(self, field_name, None)
+            if value is None:
+                continue
+            s = str(value)
+            if s.startswith(sentry_prefix) or s == sentry_exact:
+                if madsci_dir is None:
+                    madsci_dir = find_madsci_dir()
+                resolved = madsci_dir.parent / s
+                # Preserve the original type (Path vs str)
+                if isinstance(value, Path):
+                    object.__setattr__(self, field_name, Path(resolved))
+                else:
+                    object.__setattr__(self, field_name, str(resolved))
+        return self
 
 
 class MadsciSQLModel(SQLModel):

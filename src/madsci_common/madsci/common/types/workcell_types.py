@@ -227,8 +227,8 @@ class WorkcellManagerSettings(
     )
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",
-        description="Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name.",
-        default_factory=lambda: Path("~") / ".madsci" / "workcells",
+        description="Directory used to store workcell-related files in. Defaults to .madsci/workcells. Workcell-related files will be stored in a sub-folder with the workcell name.",
+        default=Path(".madsci/workcells"),
         alias="workcells_directory",  # * Don't double prefix
     )
     redis_host: str = Field(

@@ -246,6 +246,46 @@ class TestWalkUpFind:
         result = walk_up_find("settings.yaml", child)
         assert result == (fakehome / "settings.yaml").resolve()
 
+    def test_stops_at_git_boundary(self, tmp_path: Path) -> None:
+        """Walk-up should not find files above a .git/ boundary directory."""
+        # tmp_path/settings.yaml  <- should NOT be found
+        # tmp_path/project/       <- has .git/
+        # tmp_path/project/child/ <- start here
+        project = tmp_path / "project"
+        child = project / "child"
+        child.mkdir(parents=True)
+        (project / ".git").mkdir()
+        (tmp_path / "settings.yaml").write_text("greeting: above-git\n")
+
+        result = walk_up_find("settings.yaml", child)
+        assert result is None
+
+    def test_searches_git_boundary_directory_itself(self, tmp_path: Path) -> None:
+        """The directory containing .git/ should still be searched."""
+        project = tmp_path / "project"
+        child = project / "child"
+        child.mkdir(parents=True)
+        (project / ".git").mkdir()
+        (project / "settings.yaml").write_text("greeting: at-git\n")
+
+        result = walk_up_find("settings.yaml", child)
+        assert result == (project / "settings.yaml").resolve()
+
+    def test_madsci_sentinel_takes_priority_over_git(self, tmp_path: Path) -> None:
+        """.madsci/ sentinel stops walk-up before .git/ is reached."""
+        # tmp_path/.git/            <- secondary boundary
+        # tmp_path/project/.madsci/ <- primary boundary
+        # tmp_path/project/child/   <- start here
+        project = tmp_path / "project"
+        child = project / "child"
+        child.mkdir(parents=True)
+        (project / ".madsci").mkdir()
+        (tmp_path / ".git").mkdir()
+        (project / "settings.yaml").write_text("greeting: at-madsci\n")
+
+        result = walk_up_find("settings.yaml", child)
+        assert result == (project / "settings.yaml").resolve()
+
 
 # ---------------------------------------------------------------------------
 # TestResolveFilePaths

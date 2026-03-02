@@ -11,15 +11,15 @@ Classes
 
 `FileMigration(**data: Any)`
 :   Migration plan for a single file.
-
+    
     Contains all information needed to migrate a definition file to the new
     configuration system.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -86,15 +86,15 @@ Classes
 
 `MigrationAction(**data: Any)`
 :   A single action in a migration.
-
+    
     Represents one step of the migration process, such as registering an ID
     or generating environment variables.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -118,14 +118,14 @@ Classes
 
 `MigrationPlan(**data: Any)`
 :   Complete migration plan for a project.
-
+    
     Contains all files that need to be migrated and their current status.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

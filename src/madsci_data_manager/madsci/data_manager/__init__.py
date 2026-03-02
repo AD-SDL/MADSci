@@ -68,7 +68,7 @@ The Data Manager uses environment variables with the ``DATA_`` prefix:
 
 - ``DATA_SERVER_URL``: Server URL (default: http://localhost:8004)
 - ``DATA_DB_URL``: MongoDB connection string
-- ``DATA_FILE_STORAGE_PATH``: Local file storage path (default: ~/.madsci/datapoints)
+- ``DATA_FILE_STORAGE_PATH``: Local file storage path (default: .madsci/datapoints, resolved via sentry walk-up)
 
 For object storage, use the ``OBJECT_STORAGE_`` prefix:
 

@@ -13,49 +13,49 @@ Functions
 
 `prefixed_alias_generator(prefix: str) ‑> pydantic.aliases.AliasGenerator`
 :   Create an AliasGenerator that adds prefixed serialization aliases.
-
+    
     This enables ``model_dump(by_alias=True)`` to produce prefixed keys
     (e.g., ``event_server_url``) while code still uses unprefixed field
     names (e.g., ``server_url``).
-
+    
     Note:
         Only ``serialization_alias`` is set here.  Setting ``validation_alias``
         would override pydantic-settings' ``env_prefix``, causing ``.env`` files
         to lose their per-manager prefixes.  Instead, use
         :func:`prefixed_model_validator` on the settings class to accept
         prefixed keys from YAML or keyword arguments.
-
+    
     Args:
         prefix: The prefix to add (e.g., "event"). Trailing underscores are stripped.
-
+    
     Returns:
         An AliasGenerator that serializes with the prefixed name.
 
 `prefixed_model_validator(prefix: str) ‑> Any`
 :   Create a ``model_validator(mode='before')`` that accepts prefixed keys.
-
+    
     When a shared ``settings.yaml`` uses prefixed keys (e.g.,
     ``event_server_url``), this validator strips the prefix so that the
     model can validate them against unprefixed field names (``server_url``).
-
+    
     The validator preserves precedence: if both ``server_url`` and
     ``event_server_url`` are present, the unprefixed value wins (since env
     vars, which have higher priority, are resolved to unprefixed names by
     pydantic-settings' ``env_prefix``).
-
+    
     Usage::
-
+    
         class EventManagerSettings(ManagerSettings, env_prefix="EVENT_", ...):
             model_config = SettingsConfigDict(
                 alias_generator=prefixed_alias_generator("event"),
                 populate_by_name=True,
             )
             _accept_prefixed_keys = prefixed_model_validator("event")
-
+    
     Args:
         prefix: The prefix to strip (e.g., "event"). Trailing underscores
             are stripped; matching is case-insensitive.
-
+    
     Returns:
         A decorated classmethod suitable for use as a Pydantic model validator.
 
@@ -64,12 +64,12 @@ Classes
 
 `Error(**data: Any)`
 :   A MADSci Error
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -98,12 +98,12 @@ Classes
 
 `MadsciBaseModel(**data: Any)`
 :   Parent class for all MADSci data models.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -209,30 +209,30 @@ Classes
 
     `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
     :   Dump model data with secret fields redacted by default.
-
+        
         This method provides a safe way to export model data without
         accidentally exposing sensitive values. Secret fields are identified
         by:
         - Fields typed as ``SecretStr`` / ``SecretBytes``
         - Fields with ``json_schema_extra={"secret": True}`` metadata
-
+        
         Args:
             include_secrets: If True, include actual secret values.
                 Defaults to False (secrets are replaced with
                 ``***REDACTED***``).
             **kwargs: Additional keyword arguments forwarded to
                 ``model_dump(mode="json", ...)``.
-
+        
         Returns:
             dict: Model data with secrets redacted unless
                 ``include_secrets=True``.
 
     `model_dump_yaml(self, include_secrets: bool = True) ‑> str`
     :   Convert the model to a YAML string.
-
+        
         Args:
             include_secrets: If False, redact secret field values.
-
+        
         Returns:
             YAML string representation of the model
 
@@ -241,7 +241,7 @@ Classes
 
     `to_yaml(self, path: str | pathlib.Path, include_secrets: bool = True, **kwargs: Any) ‑> None`
     :   Export the model to a YAML file.
-
+        
         Args:
             path: File path to write to.
             include_secrets: If False, redact secret field values.
@@ -252,19 +252,19 @@ Classes
 
 `MadsciBaseSettings(**kwargs: Any)`
 :   Base class for all MADSci settings.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -298,7 +298,7 @@ Classes
 
     `settings_customise_sources(settings_cls: type[pydantic_settings.main.BaseSettings], init_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, env_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, dotenv_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource, file_secret_settings: pydantic_settings.sources.base.PydanticBaseSettingsSource) ‑> tuple[pydantic_settings.sources.base.PydanticBaseSettingsSource, ...]`
     :   Sets the order of settings sources for the settings model.
-
+        
         File paths are resolved with walk-up discovery from the settings
         directory (defaulting to CWD). Each filename walks up independently,
         so shared configs in parent directories are found automatically.
@@ -307,40 +307,40 @@ Classes
 
     `model_dump_safe(self, include_secrets: bool = False, **kwargs: Any) ‑> dict[str, typing.Any]`
     :   Dump settings data with secret fields redacted by default.
-
+        
         Secret fields are identified by ``json_schema_extra={"secret": True}``
         or ``SecretStr`` / ``SecretBytes`` type annotations. Nested models
         are recursively redacted.
-
+        
         Args:
             include_secrets: If True, include actual secret values.
             **kwargs: Additional keyword arguments forwarded to ``model_dump``.
-
+        
         Returns:
             dict: Settings with secrets redacted unless ``include_secrets=True``.
 
 `MadsciDeveloperSettings(**values: Any)`
 :   Developer-focused settings for MADSci behavior.
-
+    
     These settings control development experience features like rich tracebacks.
     All settings use the MADSCI_ prefix for environment variables.
-
+    
     Environment Variables:
         MADSCI_DISABLE_RICH_TRACEBACKS: Set to true to disable rich tracebacks
             (default: false, rich tracebacks are enabled)
         MADSCI_RICH_TRACEBACKS_SHOW_LOCALS: Set to true to show local variables
             in tracebacks (default: false for security - can leak secrets)
-
+    
     Note:
         show_locals is disabled by default to prevent accidental exposure of
         sensitive data (tokens, passwords) that may be present in local variables
         during exceptions.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -361,12 +361,12 @@ Classes
 
 `MadsciSQLModel(**data: Any)`
 :   Parent class for all MADSci data models that are SQLModel-based.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -394,5 +394,5 @@ Classes
 
     `to_yaml(self, path: str | pathlib.Path, **kwargs: Any) ‑> None`
     :   Allows all derived data models to be exported into yaml.
-
+        
         kwargs are passed to model_dump

@@ -20,23 +20,23 @@ Classes
 
 `ExperimentApplication(lab_server_url: str | pydantic.networks.AnyUrl | None = None, experiment_design: madsci.common.types.experiment_types.ExperimentDesign | str | pathlib.Path | None = None, experiment: madsci.common.types.experiment_types.Experiment | None = None, *args: Any, **kwargs: Any)`
 :   An experiment application that helps manage the execution of an experiment.
-
+    
     You can either use this class as a base class for your own application class,
     or create an instance of it to manage the execution of an experiment.
-
+    
     This class extends AbstractNode (via RestNode) and inherits client management
     from MadsciClientMixin. In addition to the standard node clients (event, resource, data),
     it also uses experiment, workcell, location, and optionally lab clients.
-
+    
     Initialize the experiment application.
-
+    
     .. deprecated:: 0.7.0
         ExperimentApplication is deprecated. Use ExperimentScript,
         ExperimentNotebook, ExperimentTUI, or ExperimentNode instead.
-
+    
     You can provide an experiment design to use for creating new experiments,
     or an existing experiment to continue.
-
+    
     Note: Client initialization is handled by the parent AbstractNode class
     via MadsciClientMixin. All manager clients (experiment, workcell, location,
     data, resource) are available as properties and will be lazily initialized
@@ -77,10 +77,10 @@ Classes
 
     `check_experiment_status(self) ‑> None`
     :   Update and check the status of the current experiment.
-
+        
         Raises an exception if the experiment has been cancelled or failed.
         If the experiment has been paused, this function will wait until the experiment is resumed.
-
+        
         Raises:
             ExperimentCancelledError: If the experiment has been cancelled.
             ExperimentFailedError: If the experiment has failed.
@@ -111,7 +111,7 @@ Classes
 
     `manage_experiment(self, run_name: str | None = None, run_description: str | None = None) ‑> Generator[None, None, None]`
     :   Context manager to start and end an experiment with full context propagation.
-
+        
         All logging within this experiment run will include the experiment
         context, enabling hierarchical log filtering and analysis.
 
@@ -132,22 +132,22 @@ Classes
 
 `ExperimentApplicationConfig(**kwargs: Any)`
 :   Configuration for the ExperimentApplication.
-
+    
     This class is used to define the configuration for the ExperimentApplication node.
     It can be extended to add custom configurations.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.

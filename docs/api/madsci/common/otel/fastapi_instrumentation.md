@@ -10,5 +10,5 @@ Functions
 
 `instrument_fastapi(app: FastAPI, *, enabled: bool = True) ‑> bool`
 :   Enable OpenTelemetry auto-instrumentation for FastAPI.
-
+    
     Returns True when instrumentation was applied, otherwise False.

@@ -7,11 +7,11 @@ Classes
 
 `ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, **kwargs: Any)`
 :   Resource Manager REST Server.
-
+    
     This class is decorated with @ownership_class() which automatically
     establishes ownership context for all public methods, eliminating the
     need for manual middleware or `with ownership_context():` blocks.
-
+    
     Initialize the Resource Manager.
 
     ### Ancestors (in MRO)
@@ -35,12 +35,12 @@ Classes
 
     `acquire_resource_lock(self, resource_id: str, lock_duration: float = 300.0, client_id: str | None = None) ‑> dict[str, typing.Any]`
     :   Acquire a lock on a resource.
-
+        
         Args:
             resource_id (str): The ID of the resource to lock.
             lock_duration (float): Lock duration in seconds.
             client_id (Optional[str]): Client identifier.
-
+        
         Returns:
             dict: Lock acquisition result.
 
@@ -52,32 +52,32 @@ Classes
 
     `change_quantity_by(self, resource_id: str, amount: int | float) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Change the quantity of a resource by a given amount.
-
+        
         Args:
             resource_id (str): The ID of the resource.
             amount (Union[float, int]): The amount to change the quantity by.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
     `check_resource_lock(self, resource_id: str) ‑> dict[str, typing.Any]`
     :   Check if a resource is currently locked.
-
+        
         Args:
             resource_id (str): The ID of the resource to check.
-
+        
         Returns:
             dict: Lock status information.
 
     `create_resource_from_template(self, template_name: str, body: madsci.common.types.resource_types.server_types.CreateResourceFromTemplateBody) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Create a resource from a template.
-
+        
         If a matching resource already exists (based on name, class, type, owner, and any overrides),
         it will be returned instead of creating a duplicate.
 
     `create_server(self) ‑> fastapi.applications.FastAPI`
     :   Create and configure the FastAPI server.
-
+        
         Note: Ownership context is now handled by the @ownership_class decorator
         which wraps all public methods with ownership context automatically.
 
@@ -86,11 +86,11 @@ Classes
 
     `decrease_quantity(self, resource_id: str, amount: int | float) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Decrease the quantity of a resource by a given amount.
-
+        
         Args:
             resource_id (str): The ID of the resource.
             amount (Union[float, int]): The amount to decrease the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
@@ -99,19 +99,19 @@ Classes
 
     `empty_resource(self, resource_id: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Empty the contents of a container or consumable resource.
-
+        
         Args:
             resource_id (str): The ID of the resource.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
     `fill_resource(self, resource_id: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Fill a consumable resource to capacity.
-
+        
         Args:
             resource_id (str): The ID of the resource.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
@@ -120,7 +120,7 @@ Classes
 
     `get_ownership_overrides(self) ‑> dict`
     :   Return ownership overrides for this manager.
-
+        
         This method is called by the @ownership_class decorator to get
         instance-specific ownership information.
 
@@ -138,11 +138,11 @@ Classes
 
     `increase_quantity(self, resource_id: str, amount: int | float) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Increase the quantity of a resource by a given amount.
-
+        
         Args:
             resource_id (str): The ID of the resource.
             amount (Union[float, int]): The amount to increase the quantity by. Note that this is a magnitude, so negative and positive values will have the same effect.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
@@ -154,20 +154,20 @@ Classes
 
     `pop(self, resource_id: str) ‑> tuple[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot, madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Slot]`
     :   Pop an asset from a stack or queue.
-
+        
         Args:
             resource_id (str): The ID of the stack or queue to pop the asset from.
-
+        
         Returns:
             tuple[ResourceDataModels, Union[Stack, Queue, Slot]]: The popped asset and the updated stack or queue.
 
     `push(self, resource_id: str, body: madsci.common.types.resource_types.server_types.PushResourceBody) ‑> madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Slot`
     :   Push a resource onto a stack or queue.
-
+        
         Args:
             resource_id (str): The ID of the stack or queue to push the resource onto.
             body (PushResourceBody): The resource to push onto the stack or queue, or the ID of an existing resource.
-
+        
         Returns:
             Union[Stack, Queue, Slot]: The updated stack or queue.
 
@@ -176,10 +176,10 @@ Classes
 
     `query_history(self, query: madsci.common.types.resource_types.server_types.ResourceHistoryGetQuery = Body(PydanticUndefined)) ‑> list[madsci.resource_manager.resource_tables.ResourceHistoryTable]`
     :   Retrieve the history of a resource.
-
+        
         Args:
             query (ResourceHistoryGetQuery): The query parameters.
-
+        
         Returns:
             list[ResourceHistoryTable]: A list of historical resource entries.
 
@@ -188,13 +188,13 @@ Classes
 
     `query_resource_hierarchy(self, resource_id: str) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
     :   Query the hierarchical relationships of a resource.
-
+        
         Returns the ancestors (successive parent IDs from closest to furthest)
         and descendants (all children recursively, organized by parent) of the specified resource.
-
+        
         Args:
             resource_id (str): The ID of the resource to query hierarchy for.
-
+        
         Returns:
             ResourceHierarchy: Hierarchy information with:
                 - ancestor_ids: List of all direct ancestors (parent, grandparent, etc.)
@@ -207,30 +207,30 @@ Classes
 
     `release_resource_lock(self, resource_id: str, client_id: str | None = None) ‑> dict[str, typing.Any] | None`
     :   Release a lock on a resource.
-
+        
         Args:
             resource_id (str): The ID of the resource to unlock.
             client_id (Optional[str]): Client identifier.
-
+        
         Returns:
             dict: Lock release result.
 
     `remove_capacity_limit(self, resource_id: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Remove the capacity limit of a resource.
-
+        
         Args:
             resource_id (str): The ID of the resource.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
     `remove_child(self, resource_id: str, body: madsci.common.types.resource_types.server_types.RemoveChildBody) ‑> madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Remove a child resource from a parent resource. Must be a container type that supports random access.
-
+        
         Args:
             resource_id (str): The ID of the parent resource.
             body (RemoveChildBody): The body of the request.
-
+        
         Returns:
             ResourceDataModels: The updated parent resource.
 
@@ -240,40 +240,40 @@ Classes
 
     `restore_deleted_resource(self, resource_id: str) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Restore a previously deleted resource from the history table.
-
+        
         Args:
             resource_id (str): the id of the resource to restore.
-
+        
         Returns:
             ResourceDataModels: The restored resource.
 
     `set_capacity(self, resource_id: str, capacity: int | float) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Set the capacity of a resource.
-
+        
         Args:
             resource_id (str): The ID of the resource.
             capacity (Union[float, int]): The capacity to set.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 
     `set_child(self, resource_id: str, body: madsci.common.types.resource_types.server_types.SetChildBody) ‑> madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Set a child resource for a parent resource. Must be a container type that supports random access.
-
+        
         Args:
             resource_id (str): The ID of the parent resource.
             body (SetChildBody): The body of the request.
-
+        
         Returns:
             ResourceDataModels: The updated parent resource.
 
     `set_quantity(self, resource_id: str, quantity: int | float) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Set the quantity of a resource.
-
+        
         Args:
             resource_id (str): The ID of the resource.
             quantity (Union[float, int]): The quantity to set.
-
+        
         Returns:
             ResourceDataModels: The updated resource.
 

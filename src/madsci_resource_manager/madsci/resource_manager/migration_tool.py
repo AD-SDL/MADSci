@@ -50,10 +50,9 @@ class DatabaseMigrationSettings(
         description="Target version to migrate to (defaults to current MADSci version)",
     )
     backup_dir: PathLike = Field(
-        default=Path(".madsci/postgresql/backups"),
+        default=Path(".madsci/backups/postgresql"),
         title="Backup Directory",
-        description="Directory where database backups will be stored. "
-        "Relative to the current working directory unless absolute.",
+        description="Directory where database backups will be stored.",
     )
     backup_only: bool = Field(
         default=False,

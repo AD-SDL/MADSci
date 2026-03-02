@@ -67,7 +67,9 @@ def madsci_backup(ctx: click.Context, config: Optional[str]) -> None:
 
 @madsci_backup.command()
 @click.option("--db-url", required=True, help="Database connection URL")
-@click.option("--backup-dir", default=".madsci/backups", help="Backup directory")
+@click.option(
+    "--backup-dir", default=None, help="Backup directory (default: .madsci/backups)"
+)
 @click.option(
     "--type",
     "db_type",
@@ -90,6 +92,15 @@ def create(
         madsci-backup create --db-url mongodb://localhost/mydb --name pre-deploy
     """
     try:
+        # Resolve backup_dir default via sentry
+        if backup_dir is None:
+            from madsci.common.sentry import (  # noqa: PLC0415
+                SUBDIR_BACKUPS,
+                get_madsci_subdir,
+            )
+
+            backup_dir = str(get_madsci_subdir(SUBDIR_BACKUPS))
+
         # Auto-detect database type if not specified
         if not db_type:
             db_type = detect_database_type(db_url)

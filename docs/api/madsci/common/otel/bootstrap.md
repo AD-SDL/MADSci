@@ -10,13 +10,13 @@ Functions
 
 `collect_metrics(runtime: OtelRuntime) ‑> Any | None`
 :   Force a synchronous metrics collection for test assertions.
-
+    
     OpenTelemetry's metrics SDK is pull-based; in tests we want deterministic
     reads without background threads.
 
 `configure_otel(config: OtelBootstrapConfig) ‑> madsci.common.otel.bootstrap.OtelRuntime`
 :   Configure OpenTelemetry SDK providers.
-
+    
     This function is idempotent: the first successful configuration wins.
 
 `current_trace_context() ‑> dict[str, str | None]`

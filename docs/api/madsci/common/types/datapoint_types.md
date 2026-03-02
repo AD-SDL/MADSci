@@ -7,18 +7,18 @@ Classes
 
 `DataManagerDefinition(**data: Any)`
 :   Definition for a Squid Data Manager.
-
+    
     Attributes:
         manager_type: The type of the event manager.
         host: The hostname or IP address of the Data Manager server.
         port: The port number of the Data Manager server.
         db_url: The URL of the database used by the Data Manager.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -43,12 +43,12 @@ Classes
 
 `DataManagerHealth(**data: Any)`
 :   Health status for Data Manager including database and storage connectivity.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -73,19 +73,19 @@ Classes
 
 `DataManagerSettings(**kwargs: Any)`
 :   Settings for the MADSci Data Manager.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -119,7 +119,7 @@ Classes
 
 `DataPoint(**data: Any)`
 :   An object to contain and locate data created during experiments.
-
+    
     Attributes:
         label: The label of this data point.
         step_id: The step that generated the data point.
@@ -129,12 +129,12 @@ Classes
         data_type: The type of the data point, inherited from class.
         datapoint_id: The specific ID for this data point.
         data_timestamp: The time the data point was created.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -172,10 +172,10 @@ Classes
 
     `discriminate(datapoint: DataPointDataModels) ‑> madsci.common.types.datapoint_types.FileDataPoint | madsci.common.types.datapoint_types.ValueDataPoint | madsci.common.types.datapoint_types.ObjectStorageDataPoint`
     :   Return the correct data point type based on the data_type attribute.
-
+        
         Args:
             datapoint: The data point instance or dictionary to discriminate.
-
+        
         Returns:
             The appropriate DataPoint subclass instance.
 
@@ -184,7 +184,7 @@ Classes
 
 `DataPointTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Enumeration for the types of data points.
-
+    
     Attributes:
         FILE: Represents a data point that contains a file.
         JSON: Represents a data point that contains a JSON serializable value.
@@ -207,16 +207,16 @@ Classes
 
 `FileDataPoint(**data: Any)`
 :   A data point containing a file.
-
+    
     Attributes:
         data_type: The type of the data point, in this case a file.
         path: The path to the file.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -235,10 +235,10 @@ Classes
 
 `ObjectStorageDataPoint(**data: Any)`
 :   A data point that references an object in S3-compatible storage (MinIO/S3).
-
+    
     This data point stores essential information about an object in S3-compatible
     storage without storing access credentials.
-
+    
     Attributes:
         url: The accessible URL for the object (can be used in frontend).
         storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
@@ -248,12 +248,12 @@ Classes
         size_bytes: The size of the object in bytes.
         etag: The entity tag (typically MD5) of the object.
         custom_metadata: Additional user-defined metadata for the object.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -299,19 +299,19 @@ Classes
 
 `ObjectStorageSettings(**kwargs: Any)`
 :   Settings for S3-compatible object storage.
-
+    
     Initialize settings with walk-up file discovery.
-
+    
     Configuration file paths (YAML, JSON, TOML, .env) are resolved via
     walk-up discovery from a starting directory. Each filename walks up
     independently, so ``node.settings.yaml`` can resolve in the node dir
     while ``settings.yaml`` resolves in the lab root.
-
+    
     The starting directory is determined by (in priority order):
     1. ``_settings_dir`` keyword argument
     2. ``MADSCI_SETTINGS_DIR`` environment variable
     3. Current working directory (default)
-
+    
     Args:
         _settings_dir: Starting directory for walk-up file discovery.
         **kwargs: Forwarded to ``BaseSettings.__init__``.
@@ -344,16 +344,16 @@ Classes
 
 `ValueDataPoint(**data: Any)`
 :   A data point corresponding to a single JSON serializable value.
-
+    
     Attributes:
         data_type: The type of the data point, in this case a value.
         value: The value of the data point.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

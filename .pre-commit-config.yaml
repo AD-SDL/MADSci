@@ -33,8 +33,11 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
       - id: mixed-line-ending
+        exclude: ^docs/api/
       - id: end-of-file-fixer
+        exclude: ^docs/api/
       - id: trailing-whitespace
+        exclude: ^docs/api/
 
   - repo: local
     hooks:

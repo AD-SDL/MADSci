@@ -18,11 +18,11 @@ Classes
 
 `InMemoryCollection(name: str)`
 :   Drop-in replacement for ``pymongo.collection.Collection``.
-
+    
     Supports: ``insert_one``, ``find_one``, ``find``, ``update_one``,
     ``update_many``, ``delete_one``, ``delete_many``, ``count_documents``,
     ``create_index``, ``drop_index``, ``index_information``.
-
+    
     Initialize a named in-memory collection.
 
     ### Methods
@@ -62,7 +62,7 @@ Classes
 
 `InMemoryCursor(documents: list[dict[str, Any]])`
 :   Mimics ``pymongo.cursor.Cursor`` with sort/skip/limit/to_list chaining.
-
+    
     Initialize with a list of documents to iterate over.
 
     ### Methods
@@ -81,9 +81,9 @@ Classes
 
 `InMemoryDatabase(name: str = 'test')`
 :   Drop-in replacement for ``pymongo.database.Database``.
-
+    
     Access collections via ``db["collection_name"]``.
-
+    
     Initialize a named in-memory database.
 
     ### Methods
@@ -93,20 +93,20 @@ Classes
 
 `InMemoryDeleteResult(deleted_count: int = 0)`
 :   Mimics ``pymongo.results.DeleteResult``.
-
+    
     Initialize with the deletion count.
 
 `InMemoryInsertResult(inserted_id: Any)`
 :   Mimics ``pymongo.results.InsertOneResult``.
-
+    
     Initialize with the inserted document's ID.
 
 `InMemoryMongoClient(*_args: Any, **_kwargs: Any)`
 :   Drop-in replacement for ``pymongo.MongoClient``.
-
+    
     Access databases via ``client["database_name"]``.
     Provides ``client.admin.command("ping")`` for health checks.
-
+    
     Initialize the in-memory Mongo client.
 
     ### Methods
@@ -116,5 +116,5 @@ Classes
 
 `InMemoryUpdateResult(matched_count: int = 0, modified_count: int = 0)`
 :   Mimics ``pymongo.results.UpdateResult``.
-
+    
     Initialize with match and modification counts.

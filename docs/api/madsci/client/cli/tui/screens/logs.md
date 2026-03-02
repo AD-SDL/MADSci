@@ -9,9 +9,9 @@ Classes
 
 `FilterPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel with log filters.
-
+    
     Initialize a Widget.
-
+    
     Args:
         *children: Child widgets.
         name: The name of the widget.
@@ -42,7 +42,7 @@ Classes
 
 `LogsScreen(**kwargs: Any)`
 :   Screen for viewing logs.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)

@@ -17,18 +17,18 @@ Classes
 
 `ExperimentTUIApp(experiment: ExperimentTUI, *args: Any, **kwargs: Any)`
 :   Textual application for experiment control.
-
+    
     Provides an interactive TUI for:
     - Starting/stopping experiments
     - Viewing experiment status
     - Monitoring logs
     - Pausing/resuming experiments
-
+    
     This is a basic implementation. Advanced features will be added
     in future releases.
-
+    
     Initialize the TUI application.
-
+    
     Args:
         experiment: The ExperimentTUI instance to control.
         *args: Additional arguments for Textual App.
@@ -62,7 +62,7 @@ Classes
 
     `action_start(self) ‑> None`
     :   Start the experiment.
-
+        
         Launches the experiment as a background task so the TUI remains
         responsive to pause/cancel/quit interactions while it runs.
 

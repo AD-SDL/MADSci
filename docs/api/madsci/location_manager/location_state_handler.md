@@ -8,7 +8,7 @@ Classes
 `LocationStateHandler(settings: madsci.common.types.location_types.LocationManagerSettings, manager_id: str, redis_connection: Any | None = None)`
 :   Manages state for a MADSci Location Manager, providing transactional access to reading and writing location state
     with optimistic check-and-set and locking.
-
+    
     Initialize a LocationStateHandler.
 
     ### Class variables

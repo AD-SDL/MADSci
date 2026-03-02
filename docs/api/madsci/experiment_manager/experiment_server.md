@@ -7,7 +7,7 @@ Classes
 
 `ExperimentManager(settings: madsci.common.types.experiment_types.ExperimentManagerSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, db_connection: pymongo.synchronous.database.Database | None = None, **kwargs: Any)`
 :   Experiment Manager REST Server.
-
+    
     Initialize the Experiment Manager.
 
     ### Ancestors (in MRO)

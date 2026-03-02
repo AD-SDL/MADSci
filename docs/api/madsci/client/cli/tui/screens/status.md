@@ -9,7 +9,7 @@ Classes
 
 `ServiceDetailPanel(**kwargs: Any)`
 :   Panel showing details for a selected service.
-
+    
     Initialize the panel.
 
     ### Ancestors (in MRO)
@@ -34,14 +34,14 @@ Classes
 
     `update_details(self, name: str, data: dict) ‑> None`
     :   Update the detail display.
-
+        
         Args:
             name: Service name.
             data: Service data dictionary.
 
 `StatusScreen(**kwargs: Any)`
 :   Screen showing detailed service status.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)

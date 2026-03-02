@@ -7,10 +7,10 @@ Classes
 
 `WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None, start_engine: bool = True, **kwargs: Any)`
 :   MADSci Workcell Manager using the new AbstractManagerBase pattern.
-
+    
     This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
     Required clients: data, location
-
+    
     Initialize the WorkcellManager.
 
     ### Ancestors (in MRO)
@@ -65,12 +65,12 @@ Classes
 
     `get_workflow_definition(self, workflow_definition_id: str) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
-
+        
         Parameters
         ----------
         Workflow Definition ID: str
         - the workflow definition ID
-
+        
         Returns
         -------
         response: WorkflowDefinition
@@ -81,7 +81,7 @@ Classes
 
     `initialize(self, **kwargs: Any) ‑> None`
     :   Initialize manager-specific components.
-
+        
         This method sets up the workcell-specific state handler and clients.
         Client initialization is handled by MadsciClientMixin via setup_clients().
 
@@ -102,7 +102,7 @@ Classes
 
     `start_workflow(self, workflow_definition_id: typing.Annotated[str, Form(PydanticUndefined)], ownership_info: typing.Annotated[str | None, Form(PydanticUndefined)] = None, json_inputs: typing.Annotated[str | None, Form(PydanticUndefined)] = None, file_input_paths: typing.Annotated[str | None, Form(PydanticUndefined)] = None, files: list[fastapi.datastructures.UploadFile] = []) ‑> madsci.common.types.workflow_types.Workflow`
     :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
-
+        
         Parameters
         ----------
         workflow: YAML string
@@ -115,7 +115,7 @@ Classes
         - whether to use real robots or not
         validate_only: bool
         - whether to validate the workflow without queueing it
-
+        
         Returns
         -------
         response: Workflow
@@ -123,13 +123,13 @@ Classes
 
     `submit_workflow_definition(self, workflow_definition: madsci.common.types.workflow_types.WorkflowDefinition) ‑> str`
     :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
-
+        
         Parameters
         ----------
         workflow_definition: YAML string
         - The workflow_definition yaml file
-
-
+        
+        
         Returns
         -------
         response: Workflow Definition ID

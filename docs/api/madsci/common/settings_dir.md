@@ -16,6 +16,9 @@ similar to how tools like git, npm, and cargo find their configuration files.
 Walk-up stops when any of the following boundaries are reached:
 - A ``.madsci/`` directory is found (project root sentinel). The directory
   containing the sentinel is still searched, but parents above it are not.
+- A ``.git/`` directory is found (secondary project root boundary). The
+  directory containing ``.git/`` is still searched, but parents above it
+  are not.
 - The user's home directory (``Path.home()``). The home directory itself is
   searched, but parents above it are not.
 - The filesystem root.
@@ -47,7 +50,7 @@ Functions
 
 `resolve_file_paths(filenames: str | tuple[str, ...] | None, settings_dir: Path, extra_search_dirs: tuple[str, ...] = ()) ‑> tuple[pathlib.Path, ...] | None`
 :   Resolve configuration file paths using walk-up discovery.
-
+    
     For each filename:
     - If absolute, use as-is
     - If relative, call ``walk_up_find()`` from ``settings_dir``
@@ -56,42 +59,43 @@ Functions
       in order; first match wins
     - If still not found, resolve to ``settings_dir / filename``
       (pydantic-settings will skip non-existent files gracefully)
-
+    
     Args:
         filenames: A single filename, tuple of filenames, or ``None``.
         settings_dir: The starting directory for walk-up resolution.
         extra_search_dirs: Subdirectory names to check under
             ``settings_dir`` when walk-up does not find the file.
-
+    
     Returns:
         Tuple of resolved ``Path`` objects, or ``None`` if input is ``None``.
 
 `resolve_settings_dir(init_settings_dir: PathLike | None = None) ‑> pathlib.Path`
 :   Resolve the settings directory using a priority chain.
-
+    
     Resolution order:
     1. ``init_settings_dir`` keyword argument (if provided)
     2. ``MADSCI_SETTINGS_DIR`` environment variable (if set)
     3. Current working directory (fallback)
-
+    
     Returns:
         Absolute resolved ``Path``.
 
 `walk_up_find(filename: str, start_dir: Path, max_levels: int = 10) ‑> pathlib.Path | None`
 :   Find a file by walking up from ``start_dir`` toward the filesystem root.
-
+    
     Walk-up stops at the first boundary encountered:
     - A ``.madsci/`` sentinel directory (project root marker)
+    - A ``.git/`` directory (secondary project root boundary)
     - The user's home directory
     - The filesystem root
     - The ``max_levels`` limit
-
+    
     The directory containing the boundary is always searched before stopping.
-
+    
     Args:
         filename: The filename to search for (e.g., ``"settings.yaml"``).
         start_dir: The directory to start searching from.
         max_levels: Maximum number of parent directories to check.
-
+    
     Returns:
         Absolute path to the found file, or ``None`` if not found.

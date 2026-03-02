@@ -296,7 +296,7 @@ class DataManagerSettings(
     file_storage_path: PathLike = Field(
         title="File Storage Path",
         description="The path where files are stored on the server.",
-        default="~/.madsci/datapoints",
+        default=".madsci/datapoints",
     )
 
 

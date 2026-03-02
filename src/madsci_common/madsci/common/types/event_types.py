@@ -169,7 +169,7 @@ class EventManagerSettings(
         description="Cron expression for backup schedule (e.g., '0 2 * * *' for 2am daily).",
     )
     backup_dir: PathLike = Field(
-        default_factory=lambda: Path("~") / ".madsci" / "backups" / "events",
+        default=Path(".madsci/backups/events"),
         title="Backup Directory",
         description="Directory for event backups.",
     )
@@ -325,7 +325,7 @@ class EventClientConfig(MadsciClientConfig):
     log_dir: PathLike = Field(
         title="Log Directory",
         description="The directory to store logs in.",
-        default_factory=lambda: Path("~") / ".madsci" / "logs",
+        default=Path(".madsci/logs"),
     )
 
     # Log rotation settings

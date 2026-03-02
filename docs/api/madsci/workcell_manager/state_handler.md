@@ -8,7 +8,7 @@ Classes
 `WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None)`
 :   Manages state for a MADSci Workcell, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
-
+    
     Initialize a StateManager for a given workcell.
 
     ### Class variables

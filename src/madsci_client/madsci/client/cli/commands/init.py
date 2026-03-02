@@ -118,6 +118,15 @@ def init(
     for path in result.files_created:
         console.print(f"  [green]\u2713[/green] Created {path}")
 
+    # Initialize .madsci/ sentry directory
+    from madsci.common.sentry import ensure_madsci_dir
+
+    lab_dir = output_dir / lab_name
+    madsci_dir = ensure_madsci_dir(lab_dir)
+    console.print(
+        f"  [green]\u2713[/green] Initialized {madsci_dir.relative_to(output_dir)}/"
+    )
+
     console.print()
     console.print("[bold]Next steps:[/bold]")
     console.print(f"  1. cd {lab_name}")

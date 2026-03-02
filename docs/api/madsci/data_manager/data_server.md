@@ -7,7 +7,7 @@ Classes
 
 `DataManager(settings: madsci.common.types.datapoint_types.DataManagerSettings | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, **kwargs: Any)`
 :   Data Manager REST Server.
-
+    
     Initialize the Data Manager.
 
     ### Ancestors (in MRO)

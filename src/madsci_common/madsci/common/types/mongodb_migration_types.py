@@ -40,9 +40,9 @@ class MongoDBMigrationSettings(
         validation_alias=AliasChoices("schema_file", "MONGODB_SCHEMA_FILE"),
     )
     backup_dir: PathLike = Field(
-        default=Path(".madsci/mongodb/backups"),
+        default=Path(".madsci/backups/mongodb"),
         title="Backup Directory",
-        description="Directory where database backups will be stored. Relative to CWD unless absolute is provided.",
+        description="Directory where database backups will be stored.",
     )
     target_version: Optional[str] = Field(
         default=None,

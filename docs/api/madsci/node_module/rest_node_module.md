@@ -7,7 +7,7 @@ Classes
 
 `RestNode(*args: Any, **kwargs: Any)`
 :   REST-based node implementation with better OpenAPI documentation and result handling.
-
+    
     Initialize the node class.
 
     ### Ancestors (in MRO)

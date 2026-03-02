@@ -18,7 +18,7 @@ Classes
 
 `DashboardScreen(**kwargs: Any)`
 :   Main dashboard screen showing lab overview.
-
+    
     Initialize the dashboard screen.
 
     ### Ancestors (in MRO)
@@ -59,7 +59,7 @@ Classes
 
 `LogsScreen(**kwargs: Any)`
 :   Screen for viewing logs.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)
@@ -112,7 +112,7 @@ Classes
 
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)
@@ -159,7 +159,7 @@ Classes
 
 `StatusScreen(**kwargs: Any)`
 :   Screen showing detailed service status.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)
@@ -206,7 +206,7 @@ Classes
 
 `WorkflowsScreen(**kwargs: Any)`
 :   Screen showing workflow visualization and management.
-
+    
     Initialize the screen.
 
     ### Ancestors (in MRO)

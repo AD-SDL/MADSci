@@ -107,65 +107,65 @@ Functions
 
 `analyze_type(type_hint: Any, depth: int = 0, max_depth: int = 20) ‑> madsci.node_module.type_analyzer.TypeInfo`
 :   Recursively analyze a type hint to extract all relevant information.
-
+    
     This function performs deep analysis of Python type hints, unwrapping all
     layers of type wrappers (Optional, Union, Annotated, list, dict, tuple) and
     identifying special MADSci types at any nesting level.
-
+    
     Args:
         type_hint: The type hint to analyze
         depth: Current recursion depth (for safety)
         max_depth: Maximum recursion depth before raising an error
-
+    
     Returns:
         TypeInfo object with complete type information
-
+    
     Raises:
         ValueError: If recursion depth exceeds max_depth or unsupported
                    combinations are found
 
 `extract_metadata_from_annotated(type_hint: Any) ‑> tuple[typing.Any, list[typing.Any]]`
 :   Extract the base type and metadata from an Annotated type hint.
-
+    
     Args:
         type_hint: The type hint to extract from
-
+    
     Returns:
         Tuple of (base_type, metadata_list)
 
 `is_action_result_type(type_hint: Any) ‑> bool`
 :   Check if a type hint is ActionResult or a subclass.
-
+    
     Args:
         type_hint: The type hint to check
-
+    
     Returns:
         True if the type is ActionResult or a subclass
 
 `is_file_type(type_hint: Any) ‑> bool`
 :   Check if a type hint represents a file parameter (Path or subclass).
-
+    
     Args:
         type_hint: The type hint to check
-
+    
     Returns:
         True if the type is Path, PurePath, or subclass
 
 `is_location_argument_type(type_hint: Any) ‑> bool`
 :   Check if a type hint contains LocationArgument at any level.
-
+    
     Args:
         type_hint: The type hint to check
-
+    
     Returns:
         True if LocationArgument is the base type
 
 `is_optional_type(type_hint: Any) ‑> bool`
 :   Check if a type hint represents an Optional type (Union with None).
-
+    
     Args:
         type_hint: The type hint to check
-
+    
     Returns:
         True if the type is Optional[T] or Union[T, None]
 
@@ -174,7 +174,7 @@ Classes
 
 `TypeInfo(base_type: Any, is_optional: bool = False, is_union: bool = False, is_list: bool = False, is_dict: bool = False, is_tuple: bool = False, list_element_type: Optional[Any] = None, dict_key_type: Optional[Any] = None, dict_value_type: Optional[Any] = None, tuple_element_types: Optional[tuple[Any, ...]] = None, union_types: Optional[list[Any]] = None, metadata: list[Any] = <factory>, special_type: Optional[str] = None, special_type_class: Optional[type] = None)`
 :   Complete information about an analyzed type hint.
-
+    
     This dataclass contains all relevant information extracted from a type hint
     through recursive analysis, including type characteristics, container details,
     union types, metadata from Annotated, and special type classification.

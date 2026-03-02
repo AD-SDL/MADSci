@@ -10,23 +10,23 @@ Classes
 
 `EventClientContextMiddleware(app: Callable, manager_name: str = 'manager')`
 :   Middleware that establishes EventClient context for each request.
-
+    
     This enables hierarchical logging where all logs within a request
     share common context (request_id, path, method, etc.).
-
+    
     When combined with manager-level context, this creates a hierarchy like:
     manager.resource_manager -> request.GET./resources -> [endpoint handlers]
-
+    
     Attributes:
         manager_name: The name of the manager to include in context.
-
+    
     Note:
         The context is established using Python's contextvars, which properly
         propagates across async boundaries in modern Python (3.7+). The
         EventClient is created lazily when first accessed via get_event_client().
-
+    
     Initialize the EventClient context middleware.
-
+    
     Args:
         app: The ASGI application
         manager_name: The name of the manager to include in context
@@ -39,37 +39,37 @@ Classes
 
     `dispatch(self, request: starlette.requests.Request, call_next: Callable) ‑> starlette.responses.Response`
     :   Process each request within an EventClient context.
-
+        
         Establishes context with:
         - request_id: From X-Request-ID header or generated ULID
         - http_method: The HTTP method (GET, POST, etc.)
         - http_path: The request path
         - manager: The manager name
-
+        
         The context is established using Python's contextvars. The EventClient
         is created lazily when first accessed via get_event_client().
-
+        
         Args:
             request: The incoming HTTP request
             call_next: The next middleware or endpoint handler
-
+        
         Returns:
             Response: The HTTP response
 
 `RateLimitMiddleware(app: Callable, requests_limit: int = 100, time_window: int = 60, short_requests_limit: int | None = None, short_time_window: int | None = None, cleanup_interval: int = 300, exempt_ips: set[str] | None = None)`
 :   Rate limiting middleware for FastAPI applications.
-
+    
     This middleware tracks requests by client IP address and enforces
     rate limits based on a sliding window algorithm. When a client
     exceeds the rate limit, a 429 Too Many Requests response is returned.
-
+    
     Supports dual rate limiting with both short (burst) and long (sustained)
     windows. Both limits must be satisfied for a request to proceed.
-
+    
     Async-safe implementation using asyncio locks to prevent race conditions
     in concurrent coroutine handling. Includes periodic cleanup to prevent
     memory leaks from inactive client IPs.
-
+    
     Attributes:
         requests_limit: Maximum number of requests allowed per long time window
         time_window: Long time window in seconds for rate limiting
@@ -81,9 +81,9 @@ Classes
         _global_lock: Lock for managing the locks dictionary itself (created lazily)
         cleanup_interval: Interval in seconds between cleanup operations
         last_cleanup: Timestamp of last cleanup operation
-
+    
     Initialize the rate limiting middleware.
-
+    
     Args:
         app: The ASGI application
         requests_limit: Maximum number of requests allowed per long time window
@@ -101,16 +101,16 @@ Classes
 
     `dispatch(self, request: starlette.requests.Request, call_next: Callable) ‑> starlette.responses.Response`
     :   Process each request and enforce rate limiting.
-
+        
         Async-safe implementation that uses per-client locks to prevent
         race conditions in concurrent request handling.
-
+        
         For dual rate limiting, both short and long window limits must be
         satisfied for a request to proceed.
-
+        
         Args:
             request: The incoming HTTP request
             call_next: The next middleware or endpoint handler
-
+        
         Returns:
             Response: The HTTP response (429 if rate limit is exceeded)

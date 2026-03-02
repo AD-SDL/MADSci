@@ -8,7 +8,7 @@ Classes
 `Engine(state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, data_client: madsci.client.data_client.DataClient)`
 :   Handles scheduling workflows and executing steps on the workcell.
     Pops incoming workflows off a redis-based queue and executes them.
-
+    
     Initialize the scheduler.
 
     ### Methods
@@ -18,7 +18,7 @@ Classes
 
     `handle_data_and_files(self, step: madsci.common.types.step_types.Step, wf: madsci.common.types.workflow_types.Workflow, response: madsci.common.types.action_types.ActionResult) ‑> madsci.common.types.action_types.ActionResult`
     :   Upload non-datapoint results as datapoints and consolidate all datapoint IDs.
-
+        
         This method ensures that all results (JSON data, files) are stored as datapoints
         in the data manager, following the principle of getting data into the data manager ASAP.
         The response datapoints field will contain only ULID strings for efficient storage.
@@ -47,14 +47,14 @@ Classes
 
     `update_active_nodes(self, state_manager: madsci.workcell_manager.state_handler.WorkcellStateHandler, update_info: bool = False) ‑> None`
     :   Update all active nodes in the workcell.
-
+        
         Args:
             state_manager: The workcell state handler
             update_info: Whether to update node info in addition to status and state (default: False)
 
     `update_node(self, node_name: str, node: madsci.common.types.node_types.Node, state_manager: madsci.workcell_manager.state_handler.WorkcellStateHandler, update_info: bool = False) ‑> None`
     :   Update a single node's status, state, and optionally info.
-
+        
         Args:
             node_name: The name of the node to update
             node: The node object to update

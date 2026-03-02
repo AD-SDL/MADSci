@@ -22,7 +22,7 @@ Classes
 
 `AliasedGroup(name: str | None = None, commands: cabc.MutableMapping[str, Command] | cabc.Sequence[Command] | None = None, invoke_without_command: bool = False, no_args_is_help: bool | None = None, subcommand_metavar: str | None = None, chain: bool = False, result_callback: t.Callable[..., t.Any] | None = None, **kwargs: t.Any)`
 :   Click group that supports command aliases and lazy command loading.
-
+    
     Commands are imported only when they are actually invoked or when
     help text is requested, reducing CLI startup time.
 

@@ -33,11 +33,19 @@ MANAGER_MODULES: dict[str, str] = {
     "location": "madsci.location_manager.location_server",
 }
 
-# Directory for PID files.
-_PID_DIR = Path.home() / ".madsci" / "pids"
 
-# Directory for detached process logs.
-_LOG_DIR = Path.home() / ".madsci" / "logs"
+def _get_pid_dir() -> Path:
+    """Return the directory for PID files, resolved via sentry."""
+    from madsci.common.sentry import SUBDIR_PIDS, get_madsci_subdir
+
+    return get_madsci_subdir(SUBDIR_PIDS)
+
+
+def _get_log_dir() -> Path:
+    """Return the directory for detached process logs, resolved via sentry."""
+    from madsci.common.sentry import SUBDIR_LOGS, get_madsci_subdir
+
+    return get_madsci_subdir(SUBDIR_LOGS)
 
 
 def _find_compose_file(config_path: str | None) -> Path:
@@ -186,9 +194,9 @@ def _open_log_file(name: str) -> tuple[Path, IO]:
     """
     from datetime import datetime
 
-    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+    log_dir = _get_log_dir()
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_path = _LOG_DIR / f"{name}_{ts}.log"
+    log_path = log_dir / f"{name}_{ts}.log"
     fh = log_path.open("a")
     return log_path, fh
 
@@ -201,8 +209,8 @@ def _write_pid(name: str, pid: int) -> Path:
     """
     import json as _json
 
-    _PID_DIR.mkdir(parents=True, exist_ok=True)
-    pid_file = _PID_DIR / f"{name}.pid"
+    pid_dir = _get_pid_dir()
+    pid_file = pid_dir / f"{name}.pid"
     pid_data = {"pid": pid, "exe": sys.executable, "name": name}
     pid_file.write_text(_json.dumps(pid_data))
     return pid_file
@@ -217,7 +225,7 @@ def _read_pid(name: str) -> int | None:
     """
     import json as _json
 
-    pid_file = _PID_DIR / f"{name}.pid"
+    pid_file = _get_pid_dir() / f"{name}.pid"
     if not pid_file.exists():
         return None
     try:
@@ -252,7 +260,7 @@ def _read_pid(name: str) -> int | None:
 
 def _remove_pid(name: str) -> None:
     """Remove a PID file."""
-    pid_file = _PID_DIR / f"{name}.pid"
+    pid_file = _get_pid_dir() / f"{name}.pid"
     pid_file.unlink(missing_ok=True)
 
 

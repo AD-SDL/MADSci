@@ -7,9 +7,9 @@ Classes
 
 `MongoDBVersionChecker(db_url: str, database_name: str, schema_file_path: str, backup_dir: str | None = None, logger: madsci.client.event_client.EventClient | None = None)`
 :   Handles MongoDB database version validation and checking.
-
+    
     Initialize the MongoDBVersionChecker.
-
+    
     Args:
         db_url: MongoDB connection URL
         database_name: Name of the database to check
@@ -30,7 +30,7 @@ Classes
 
     `get_database_version(self) ‑> pydantic_extra_types.semantic_version.SemanticVersion | None`
     :   Get the current database schema version from the schema_versions collection.
-
+        
         Returns:
             SemanticVersion if a valid semantic version is found
             SemanticVersion(0, 0, 0) if database exists but no version tracking
@@ -44,19 +44,19 @@ Classes
 
     `is_migration_needed(self) ‑> tuple[bool, pydantic_extra_types.semantic_version.SemanticVersion, pydantic_extra_types.semantic_version.SemanticVersion | None]`
     :   Check if database migration is needed.
-
+        
         Migration is needed if:
         1. Database exists but has no version tracking (version 0.0.0), OR
         2. Database has version tracking with version mismatch
-
+        
         If database doesn't exist at all (None), auto-initialization may be possible.
-
+        
         Returns:
             tuple: (needs_migration, expected_schema_version, database_version)
 
     `is_version_tracked(self) ‑> bool`
     :   Check if version tracking exists in the database.
-
+        
         Returns True if the schema_versions collection exists AND has at least one version record.
         Returns False if the collection doesn't exist or is empty.
 
@@ -66,7 +66,7 @@ Classes
     `validate_or_fail(self) ‑> None`
     :   Validate database version compatibility or raise an exception.
         This should be called during server startup.
-
+        
         Behavior:
         - If completely fresh database (no collections) -> Auto-initialize
         - If version tracking exists and versions match -> Allow server to start

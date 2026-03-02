@@ -17,7 +17,7 @@ Functions
 
 `clear_all_registries() ‑> None`
 :   Clear all module-level registries.
-
+    
     Useful in test fixtures to prevent cross-test state pollution.
 
 Classes
@@ -26,7 +26,7 @@ Classes
 `InMemoryRedisClient(**_kwargs: Any)`
 :   Drop-in replacement for ``redis.Redis`` supporting the subset of
     methods used by MADSci state handlers: ``incr``, ``get``, and ``ping``.
-
+    
     Initialize the in-memory Redis client.
 
     ### Methods
@@ -45,14 +45,14 @@ Classes
 
 `InMemoryRedisDict(*, key: str, redis: Any)`
 :   Drop-in replacement for ``pottery.RedisDict``.
-
+    
     Supports: ``[]``, ``del``, ``in``, ``update()``, ``clear()``,
     ``to_dict()``, ``items()``, ``get()``, ``iter()``, ``len()``,
     ``model_validate`` passthrough via ``to_dict()``.
-
+    
     Multiple instances created with the same *key* and *redis* client share
     the same underlying storage, mirroring Redis semantics.
-
+    
     Initialize a shared-storage dict keyed by *key*.
 
     ### Methods
@@ -74,12 +74,12 @@ Classes
 
 `InMemoryRedisList(*, key: str, redis: Any)`
 :   Drop-in replacement for ``pottery.RedisList``.
-
+    
     Supports: ``append()``, ``remove()``, ``iter()``, ``len()``.
-
+    
     Multiple instances created with the same *key* and *redis* client share
     the same underlying storage.
-
+    
     Initialize a shared-storage list keyed by *key*.
 
     ### Methods
@@ -92,11 +92,11 @@ Classes
 
 `InMemoryRedlock(*, key: str, masters: Any = None, auto_release_time: int = 60)`
 :   Drop-in replacement for ``pottery.Redlock``.
-
+    
     Uses ``threading.RLock`` for single-process locking.  The ``masters``
     and ``auto_release_time`` parameters are accepted for API compatibility
     but are not enforced (no network timeouts in single-process mode).
-
+    
     Initialize a reentrant lock keyed by *key*.
 
     ### Methods

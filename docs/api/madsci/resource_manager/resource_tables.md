@@ -7,7 +7,7 @@ Functions
 
 `add_automated_history(session: sqlmodel.orm.session.Session) ‑> None`
 :   Add automated history to the session.
-
+    
     Args:
         session (Session): SQLAlchemy session.
 
@@ -147,7 +147,7 @@ Classes
 
     `children: dict[str, 'ResourceTable']`
     :   Get the children resources as a dictionary.
-
+        
         Returns:
             dict: Dictionary of children resources.
 
@@ -225,12 +225,12 @@ Classes
 
 `ResourceTableBase(**data: Any)`
 :   Base class for all resource-based tables.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -297,7 +297,7 @@ Classes
 
     `to_data_model(self, include_children: bool = True) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Convert the table entry to a data model.
-
+        
         Returns:
             ResourceDataModels: The resource data model.
 
