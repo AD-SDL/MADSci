@@ -16,6 +16,7 @@ Sub-modules
 * madsci.client.resource_client
 * madsci.client.structlog_config
 * madsci.client.workcell_client
+* madsci.client.workflow_display
 
 Classes
 -------
@@ -1583,7 +1584,7 @@ Classes
         Node
             The added node details.
 
-    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0) ‑> madsci.common.types.workflow_types.Workflow`
+    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: Literal['auto', 'rich', 'jupyter', 'plain'] = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
         
         Parameters
@@ -1598,6 +1599,8 @@ Classes
             If True, raise an exception if the workflow is cancelled, by default True.
         query_frequency : float, optional
             How often to query the workflow status in seconds, by default 2.0.
+        display_mode : DisplayMode, optional
+            Display backend: "auto" (detect), "rich", "jupyter", or "plain".
         
         Returns
         -------
@@ -1943,7 +1946,7 @@ Classes
         Node
             The added node details.
 
-    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0) ‑> madsci.common.types.workflow_types.Workflow`
+    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: Literal['auto', 'rich', 'jupyter', 'plain'] = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
         
         Parameters
@@ -1958,6 +1961,8 @@ Classes
             If True, raise an exception if the workflow is cancelled, by default True.
         query_frequency : float, optional
             How often to query the workflow status in seconds, by default 2.0.
+        display_mode : DisplayMode, optional
+            Display backend: "auto" (detect), "rich", "jupyter", or "plain".
         
         Returns
         -------

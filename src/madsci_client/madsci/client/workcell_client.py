@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
+from madsci.client.workflow_display import DisplayMode, WorkflowDisplay
 from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.ownership import get_current_ownership_info
@@ -23,7 +24,6 @@ from madsci.common.workflows import (
     check_parameters_lists,
 )
 from pydantic import AnyUrl
-from rich import print
 from ulid import ULID
 
 
@@ -435,6 +435,7 @@ class WorkcellClient:
         prompt_on_error: bool,
         raise_on_failed: bool,
         raise_on_cancelled: bool,
+        display: Optional[WorkflowDisplay] = None,
     ) -> Workflow:
         """
         Handle errors in a workflow by prompting the user for action or raising exceptions.
@@ -448,6 +449,8 @@ class WorkcellClient:
             If True, raise an exception if the workflow fails.
         raise_on_cancelled : bool
             If True, raise an exception if the workflow is cancelled.
+        display : Optional[WorkflowDisplay]
+            Optional display instance for formatted prompts.
         Returns
         -------
         Workflow
@@ -455,13 +458,16 @@ class WorkcellClient:
         """
         if prompt_on_error:
             while True:
-                decision = input(
-                    f"""Workflow {"Failed" if wf.status.failed else "Cancelled"}.
-Options:
-- Retry from a specific step (Enter the step index, e.g., 1; 0 for the first step; -1 for the current step)
-- {"R" if raise_on_failed else "Do not r"}aise an exception and continue (c, enter to continue)
-"""
-                ).strip()
+                if display is not None:
+                    prompt_text = display.format_error_prompt(wf)
+                else:
+                    prompt_text = (
+                        f"\nWorkflow {'Failed' if wf.status.failed else 'Cancelled'}.\n"
+                        "Options:\n"
+                        "- Retry from a specific step (Enter the step index, e.g., 1; 0 for the first step; -1 for the current step)\n"
+                        "- Enter 'c' or press Enter to continue\n"
+                    )
+                decision = input(prompt_text).strip()
                 try:
                     step = int(decision)
                     if step in range(-1, len(wf.steps)):
@@ -488,7 +494,9 @@ Options:
                     pass
                 if decision in {"c", "", None}:
                     break
-                print("Invalid input. Please try again.")
+                from rich import print as rprint  # noqa: PLC0415
+
+                rprint("Invalid input. Please try again.")
         if wf.status.failed and raise_on_failed:
             raise WorkflowFailedError(
                 f"Workflow {wf.name} ({wf.workflow_id}) failed on step {wf.status.current_step_index}: '{wf.steps[wf.status.current_step_index].name}' with result:\n {wf.steps[wf.status.current_step_index].result}."
@@ -506,6 +514,7 @@ Options:
         raise_on_failed: bool = True,
         raise_on_cancelled: bool = True,
         query_frequency: float = 2.0,
+        display_mode: DisplayMode = "auto",
     ) -> Workflow:
         """
         Wait for a workflow to complete.
@@ -522,40 +531,34 @@ Options:
             If True, raise an exception if the workflow is cancelled, by default True.
         query_frequency : float, optional
             How often to query the workflow status in seconds, by default 2.0.
+        display_mode : DisplayMode, optional
+            Display backend: "auto" (detect), "rich", "jupyter", or "plain".
 
         Returns
         -------
         Workflow
             The completed workflow object.
         """
-        prior_status = None
-        prior_index = None
-        while True:
-            wf = self.query_workflow(workflow_id)
-            status = wf.status
-            step_index = wf.status.current_step_index
-            if prior_status != status or prior_index != step_index:
-                if step_index < len(wf.steps):
-                    step_name = wf.steps[step_index].name
-                else:
-                    step_name = "Workflow End"
-                # TODO: Improve progress reporting
-                print(
-                    f"\n{wf.name}['{step_name}']: {wf.status.description}",
-                    end="",
-                    flush=True,
-                )
-            else:
-                print(".", end="", flush=True)
-            time.sleep(query_frequency)
-            if wf.status.terminal:
-                print()
-                break
-            prior_status = status
-            prior_index = step_index
+        display = WorkflowDisplay(mode=display_mode)
+        display.start()
+        wf = None
+        try:
+            while True:
+                wf = self.query_workflow(workflow_id)
+                display.update(wf)
+                if wf.status.terminal:
+                    break
+                time.sleep(query_frequency)
+        finally:
+            if wf is not None:
+                display.stop(wf)
         if wf.status.failed or wf.status.cancelled:
             return self._handle_workflow_error(
-                wf, prompt_on_error, raise_on_failed, raise_on_cancelled
+                wf,
+                prompt_on_error,
+                raise_on_failed,
+                raise_on_cancelled,
+                display=display,
             )
         return wf
 

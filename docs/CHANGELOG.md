@@ -103,6 +103,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `event_client_context()` and `get_event_client()` for context management
 - Per-manager OTEL configuration via environment variables
 
+#### Workflow Status Display
+- New `WorkflowDisplay` class in `madsci.client.workflow_display` with three rendering backends:
+  - **Rich Live** (default terminal): In-place updating table with progress bar, step icons, and colored status panels
+  - **Jupyter/IPython**: HTML table with styled status cells and CSS progress bar, updated in-place via `display_id`
+  - **Plain text**: Simple line-based output for environments without Rich or IPython
+- Auto-detection of display environment (Jupyter notebook vs terminal vs plain), overridable via `display_mode` parameter
+- Per-step timing: running steps show live elapsed time, completed steps show final duration
+- Step key annotations shown alongside step names when available
+- Paused/queued workflow indicators in all three backends
+- Formatted error prompts for workflow failure/cancellation with retry options
+
 ### Changed
 
 #### Workcell Node Reconnect Behavior
@@ -110,6 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reconnect attempts run in a separate background thread, so the main engine loop is never blocked by reconnect activity
 - On a successful reconnect, `update_node()` naturally restores the node's status from the node's own response; on failure, the node stays disconnected and is retried on the next interval
 - Default `reconnect_attempt_interval` reduced from 1200 s → 30 s, safe now that retries are non-disruptive
+
+#### Workcell Client
+- `WorkcellClient.await_workflow()` now uses `WorkflowDisplay` for rich progress output instead of raw `print()` calls with flush hacks
+- New `display_mode` parameter on `await_workflow()` (default `"auto"`) to control rendering backend
+- `_handle_workflow_error()` uses display-aware prompt formatting when a display instance is available
+- All changes are backward-compatible; existing method signatures are preserved
 
 - Default paths for manager runtime data (PIDs, logs, backups, workcell files, datapoints) now resolve to a project-local `.madsci/` directory via walk-up instead of always `~/.madsci/`. If no `.madsci/` or `.git/` directory is found in the directory tree, `~/.madsci/` is still used as the fallback. Set `MADSCI_SETTINGS_DIR` to override the resolution start directory.
 - Backup subdirectory layout changed: `.madsci/mongodb/backups` -> `.madsci/backups/mongodb`, `.madsci/postgresql/backups` -> `.madsci/backups/postgresql`
@@ -134,7 +151,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `lab_definition_path` parameter removed from `LocalRunner` (was accepted but never used)
 
 ### Deprecated
-- Definition files hard-deprecated in v0.7.0 (previously soft-deprecated with removal planned for v0.8.0)
+- Definition files hard-deprecated in v0.7.0
 - `NodeDefinition` files (use `NodeInfo.from_config()` instead)
 - `ManagerDefinition` files (use `ManagerSettings` instead)
 - `load_or_create_definition()` (use `load_definition()` instead)
