@@ -101,7 +101,7 @@ Classes
         
         Call this during shutdown to clean up all resources.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, retry_timeout: float | None = None) ‑> str`
     :   Resolve a name to an ID.
         
         This is the primary method for components to get their identity.
@@ -112,6 +112,9 @@ Classes
             name: Component name (e.g., "liquidhandler_1").
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to
+                :meth:`LocalRegistryManager.resolve`.
         
         Returns:
             The component's ID (ULID).
@@ -119,7 +122,7 @@ Classes
         Raises:
             RegistryLockError: If the name is already locked by another process.
 
-    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
+    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, retry_timeout: float | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
     :   Resolve a name and return detailed information.
         
         Like resolve(), but returns additional information about where
@@ -129,6 +132,8 @@ Classes
             name: Component name.
             component_type: Type of component.
             metadata: Optional metadata.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to :meth:`resolve`.
         
         Returns:
             RegistryResolveResult with ID and source information.
@@ -259,7 +264,7 @@ Classes
             RegistryError: If old_name doesn't exist or new_name already exists.
             RegistryLockError: If old_name is locked and force=False.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True, retry_timeout: float | None = None) ‑> str`
     :   Resolve a name to an ID, creating if necessary.
         
         This is the primary method for getting a component's ID. If the name
@@ -271,12 +276,16 @@ Classes
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
+            retry_timeout: When set and a ``RegistryLockError`` occurs,
+                retry every 2 seconds until this many seconds have elapsed.
+                When ``None`` (default), fail immediately on lock contention.
         
         Returns:
             The component's ID (ULID).
         
         Raises:
-            RegistryLockError: If the lock cannot be acquired.
+            RegistryLockError: If the lock cannot be acquired (after retries,
+                if retry_timeout is set).
             Timeout: If the file lock times out.
 
 `LockManager(instance_id: str | None = None, lock_ttl: datetime.timedelta | None = None, heartbeat_interval: int | None = None)`
