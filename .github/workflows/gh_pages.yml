@@ -49,9 +49,9 @@ jobs:
           # Strip machine-specific pointer addresses to keep docs deterministic
           python -c "import re, pathlib; [f.write_text(re.sub(r'[\s\xa0]at[\s\xa0]0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
       - name: Export OpenAPI specs
-        run: python scripts/export_openapi.py
+        run: pdm run python scripts/export_openapi.py
       - name: Generate REST API docs
-        run: python scripts/generate_redoc.py
+        run: pdm run python scripts/generate_redoc.py
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
