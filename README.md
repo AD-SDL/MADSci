@@ -242,3 +242,5 @@ cd MADSci
 just init  # Installs dependencies and sets up pre-commit hooks
 just up    # Start example lab for testing
 ```
+
+> **Note:** The `pdm.lock` file was generated using [uv as the resolver](https://pdm-project.org/latest/usage/uv/). If `pdm install` fails with resolver errors, either install uv and run `pdm config use_uv true`, or delete `pdm.lock` to let PDM regenerate it with the standard resolver. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.

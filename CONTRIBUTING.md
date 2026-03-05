@@ -37,6 +37,22 @@ just list
 just up
 ```
 
+> **Note: PDM lockfile and uv compatibility**
+>
+> The `pdm.lock` file in this repository was generated using [uv as the resolver](https://pdm-project.org/latest/usage/uv/). If you encounter resolver errors when running `pdm install` (or `just init`), you have two options:
+>
+> 1. **Install uv and configure PDM to use it (recommended):**
+>    ```bash
+>    pip install uv  # or see https://docs.astral.sh/uv/getting-started/installation/
+>    pdm config use_uv true
+>    ```
+> 2. **Delete the lockfile** so PDM regenerates it with the standard resolver:
+>    ```bash
+>    rm pdm.lock
+>    ```
+>
+> After either option, re-run `just init` (or `pdm install -G:all`).
+
 ### Development Commands
 
 ```bash
