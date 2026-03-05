@@ -1,6 +1,9 @@
 """Tests for the LocalRegistryManager."""
 
 import tempfile
+import threading
+import time
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -187,3 +190,100 @@ class TestLockManager:
 
             # Clean up
             registry2.release("test_node")
+
+
+class TestResolveRetry:
+    """Tests for resolve() retry-on-lock-contention behavior."""
+
+    def test_resolve_retries_on_lock_contention(self):
+        """Retry succeeds after the holder releases the lock."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "registry.json"
+            registry1 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=LockManager(),
+            )
+            registry2 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=LockManager(),
+            )
+
+            # First registry acquires the lock
+            id1 = registry1.resolve("test_node", "node")
+
+            # Release the lock in a background thread after a short delay
+            def release_later():
+                time.sleep(1.0)
+                registry1.release("test_node")
+
+            t = threading.Thread(target=release_later, daemon=True)
+            t.start()
+
+            # Second registry retries and should succeed once the lock
+            # is released
+            id2 = registry2.resolve(
+                "test_node",
+                "node",
+                retry_timeout=10.0,
+            )
+            assert id1 == id2
+
+            # Clean up
+            registry2.release("test_node")
+            t.join(timeout=5)
+
+    def test_resolve_retry_timeout_raises(self):
+        """RegistryLockError is raised after retry_timeout expires."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "registry.json"
+            # Use a long TTL so the lock never expires during the test
+            lock1 = LockManager(lock_ttl=timedelta(seconds=300))
+            registry1 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=lock1,
+            )
+            registry2 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=LockManager(),
+            )
+
+            registry1.resolve("test_node", "node")
+
+            start = time.monotonic()
+            with pytest.raises(RegistryLockError):
+                registry2.resolve(
+                    "test_node",
+                    "node",
+                    retry_timeout=3.0,
+                )
+            elapsed = time.monotonic() - start
+            # Should have waited approximately 3 seconds (at least 2s)
+            assert elapsed >= 2.0
+
+            # Clean up
+            registry1.release("test_node")
+
+    def test_resolve_no_retry_by_default(self):
+        """Without retry_timeout, RegistryLockError is raised immediately."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            registry_path = Path(tmpdir) / "registry.json"
+            registry1 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=LockManager(),
+            )
+            registry2 = LocalRegistryManager(
+                registry_path=registry_path,
+                lock_manager=LockManager(),
+            )
+
+            registry1.resolve("test_node", "node")
+
+            start = time.monotonic()
+            with pytest.raises(RegistryLockError):
+                registry2.resolve("test_node", "node")
+            elapsed = time.monotonic() - start
+            # Should fail immediately (< 1 second)
+            assert elapsed < 1.0
+
+            # Clean up
+            registry1.release("test_node")

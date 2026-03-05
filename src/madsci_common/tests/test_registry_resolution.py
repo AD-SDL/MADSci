@@ -198,4 +198,5 @@ class TestRegistryResolutionIntegration:
             name="Custom Name",
             component_type="manager",
             metadata={"manager_class": "AbstractManagerBase"},
+            retry_timeout=60.0,
         )
