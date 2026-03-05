@@ -19,6 +19,7 @@ from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.middleware import EventClientContextMiddleware, RateLimitMiddleware
+from madsci.common.openapi_utils import deduplicate_discriminated_unions
 from madsci.common.otel import (
     OtelBootstrapConfig,
     configure_otel,
@@ -591,6 +592,19 @@ class AbstractManagerBase(
 
         # Include the router from this Routable class
         app.include_router(self.router)
+
+        # Wrap the OpenAPI schema generator so that the /docs and /redoc
+        # endpoints serve a deduplicated spec.  Pydantic inlines discriminated
+        # unions at every usage site; for recursive types this creates circular
+        # schemas that crash Swagger UI and Redoc.
+        _original_openapi = app.openapi
+
+        def _patched_openapi() -> dict:
+            schema = _original_openapi()
+            deduplicate_discriminated_unions(schema)
+            return schema
+
+        app.openapi = _patched_openapi  # type: ignore[method-assign]
 
         return app
 

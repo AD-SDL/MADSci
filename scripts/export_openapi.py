@@ -11,6 +11,8 @@ import json
 import sys
 from pathlib import Path
 
+from madsci.common.openapi_utils import deduplicate_discriminated_unions
+
 # Manager registry: (display_name, module_path, class_name, output_filename)
 MANAGERS = [
     ("Lab Manager", "madsci.squid.lab_server", "LabManager", "lab-manager.json"),
@@ -62,7 +64,7 @@ def export_spec(display_name: str, module_path: str, class_name: str) -> dict | 
         manager_cls = getattr(module, class_name)
         manager = manager_cls()
         app = manager.create_server()
-        return app.openapi()
+        return deduplicate_discriminated_unions(app.openapi())
     except Exception as exc:
         print(f"  WARNING: Failed to export {display_name}: {exc}", file=sys.stderr)
         return None

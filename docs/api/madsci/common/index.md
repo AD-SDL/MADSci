@@ -17,6 +17,7 @@ Sub-modules
 * madsci.common.mongodb_version_checker
 * madsci.common.nodes
 * madsci.common.object_storage_helpers
+* madsci.common.openapi_utils
 * madsci.common.otel
 * madsci.common.ownership
 * madsci.common.registry

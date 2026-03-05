@@ -1797,21 +1797,7 @@
                 "type": "string"
               },
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ParameterInputJson"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "parameter_type",
-                  "mapping": {
-                    "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                    "json_input": "#/components/schemas/ParameterInputJson"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
               },
               {
                 "type": "null"
@@ -1826,21 +1812,7 @@
                 "type": "string"
               },
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ParameterInputJson"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "parameter_type",
-                  "mapping": {
-                    "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                    "json_input": "#/components/schemas/ParameterInputJson"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
               },
               {
                 "type": "null"
@@ -1855,21 +1827,7 @@
                 "type": "string"
               },
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ParameterInputJson"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "parameter_type",
-                  "mapping": {
-                    "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                    "json_input": "#/components/schemas/ParameterInputJson"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
               },
               {
                 "type": "null"
@@ -1884,21 +1842,7 @@
                 "type": "string"
               },
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ParameterInputJson"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "parameter_type",
-                  "mapping": {
-                    "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                    "json_input": "#/components/schemas/ParameterInputJson"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
               },
               {
                 "type": "null"
@@ -1914,21 +1858,7 @@
                   "type": "string"
                 },
                 {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/ParameterInputJson"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                    }
-                  ],
-                  "discriminator": {
-                    "propertyName": "parameter_type",
-                    "mapping": {
-                      "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                      "json_input": "#/components/schemas/ParameterInputJson"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AnyParameterInputJsonModel"
                 }
               ]
             },
@@ -1943,21 +1873,7 @@
                   "type": "string"
                 },
                 {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/ParameterInputJson"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ParameterFeedForwardJson"
-                    }
-                  ],
-                  "discriminator": {
-                    "propertyName": "parameter_type",
-                    "mapping": {
-                      "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
-                      "json_input": "#/components/schemas/ParameterInputJson"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AnyParameterInputJsonModel"
                 }
               ]
             },
@@ -2160,6 +2076,23 @@
         "type": "object",
         "title": "WorkflowParameters",
         "description": "container for all of the workflow parameters"
+      },
+      "AnyParameterInputJsonModel": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ParameterInputJson"
+          },
+          {
+            "$ref": "#/components/schemas/ParameterFeedForwardJson"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "parameter_type",
+          "mapping": {
+            "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
+            "json_input": "#/components/schemas/ParameterInputJson"
+          }
+        }
       }
     }
   }

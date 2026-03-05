@@ -79,70 +79,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/Resource"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Asset"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Consumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Container"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Collection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Row"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Grid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGrid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Stack"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Queue"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Pool"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Slot"
-                  }
-                ],
-                "title": "Resource",
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "resource": "#/components/schemas/Resource",
-                    "asset": "#/components/schemas/Asset",
-                    "consumable": "#/components/schemas/Consumable",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                    "container": "#/components/schemas/Container",
-                    "collection": "#/components/schemas/Collection",
-                    "row": "#/components/schemas/Row",
-                    "grid": "#/components/schemas/Grid",
-                    "voxel_grid": "#/components/schemas/VoxelGrid",
-                    "stack": "#/components/schemas/Stack",
-                    "queue": "#/components/schemas/Queue",
-                    "pool": "#/components/schemas/Pool",
-                    "slot": "#/components/schemas/Slot"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceModel"
               }
             }
           },
@@ -179,70 +116,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/Resource"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Asset"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Consumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Container"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Collection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Row"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Grid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGrid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Stack"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Queue"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Pool"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Slot"
-                  }
-                ],
-                "title": "Resource",
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "resource": "#/components/schemas/Resource",
-                    "asset": "#/components/schemas/Asset",
-                    "consumable": "#/components/schemas/Consumable",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                    "container": "#/components/schemas/Container",
-                    "collection": "#/components/schemas/Collection",
-                    "row": "#/components/schemas/Row",
-                    "grid": "#/components/schemas/Grid",
-                    "voxel_grid": "#/components/schemas/VoxelGrid",
-                    "stack": "#/components/schemas/Stack",
-                    "queue": "#/components/schemas/Queue",
-                    "pool": "#/components/schemas/Pool",
-                    "slot": "#/components/schemas/Slot"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceModel"
               }
             }
           },
@@ -1620,70 +1494,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/Resource"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Asset"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Consumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Container"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Collection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Row"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Grid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGrid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Stack"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Queue"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Pool"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Slot"
-                  }
-                ],
-                "title": "Resource",
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "resource": "#/components/schemas/Resource",
-                    "asset": "#/components/schemas/Asset",
-                    "consumable": "#/components/schemas/Consumable",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                    "container": "#/components/schemas/Container",
-                    "collection": "#/components/schemas/Collection",
-                    "row": "#/components/schemas/Row",
-                    "grid": "#/components/schemas/Grid",
-                    "voxel_grid": "#/components/schemas/VoxelGrid",
-                    "stack": "#/components/schemas/Stack",
-                    "queue": "#/components/schemas/Queue",
-                    "pool": "#/components/schemas/Pool",
-                    "slot": "#/components/schemas/Slot"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceModel"
               }
             }
           },
@@ -2091,69 +1902,7 @@
           },
           "children": {
             "additionalProperties": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Resource"
-                },
-                {
-                  "$ref": "#/components/schemas/Asset"
-                },
-                {
-                  "$ref": "#/components/schemas/Consumable"
-                },
-                {
-                  "$ref": "#/components/schemas/DiscreteConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/ContinuousConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/Container"
-                },
-                {
-                  "$ref": "#/components/schemas/Collection"
-                },
-                {
-                  "$ref": "#/components/schemas/Row"
-                },
-                {
-                  "$ref": "#/components/schemas/Grid"
-                },
-                {
-                  "$ref": "#/components/schemas/VoxelGrid"
-                },
-                {
-                  "$ref": "#/components/schemas/Stack"
-                },
-                {
-                  "$ref": "#/components/schemas/Queue"
-                },
-                {
-                  "$ref": "#/components/schemas/Pool"
-                },
-                {
-                  "$ref": "#/components/schemas/Slot"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "base_type",
-                "mapping": {
-                  "asset": "#/components/schemas/Asset",
-                  "collection": "#/components/schemas/Collection",
-                  "consumable": "#/components/schemas/Consumable",
-                  "container": "#/components/schemas/Container",
-                  "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                  "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                  "grid": "#/components/schemas/Grid",
-                  "pool": "#/components/schemas/Pool",
-                  "queue": "#/components/schemas/Queue",
-                  "resource": "#/components/schemas/Resource",
-                  "row": "#/components/schemas/Row",
-                  "slot": "#/components/schemas/Slot",
-                  "stack": "#/components/schemas/Stack",
-                  "voxel_grid": "#/components/schemas/VoxelGrid"
-                }
-              }
+              "$ref": "#/components/schemas/AnyResourceModel"
             },
             "type": "object",
             "title": "Children",
@@ -2268,69 +2017,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -2832,69 +2519,7 @@
           },
           "children": {
             "additionalProperties": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Resource"
-                },
-                {
-                  "$ref": "#/components/schemas/Asset"
-                },
-                {
-                  "$ref": "#/components/schemas/Consumable"
-                },
-                {
-                  "$ref": "#/components/schemas/DiscreteConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/ContinuousConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/Container"
-                },
-                {
-                  "$ref": "#/components/schemas/Collection"
-                },
-                {
-                  "$ref": "#/components/schemas/Row"
-                },
-                {
-                  "$ref": "#/components/schemas/Grid"
-                },
-                {
-                  "$ref": "#/components/schemas/VoxelGrid"
-                },
-                {
-                  "$ref": "#/components/schemas/Stack"
-                },
-                {
-                  "$ref": "#/components/schemas/Queue"
-                },
-                {
-                  "$ref": "#/components/schemas/Pool"
-                },
-                {
-                  "$ref": "#/components/schemas/Slot"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "base_type",
-                "mapping": {
-                  "asset": "#/components/schemas/Asset",
-                  "collection": "#/components/schemas/Collection",
-                  "consumable": "#/components/schemas/Consumable",
-                  "container": "#/components/schemas/Container",
-                  "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                  "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                  "grid": "#/components/schemas/Grid",
-                  "pool": "#/components/schemas/Pool",
-                  "queue": "#/components/schemas/Queue",
-                  "resource": "#/components/schemas/Resource",
-                  "row": "#/components/schemas/Row",
-                  "slot": "#/components/schemas/Slot",
-                  "stack": "#/components/schemas/Stack",
-                  "voxel_grid": "#/components/schemas/VoxelGrid"
-                }
-              }
+              "$ref": "#/components/schemas/AnyResourceModel"
             },
             "type": "object",
             "title": "Children",
@@ -3009,69 +2634,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -4056,69 +3619,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -4594,69 +4095,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -4699,69 +4138,7 @@
           "child": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/Resource"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Asset"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Consumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Container"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Collection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Row"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Grid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGrid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Stack"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Queue"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Pool"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Slot"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/Asset",
-                    "collection": "#/components/schemas/Collection",
-                    "consumable": "#/components/schemas/Consumable",
-                    "container": "#/components/schemas/Container",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                    "grid": "#/components/schemas/Grid",
-                    "pool": "#/components/schemas/Pool",
-                    "queue": "#/components/schemas/Queue",
-                    "resource": "#/components/schemas/Resource",
-                    "row": "#/components/schemas/Row",
-                    "slot": "#/components/schemas/Slot",
-                    "stack": "#/components/schemas/Stack",
-                    "voxel_grid": "#/components/schemas/VoxelGrid"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceModel"
               },
               {
                 "type": "null"
@@ -4933,69 +4310,7 @@
           },
           "children": {
             "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Resource"
-                },
-                {
-                  "$ref": "#/components/schemas/Asset"
-                },
-                {
-                  "$ref": "#/components/schemas/Consumable"
-                },
-                {
-                  "$ref": "#/components/schemas/DiscreteConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/ContinuousConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/Container"
-                },
-                {
-                  "$ref": "#/components/schemas/Collection"
-                },
-                {
-                  "$ref": "#/components/schemas/Row"
-                },
-                {
-                  "$ref": "#/components/schemas/Grid"
-                },
-                {
-                  "$ref": "#/components/schemas/VoxelGrid"
-                },
-                {
-                  "$ref": "#/components/schemas/Stack"
-                },
-                {
-                  "$ref": "#/components/schemas/Queue"
-                },
-                {
-                  "$ref": "#/components/schemas/Pool"
-                },
-                {
-                  "$ref": "#/components/schemas/Slot"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "base_type",
-                "mapping": {
-                  "asset": "#/components/schemas/Asset",
-                  "collection": "#/components/schemas/Collection",
-                  "consumable": "#/components/schemas/Consumable",
-                  "container": "#/components/schemas/Container",
-                  "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                  "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                  "grid": "#/components/schemas/Grid",
-                  "pool": "#/components/schemas/Pool",
-                  "queue": "#/components/schemas/Queue",
-                  "resource": "#/components/schemas/Resource",
-                  "row": "#/components/schemas/Row",
-                  "slot": "#/components/schemas/Slot",
-                  "stack": "#/components/schemas/Stack",
-                  "voxel_grid": "#/components/schemas/VoxelGrid"
-                }
-              }
+              "$ref": "#/components/schemas/AnyResourceModel"
             },
             "type": "array",
             "title": "Children",
@@ -5110,69 +4425,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -5856,69 +5109,7 @@
             "items": {
               "anyOf": [
                 {
-                  "oneOf": [
-                    {
-                      "$ref": "#/components/schemas/Resource"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Asset"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Consumable"
-                    },
-                    {
-                      "$ref": "#/components/schemas/DiscreteConsumable"
-                    },
-                    {
-                      "$ref": "#/components/schemas/ContinuousConsumable"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Container"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Collection"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Row"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Grid"
-                    },
-                    {
-                      "$ref": "#/components/schemas/VoxelGrid"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Stack"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Queue"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Pool"
-                    },
-                    {
-                      "$ref": "#/components/schemas/Slot"
-                    }
-                  ],
-                  "discriminator": {
-                    "propertyName": "base_type",
-                    "mapping": {
-                      "asset": "#/components/schemas/Asset",
-                      "collection": "#/components/schemas/Collection",
-                      "consumable": "#/components/schemas/Consumable",
-                      "container": "#/components/schemas/Container",
-                      "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                      "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                      "grid": "#/components/schemas/Grid",
-                      "pool": "#/components/schemas/Pool",
-                      "queue": "#/components/schemas/Queue",
-                      "resource": "#/components/schemas/Resource",
-                      "row": "#/components/schemas/Row",
-                      "slot": "#/components/schemas/Slot",
-                      "stack": "#/components/schemas/Stack",
-                      "voxel_grid": "#/components/schemas/VoxelGrid"
-                    }
-                  }
+                  "$ref": "#/components/schemas/AnyResourceModel"
                 },
                 {
                   "type": "null"
@@ -6048,69 +5239,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -6229,69 +5358,7 @@
                 "type": "string"
               },
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/Resource"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Asset"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Consumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumable"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Container"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Collection"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Row"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Grid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGrid"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Stack"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Queue"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Pool"
-                  },
-                  {
-                    "$ref": "#/components/schemas/Slot"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/Asset",
-                    "collection": "#/components/schemas/Collection",
-                    "consumable": "#/components/schemas/Consumable",
-                    "container": "#/components/schemas/Container",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                    "grid": "#/components/schemas/Grid",
-                    "pool": "#/components/schemas/Pool",
-                    "queue": "#/components/schemas/Queue",
-                    "resource": "#/components/schemas/Resource",
-                    "row": "#/components/schemas/Row",
-                    "slot": "#/components/schemas/Slot",
-                    "stack": "#/components/schemas/Stack",
-                    "voxel_grid": "#/components/schemas/VoxelGrid"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceModel"
               }
             ],
             "title": "Child"
@@ -6458,69 +5525,7 @@
           },
           "children": {
             "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Resource"
-                },
-                {
-                  "$ref": "#/components/schemas/Asset"
-                },
-                {
-                  "$ref": "#/components/schemas/Consumable"
-                },
-                {
-                  "$ref": "#/components/schemas/DiscreteConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/ContinuousConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/Container"
-                },
-                {
-                  "$ref": "#/components/schemas/Collection"
-                },
-                {
-                  "$ref": "#/components/schemas/Row"
-                },
-                {
-                  "$ref": "#/components/schemas/Grid"
-                },
-                {
-                  "$ref": "#/components/schemas/VoxelGrid"
-                },
-                {
-                  "$ref": "#/components/schemas/Stack"
-                },
-                {
-                  "$ref": "#/components/schemas/Queue"
-                },
-                {
-                  "$ref": "#/components/schemas/Pool"
-                },
-                {
-                  "$ref": "#/components/schemas/Slot"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "base_type",
-                "mapping": {
-                  "asset": "#/components/schemas/Asset",
-                  "collection": "#/components/schemas/Collection",
-                  "consumable": "#/components/schemas/Consumable",
-                  "container": "#/components/schemas/Container",
-                  "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                  "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                  "grid": "#/components/schemas/Grid",
-                  "pool": "#/components/schemas/Pool",
-                  "queue": "#/components/schemas/Queue",
-                  "resource": "#/components/schemas/Resource",
-                  "row": "#/components/schemas/Row",
-                  "slot": "#/components/schemas/Slot",
-                  "stack": "#/components/schemas/Stack",
-                  "voxel_grid": "#/components/schemas/VoxelGrid"
-                }
-              }
+              "$ref": "#/components/schemas/AnyResourceModel"
             },
             "type": "array",
             "title": "Children",
@@ -6627,69 +5632,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -6876,69 +5819,7 @@
           },
           "children": {
             "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/Resource"
-                },
-                {
-                  "$ref": "#/components/schemas/Asset"
-                },
-                {
-                  "$ref": "#/components/schemas/Consumable"
-                },
-                {
-                  "$ref": "#/components/schemas/DiscreteConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/ContinuousConsumable"
-                },
-                {
-                  "$ref": "#/components/schemas/Container"
-                },
-                {
-                  "$ref": "#/components/schemas/Collection"
-                },
-                {
-                  "$ref": "#/components/schemas/Row"
-                },
-                {
-                  "$ref": "#/components/schemas/Grid"
-                },
-                {
-                  "$ref": "#/components/schemas/VoxelGrid"
-                },
-                {
-                  "$ref": "#/components/schemas/Stack"
-                },
-                {
-                  "$ref": "#/components/schemas/Queue"
-                },
-                {
-                  "$ref": "#/components/schemas/Pool"
-                },
-                {
-                  "$ref": "#/components/schemas/Slot"
-                }
-              ],
-              "discriminator": {
-                "propertyName": "base_type",
-                "mapping": {
-                  "asset": "#/components/schemas/Asset",
-                  "collection": "#/components/schemas/Collection",
-                  "consumable": "#/components/schemas/Consumable",
-                  "container": "#/components/schemas/Container",
-                  "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                  "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                  "grid": "#/components/schemas/Grid",
-                  "pool": "#/components/schemas/Pool",
-                  "queue": "#/components/schemas/Queue",
-                  "resource": "#/components/schemas/Resource",
-                  "row": "#/components/schemas/Row",
-                  "slot": "#/components/schemas/Slot",
-                  "stack": "#/components/schemas/Stack",
-                  "voxel_grid": "#/components/schemas/VoxelGrid"
-                }
-              }
+              "$ref": "#/components/schemas/AnyResourceModel"
             },
             "type": "array",
             "title": "Children",
@@ -7053,69 +5934,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -7145,70 +5964,7 @@
       "TemplateCreateBody": {
         "properties": {
           "resource": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/Resource"
-              },
-              {
-                "$ref": "#/components/schemas/Asset"
-              },
-              {
-                "$ref": "#/components/schemas/Consumable"
-              },
-              {
-                "$ref": "#/components/schemas/DiscreteConsumable"
-              },
-              {
-                "$ref": "#/components/schemas/ContinuousConsumable"
-              },
-              {
-                "$ref": "#/components/schemas/Container"
-              },
-              {
-                "$ref": "#/components/schemas/Collection"
-              },
-              {
-                "$ref": "#/components/schemas/Row"
-              },
-              {
-                "$ref": "#/components/schemas/Grid"
-              },
-              {
-                "$ref": "#/components/schemas/VoxelGrid"
-              },
-              {
-                "$ref": "#/components/schemas/Stack"
-              },
-              {
-                "$ref": "#/components/schemas/Queue"
-              },
-              {
-                "$ref": "#/components/schemas/Pool"
-              },
-              {
-                "$ref": "#/components/schemas/Slot"
-              }
-            ],
-            "title": "Resource",
-            "discriminator": {
-              "propertyName": "base_type",
-              "mapping": {
-                "asset": "#/components/schemas/Asset",
-                "collection": "#/components/schemas/Collection",
-                "consumable": "#/components/schemas/Consumable",
-                "container": "#/components/schemas/Container",
-                "continuous_consumable": "#/components/schemas/ContinuousConsumable",
-                "discrete_consumable": "#/components/schemas/DiscreteConsumable",
-                "grid": "#/components/schemas/Grid",
-                "pool": "#/components/schemas/Pool",
-                "queue": "#/components/schemas/Queue",
-                "resource": "#/components/schemas/Resource",
-                "row": "#/components/schemas/Row",
-                "slot": "#/components/schemas/Slot",
-                "stack": "#/components/schemas/Stack",
-                "voxel_grid": "#/components/schemas/VoxelGrid"
-              }
-            }
+            "$ref": "#/components/schemas/AnyResourceModel"
           },
           "template_name": {
             "type": "string",
@@ -7697,69 +6453,7 @@
           "default_child_template": {
             "anyOf": [
               {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/AssetResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContainerResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/CollectionResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/RowResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/GridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/VoxelGridResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/StackResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/QueueResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/PoolResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/SlotResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
-                  },
-                  {
-                    "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
-                  }
-                ],
-                "discriminator": {
-                  "propertyName": "base_type",
-                  "mapping": {
-                    "asset": "#/components/schemas/AssetResourceDefinition",
-                    "collection": "#/components/schemas/CollectionResourceDefinition",
-                    "consumable": "#/components/schemas/ConsumableResourceDefinition",
-                    "container": "#/components/schemas/ContainerResourceDefinition",
-                    "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
-                    "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
-                    "grid": "#/components/schemas/GridResourceDefinition",
-                    "pool": "#/components/schemas/PoolResourceDefinition",
-                    "queue": "#/components/schemas/QueueResourceDefinition",
-                    "resource": "#/components/schemas/ResourceDefinition",
-                    "row": "#/components/schemas/RowResourceDefinition",
-                    "slot": "#/components/schemas/SlotResourceDefinition",
-                    "stack": "#/components/schemas/StackResourceDefinition",
-                    "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
-                  }
-                }
+                "$ref": "#/components/schemas/AnyResourceDefinitionModel"
               },
               {
                 "type": "null"
@@ -7805,6 +6499,137 @@
         ],
         "title": "VoxelGridResourceDefinition",
         "description": "Definition for a voxel grid resource. Voxel grids are 3D grids of resources. They are treated as nested collections (i.e. Collection[Collection[Collection[Resource]]])."
+      },
+      "AnyResourceModel": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Resource"
+          },
+          {
+            "$ref": "#/components/schemas/Asset"
+          },
+          {
+            "$ref": "#/components/schemas/Consumable"
+          },
+          {
+            "$ref": "#/components/schemas/DiscreteConsumable"
+          },
+          {
+            "$ref": "#/components/schemas/ContinuousConsumable"
+          },
+          {
+            "$ref": "#/components/schemas/Container"
+          },
+          {
+            "$ref": "#/components/schemas/Collection"
+          },
+          {
+            "$ref": "#/components/schemas/Row"
+          },
+          {
+            "$ref": "#/components/schemas/Grid"
+          },
+          {
+            "$ref": "#/components/schemas/VoxelGrid"
+          },
+          {
+            "$ref": "#/components/schemas/Stack"
+          },
+          {
+            "$ref": "#/components/schemas/Queue"
+          },
+          {
+            "$ref": "#/components/schemas/Pool"
+          },
+          {
+            "$ref": "#/components/schemas/Slot"
+          }
+        ],
+        "title": "Resource",
+        "discriminator": {
+          "propertyName": "base_type",
+          "mapping": {
+            "resource": "#/components/schemas/Resource",
+            "asset": "#/components/schemas/Asset",
+            "consumable": "#/components/schemas/Consumable",
+            "discrete_consumable": "#/components/schemas/DiscreteConsumable",
+            "continuous_consumable": "#/components/schemas/ContinuousConsumable",
+            "container": "#/components/schemas/Container",
+            "collection": "#/components/schemas/Collection",
+            "row": "#/components/schemas/Row",
+            "grid": "#/components/schemas/Grid",
+            "voxel_grid": "#/components/schemas/VoxelGrid",
+            "stack": "#/components/schemas/Stack",
+            "queue": "#/components/schemas/Queue",
+            "pool": "#/components/schemas/Pool",
+            "slot": "#/components/schemas/Slot"
+          }
+        }
+      },
+      "AnyResourceDefinitionModel": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/AssetResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/ContainerResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/CollectionResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/RowResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/GridResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/VoxelGridResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/StackResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/QueueResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/PoolResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/SlotResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/ConsumableResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/DiscreteConsumableResourceDefinition"
+          },
+          {
+            "$ref": "#/components/schemas/ContinuousConsumableResourceDefinition"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "base_type",
+          "mapping": {
+            "asset": "#/components/schemas/AssetResourceDefinition",
+            "collection": "#/components/schemas/CollectionResourceDefinition",
+            "consumable": "#/components/schemas/ConsumableResourceDefinition",
+            "container": "#/components/schemas/ContainerResourceDefinition",
+            "continuous_consumable": "#/components/schemas/ContinuousConsumableResourceDefinition",
+            "discrete_consumable": "#/components/schemas/DiscreteConsumableResourceDefinition",
+            "grid": "#/components/schemas/GridResourceDefinition",
+            "pool": "#/components/schemas/PoolResourceDefinition",
+            "queue": "#/components/schemas/QueueResourceDefinition",
+            "resource": "#/components/schemas/ResourceDefinition",
+            "row": "#/components/schemas/RowResourceDefinition",
+            "slot": "#/components/schemas/SlotResourceDefinition",
+            "stack": "#/components/schemas/StackResourceDefinition",
+            "voxel_grid": "#/components/schemas/VoxelGridResourceDefinition"
+          }
+        }
       }
     }
   }
