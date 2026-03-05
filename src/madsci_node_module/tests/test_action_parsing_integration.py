@@ -33,7 +33,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
-from madsci.common.types.node_types import NodeDefinition, RestNodeConfig
+from madsci.common.types.node_types import RestNodeConfig
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import BaseModel
@@ -41,6 +41,35 @@ from pydantic import BaseModel
 # ============================================================================
 # Test Fixtures and Helper Classes
 # ============================================================================
+
+
+def wait_for_action_completion(
+    node, action_id: str, timeout: float = 5.0
+) -> ActionResult:
+    """Wait for an action to complete and return the final result.
+
+    Args:
+        node: The node running the action
+        action_id: The action ID to wait for
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        The final ActionResult
+
+    Raises:
+        AssertionError: If the action doesn't complete within timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        result = node.get_action_result(action_id)
+        if result.status in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+        ]:
+            return result
+        time.sleep(0.01)  # Check every 10ms
+    raise AssertionError(f"Action {action_id} timed out after {timeout} seconds")
 
 
 class TestIntegrationNodeConfig(RestNodeConfig):
@@ -53,13 +82,12 @@ class TestIntegrationNodeConfig(RestNodeConfig):
 
 def create_test_node_instance(node_class):
     """Helper to create a node instance with proper config and definition."""
-    node_definition = NodeDefinition(
+    node_config = TestIntegrationNodeConfig(
+        test_required_param=1,
         node_name="test_node",
         module_name="test_module",
-        description="Integration test node",
     )
-    node_config = TestIntegrationNodeConfig(test_required_param=1)
-    return node_class(node_definition=node_definition, node_config=node_config)
+    return node_class(node_config=node_config)
 
 
 class TestIntegrationNode(RestNode):
@@ -146,7 +174,7 @@ def node_with_complex_actions():
 def test_create_node_with_complex_actions(node_with_complex_actions):
     """Test 180: Node with all type combinations."""
     assert node_with_complex_actions is not None
-    assert node_with_complex_actions.node_definition.node_name == "test_node"
+    assert node_with_complex_actions.node_info.node_name == "test_node"
 
 
 def test_node_info_generation(node_with_complex_actions):
@@ -574,16 +602,21 @@ def test_execute_action_validates_location_argument():
         action_name="test_action",
         args={"loc": {"representation": "test_loc", "location_name": "test_loc"}},
     )
-    result = node.run_action(valid_request)
+    node.run_action(valid_request)
+    result = wait_for_action_completion(node, valid_request.action_id)
     assert result.status == ActionStatus.SUCCEEDED
     assert result.json_result == "Location: test_loc"
 
     # Invalid location should fail validation
+    # Note: This should fail immediately during arg parsing, not in the thread
     invalid_request = ActionRequest(
         action_name="test_action",
         args={"loc": {"invalid": "data"}},
     )
     result = node.run_action(invalid_request)
+    # Wait a bit for thread to complete if it started
+    time.sleep(0.1)
+    result = node.get_action_result(invalid_request.action_id)
     assert result.status == ActionStatus.FAILED
     assert result.errors is not None
 

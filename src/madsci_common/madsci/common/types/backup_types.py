@@ -56,6 +56,7 @@ class PostgreSQLBackupSettings(
         description="PostgreSQL connection URL",
         alias="db_url",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+        json_schema_extra={"secret": True},
     )
     backup_format: str = Field(
         default="custom",
@@ -79,6 +80,7 @@ class MongoDBBackupSettings(
         description="MongoDB connection URL",
         alias="mongo_db_url",  # avoid double prefixing
         default="mongodb://localhost:27017",
+        json_schema_extra={"secret": True},
     )
     database: Optional[str] = Field(
         title="Database Name", description="Database name to backup", default=None

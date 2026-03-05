@@ -1,0 +1,114 @@
+# Tutorial 06: Full Lifecycle
+# Tests the complete scaffolding lifecycle: module + experiment + workflow
+
+name: "Tutorial 06 - Full Lifecycle"
+description: "Test creating a module, experiment, and workflow together"
+version: "1.0"
+tags:
+  - tutorial
+  - no-docker
+  - lifecycle
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 600.0
+
+steps:
+  - name: "Create device module"
+    command: "madsci new module --name test_device --template module/device --no-interactive ./test_tutorial_06"
+    timeout: 60.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: directory_exists
+        path: "./test_tutorial_06/test_device_module"
+      - type: file_exists
+        path: "./test_tutorial_06/test_device_module/src/test_device_rest_node.py"
+      - type: file_exists
+        path: "./test_tutorial_06/test_device_module/src/test_device_interface.py"
+      - type: file_exists
+        path: "./test_tutorial_06/test_device_module/src/test_device_fake_interface.py"
+      - type: file_exists
+        path: "./test_tutorial_06/test_device_module/src/test_device_types.py"
+
+  - name: "Validate device module Python syntax"
+    command: "python -m py_compile ./test_tutorial_06/test_device_module/src/test_device_rest_node.py && python -m py_compile ./test_tutorial_06/test_device_module/src/test_device_interface.py && python -m py_compile ./test_tutorial_06/test_device_module/src/test_device_fake_interface.py && python -m py_compile ./test_tutorial_06/test_device_module/src/test_device_types.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Run ruff on device module"
+    command: "ruff check ./test_tutorial_06/test_device_module/src/"
+    continue_on_error: true
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Create script experiment"
+    command: "madsci new experiment --name test_exp --modality script --no-interactive ./test_tutorial_06"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_06/test_exp.py"
+
+  - name: "Validate experiment syntax"
+    command: "python -m py_compile ./test_tutorial_06/test_exp.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Create notebook experiment"
+    command: "madsci new experiment --name test_nb_exp --modality notebook --no-interactive ./test_tutorial_06"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_06/test_nb_exp.ipynb"
+
+  - name: "Create workflow for device"
+    command: "madsci new workflow --name test_device_wf --no-interactive ./test_tutorial_06"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_06/test_device_wf.workflow.yaml"
+
+  - name: "Create workcell"
+    command: "madsci new workcell --name test_wc --no-interactive ./test_tutorial_06"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: "./test_tutorial_06/test_wc.workcell.yaml"
+
+  - name: "List all templates"
+    command: "madsci new list"
+    timeout: 15.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "module/basic"
+      - type: output_contains
+        pattern: "module/device"
+      - type: output_contains
+        pattern: "node/basic"
+      - type: output_contains
+        pattern: "experiment/script"
+      - type: output_contains
+        pattern: "workflow/basic"
+      - type: output_contains
+        pattern: "lab/minimal"
+
+cleanup:
+  commands:
+    - "rm -rf ./test_tutorial_06"
+  stop_background: true

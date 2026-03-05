@@ -1,8 +1,8 @@
 "MADSci Node Types."
 
+import warnings
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Optional
 
 from madsci.common.types.action_types import ActionDefinition
@@ -12,7 +12,6 @@ from madsci.common.types.base_types import (
     Error,
     MadsciBaseModel,
     MadsciBaseSettings,
-    PathLike,
 )
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
@@ -52,22 +51,6 @@ class NodeConfig(
 ):
     """Basic Configuration for a MADSci Node."""
 
-    node_definition: Optional[PathLike] = Field(
-        title="Node Definition File",
-        description="Path to the node definition file to use. If set, the node will load the definition from this file on startup. Otherwise, a default configuration will be created.",
-        default=Path("default.node.yaml"),
-        alias="node_definition",  # * Don't double prefix
-    )
-    node_info_path: Optional[PathLike] = Field(
-        title="Node Info Path",
-        description="Path to export the generated node info file. If not set, will use the node name and the node_definition's path.",
-        default=None,
-    )
-    update_node_files: bool = Field(
-        title="Update Node Files",
-        description="Whether to update the node definition and info files on startup. If set to False, the node will not update the files even if they are out of date.",
-        default=True,
-    )
     status_update_interval: Optional[float] = Field(
         title="Status Update Interval",
         description="The interval in seconds at which the node should update its status.",
@@ -77,6 +60,33 @@ class NodeConfig(
         title="State Update Interval",
         description="The interval in seconds at which the node should update its state.",
         default=2.0,
+    )
+
+    # Identity fields — these specify node identity via settings/env vars.
+    node_name: Optional[str] = Field(
+        default=None,
+        title="Node Name",
+        description="Name for this node. If not set, defaults to the class name.",
+    )
+    node_id: Optional[str] = Field(
+        default=None,
+        title="Node ID",
+        description="Unique ID for this node. If not set, a new ULID is generated.",
+    )
+    node_type: Optional[NodeType] = Field(
+        default=None,
+        title="Node Type",
+        description="The type of thing this node provides an interface for.",
+    )
+    module_name: Optional[str] = Field(
+        default=None,
+        title="Module Name",
+        description="Name of the node module implementation.",
+    )
+    module_version: Optional[str] = Field(
+        default=None,
+        title="Module Version",
+        description="Version of the node module implementation.",
     )
 
 
@@ -232,7 +242,11 @@ class NodeCapabilities(NodeClientCapabilities):
 
 
 class NodeDefinition(MadsciBaseModel):
-    """Definition of a MADSci Node, a unique instance of a MADSci Node Module."""
+    """Definition of a MADSci Node, a unique instance of a MADSci Node Module.
+
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`NodeConfig` instead.
+    """
 
     node_name: str = Field(title="Node Name", description="The name of the node.")
     node_id: str = Field(
@@ -265,6 +279,21 @@ class NodeDefinition(MadsciBaseModel):
     )
 
     is_ulid = field_validator("node_id")(ulid_validator)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning when NodeDefinition is instantiated directly."""
+        # Only warn for NodeDefinition itself, not subclasses like NodeInfo
+        if type(self) is NodeDefinition:
+            from madsci.common.deprecation import (  # noqa: PLC0415
+                MadsciDeprecationWarning,
+            )
+
+            warnings.warn(
+                "NodeDefinition is deprecated and removed in v0.7.0. "
+                "Use NodeConfig instead.",
+                MadsciDeprecationWarning,
+                stacklevel=4,
+            )
 
 
 class Node(MadsciBaseModel, arbitrary_types_allowed=True):
@@ -327,9 +356,84 @@ class NodeInfo(NodeDefinition):
         node: NodeDefinition,
         config: Optional[NodeConfig] = None,
     ) -> "NodeInfo":
-        """Create a NodeInfo from a NodeDefinition and config."""
+        """Create a NodeInfo from a NodeDefinition and config.
+
+        .. deprecated:: 0.7.0
+            Use :meth:`from_config` when possible. This method is maintained
+            for backwards compatibility with existing code that passes a
+            ``NodeDefinition`` object.
+        """
         return cls(
             **node.model_dump(exclude={"commands"}),
+            config=config,
+            config_schema=config.model_json_schema() if config else None,
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        config: NodeConfig,
+        *,
+        node_name: Optional[str] = None,
+        module_name: Optional[str] = None,
+        module_version: Optional[str] = None,
+        node_definition: Optional[NodeDefinition] = None,
+    ) -> "NodeInfo":
+        """Create a NodeInfo from settings and optional module metadata.
+
+        This factory builds a NodeInfo from ``NodeConfig`` settings fields
+        without requiring a separate ``NodeDefinition`` file.  Identity
+        fields are resolved with the following priority:
+
+        1. Explicit keyword arguments (``node_name``, ``module_name``, etc.)
+        2. Values from ``config`` identity fields (if set)
+        3. Values from ``node_definition`` (if provided, for backwards compat)
+        4. Sensible defaults
+
+        Args:
+            config: The node's configuration settings.
+            node_name: Explicit node name override.
+            module_name: Explicit module name override.
+            module_version: Explicit module version override.
+            node_definition: Optional legacy definition for backwards compat.
+
+        Returns:
+            NodeInfo: A new NodeInfo instance.
+        """
+        # Build identity from config -> definition -> defaults
+        identity: dict[str, Any] = {}
+
+        # Start with definition values if available
+        if node_definition is not None:
+            identity.update(node_definition.model_dump(exclude={"commands"}))
+
+        # Override with config identity fields (if set)
+        if config.node_name is not None:
+            identity["node_name"] = config.node_name
+        if config.node_id is not None:
+            identity["node_id"] = config.node_id
+        if config.node_type is not None:
+            identity["node_type"] = config.node_type
+        if config.module_name is not None:
+            identity["module_name"] = config.module_name
+        if config.module_version is not None:
+            identity["module_version"] = Version.parse(config.module_version)
+
+        # Override with explicit keyword arguments
+        if node_name is not None:
+            identity["node_name"] = node_name
+        if module_name is not None:
+            identity["module_name"] = module_name
+        if module_version is not None:
+            identity["module_version"] = Version.parse(module_version)
+
+        # Ensure required fields have defaults
+        identity.setdefault("node_name", "unnamed_node")
+        identity.setdefault("module_name", "unknown_module")
+        identity.setdefault("node_id", new_ulid_str())
+
+        return cls(
+            **identity,
             config=config,
             config_schema=config.model_json_schema(),
         )

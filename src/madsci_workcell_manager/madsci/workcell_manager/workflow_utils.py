@@ -12,13 +12,15 @@ from fastapi import UploadFile
 from madsci.client.data_client import DataClient
 from madsci.client.event_client import EventClient
 from madsci.client.location_client import LocationClient
+from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.datapoint_types import FileDataPoint
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     LocationArgument,
 )
 from madsci.common.types.parameter_types import ParameterInputFile, ParameterTypes
 from madsci.common.types.step_types import Step
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import WorkcellInfo
 from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
@@ -39,7 +41,7 @@ def validate_node_names(
                 state_handler.get_node(node_name)
         except KeyError as e:
             raise ValueError(
-                f"Node {node_name} not in Workcell {state_handler.get_workcell_definition().name}"
+                f"Node {node_name} not in Workcell {state_handler.get_workcell_info().name}"
             ) from e
 
 
@@ -181,7 +183,7 @@ def validate_step(
 
 def create_workflow(
     workflow_def: WorkflowDefinition,
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     state_handler: WorkcellStateHandler,
     json_inputs: Optional[dict[str, Any]] = None,
     file_input_paths: Optional[dict[str, str]] = None,
@@ -254,7 +256,7 @@ def insert_parameters(step: Step, parameter_values: dict[str, Any]) -> Step:
 
 
 def prepare_workflow_step(
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     state_handler: WorkcellStateHandler,
     step: Step,
     workflow: Workflow,
@@ -274,7 +276,17 @@ def prepare_workflow_step(
     )
     if data_client is not None:
         working_step = prepare_workflow_files(working_step, workflow, data_client)
-    EventClient().info(validation_string)
+    EventClient().info(
+        "Workflow step validation",
+        event_type=EventType.WORKCELL_STATUS_UPDATE,
+        valid=valid,
+        validation_message=validation_string,
+        workflow_id=workflow.workflow_id,
+        workflow_name=workflow.name,
+        step_name=getattr(working_step, "name", None),
+        step_action=getattr(working_step, "action", None),
+        step_node=getattr(working_step, "node", None),
+    )
     if not valid:
         raise ValueError(validation_string)
     return working_step
@@ -344,7 +356,7 @@ def prepare_workflow_files(
 
 
 def replace_locations(
-    workcell: WorkcellManagerDefinition,
+    workcell: WorkcellInfo,
     step: Step,
     location_client: Optional[LocationClient] = None,
 ) -> None:
@@ -433,11 +445,49 @@ def get_workflow_inputs_directory(
     return Path(working_directory).expanduser() / "Workflows" / workflow_id / "Inputs"
 
 
-def cancel_workflow(wf: Workflow, state_handler: WorkcellStateHandler) -> None:
-    """Cancels the workflow run"""
+def pause_workflow(wf: Workflow) -> Workflow:
+    """Pauses the workflow run."""
+    EventClient().debug(
+        "Pausing workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
+
+    wf.status.paused = True
+    wf.status.running = False
+
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.PAUSED
+        step.result = ActionResult(status=ActionStatus.PAUSED)
+
+    return wf
+
+
+def cancel_workflow(wf: Workflow) -> Workflow:
+    """Cancels the workflow run."""
+    EventClient().debug(
+        "Cancelling workflow",
+        workflow_id=wf.workflow_id,
+        workflow_name=wf.name,
+    )
+
     wf.status.cancelled = True
-    with state_handler.wc_state_lock():
-        state_handler.set_active_workflow(wf)
+    wf.status.running = False
+
+    i = wf.status.current_step_index
+    if 0 <= i < len(wf.steps):
+        step = wf.steps[i]
+        step.status = ActionStatus.CANCELLED
+        step.result = ActionResult(status=ActionStatus.CANCELLED)
+        if not step.end_time:
+            step.end_time = datetime.now()
+        if step.start_time and step.end_time:
+            step.duration = step.end_time - step.start_time
+
+    if not wf.end_time:
+        wf.end_time = datetime.now()
     return wf
 
 
@@ -445,4 +495,5 @@ def cancel_active_workflows(state_handler: WorkcellStateHandler) -> None:
     """Cancels all currently running workflow runs"""
     for wf in state_handler.get_active_workflows().values():
         if wf.status.active:
-            cancel_workflow(wf, state_handler=state_handler)
+            cancelled_wf = cancel_workflow(wf)
+            state_handler.set_active_workflow(cancelled_wf)

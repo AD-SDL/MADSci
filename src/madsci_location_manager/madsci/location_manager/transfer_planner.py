@@ -5,9 +5,10 @@ from typing import Optional
 
 from madsci.client.event_client import EventClient
 from madsci.client.resource_client import ResourceClient
+from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
-    LocationManagerDefinition,
+    LocationTransferCapabilities,
     TransferGraphEdge,
     TransferStepTemplate,
     TransferTemplateOverrides,
@@ -27,18 +28,18 @@ class TransferPlanner:
     def __init__(
         self,
         state_handler: LocationStateHandler,
-        definition: LocationManagerDefinition,
+        transfer_capabilities: Optional[LocationTransferCapabilities] = None,
         resource_client: Optional[ResourceClient] = None,
     ) -> None:
         """Initialize the TransferPlanner.
 
         Args:
             state_handler: LocationStateHandler instance for accessing location data
-            definition: LocationManagerDefinition containing transfer capabilities
+            transfer_capabilities: Transfer capabilities configuration
             resource_client: ResourceClient for capacity-aware transfer planning (optional)
         """
         self.state_handler = state_handler
-        self.definition = definition
+        self.transfer_capabilities = transfer_capabilities
         self.resource_client = resource_client
         self._transfer_graph = self._build_transfer_graph()
 
@@ -53,7 +54,7 @@ class TransferPlanner:
         """
         transfer_graph = {}
 
-        if not self.definition.transfer_capabilities:
+        if not self.transfer_capabilities:
             return transfer_graph
 
         locations = self.state_handler.get_locations()
@@ -131,8 +132,8 @@ class TransferPlanner:
 
         # Check if override templates are configured
         overrides = (
-            self.definition.transfer_capabilities.override_transfer_templates
-            if self.definition.transfer_capabilities
+            self.transfer_capabilities.override_transfer_templates
+            if self.transfer_capabilities
             else None
         )
 
@@ -159,8 +160,8 @@ class TransferPlanner:
                 return dest_templates
 
         # 4. If no overrides found, use default templates
-        if not templates and self.definition.transfer_capabilities:
-            templates = self.definition.transfer_capabilities.transfer_templates
+        if not templates and self.transfer_capabilities:
+            templates = self.transfer_capabilities.transfer_templates
 
         return templates
 
@@ -228,9 +229,9 @@ class TransferPlanner:
         """
         # Check if capacity cost adjustments are not enabled, resource client is unavailable, or destination has no resource
         if (
-            not self.definition.transfer_capabilities
-            or not self.definition.transfer_capabilities.capacity_cost_config
-            or not self.definition.transfer_capabilities.capacity_cost_config.enabled
+            not self.transfer_capabilities
+            or not self.transfer_capabilities.capacity_cost_config
+            or not self.transfer_capabilities.capacity_cost_config.enabled
             or not self.resource_client
             or not target_location.resource_id
         ):
@@ -253,7 +254,7 @@ class TransferPlanner:
             utilization_ratio = float(resource.quantity) / float(resource.capacity)
 
             # Get capacity configuration
-            config = self.definition.transfer_capabilities.capacity_cost_config
+            config = self.transfer_capabilities.capacity_cost_config
 
             # Apply multipliers based on utilization thresholds
             if utilization_ratio >= config.full_capacity_threshold:
@@ -265,7 +266,10 @@ class TransferPlanner:
         except Exception:
             # Log warning but don't fail - just return base cost
             EventClient().warning(
-                f"Failure during capacity check for resource {target_location.resource_id}. Using base transfer cost."
+                "Failure during capacity check for resource. Using base transfer cost.",
+                event_type=EventType.DATA_QUERY,
+                resource_id=target_location.resource_id,
+                exc_info=True,
             )
             return base_cost
 

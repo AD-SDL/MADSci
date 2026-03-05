@@ -8,8 +8,8 @@ Functions
 `cancel_active_workflows(state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler) ‑> None`
 :   Cancels all currently running workflow runs
 
-`cancel_workflow(wf: madsci.common.types.workflow_types.Workflow, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler) ‑> None`
-:   Cancels the workflow run
+`cancel_workflow(wf: madsci.common.types.workflow_types.Workflow) ‑> madsci.common.types.workflow_types.Workflow`
+:   Cancels the workflow run.
 
 `check_json_parameters(workflow_definition: madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None) ‑> None`
 :   Check that all required JSON parameters are provided
@@ -21,26 +21,26 @@ Functions
 :   Saves the files to the workflow run directory,
     and updates the step files to point to the new location
 
-`create_workflow(workflow_def: madsci.common.types.workflow_types.WorkflowDefinition, workcell: madsci.common.types.workcell_types.WorkcellManagerDefinition, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, json_inputs: dict[str, typing.Any] | None = None, file_input_paths: dict[str, str] | None = None, location_client: madsci.client.location_client.LocationClient | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+`create_workflow(workflow_def: madsci.common.types.workflow_types.WorkflowDefinition, workcell: madsci.common.types.workcell_types.WorkcellInfo, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, json_inputs: dict[str, typing.Any] | None = None, file_input_paths: dict[str, str] | None = None, location_client: madsci.client.location_client.LocationClient | None = None) ‑> madsci.common.types.workflow_types.Workflow`
 :   Pulls the workcell and builds a list of dictionary steps to be executed
-
+    
     Parameters
     ----------
     workflow_def: WorkflowDefintion
         The workflow data file loaded in from the workflow yaml file
-
+    
     workcell : Workcell
         The Workcell object stored in the database
-
+    
     parameters: Dict
         The input to the workflow
-
+    
     ownership_info: OwnershipInfo
         Information on the owner(s) of the workflow
-
+    
     simulate: bool
         Whether or not to use real robots
-
+    
     Returns
     -------
     steps: WorkflowRun
@@ -52,13 +52,16 @@ Functions
 `insert_parameters(step: madsci.common.types.step_types.Step, parameter_values: dict[str, typing.Any]) ‑> madsci.common.types.step_types.Step`
 :   Replace parameter values in a provided step
 
+`pause_workflow(wf: madsci.common.types.workflow_types.Workflow) ‑> madsci.common.types.workflow_types.Workflow`
+:   Pauses the workflow run.
+
 `prepare_workflow_files(step: madsci.common.types.step_types.Step, workflow: madsci.common.types.workflow_types.Workflow, data_client: madsci.client.data_client.DataClient) ‑> madsci.common.types.step_types.Step`
 :   Get workflow files ready to upload
 
-`prepare_workflow_step(workcell: madsci.common.types.workcell_types.WorkcellManagerDefinition, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, step: madsci.common.types.step_types.Step, workflow: madsci.common.types.workflow_types.Workflow, data_client: madsci.client.data_client.DataClient | None = None, location_client: madsci.client.location_client.LocationClient | None = None) ‑> madsci.common.types.step_types.Step`
+`prepare_workflow_step(workcell: madsci.common.types.workcell_types.WorkcellInfo, state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, step: madsci.common.types.step_types.Step, workflow: madsci.common.types.workflow_types.Workflow, data_client: madsci.client.data_client.DataClient | None = None, location_client: madsci.client.location_client.LocationClient | None = None) ‑> madsci.common.types.step_types.Step`
 :   Prepares a step for execution by replacing locations and validating it
 
-`replace_locations(workcell: madsci.common.types.workcell_types.WorkcellManagerDefinition, step: madsci.common.types.step_types.Step, location_client: madsci.client.location_client.LocationClient | None = None) ‑> None`
+`replace_locations(workcell: madsci.common.types.workcell_types.WorkcellInfo, step: madsci.common.types.step_types.Step, location_client: madsci.client.location_client.LocationClient | None = None) ‑> None`
 :   Replaces the location names with the location objects
 
 `save_workflow_files(workflow: madsci.common.types.workflow_types.Workflow, files: list[fastapi.datastructures.UploadFile], data_client: madsci.client.data_client.DataClient) ‑> madsci.common.types.workflow_types.Workflow`

@@ -1,0 +1,1252 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EventManager",
+    "description": "EventManager Manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/events/archive": {
+      "post": {
+        "summary": "Archive Events",
+        "description": "Archive (soft-delete) events.\n\nEvents can be archived either by specific IDs or by date threshold.\nArchived events are excluded from default queries but can be retrieved\nusing include_archived=True or the /events/archived endpoint.\n\nArgs:\n    request: Archive request containing event_ids and/or before_date\n\nReturns:\n    Count of archived events",
+        "operationId": "archive_events_events_archive_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArchiveEventsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backup": {
+      "post": {
+        "summary": "Create Backup",
+        "description": "Create a one-time backup of all events.\n\nUses the MongoDBBackupTool from madsci_common for consistent backup\nhandling across all MADSci managers.\n\nArgs:\n    request: Backup request with optional description\n\nReturns:\n    Backup file path and status",
+        "operationId": "create_backup_backup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/archived": {
+      "get": {
+        "summary": "Get Archived Events",
+        "description": "Retrieve archived events.\n\nArgs:\n    number: Maximum number of events to return\n    offset: Offset for pagination\n\nReturns:\n    Dictionary of archived events",
+        "operationId": "get_archived_events_events_archived_get",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Maximum number of events to return",
+              "default": 100,
+              "title": "Number"
+            },
+            "description": "Maximum number of events to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Purge Archived Events",
+        "description": "Permanently delete archived events older than threshold.\n\nThis is a hard-delete operation. Events deleted this way cannot be recovered.\nNote: MongoDB TTL indexes also perform automatic hard-deletion based on\nthe hard_delete_after_days setting.\n\nArgs:\n    older_than_days: Delete archived events older than this many days\n\nReturns:\n    Count of deleted events",
+        "operationId": "purge_archived_events_events_archived_delete",
+        "parameters": [
+          {
+            "name": "older_than_days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Delete archived events older than this many days",
+              "default": 365,
+              "title": "Older Than Days"
+            },
+            "description": "Delete archived events older than this many days"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/backup/status": {
+      "get": {
+        "summary": "Get Backup Status",
+        "description": "Get status of backups including list of available backups.\n\nReturns:\n    Backup configuration and list of available backups",
+        "operationId": "get_backup_status_backup_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event/{event_id}": {
+      "get": {
+        "summary": "Get Event",
+        "description": "Look up an event by event_id",
+        "operationId": "get_event_event__event_id__get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "summary": "Get Events",
+        "description": "Get events with enhanced filtering options.\n\nArgs:\n    number: Maximum number of events to return\n    offset: Offset for pagination\n    level: Minimum log level to include\n    start_time: Filter events after this time\n    end_time: Filter events before this time\n    include_archived: Whether to include archived events (default False)\n\nReturns:\n    Dictionary of events keyed by event_id",
+        "operationId": "get_events_events_get",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Maximum number of events to return",
+              "default": 100,
+              "title": "Number"
+            },
+            "description": "Maximum number of events to return"
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "description": "Offset for pagination",
+              "default": 0,
+              "title": "Offset"
+            },
+            "description": "Offset for pagination"
+          },
+          {
+            "name": "level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "$ref": "#/components/schemas/EventLogLevel"
+                }
+              ],
+              "description": "Minimum log level to include",
+              "default": 0,
+              "title": "Level"
+            },
+            "description": "Minimum log level to include"
+          },
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter events after this time (ISO format)",
+              "title": "Start Time"
+            },
+            "description": "Filter events after this time (ISO format)"
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter events before this time (ISO format)",
+              "title": "End Time"
+            },
+            "description": "Filter events before this time (ISO format)"
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Whether to include archived events",
+              "default": false,
+              "title": "Include Archived"
+            },
+            "description": "Whether to include archived events"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilization/sessions": {
+      "get": {
+        "summary": "Get Session Utilization",
+        "description": "Generate comprehensive session-based utilization report.",
+        "operationId": "get_session_utilization_utilization_sessions_get",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Time"
+            }
+          },
+          {
+            "name": "csv_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return data in CSV format",
+              "default": false,
+              "title": "Csv Format"
+            },
+            "description": "Return data in CSV format"
+          },
+          {
+            "name": "save_to_file",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Save CSV to server filesystem",
+              "default": false,
+              "title": "Save To File"
+            },
+            "description": "Save CSV to server filesystem"
+          },
+          {
+            "name": "output_path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Server path to save CSV files",
+              "title": "Output Path"
+            },
+            "description": "Server path to save CSV files"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Get Settings Endpoint",
+        "description": "Export current settings for backup/replication.\n\nThis endpoint allows exporting the current manager settings in a format\nsuitable for backup, documentation, or replicating the configuration\nto another environment. Secrets are always redacted from the API\nendpoint for safety.\n\nArgs:\n    include_defaults: If True, include fields with default values.\n                     If False, only include non-default settings.\n    include_schema: If True, include JSON schema for documentation.\n\nReturns:\n    dict: Settings as a dictionary with sensitive fields redacted.",
+        "operationId": "get_settings_endpoint_settings_get",
+        "parameters": [
+          {
+            "name": "include_defaults",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Defaults"
+            }
+          },
+          {
+            "name": "include_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Schema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilization/user": {
+      "get": {
+        "summary": "Get User Utilization Report",
+        "description": "Generate detailed user utilization report based on workflow authors.",
+        "operationId": "get_user_utilization_report_utilization_user_get",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Time"
+            }
+          },
+          {
+            "name": "csv_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return data in CSV format",
+              "default": false,
+              "title": "Csv Format"
+            },
+            "description": "Return data in CSV format"
+          },
+          {
+            "name": "save_to_file",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Save CSV to server filesystem",
+              "default": false,
+              "title": "Save To File"
+            },
+            "description": "Save CSV to server filesystem"
+          },
+          {
+            "name": "output_path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Server path to save CSV files",
+              "title": "Output Path"
+            },
+            "description": "Server path to save CSV files"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/utilization/periods": {
+      "get": {
+        "summary": "Get Utilization Periods",
+        "description": "Generate time-series utilization analysis with periodic breakdowns.",
+        "operationId": "get_utilization_periods_utilization_periods_get",
+        "parameters": [
+          {
+            "name": "start_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Time"
+            }
+          },
+          {
+            "name": "end_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Time"
+            }
+          },
+          {
+            "name": "analysis_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Analysis type: hourly, daily, weekly, monthly",
+              "default": "daily",
+              "title": "Analysis Type"
+            },
+            "description": "Analysis type: hourly, daily, weekly, monthly"
+          },
+          {
+            "name": "user_timezone",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "Timezone for day boundaries",
+              "default": "America/Chicago",
+              "title": "User Timezone"
+            },
+            "description": "Timezone for day boundaries"
+          },
+          {
+            "name": "include_users",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Include user utilization data",
+              "default": true,
+              "title": "Include Users"
+            },
+            "description": "Include user utilization data"
+          },
+          {
+            "name": "csv_format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Return data in CSV format",
+              "default": false,
+              "title": "Csv Format"
+            },
+            "description": "Return data in CSV format"
+          },
+          {
+            "name": "save_to_file",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "Save CSV to server filesystem",
+              "default": false,
+              "title": "Save To File"
+            },
+            "description": "Save CSV to server filesystem"
+          },
+          {
+            "name": "output_path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Server path to save CSV files",
+              "title": "Output Path"
+            },
+            "description": "Server path to save CSV files"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Endpoint",
+        "description": "Health check endpoint for the manager.\n\nThis endpoint is automatically inherited by all manager subclasses.\nManagers that override get_health() will automatically have their\ncustom health checks exposed through this endpoint.\n\nReturns:\n    ManagerHealth: The current health status",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/event": {
+      "post": {
+        "summary": "Log Event",
+        "description": "Create a new event.",
+        "operationId": "log_event_event_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Event"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/events/query": {
+      "post": {
+        "summary": "Query Events",
+        "description": "Query events based on a selector. Note: this is a raw query, so be careful.",
+        "operationId": "query_events_events_query_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "title": "Selector"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArchiveEventsRequest": {
+        "properties": {
+          "event_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Ids"
+          },
+          "before_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Date"
+          },
+          "batch_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Size"
+          }
+        },
+        "type": "object",
+        "title": "ArchiveEventsRequest",
+        "description": "Request model for archiving events.\n\nEither event_ids or before_date must be provided to specify which events to archive."
+      },
+      "BackupRequest": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "BackupRequest",
+        "description": "Request model for backup creation."
+      },
+      "Event": {
+        "properties": {
+          "_id": {
+            "type": "string",
+            "title": "Event ID",
+            "description": "The ID of the event."
+          },
+          "event_type": {
+            "$ref": "#/components/schemas/EventType",
+            "title": "Event Type",
+            "description": "The type of the event."
+          },
+          "log_level": {
+            "$ref": "#/components/schemas/EventLogLevel",
+            "title": "Event Log Level",
+            "description": "The log level of the event. Defaults to NOTSET. See https://docs.python.org/3/library/logging.html#logging-levels"
+          },
+          "alert": {
+            "type": "boolean",
+            "title": "Alert",
+            "description": "Forces firing an alert about this event. Defaults to False.",
+            "default": false
+          },
+          "event_timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Event Timestamp",
+            "description": "The timestamp of the event."
+          },
+          "source": {
+            "$ref": "#/components/schemas/OwnershipInfo",
+            "title": "Source",
+            "description": "Information about the source of the event."
+          },
+          "event_data": {
+            "title": "Event Data",
+            "description": "The data associated with the event."
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace ID",
+            "description": "OpenTelemetry trace ID for distributed trace correlation (32 hex characters)."
+          },
+          "span_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span ID",
+            "description": "OpenTelemetry span ID for distributed trace correlation (16 hex characters)."
+          },
+          "archived": {
+            "type": "boolean",
+            "title": "Archived",
+            "description": "Whether this event has been archived (soft-deleted).",
+            "default": false
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At",
+            "description": "Timestamp when this event was archived. Used by MongoDB TTL index for automatic hard-deletion."
+          }
+        },
+        "type": "object",
+        "title": "Event",
+        "description": "An event in the MADSci system."
+      },
+      "EventLogLevel": {
+        "type": "integer",
+        "enum": [
+          0,
+          10,
+          20,
+          30,
+          40,
+          50
+        ],
+        "title": "EventLogLevel",
+        "description": "The log level of an event."
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "unknown",
+          "log",
+          "log_debug",
+          "log_info",
+          "log_warning",
+          "log_error",
+          "log_critical",
+          "test",
+          "lab_create",
+          "lab_start",
+          "lab_stop",
+          "node_create",
+          "node_start",
+          "node_stop",
+          "node_config_update",
+          "node_status_update",
+          "node_error",
+          "workcell_create",
+          "workcell_start",
+          "workcell_stop",
+          "workcell_config_update",
+          "workcell_status_update",
+          "workflow_create",
+          "workflow_start",
+          "workflow_complete",
+          "workflow_abort",
+          "experiment_create",
+          "experiment_start",
+          "experiment_complete",
+          "experiment_failed",
+          "experiment_cancelled",
+          "experiment_pause",
+          "experiment_continued",
+          "campaign_create",
+          "campaign_start",
+          "campaign_complete",
+          "campaign_abort",
+          "action_status_change",
+          "resource_create",
+          "resource_update",
+          "resource_delete",
+          "resource_allocate",
+          "resource_release",
+          "location_create",
+          "location_update",
+          "location_delete",
+          "attachment_create",
+          "attachment_delete",
+          "data_store",
+          "data_query",
+          "data_export",
+          "manager_start",
+          "manager_stop",
+          "manager_error",
+          "manager_health_check",
+          "workflow_step_start",
+          "workflow_step_complete",
+          "workflow_step_failed",
+          "action_start",
+          "action_complete",
+          "action_failed",
+          "backup_create",
+          "backup_restore"
+        ],
+        "title": "EventType",
+        "description": "The type of an event.\n\nNotes:\n- Prefer the most specific type available.\n- The LOG_* types are for general logging; prefer domain-specific types when\n  applicable."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "OwnershipInfo": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User ID",
+            "description": "The ID of the user who owns the object."
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment ID",
+            "description": "The ID of the experiment that owns the object."
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign ID",
+            "description": "The ID of the campaign that owns the object."
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project ID",
+            "description": "The ID of the project that owns the object."
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node ID",
+            "description": "The ID of the node that owns the object."
+          },
+          "workcell_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workcell ID",
+            "description": "The ID of the workcell that owns the object."
+          },
+          "lab_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lab ID",
+            "description": "The ID of the lab that owns the object."
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step ID",
+            "description": "The ID of the step that owns the object."
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow ID",
+            "description": "The ID of the workflow that owns the object."
+          },
+          "manager_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager ID",
+            "description": "The ID of the manager that owns the object."
+          }
+        },
+        "type": "object",
+        "title": "OwnershipInfo",
+        "description": "Information about the ownership of a MADSci object."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

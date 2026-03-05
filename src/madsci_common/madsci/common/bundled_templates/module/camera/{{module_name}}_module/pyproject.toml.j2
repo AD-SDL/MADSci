@@ -1,0 +1,44 @@
+[project]
+name = "{{ module_name }}-module"
+version = "0.1.0"
+description = "{{ module_description }}"
+{% if author_name %}authors = [{name = "{{ author_name }}"}]{% endif %}
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "madsci-node-module>=0.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+{{ module_name }}-node = "{{ module_name }}_rest_node:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+py-modules = [
+    "{{ module_name }}_interface",
+    "{{ module_name }}_fake_interface",
+    "{{ module_name }}_rest_node",
+    "{{ module_name }}_types",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

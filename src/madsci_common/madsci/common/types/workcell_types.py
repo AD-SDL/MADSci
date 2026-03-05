@@ -1,5 +1,6 @@
 """Types for MADSci Workcell configuration."""
 
+import warnings
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
@@ -7,6 +8,8 @@ from madsci.common.types.base_types import (
     Error,
     MadsciBaseModel,
     PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.manager_types import (
     ManagerHealth,
@@ -20,10 +23,43 @@ from madsci.common.validators import ulid_validator
 from pydantic import Field, computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
+from pydantic_settings import SettingsConfigDict
+
+
+class WorkcellInfo(MadsciBaseModel):
+    """Runtime info for a MADSci Workcell, stored in Redis for state sharing."""
+
+    name: str = Field(
+        title="Workcell Name",
+        description="The name of the workcell.",
+    )
+    manager_id: str = Field(
+        title="Workcell Manager ID",
+        description="The ID of the workcell manager.",
+        default_factory=new_ulid_str,
+    )
+    description: Optional[str] = Field(
+        default=None,
+        title="Workcell Description",
+        description="A description of the workcell.",
+    )
+    nodes: dict[str, AnyUrl] = Field(
+        default_factory=dict,
+        title="Workcell Node URLs",
+        description="The URL for each node in the workcell.",
+    )
+
+    is_ulid = field_validator("manager_id")(ulid_validator)
 
 
 class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
-    """Definition of a MADSci Workcell."""
+    """Definition of a MADSci Workcell.
+
+    .. deprecated:: 0.7.0
+        ``WorkcellManagerDefinition`` is removed in v0.7.0.
+        Use ``WorkcellInfo`` for runtime state or ``WorkcellManagerSettings``
+        for configuration.
+    """
 
     name: str = Field(
         title="Workcell Name",
@@ -53,6 +89,17 @@ class WorkcellManagerDefinition(MadsciBaseModel, extra="allow"):
     )
 
     is_ulid = field_validator("manager_id")(ulid_validator)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning on instantiation."""
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            "WorkcellManagerDefinition is deprecated and removed in v0.7.0. "
+            "Use WorkcellInfo for runtime state or WorkcellManagerSettings for configuration.",
+            MadsciDeprecationWarning,
+            stacklevel=4,
+        )
 
 
 class WorkcellStatus(MadsciBaseModel):
@@ -135,9 +182,9 @@ class WorkcellState(MadsciBaseModel):
         title="Workflow Queue",
         description="The queue of workflows in non-terminal states.",
     )
-    workcell_definition: WorkcellManagerDefinition = Field(
-        title="Workcell Definition",
-        description="The definition of the workcell.",
+    workcell_info: WorkcellInfo = Field(
+        title="Workcell Info",
+        description="Runtime info for the workcell.",
     )
     nodes: dict[str, Node] = Field(
         default_factory=dict,
@@ -156,23 +203,32 @@ class WorkcellManagerSettings(
 ):
     """Settings for the MADSci Workcell Manager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("workcell"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("workcell")
+
+    nodes: Optional[dict[str, AnyUrl]] = Field(
+        default=None,
+        title="Workcell Node URLs",
+        description="Node URLs for the workcell, as a JSON dict mapping node names to their URLs.",
+    )
+
     server_url: AnyUrl = Field(
         title="Workcell Server URL",
         description="The URL of the workcell manager server.",
         default=AnyUrl("http://localhost:8005"),
     )
-    manager_definition: PathLike = Field(
-        title="Workcell Definition File",
-        description="Path to the workcell definition file to use.",
-        default=Path("workcell.manager.yaml"),
-        validation_alias=AliasChoices(
-            "workcell_manager_definition", "workcell_definition", "manager_definition"
-        ),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.WORKCELL_MANAGER,
     )
     workcells_directory: Optional[PathLike] = Field(
         title="Workcells Directory",
-        description="Directory used to store workcell-related files in. Defaults to ~/.madsci/workcells. Workcell-related filess will be stored in a sub-folder with the workcell name.",
-        default_factory=lambda: Path("~") / ".madsci" / "workcells",
+        description="Directory used to store workcell-related files in. Defaults to .madsci/workcells. Workcell-related files will be stored in a sub-folder with the workcell name.",
+        default=Path(".madsci/workcells"),
         alias="workcells_directory",  # * Don't double prefix
     )
     redis_host: str = Field(
@@ -189,6 +245,7 @@ class WorkcellManagerSettings(
         default=None,
         title="Redis Password",
         description="The password for the redis server.",
+        json_schema_extra={"secret": True},
     )
     scheduler_update_interval: float = Field(
         default=5.0,
@@ -201,9 +258,9 @@ class WorkcellManagerSettings(
         description="The interval at which the workcell queries its node's states and status, in seconds. Must be <= scheduler_update_interval",
     )
     reconnect_attempt_interval: float = Field(
-        default=1200.0,
+        default=30.0,
         title="Reconnect Attempt Interval",
-        description="The interval at which the workcell resets disconnected nodes, in seconds.",
+        description="The interval (in seconds) at which the workcell retries connecting to disconnected nodes. A non-disruptive retry: if the node responds, its status is restored naturally; if not, it remains disconnected until the next attempt.",
     )
     node_info_update_interval: float = Field(
         default=60.0,
@@ -227,6 +284,7 @@ class WorkcellManagerSettings(
         validation_alias=AliasChoices(
             "mongo_db_url", "WORKCELL_MONGO_URL", "mongo_url"
         ),
+        json_schema_extra={"secret": True},
     )
     database_name: str = Field(
         default="madsci_workcells",

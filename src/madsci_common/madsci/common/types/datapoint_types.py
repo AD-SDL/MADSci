@@ -2,13 +2,18 @@
 
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Annotated, Any, Literal, Optional, Union
 
 from bson.objectid import ObjectId
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    MadsciBaseSettings,
+    PathLike,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -24,6 +29,7 @@ from pydantic import (
     field_validator,
 )
 from pydantic.types import Discriminator
+from pydantic_settings import SettingsConfigDict
 
 
 class DataPointTypeEnum(str, Enum):
@@ -216,12 +222,16 @@ class ObjectStorageSettings(
         description="Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')",
     )
     access_key: str = Field(
-        title="Access Key", description="Access key for authentication", default=""
+        title="Access Key",
+        description="Access key for authentication",
+        default="",
+        json_schema_extra={"secret": True},
     )
     secret_key: str = Field(
         title="Secret Key",
         description="Secret key for authentication",
         default="",
+        json_schema_extra={"secret": True},
     )
     secure: bool = Field(
         default=False,
@@ -250,15 +260,21 @@ class DataManagerSettings(
 ):
     """Settings for the MADSci Data Manager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("data"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("data")
+
     server_url: AnyUrl = Field(
         title="Data Manager Server URL",
         description="The URL of the data manager server.",
         default=AnyUrl("http://localhost:8004"),
     )
-    manager_definition: PathLike = Field(
-        title="Data Manager Definition File",
-        description="Path to the data manager definition file to use.",
-        default=Path("data.manager.yaml"),
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.DATA_MANAGER,
     )
     database_name: str = Field(
         default="madsci_data",
@@ -275,11 +291,12 @@ class DataManagerSettings(
         title="MongoDB URL",
         description="The URL of the MongoDB database used by the Data Manager.",
         validation_alias=AliasChoices("mongo_db_url", "DATA_DB_URL", "db_url"),
+        json_schema_extra={"secret": True},
     )
     file_storage_path: PathLike = Field(
         title="File Storage Path",
         description="The path where files are stored on the server.",
-        default="~/.madsci/datapoints",
+        default=".madsci/datapoints",
     )
 
 

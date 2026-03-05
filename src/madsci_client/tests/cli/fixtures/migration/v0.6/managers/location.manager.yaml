@@ -1,0 +1,26 @@
+name: Test Location Manager
+description: A test location manager
+manager_id: 01JK7069DXAKAMWE0PDX6EY1PD
+manager_type: location_manager
+locations:
+  - location_name: deck_1
+    location_id: 01K5HDZZCF27YHD2WDGSXFPPKF
+    description: Test deck 1
+    representations:
+      robot_arm:
+        position: [10, 15, 5]
+    allow_transfers: true
+  - location_name: deck_2
+    location_id: 01K5HDZZCF27YHD2WDGSXFPPKG
+    description: Test deck 2
+    representations:
+      robot_arm:
+        position: [20, 15, 5]
+    allow_transfers: true
+transfer_capabilities:
+  transfer_templates:
+    - node_name: robot_arm
+      action: transfer
+      source_argument_name: source
+      target_argument_name: target
+      cost_weight: 1.0

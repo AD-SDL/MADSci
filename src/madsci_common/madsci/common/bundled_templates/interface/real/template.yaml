@@ -1,0 +1,34 @@
+name: "Real Interface"
+version: "1.0.0"
+description: "A real hardware interface stub with connection lifecycle and error handling patterns"
+category: "interface"
+tags: ["real", "hardware", "interface"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (must match existing module)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_module"
+
+  - name: connection_type
+    type: string
+    description: "Type of connection (serial, tcp, usb, sdk)"
+    required: false
+    default: "tcp"
+
+files:
+  - source: "{{module_name}}_interface.py.j2"
+    destination: "src/{{module_name}}_interface.py"
+
+hooks:
+  post_generate:
+    - command: "ruff format src/{{module_name}}_interface.py"
+      description: "Format generated code"
+      continue_on_error: true

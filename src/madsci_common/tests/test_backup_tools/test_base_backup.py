@@ -233,7 +233,10 @@ class TestBaseBackupSettings:
         """Test default backup settings values."""
         settings = BaseBackupSettings()
 
-        assert settings.backup_dir == Path(".madsci/backups")
+        # backup_dir is now resolved via sentry — just verify it's an absolute
+        # path ending with the expected subdirectory.
+        assert settings.backup_dir.is_absolute()
+        assert settings.backup_dir.name == "backups"
         assert settings.max_backups == 10
         assert settings.validate_integrity is True
         assert settings.compression is True

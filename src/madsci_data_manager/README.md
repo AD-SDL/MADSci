@@ -18,15 +18,15 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.data_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_data.manager.yaml](../../example_lab/managers/example_data.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_data.manager.yaml](../../examples/example_lab/managers/example_data.manager.yaml)
 
-**Dependencies**: MongoDB database, optional MinIO/S3 storage (see [example_lab](../../example_lab/))
+**Dependencies**: MongoDB database, optional MinIO/S3 storage (see [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -39,7 +39,7 @@ python src/madsci_data_manager/madsci/data_manager/data_server.py
 
 ### Manager Setup
 
-For custom deployments, see [example_data.manager.yaml](../../example_lab/managers/example_data.manager.yaml) for configuration options.
+For custom deployments, see [example_data.manager.yaml](../../examples/example_lab/managers/example_data.manager.yaml) for configuration options.
 
 ### Data Client
 
@@ -75,7 +75,7 @@ retrieved = client.get_datapoint(submitted.datapoint_id)
 client.save_datapoint_value(submitted_file.datapoint_id, "/local/save/path.txt")
 ```
 
-**Examples**: See [example_lab/notebooks/experiment_notebook.ipynb](../../example_lab/notebooks/experiment_notebook.ipynb) for data management workflows.
+**Examples**: See [experiment_notebook.ipynb](../../examples/notebooks/experiment_notebook.ipynb) for data management workflows.
 
 ## Storage Configuration
 

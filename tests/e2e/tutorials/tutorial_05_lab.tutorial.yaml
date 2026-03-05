@@ -1,0 +1,102 @@
+# Tutorial 05: Lab Creation
+# Tests the minimal lab template generation
+
+name: "Tutorial 05 - Lab Creation"
+description: "Test lab creation and validate all generated files"
+version: "1.0"
+tags:
+  - tutorial
+  - no-docker
+  - scaffolding
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 300.0
+
+steps:
+  - name: "Create minimal lab"
+    command: "madsci new lab --name test_lab --template minimal --no-interactive ./test_tutorial_05"
+    timeout: 30.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: directory_exists
+        path: "./test_tutorial_05/test_lab"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/start_lab.py"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/settings.yaml"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/.env"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/.gitignore"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/pyproject.toml"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/README.md"
+      - type: directory_exists
+        path: "./test_tutorial_05/test_lab/workflows"
+      - type: file_exists
+        path: "./test_tutorial_05/test_lab/workflows/example.workflow.yaml"
+
+  - name: "Validate start_lab.py syntax"
+    command: "python -m py_compile ./test_tutorial_05/test_lab/start_lab.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Validate pyproject.toml"
+    command: "python -c \"\nimport sys\nif sys.version_info >= (3, 11):\n    import tomllib\nelse:\n    try:\n        import tomli as tomllib\n    except ImportError:\n        import ast; ast.literal_eval  # fallback: just check file is readable\n        data = open('./test_tutorial_05/test_lab/pyproject.toml').read()\n        assert len(data) > 0\n        print('pyproject.toml valid')\n        sys.exit(0)\ntomllib.load(open('./test_tutorial_05/test_lab/pyproject.toml', 'rb'))\nprint('pyproject.toml valid')\n\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "pyproject.toml valid"
+
+  - name: "Validate settings.yaml contains expected variables"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/settings.yaml').read(); assert 'lab_server_url' in data; assert 'event_server_url' in data; print('settings.yaml valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "settings.yaml valid"
+
+  - name: "Validate .env contains lab metadata"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/.env').read(); assert 'LAB_NAME' in data; print('.env valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: ".env valid"
+
+  - name: "Validate .gitignore exists and has content"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/.gitignore').read(); assert '__pycache__' in data; assert '.venv' in data; print('.gitignore valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: ".gitignore valid"
+
+  - name: "Validate example workflow"
+    command: "python -c \"import yaml; d=yaml.safe_load(open('./test_tutorial_05/test_lab/workflows/example.workflow.yaml')); assert d['name'] == 'example_workflow'; print('Workflow valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Workflow valid"
+
+  - name: "Validate README mentions project structure"
+    command: "python -c \"data=open('./test_tutorial_05/test_lab/README.md').read(); assert 'pyproject.toml' in data; assert 'workflows' in data; print('README valid')\""
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "README valid"
+
+cleanup:
+  commands:
+    - "rm -rf ./test_tutorial_05"
+  stop_background: true

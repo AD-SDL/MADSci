@@ -7,7 +7,7 @@ Functions
 
 `add_automated_history(session: sqlmodel.orm.session.Session) ‑> None`
 :   Add automated history to the session.
-
+    
     Args:
         session (Session): SQLAlchemy session.
 
@@ -65,7 +65,7 @@ Classes
     `created_at: datetime.datetime | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `key: str | None`
@@ -147,11 +147,11 @@ Classes
 
     `children: dict[str, 'ResourceTable']`
     :   Get the children resources as a dictionary.
-
+        
         Returns:
             dict: Dictionary of children resources.
 
-    `children_list: sqlalchemy.orm.base.Mapped[list[madsci.resource_manager.resource_tables.ResourceTable]]`
+    `children_list: sqlalchemy.orm.base.Mapped[list['ResourceTable']]`
     :
 
     `columns: int | None`
@@ -160,7 +160,7 @@ Classes
     `created_at: datetime.datetime | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `key: str | None`
@@ -225,12 +225,12 @@ Classes
 
 `ResourceTableBase(**data: Any)`
 :   Base class for all resource-based tables.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -290,14 +290,14 @@ Classes
 
     ### Static methods
 
-    `from_data_model(resource: Annotated[Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]) ‑> Self`
+    `from_data_model(resource: typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]) ‑> typing_extensions.Self`
     :   Create a new Resource Table entry from a resource data model.
 
     ### Methods
 
     `to_data_model(self, include_children: bool = True) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Convert the table entry to a data model.
-
+        
         Returns:
             ResourceDataModels: The resource data model.
 
@@ -333,7 +333,7 @@ Classes
     `created_by: str | None`
     :
 
-    `custom_attributes: list[madsci.common.types.resource_types.definitions.CustomResourceAttributeDefinition] | None`
+    `custom_attributes: list['CustomResourceAttributeDefinition'] | None`
     :
 
     `default_values: dict[str, typing.Any]`

@@ -110,7 +110,7 @@ settings = MyManagerSettings()
 
 ![Settings Precedence](./assets/drawio/config_precedence.drawio.svg)
 
-**Configuration options**: See [Configuration.md](../../Configuration.md) and [example_lab/managers/](../../example_lab/managers/) for examples.
+**Configuration options**: See [Configuration.md](../../docs/Configuration.md) and [example_lab/settings.yaml](../../examples/example_lab/settings.yaml) for examples.
 
 ### ULID Best Practices
 
@@ -485,3 +485,116 @@ madsci-backup validate --backup /path/to/backup --db-url mongodb://localhost:270
 - Unified CLI for both PostgreSQL and MongoDB
 
 For comprehensive documentation including examples, best practices, and advanced usage, see [backup_tools/README.md](./madsci/common/backup_tools/README.md).
+
+### Context Management
+
+MADSci provides a hierarchical context system for managing configuration and logging contexts across components:
+
+```python
+from madsci.common.context import (
+    madsci_context,
+    get_current_madsci_context,
+    event_client_context,
+    get_event_client,
+)
+
+# Global context for server URLs
+with madsci_context(event_server_url="http://localhost:8001") as ctx:
+    print(ctx.event_server_url)
+
+# EventClient context for hierarchical logging
+with event_client_context(name="my_operation", experiment_id="exp-123") as logger:
+    logger.info("Starting operation")
+
+    # Nested contexts inherit parent metadata
+    with event_client_context(name="substep", step_id="step-1") as step_logger:
+        step_logger.info("Executing substep")  # Includes both experiment_id and step_id
+
+# In library code, use get_event_client() to inherit context
+def utility_function():
+    logger = get_event_client()  # Uses context if available
+    logger.info("Utility running")
+```
+
+**Context Decorators:**
+```python
+from madsci.common.context import with_event_client, event_client_class
+
+@with_event_client(name="my_workflow")
+def my_workflow(event_client=None):
+    event_client.info("Running workflow")
+
+@event_client_class(component_type="processor")
+class DataProcessor:
+    def process(self, data):
+        self.event_client.info("Processing", data_size=len(data))
+```
+
+See [docs/guides/logging.md](../../docs/guides/logging.md) for comprehensive documentation.
+
+### Ownership Context
+
+Track ownership metadata (user, experiment, workflow, etc.) throughout the system:
+
+```python
+from madsci.common.ownership import ownership_context, get_current_ownership_info
+
+with ownership_context(experiment_id="exp-123", workflow_id="wf-456") as info:
+    # All operations within this context include ownership metadata
+    print(info.experiment_id)  # "exp-123"
+
+    # Events automatically capture current ownership
+    logger = get_event_client()
+    logger.info("Processing")  # Event includes experiment_id, workflow_id
+```
+
+### OpenTelemetry Integration
+
+MADSci includes built-in OpenTelemetry support for distributed tracing, metrics, and logs:
+
+```python
+from madsci.common.otel import (
+    configure_otel,
+    OtelBootstrapConfig,
+    span_context,
+    with_span,
+    traced_class,
+)
+
+# Configure OTEL (idempotent - first call wins)
+runtime = configure_otel(OtelBootstrapConfig(
+    enabled=True,
+    service_name="my_service",
+    exporter="otlp",
+    otlp_endpoint="http://localhost:4317",
+))
+
+# Context manager for spans
+with span_context("process_data", attributes={"data.size": 100}) as span:
+    result = process(data)
+    span.set_attribute("result.count", len(result))
+
+# Decorator for automatic tracing
+@with_span(name="fetch_user")
+def get_user(user_id: str):
+    return api.fetch(user_id)
+
+# Class decorator for tracing all methods
+@traced_class(attributes={"component": "processor"})
+class DataProcessor:
+    def process(self, data):
+        return transform(data)
+```
+
+**Auto-instrumentation:**
+```python
+from madsci.common.otel import instrument_fastapi, instrument_requests
+
+# Instrument FastAPI applications
+instrument_fastapi(app, enabled=True)
+
+# Instrument HTTP requests library
+instrument_requests(enabled=True)
+```
+
+See [Observability Guide](../../docs/guides/observability.md) for the full observability stack setup.

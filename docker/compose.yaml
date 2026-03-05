@@ -1,0 +1,26 @@
+# Build-only service definitions for MADSci Docker images.
+# These services are not meant to be run directly.
+# Usage: docker compose --profile build build
+
+services:
+  madsci:
+    image: ghcr.io/ad-sdl/madsci:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      tags:
+        - ghcr.io/ad-sdl/madsci:latest
+        - ghcr.io/ad-sdl/madsci:dev
+    profiles:
+      - build
+
+  madsci_dashboard:
+    image: ghcr.io/ad-sdl/madsci_dashboard:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.dashboard
+      tags:
+        - ghcr.io/ad-sdl/madsci_dashboard:latest
+        - ghcr.io/ad-sdl/madsci_dashboard:dev
+    profiles:
+      - build

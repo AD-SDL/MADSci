@@ -5,12 +5,10 @@ from typing import ClassVar
 import pytest
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.types.manager_types import (
-    ManagerDefinition,
     ManagerHealth,
     ManagerSettings,
     ManagerType,
 )
-from pydantic import Field
 from starlette.testclient import TestClient
 
 
@@ -20,23 +18,16 @@ class TestManagerSettings(ManagerSettings):
     model_config: ClassVar[dict] = {"env_prefix": "TEST_"}
 
 
-class TestManagerDefinition(ManagerDefinition):
-    """Test definition for the manager."""
-
-    manager_type: ManagerType = Field(default=ManagerType.EVENT_MANAGER)
-
-
 class TestManagerHealth(ManagerHealth):
     """Test health status for the manager."""
 
-    test_value: int = Field(default=42)
+    test_value: int = 42
 
 
-class TestManager(AbstractManagerBase[TestManagerSettings, TestManagerDefinition]):
+class TestManager(AbstractManagerBase[TestManagerSettings]):
     """Test manager implementation."""
 
     SETTINGS_CLASS = TestManagerSettings
-    DEFINITION_CLASS = TestManagerDefinition
 
     def get_health(self) -> TestManagerHealth:
         """Override health check to return custom health."""
@@ -50,8 +41,11 @@ class TestManager(AbstractManagerBase[TestManagerSettings, TestManagerDefinition
 @pytest.fixture
 def test_manager() -> TestManager:
     """Create a test manager instance."""
-    definition = TestManagerDefinition(name="Test Manager")
-    return TestManager(definition=definition)
+    settings = TestManagerSettings(
+        manager_name="Test Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
+    )
+    return TestManager(settings=settings)
 
 
 @pytest.fixture
@@ -72,34 +66,13 @@ def test_inherited_health_endpoint(test_client: TestClient) -> None:
     assert health_data["test_value"] == 100
 
 
-def test_inherited_root_endpoint(test_client: TestClient) -> None:
-    """Test that the / endpoint returns the manager definition."""
-    response = test_client.get("/")
+def test_settings_endpoint(test_client: TestClient) -> None:
+    """Test that the /settings endpoint returns the manager settings."""
+    response = test_client.get("/settings")
     assert response.status_code == 200
 
-    definition_data = response.json()
-    assert definition_data["name"] == "Test Manager"
-    assert definition_data["manager_type"] == "event_manager"
-
-
-def test_inherited_definition_endpoint(test_client: TestClient) -> None:
-    """Test that the /definition endpoint returns the manager definition."""
-    response = test_client.get("/definition")
-    assert response.status_code == 200
-
-    definition_data = response.json()
-    assert definition_data["name"] == "Test Manager"
-    assert definition_data["manager_type"] == "event_manager"
-
-
-def test_both_definition_endpoints_return_same_data(
-    test_client: TestClient,
-) -> None:
-    """Test that / and /definition endpoints return the same data."""
-    root_response = test_client.get("/")
-    definition_response = test_client.get("/definition")
-
-    assert root_response.json() == definition_response.json()
+    settings_data = response.json()
+    assert "settings" in settings_data
 
 
 def test_inherited_routes_with_custom_subclass() -> None:
@@ -108,8 +81,11 @@ def test_inherited_routes_with_custom_subclass() -> None:
     class CustomManager(TestManager):
         """Custom subclass that doesn't override health."""
 
-    definition = TestManagerDefinition(name="Custom Manager")
-    manager = CustomManager(definition=definition)
+    settings = TestManagerSettings(
+        manager_name="Custom Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
+    )
+    manager = CustomManager(settings=settings)
     app = manager.create_server()
     client = TestClient(app)
 
@@ -117,21 +93,17 @@ def test_inherited_routes_with_custom_subclass() -> None:
     response = client.get("/health")
     assert response.status_code == 200
 
-    response = client.get("/")
+    response = client.get("/settings")
     assert response.status_code == 200
-    assert response.json()["name"] == "Custom Manager"
 
 
 def test_manager_with_overridden_health() -> None:
     """Test that managers can override the health method."""
 
-    class HealthOverrideManager(
-        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
-    ):
+    class HealthOverrideManager(AbstractManagerBase[TestManagerSettings]):
         """Manager that overrides health."""
 
         SETTINGS_CLASS = TestManagerSettings
-        DEFINITION_CLASS = TestManagerDefinition
 
         def get_health(self) -> ManagerHealth:
             """Override to return different health status."""
@@ -140,8 +112,11 @@ def test_manager_with_overridden_health() -> None:
                 description="Custom health check failed",
             )
 
-    definition = TestManagerDefinition(name="Override Manager")
-    manager = HealthOverrideManager(definition=definition)
+    settings = TestManagerSettings(
+        manager_name="Override Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
+    )
+    manager = HealthOverrideManager(settings=settings)
     app = manager.create_server()
     client = TestClient(app)
 
@@ -152,89 +127,26 @@ def test_manager_with_overridden_health() -> None:
     assert health_data["description"] == "Custom health check failed"
 
 
-def test_root_endpoint_can_be_disabled() -> None:
-    """Test that the root definition endpoint can be disabled."""
+def test_settings_endpoint_returns_data() -> None:
+    """Test that the /settings endpoint returns settings data."""
 
-    class ManagerWithoutRootEndpoint(
-        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
-    ):
-        """Manager with disabled root endpoint."""
+    class DefaultManager(AbstractManagerBase[TestManagerSettings]):
+        """Manager using default settings."""
 
         SETTINGS_CLASS = TestManagerSettings
-        DEFINITION_CLASS = TestManagerDefinition
-        ENABLE_ROOT_DEFINITION_ENDPOINT = False
 
-    definition = TestManagerDefinition(name="No Root Manager")
-    manager = ManagerWithoutRootEndpoint(definition=definition)
+    settings = TestManagerSettings(
+        manager_name="Default Manager",
+        manager_type=ManagerType.EVENT_MANAGER,
+    )
+    manager = DefaultManager(settings=settings)
     app = manager.create_server()
     client = TestClient(app)
 
-    # Root endpoint should return 404
-    response = client.get("/")
-    assert response.status_code == 404
-
-    # But /definition should still work
-    response = client.get("/definition")
+    response = client.get("/settings")
     assert response.status_code == 200
-    definition_data = response.json()
-    assert definition_data["name"] == "No Root Manager"
+    settings_data = response.json()
+    assert "settings" in settings_data
 
-    # Health endpoint should still work
     response = client.get("/health")
     assert response.status_code == 200
-
-
-def test_root_endpoint_enabled_by_default() -> None:
-    """Test that the root definition endpoint is enabled by default."""
-
-    class DefaultManager(
-        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
-    ):
-        """Manager using default root endpoint setting."""
-
-        SETTINGS_CLASS = TestManagerSettings
-        DEFINITION_CLASS = TestManagerDefinition
-
-    definition = TestManagerDefinition(name="Default Manager")
-    manager = DefaultManager(definition=definition)
-    app = manager.create_server()
-    client = TestClient(app)
-
-    # Both root and definition endpoints should work
-    response = client.get("/")
-    assert response.status_code == 200
-    root_data = response.json()
-
-    response = client.get("/definition")
-    assert response.status_code == 200
-    definition_data = response.json()
-
-    assert root_data == definition_data
-    assert root_data["name"] == "Default Manager"
-
-
-def test_root_endpoint_can_be_explicitly_enabled() -> None:
-    """Test that the root definition endpoint can be explicitly enabled."""
-
-    class ManagerWithExplicitRootEndpoint(
-        AbstractManagerBase[TestManagerSettings, TestManagerDefinition]
-    ):
-        """Manager with explicitly enabled root endpoint."""
-
-        SETTINGS_CLASS = TestManagerSettings
-        DEFINITION_CLASS = TestManagerDefinition
-        ENABLE_ROOT_DEFINITION_ENDPOINT = True
-
-    definition = TestManagerDefinition(name="Explicit Root Manager")
-    manager = ManagerWithExplicitRootEndpoint(definition=definition)
-    app = manager.create_server()
-    client = TestClient(app)
-
-    # Both endpoints should work
-    response = client.get("/")
-    assert response.status_code == 200
-    assert response.json()["name"] == "Explicit Root Manager"
-
-    response = client.get("/definition")
-    assert response.status_code == 200
-    assert response.json()["name"] == "Explicit Root Manager"

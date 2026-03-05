@@ -1,0 +1,90 @@
+name: "Robot Arm Module"
+version: "1.0.0"
+description: "A robot arm module with pick, place, move, and home actions for material handling"
+category: "module"
+tags: ["robot-arm", "material-handling", "automation"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_robot_arm"
+
+  - name: module_description
+    type: string
+    description: "Human-readable description of the module"
+    required: true
+    default: "A MADSci robot arm module"
+
+  - name: author_name
+    type: string
+    description: "Author name"
+    required: false
+    default: ""
+
+  - name: port
+    type: integer
+    description: "Default port number for the node REST API"
+    required: true
+    default: 2000
+    min: 1024
+    max: 65535
+
+  - name: include_tests
+    type: boolean
+    description: "Include test files"
+    required: false
+    default: true
+
+  - name: include_dockerfile
+    type: boolean
+    description: "Include Dockerfile"
+    required: false
+    default: true
+
+files:
+  - source: "{{module_name}}_module/src/{{module_name}}_rest_node.py.j2"
+    destination: "{{module_name}}_module/src/{{module_name}}_rest_node.py"
+
+  - source: "{{module_name}}_module/src/{{module_name}}_interface.py.j2"
+    destination: "{{module_name}}_module/src/{{module_name}}_interface.py"
+
+  - source: "{{module_name}}_module/src/{{module_name}}_fake_interface.py.j2"
+    destination: "{{module_name}}_module/src/{{module_name}}_fake_interface.py"
+
+  - source: "{{module_name}}_module/src/{{module_name}}_types.py.j2"
+    destination: "{{module_name}}_module/src/{{module_name}}_types.py"
+
+  - source: "{{module_name}}_module/tests/__init__.py.j2"
+    destination: "{{module_name}}_module/tests/__init__.py"
+    condition: "{{ include_tests }}"
+
+  - source: "{{module_name}}_module/tests/test_{{module_name}}_interface.py.j2"
+    destination: "{{module_name}}_module/tests/test_{{module_name}}_interface.py"
+    condition: "{{ include_tests }}"
+
+  - source: "{{module_name}}_module/pyproject.toml.j2"
+    destination: "{{module_name}}_module/pyproject.toml"
+
+  - source: "{{module_name}}_module/README.md.j2"
+    destination: "{{module_name}}_module/README.md"
+
+  - source: "{{module_name}}_module/Dockerfile.j2"
+    destination: "{{module_name}}_module/Dockerfile"
+    condition: "{{ include_dockerfile }}"
+
+hooks:
+  post_generate:
+    - command: "ruff format {{module_name}}_module/"
+      description: "Format generated code"
+      continue_on_error: true
+    - command: "ruff check {{module_name}}_module/ --fix"
+      description: "Fix linting issues"
+      continue_on_error: true

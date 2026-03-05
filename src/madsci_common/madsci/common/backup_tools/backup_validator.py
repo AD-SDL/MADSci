@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import EventType
 
 
 class BackupValidator:
@@ -85,7 +86,11 @@ class BackupValidator:
         """
         stored_checksum = self.load_checksum(backup_path)
         if stored_checksum is None:
-            self.logger.warning(f"No checksum file found for {backup_path}")
+            self.logger.warning(
+                "No checksum file found",
+                event_type=EventType.BACKUP_CREATE,
+                backup_path=str(backup_path),
+            )
             return False
 
         try:
@@ -93,17 +98,30 @@ class BackupValidator:
             is_valid = current_checksum == stored_checksum
 
             if is_valid:
-                self.logger.info(f"Checksum validation passed for {backup_path}")
+                self.logger.info(
+                    "Checksum validation passed",
+                    event_type=EventType.BACKUP_CREATE,
+                    backup_path=str(backup_path),
+                )
             else:
                 self.logger.error(
-                    f"Checksum validation failed for {backup_path}: "
-                    f"expected {stored_checksum}, got {current_checksum}"
+                    "Checksum validation failed",
+                    event_type=EventType.BACKUP_CREATE,
+                    backup_path=str(backup_path),
+                    expected_checksum=stored_checksum,
+                    actual_checksum=current_checksum,
                 )
 
             return is_valid
 
         except Exception as e:
-            self.logger.error(f"Error validating checksum for {backup_path}: {e}")
+            self.logger.error(
+                "Error validating checksum",
+                event_type=EventType.BACKUP_CREATE,
+                backup_path=str(backup_path),
+                error=str(e),
+                exc_info=True,
+            )
             return False
 
     def create_backup_metadata(
@@ -174,7 +192,13 @@ class BackupValidator:
         try:
             return json.loads(metadata_file.read_text())
         except json.JSONDecodeError as e:
-            self.logger.error(f"Invalid metadata JSON in {metadata_file}: {e}")
+            self.logger.error(
+                "Invalid metadata JSON",
+                event_type=EventType.BACKUP_CREATE,
+                metadata_file=str(metadata_file),
+                error=str(e),
+                exc_info=True,
+            )
             return None
 
     def validate_backup_comprehensive(
@@ -268,7 +292,11 @@ class BackupValidator:
 
         except Exception as e:
             self.logger.error(
-                f"Error validating SQL backup structure for {backup_path}: {e}"
+                "Error validating SQL backup structure",
+                event_type=EventType.BACKUP_CREATE,
+                backup_path=str(backup_path),
+                error=str(e),
+                exc_info=True,
             )
             return False
 

@@ -1,7 +1,6 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
 import json
-import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
@@ -25,7 +24,7 @@ from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerHealth,
     WorkcellManagerSettings,
     WorkcellState,
@@ -38,8 +37,10 @@ from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
 from madsci.workcell_manager.workflow_utils import (
+    cancel_workflow,
     check_parameters,
     create_workflow,
+    pause_workflow,
     save_workflow_files,
 )
 from pymongo.synchronous.database import Database
@@ -49,9 +50,7 @@ from ulid import ULID
 LOOKUP_VAL_BODY = Body(...)
 
 
-class WorkcellManager(
-    AbstractManagerBase[WorkcellManagerSettings, WorkcellManagerDefinition]
-):
+class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
     """
     MADSci Workcell Manager using the new AbstractManagerBase pattern.
 
@@ -60,7 +59,6 @@ class WorkcellManager(
     """
 
     SETTINGS_CLASS = WorkcellManagerSettings
-    DEFINITION_CLASS = WorkcellManagerDefinition
 
     # Declare required clients for the mixin
     REQUIRED_CLIENTS: ClassVar[list[str]] = ["event", "data", "location"]
@@ -68,7 +66,6 @@ class WorkcellManager(
     def __init__(
         self,
         settings: Optional[WorkcellManagerSettings] = None,
-        definition: Optional[WorkcellManagerDefinition] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
         start_engine: bool = True,
@@ -79,12 +76,7 @@ class WorkcellManager(
         self.mongo_connection = mongo_connection
         self.start_engine = start_engine
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
-
-    def create_default_definition(self) -> WorkcellManagerDefinition:
-        """Create a default definition instance for this manager."""
-        name = str(self.get_definition_path().name).split(".")[0]
-        return WorkcellManagerDefinition(name=name)
+        super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -95,21 +87,30 @@ class WorkcellManager(
         """
         super().initialize(**kwargs)
 
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
+
         # Skip version validation if external mongo_connection was provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
         if self.mongo_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo_connection provided, skipping MongoDB version validation"
+                "External mongo_connection provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="workcell",
+                mongo_external_connection=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
-            global_ownership_info.workcell_id = self.definition.manager_id
-            global_ownership_info.manager_id = self.definition.manager_id
+            global_ownership_info.workcell_id = manager_id
+            global_ownership_info.manager_id = manager_id
 
             # Initialize state handler
             self.state_handler = WorkcellStateHandler(
-                self.definition,
                 workcell_settings=self.settings,
+                workcell_id=manager_id,
+                nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
             )
@@ -120,7 +121,15 @@ class WorkcellManager(
             self.location_client = LocationClient(context.location_server_url)
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            manager_name=manager_name,
+            manager_id=manager_id,
+            manager_type="workcell",
+            mongo_db=str(self.settings.mongo_db_url),
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
         mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
@@ -134,21 +143,35 @@ class WorkcellManager(
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
-        except RuntimeError as e:
-            self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
             )
-            raise e
+        except RuntimeError:
+            self.logger.error(
+                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
+                event_type=EventType.MANAGER_ERROR,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="workcell",
+                database_name=self.settings.database_name,
+                exc_info=True,
+            )
+            raise
 
         # Set up global ownership
-        global_ownership_info.workcell_id = self.definition.manager_id
-        global_ownership_info.manager_id = self.definition.manager_id
+        global_ownership_info.workcell_id = manager_id
+        global_ownership_info.manager_id = manager_id
 
         # Initialize state handler
         self.state_handler = WorkcellStateHandler(
-            self.definition,
             workcell_settings=self.settings,
+            workcell_id=manager_id,
+            nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
         )
@@ -162,20 +185,22 @@ class WorkcellManager(
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with lifespan."""
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
 
         # Set up lifespan context manager
         @asynccontextmanager
         async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             """Start the REST server and initialize the state handler and engine"""
             _ = app  # Mark app as used to avoid lint warning
-            global_ownership_info.workcell_id = self.definition.manager_id
-            global_ownership_info.manager_id = self.definition.manager_id
+            global_ownership_info.workcell_id = manager_id
+            global_ownership_info.manager_id = manager_id
 
             # LOG WORKCELL START EVENT
             self.logger.log(
                 Event(
                     event_type=EventType.WORKCELL_START,
-                    event_data=self.definition.model_dump(mode="json"),
+                    event_data=self.settings.model_dump_safe(),
                 )
             )
 
@@ -192,15 +217,14 @@ class WorkcellManager(
                 self.logger.log(
                     Event(
                         event_type=EventType.WORKCELL_STOP,
-                        event_data=self.definition.model_dump(mode="json"),
+                        event_data=self.settings.model_dump_safe(),
                     )
                 )
 
         # Create app with lifespan
         app = FastAPI(
-            title=self._definition.name,
-            description=self._definition.description
-            or f"{self._definition.name} Manager",
+            title=manager_name,
+            description=self.settings.manager_description or f"{manager_name} Manager",
             lifespan=lifespan,
             **kwargs,
         )
@@ -231,7 +255,7 @@ class WorkcellManager(
                 health.redis_connected = None
 
             # Count nodes and check their reachability
-            total_nodes = len(self.definition.nodes)
+            total_nodes = len(self.settings.nodes or {})
             health.total_nodes = total_nodes
 
             # TODO: Implement actual node reachability checks
@@ -249,9 +273,9 @@ class WorkcellManager(
         return health
 
     @get("/workcell")
-    def get_workcell(self) -> WorkcellManagerDefinition:
-        """Get the currently running workcell (backward compatibility)."""
-        return self.state_handler.get_workcell_definition()
+    def get_workcell(self) -> WorkcellInfo:
+        """Get the currently running workcell info."""
+        return self.state_handler.get_workcell_info()
 
     @get("/state")
     def get_state(self) -> WorkcellState:
@@ -277,21 +301,12 @@ class WorkcellManager(
         self,
         node_name: str,
         node_url: str,
-        permanent: bool = False,
     ) -> Union[Node, str]:
         """Add a node to the workcell's node list"""
         if node_name in self.state_handler.get_nodes():
             return "Node name exists, node names must be unique!"
         node = Node(node_url=node_url)
         self.state_handler.set_node(node_name, node)
-        if permanent:
-            workcell = self.state_handler.get_workcell_definition()
-            workcell.nodes[node_name] = node_url
-            workcell_path = self.get_definition_path()
-            if workcell_path.exists():
-                workcell.to_yaml(workcell_path)
-            self.state_handler.set_workcell_definition(workcell)
-
         return self.state_handler.get_node(node_name)
 
     @post("/admin/{command}")
@@ -347,46 +362,68 @@ class WorkcellManager(
 
     @post("/workflow/{workflow_id}/pause")
     def pause_workflow(self, workflow_id: str) -> Workflow:
-        """Pause a specific workflow."""
+        """Pause a running workflow."""
         with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_active_workflow(workflow_id)
-            if wf.status.active:
-                if wf.status.running:
-                    self.send_admin_command_to_node(
-                        "pause", wf.steps[wf.status.current_step_index].node
-                    )
-                wf.status.paused = True
-                self.state_handler.set_active_workflow(wf)
+            wf = self.state_handler.get_workflow(workflow_id)
+            wf = pause_workflow(wf)
 
-        return self.state_handler.get_active_workflow(workflow_id)
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("pause", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Pause not supported by node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
+            self.state_handler.set_active_workflow(wf)
+
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/resume")
     def resume_workflow(self, workflow_id: str) -> Workflow:
         """Resume a paused workflow."""
         with self.state_handler.wc_state_lock():
-            wf = self.state_handler.get_active_workflow(workflow_id)
+            wf = self.state_handler.get_workflow(workflow_id)
             if wf.status.paused:
-                if wf.status.running:
-                    self.send_admin_command_to_node(
-                        "resume", wf.steps[wf.status.current_step_index].node
-                    )
-                wf.status.paused = False
+                index = wf.status.current_step_index
+                wf.status.reset(index)
+                if 0 <= wf.status.current_step_index < len(wf.steps):
+                    try:
+                        self.send_admin_command_to_node(
+                            "resume", wf.steps[wf.status.current_step_index].node
+                        )
+                    except HTTPException:
+                        self.logger.warning(
+                            "Resume not supported by node",
+                            node_name=wf.steps[wf.status.current_step_index].node,
+                            exc_info=True,
+                        )
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.enqueue_workflow(wf.workflow_id)
-        return self.state_handler.get_active_workflow(workflow_id)
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/cancel")
     def cancel_workflow(self, workflow_id: str) -> Workflow:
         """Cancel a specific workflow."""
         with self.state_handler.wc_state_lock():
             wf = self.state_handler.get_workflow(workflow_id)
-            if wf.status.running:
-                self.send_admin_command_to_node(
-                    "cancel", wf.steps[wf.status.current_step_index].node
-                )
-            wf.status.cancelled = True
+            wf = cancel_workflow(wf)
+
+            if 0 <= wf.status.current_step_index < len(wf.steps):
+                node_name = wf.steps[wf.status.current_step_index].node
+                try:
+                    self.send_admin_command_to_node("cancel", node_name)
+                except HTTPException:
+                    self.logger.warning(
+                        "Cancel not supported by this node",
+                        node_name=node_name,
+                        exc_info=True,
+                    )
             self.state_handler.set_active_workflow(wf)
-        return self.state_handler.get_active_workflow(workflow_id)
+
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow/{workflow_id}/retry")
     def retry_workflow(self, workflow_id: str, index: int = -1) -> Workflow:
@@ -396,6 +433,8 @@ class WorkcellManager(
             if wf.status.terminal:
                 if index < 0:
                     index = wf.status.current_step_index
+                if wf.status.completed:
+                    index = 0
                 wf.status.reset(index)
                 self.state_handler.set_active_workflow(wf)
                 self.state_handler.delete_archived_workflow(wf.workflow_id)
@@ -405,7 +444,7 @@ class WorkcellManager(
                     status_code=400,
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
-        return self.state_handler.get_active_workflow(workflow_id)
+        return self.state_handler.get_workflow(workflow_id)
 
     @post("/workflow_definition")
     async def submit_workflow_definition(
@@ -431,7 +470,6 @@ class WorkcellManager(
                 wf_def = WorkflowDefinition.model_validate(workflow_definition)
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
             return self.state_handler.save_workflow_definition(
                 workflow_definition=wf_def,
@@ -439,8 +477,12 @@ class WorkcellManager(
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error saving workflow definition: {e}")
-            traceback.print_exc()
+            self.logger.error(
+                "Error saving workflow definition",
+                event_type=EventType.WORKFLOW_CREATE,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500,
                 detail=f"Error saving workflow definition: {e}",
@@ -467,7 +509,6 @@ class WorkcellManager(
         try:
             return self.state_handler.get_workflow_definition(workflow_definition_id)
         except Exception as e:
-            traceback.print_exc()
             raise HTTPException(status_code=404, detail=str(e)) from e
 
     @post("/workflow")
@@ -506,7 +547,6 @@ class WorkcellManager(
                 wf_def = self.state_handler.get_workflow_definition(str(workflow_id))
 
             except Exception as e:
-                traceback.print_exc()
                 raise HTTPException(status_code=422, detail=str(e)) from e
 
             ownership_info = (
@@ -537,38 +577,49 @@ class WorkcellManager(
                             status_code=400,
                             detail="Input File Paths must be a dictionary with string keys",
                         )
-                workcell = self.state_handler.get_workcell_definition()
-                check_parameters(wf_def, json_inputs, file_input_paths)
-                wf = create_workflow(
-                    workflow_def=wf_def,
-                    workcell=workcell,
-                    json_inputs=json_inputs,
-                    file_input_paths=file_input_paths,
-                    state_handler=self.state_handler,
-                    location_client=self.location_client,
-                )
 
-                wf = save_workflow_files(
-                    workflow=wf, files=files, data_client=self.data_client
-                )
-
-                with self.state_handler.wc_state_lock():
-                    self.state_handler.set_active_workflow(wf)
-                    self.state_handler.enqueue_workflow(wf.workflow_id)
-
-                self.logger.log(
-                    Event(
-                        event_type=EventType.WORKFLOW_START,
-                        event_data=wf.model_dump(mode="json"),
+                with self.span(
+                    "workflow.execute",
+                    attributes={"workflow.step_count": len(wf_def.steps)},
+                ):
+                    workcell = self.state_handler.get_workcell_info()
+                    check_parameters(wf_def, json_inputs, file_input_paths)
+                    wf = create_workflow(
+                        workflow_def=wf_def,
+                        workcell=workcell,
+                        json_inputs=json_inputs,
+                        file_input_paths=file_input_paths,
+                        state_handler=self.state_handler,
+                        location_client=self.location_client,
                     )
-                )
-                return wf
+
+                    wf = save_workflow_files(
+                        workflow=wf, files=files, data_client=self.data_client
+                    )
+
+                    with self.state_handler.wc_state_lock():
+                        self.state_handler.set_active_workflow(wf)
+                        self.state_handler.enqueue_workflow(wf.workflow_id)
+
+                    self.logger.info(
+                        "Workflow start successful",
+                        event_type=EventType.WORKFLOW_START,
+                        workflow_name=wf.name,
+                        workflow_id=wf.workflow_id,
+                        workflow_definition_id=workflow_definition_id,
+                    )
+                    return wf
 
         except HTTPException as e:
             raise e
         except Exception as e:
-            self.logger.error(f"Error starting workflow: {e}")
-            traceback.print_exc()
+            self.logger.error(
+                "Error starting workflow",
+                event_type=EventType.WORKFLOW_START,
+                workflow_definition_id=workflow_definition_id,
+                error=str(e),
+                exc_info=True,
+            )
             raise HTTPException(
                 status_code=500,
                 detail=f"Error starting workflow: {e}",

@@ -11,29 +11,26 @@ from madsci.common.context import get_current_madsci_context
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.event_types import EventType
 from madsci.common.types.lab_types import (
     LabHealth,
-    LabManagerDefinition,
     LabManagerSettings,
 )
 from madsci.common.types.manager_types import ManagerHealth
 
 
-class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
+class LabManager(AbstractManagerBase[LabManagerSettings]):
     """Lab Manager REST Server."""
 
     SETTINGS_CLASS = LabManagerSettings
-    DEFINITION_CLASS = LabManagerDefinition
-    ENABLE_ROOT_DEFINITION_ENDPOINT = False
 
     def __init__(
         self,
         settings: Optional[LabManagerSettings] = None,
-        definition: Optional[LabManagerDefinition] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Lab Manager."""
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Set up additional ownership context for lab
         self._setup_lab_ownership()
@@ -41,7 +38,7 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
     def _setup_lab_ownership(self) -> None:
         """Setup lab-specific ownership information."""
         # Lab Manager also sets the lab_id in global ownership
-        global_ownership_info.lab_id = self.definition.manager_id
+        global_ownership_info.lab_id = self.settings.manager_id
 
     def create_server(self, **kwargs: Any) -> FastAPI:
         """Create the FastAPI server application with proper route order."""
@@ -107,13 +104,23 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
 
             # Overall lab health is healthy if more than half the managers are healthy
             lab_health.healthy = healthy_count > total_count / 2
-            lab_health.description = (
-                f"{healthy_count}/{total_count} managers are healthy"
+            lab_health.description = "Managers health summary"
+            self.logger.info(
+                "Lab health check complete",
+                event_type=EventType.MANAGER_HEALTH_CHECK,
+                healthy_managers=healthy_count,
+                total_managers=total_count,
+                lab_healthy=lab_health.healthy,
             )
 
-        except Exception as e:
+        except Exception:
             lab_health.healthy = False
-            lab_health.description = f"Lab health check failed: {e!s}"
+            lab_health.description = "Lab health check failed"
+            self.logger.error(
+                "Lab health check failed",
+                event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
+            )
 
         return lab_health
 
@@ -141,11 +148,23 @@ class LabManager(AbstractManagerBase[LabManagerSettings, LabManagerDefinition]):
                             healthy_count += 1
                     else:
                         manager_healths[manager_name] = ManagerHealth(
-                            healthy=False, description=f"HTTP {response.status_code}"
+                            healthy=False, description="HTTP error"
                         )
-                except Exception as e:
+                        self.logger.warning(
+                            "Manager health check HTTP error",
+                            event_type=EventType.MANAGER_HEALTH_CHECK,
+                            manager_name=manager_name,
+                            status_code=response.status_code,
+                        )
+                except Exception:
                     manager_healths[manager_name] = ManagerHealth(
-                        healthy=False, description=f"Failed to connect: {e!s}"
+                        healthy=False, description="Failed to connect"
+                    )
+                    self.logger.warning(
+                        "Manager health check connection failed",
+                        event_type=EventType.MANAGER_HEALTH_CHECK,
+                        manager_name=manager_name,
+                        exc_info=True,
                     )
 
         return healthy_count, total_count

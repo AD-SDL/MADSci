@@ -66,13 +66,48 @@ status = client.get_status()
 - Support for complex return types (JSON, files, datapoint IDs)
 - Node capability checking and schema introspection
 
-**Examples**: See [example_lab/notebooks/node_notebook.ipynb](../../example_lab/notebooks/node_notebook.ipynb) for detailed usage.
+**Examples**: See [node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb) for detailed usage.
 
 ## Event Client
 
 Allows a user or system to interface with a MADSci EventManager, or log events locally if one isn't available/configured. Can be used to both log new events and query logged events.
 
 For detailed documentation on usage, see the [EventManager Documentation](../madsci_event_manager/README.md).
+
+### Logging with Context
+
+MADSci clients automatically participate in the logging context system, enabling hierarchical logging across components:
+
+```python
+from madsci.common.context import event_client_context, get_event_client
+from madsci.client.resource_client import ResourceClient
+from madsci.client.workcell_client import WorkcellClient
+
+# All clients created within this context share logging context
+with event_client_context(name="my_app", app_id="app-123") as logger:
+    logger.info("Starting application")
+
+    # Clients automatically use the shared context
+    resource_client = ResourceClient()
+    workcell_client = WorkcellClient()
+
+    # Logs from these clients will include app_id="app-123"
+    resource_client.logger.info("Using resource client")
+    workcell_client.logger.info("Using workcell client")
+```
+
+For library code or utility functions, use `get_event_client()` to inherit context:
+
+```python
+from madsci.common.context import get_event_client
+
+def utility_function():
+    # Uses context if available, creates new client if not
+    logger = get_event_client()
+    logger.info("Utility function running")
+```
+
+See the [Migration Guide](../../docs/dev/event_client_context_plan/migration_guide.md) for detailed migration patterns, and the [Logging Guide](../../docs/guides/logging.md) for comprehensive documentation on structured logging and context management.
 
 ## Experiment Application
 

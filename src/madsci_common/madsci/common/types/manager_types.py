@@ -1,15 +1,15 @@
 """Types used primarily by MADSci Managers."""
 
+import warnings
 from enum import Enum
-from pathlib import Path
-from typing import Optional
+from typing import Any, ClassVar, Literal, Optional
 
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings, PathLike
+from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from madsci.common.utils import new_ulid_str
 from pydantic import AnyUrl, ConfigDict, Field
 
 
-class ManagerType(str, Enum):
+class ManagerType(str, Enum):  # pyright: ignore[reportIncompatibleMethodOverride]
     """Types of Squid Managers."""
 
     WORKCELL_MANAGER = "workcell_manager"
@@ -22,36 +22,44 @@ class ManagerType(str, Enum):
     LAB_MANAGER = "lab_manager"
     LOCATION_MANAGER = "location_manager"
 
-    @classmethod
-    def _missing_(cls, value: str) -> "ManagerType":
-        value = value.lower()
-        for member in cls:
-            if member.lower() == value:
-                return member
-        raise ValueError(f"Invalid ManagerTypes: {value}")
-
 
 class ManagerSettings(MadsciBaseSettings):
     """Base settings class for MADSci Manager services.
 
     This class provides common configuration fields that all managers need,
-    such as server URL and manager definition file path.
+    such as server URL, manager identity, and operational parameters.
 
     Manager-specific settings classes should inherit from this class and:
     1. Add their specific configuration parameters
     2. Set appropriate env_prefix, env_file, toml_file, etc. parameters
     3. Override default values as needed (especially server_url default port)
+
+    By default, manager settings also search ``managers/`` and ``config/``
+    subdirectories under the settings directory when walk-up discovery does
+    not find a configuration file.  This allows lab layouts like::
+
+        my-lab/
+        ├── settings.yaml              # shared settings
+        └── managers/
+            └── events.settings.yaml   # manager-specific overrides
     """
+
+    _extra_search_dirs: ClassVar[tuple[str, ...]] = ("managers", "config")
 
     server_url: AnyUrl = Field(
         title="Server URL",
         description="The URL where this manager's server runs.",
         default="http://localhost:8000",
     )
-    manager_definition: PathLike = Field(
-        title="Manager Definition File",
-        description="Path to the manager definition file to use.",
-        default=Path("manager.yaml"),
+    manager_id: Optional[str] = Field(
+        title="Manager ID",
+        description="Unique identifier for this manager instance. If not set, a new ULID is generated at runtime. The registry system provides the stable ID thereafter.",
+        default=None,
+    )
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager, used by other components to find matching managers.",
+        default=None,
     )
 
     # Rate limiting settings
@@ -116,6 +124,55 @@ class ManagerSettings(MadsciBaseSettings):
         ge=1,
     )
 
+    # Registry resolution
+    enable_registry_resolution: bool = Field(
+        default=True,
+        title="Enable Registry Resolution",
+        description="When true, resolve manager_id from the ID Registry at startup for stable identity across restarts.",
+    )
+    manager_name: Optional[str] = Field(
+        default=None,
+        title="Manager Name",
+        description="Name for this manager instance. Used for registry lookup and display.",
+    )
+    manager_description: Optional[str] = Field(
+        default=None,
+        title="Manager Description",
+        description="Human-readable description of this manager instance.",
+    )
+    lab_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Lab URL",
+        description="Lab Manager URL for distributed registry coordination.",
+    )
+
+    # OpenTelemetry configuration
+    otel_enabled: bool = Field(
+        default=False,
+        title="OpenTelemetry Enabled",
+        description="Enable OpenTelemetry tracing and metrics integration for this manager",
+    )
+    otel_service_name: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Service Name",
+        description="Override service name for OpenTelemetry (defaults to manager name)",
+    )
+    otel_exporter: Literal["console", "otlp", "none"] = Field(
+        default="console",
+        title="OpenTelemetry Exporter",
+        description="OpenTelemetry exporter type: 'console' for development, 'otlp' for production, 'none' to disable",
+    )
+    otel_endpoint: Optional[str] = Field(
+        default=None,
+        title="OpenTelemetry Endpoint",
+        description="OTLP collector endpoint (required when otel_exporter='otlp')",
+    )
+    otel_protocol: Literal["grpc", "http"] = Field(
+        default="grpc",
+        title="OpenTelemetry Protocol",
+        description="OTLP transport protocol ('grpc' or 'http')",
+    )
+
 
 class ManagerHealth(MadsciBaseModel):
     """Base health status for MADSci Manager services.
@@ -135,12 +192,21 @@ class ManagerHealth(MadsciBaseModel):
         description="Human-readable description of any problems or status.",
         default=None,
     )
+    version: Optional[str] = Field(
+        title="Manager Version",
+        description="The version of the manager's package.",
+        default=None,
+    )
 
     model_config = ConfigDict(extra="allow")
 
 
 class ManagerDefinition(MadsciBaseModel):
-    """Definition for a MADSci Manager."""
+    """Definition for a MADSci Manager.
+
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`ManagerSettings` instead.
+    """
 
     model_config = ConfigDict(extra="allow")
 
@@ -162,3 +228,14 @@ class ManagerDefinition(MadsciBaseModel):
         title="Manager Type",
         description="The type of the manager, used by other components or managers to find matching managers.",
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning on instantiation."""
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            f"{type(self).__name__} is deprecated and removed in v0.7.0. "
+            "Use ManagerSettings instead.",
+            MadsciDeprecationWarning,
+            stacklevel=4,
+        )

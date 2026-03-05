@@ -10,7 +10,7 @@ Classes
 
 `MadsciClientMixin()`
 :   Mixin for managing MADSci client lifecycle.
-
+    
     Provides automatic initialization and management of MADSci service clients
     with support for:
     - Context-based auto-configuration
@@ -18,27 +18,27 @@ Classes
     - Selective client initialization
     - EventClient sharing across clients
     - Lazy initialization
-
+    
     Usage:
         class MyComponent(MadsciClientMixin):
             # Optional: Declare which clients to initialize eagerly
             REQUIRED_CLIENTS = ["event", "resource", "data"]
-
+    
             def __init__(self):
                 super().__init__()
                 self.setup_clients()  # Initialize required clients
-
+    
             def my_method(self):
                 # Access clients via properties
                 self.event_client.info("Hello")
                 self.resource_client.get_resource("xyz")
-
+    
     Class Attributes:
         REQUIRED_CLIENTS: List of client names to initialize in setup_clients().
                          Available: "event", "resource", "data", "experiment",
                                    "workcell", "location", "lab"
         OPTIONAL_CLIENTS: List of client names that may be used but aren't required.
-
+    
     Client Properties:
         event_client: EventClient for logging and event management
         resource_client: ResourceClient for resource and inventory tracking
@@ -47,7 +47,7 @@ Classes
         workcell_client: WorkcellClient for workflow coordination
         location_client: LocationClient for location management
         lab_client: LabClient for lab configuration and context
-
+    
     Configuration:
         The mixin supports several ways to configure clients:
         1. Context-based (default): URLs from get_current_madsci_context()
@@ -58,6 +58,7 @@ Classes
     ### Descendants
 
     * madsci.common.manager_base.AbstractManagerBase
+    * madsci.experiment_application.experiment_base.ExperimentBase
     * madsci.node_module.abstract_node_module.AbstractNode
 
     ### Class variables
@@ -98,6 +99,9 @@ Classes
     `location_server_url: str | pydantic.networks.AnyUrl | None`
     :
 
+    `name: str | None`
+    :
+
     `object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None`
     :
 
@@ -114,43 +118,48 @@ Classes
 
     `data_client: madsci.client.data_client.DataClient`
     :   Get or create the DataClient instance.
-
+        
         Returns:
             DataClient: The data client for data storage and retrieval
 
     `event_client: madsci.client.event_client.EventClient`
     :   Get or create the EventClient instance.
-
+        
+        Resolution order:
+        1. Explicitly set client (_event_client)
+        2. Context client with component binding (if context exists)
+        3. New client from config (legacy fallback)
+        
         Returns:
             EventClient: The event client for logging and event management
 
     `experiment_client: madsci.client.experiment_client.ExperimentClient`
     :   Get or create the ExperimentClient instance.
-
+        
         Returns:
             ExperimentClient: The experiment client for experiment management
 
     `lab_client: madsci.client.lab_client.LabClient`
     :   Get or create the LabClient instance.
-
+        
         Returns:
             LabClient: The lab client for lab configuration
 
     `location_client: madsci.client.location_client.LocationClient`
     :   Get or create the LocationClient instance.
-
+        
         Returns:
             LocationClient: The location client for location management
 
     `resource_client: madsci.client.resource_client.ResourceClient`
     :   Get or create the ResourceClient instance.
-
+        
         Returns:
             ResourceClient: The resource client for inventory tracking
 
     `workcell_client: madsci.client.workcell_client.WorkcellClient`
     :   Get or create the WorkcellClient instance.
-
+        
         Returns:
             WorkcellClient: The workcell client for workflow coordination
 
@@ -158,11 +167,11 @@ Classes
 
     `setup_clients(self, clients: list[str] | None = None, event_client: madsci.client.event_client.EventClient | None = None, resource_client: madsci.client.resource_client.ResourceClient | None = None, data_client: madsci.client.data_client.DataClient | None = None, experiment_client: madsci.client.experiment_client.ExperimentClient | None = None, workcell_client: madsci.client.workcell_client.WorkcellClient | None = None, location_client: madsci.client.location_client.LocationClient | None = None, lab_client: madsci.client.lab_client.LabClient | None = None) ‑> None`
     :   Initialize specified clients.
-
+        
         This method initializes the clients specified in the 'clients' parameter,
         or all REQUIRED_CLIENTS if not specified. Clients can also be directly
         injected as parameters (useful for testing).
-
+        
         Args:
             clients: List of client names to initialize. If None, initializes
                     all clients in REQUIRED_CLIENTS. Available: "event",
@@ -174,24 +183,24 @@ Classes
             workcell_client: Pre-initialized WorkcellClient to use
             location_client: Pre-initialized LocationClient to use
             lab_client: Pre-initialized LabClient to use
-
+        
         Example:
             # Initialize required clients
             self.setup_clients()
-
+        
             # Initialize specific clients
             self.setup_clients(clients=["event", "resource"])
-
+        
             # Inject a mock client for testing
             mock_event = Mock(spec=EventClient)
             self.setup_clients(event_client=mock_event)
 
     `teardown_clients(self) ‑> None`
     :   Clean up client resources.
-
-        Currently a no-op, but provided for future enhancements
-        where clients may need explicit cleanup (e.g., connection
-        pools, background threads).
-
-        This method can be called in shutdown handlers or context
-        managers to ensure clean resource cleanup.
+        
+        This method closes the EventClient and any other clients that
+        have resources that need explicit cleanup (file handlers,
+        connection pools, background threads).
+        
+        This method should be called in shutdown handlers or when
+        the component is no longer needed to prevent resource leaks.

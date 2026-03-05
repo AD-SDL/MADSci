@@ -1,0 +1,36 @@
+name: "Fake Interface"
+version: "1.0.0"
+description: "Add a fake interface for testing without hardware"
+category: "interface"
+tags: ["fake", "testing", "simulation"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (must match existing module)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_module"
+
+  - name: simulated_latency
+    type: float
+    description: "Default simulated operation latency in seconds"
+    required: false
+    default: 0.1
+    min: 0.0
+    max: 60.0
+
+files:
+  - source: "{{module_name}}_fake_interface.py.j2"
+    destination: "src/{{module_name}}_fake_interface.py"
+
+hooks:
+  post_generate:
+    - command: "ruff format src/{{module_name}}_fake_interface.py"
+      description: "Format generated code"
+      continue_on_error: true

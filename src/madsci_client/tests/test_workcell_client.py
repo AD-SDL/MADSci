@@ -14,7 +14,6 @@ from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
     WorkcellManagerSettings,
     WorkcellState,
 )
@@ -52,14 +51,6 @@ def pmr_mongo_config() -> MongoConfig:
 
 redis_server = create_redis_fixture()
 mongo_server = create_mongo_fixture()
-
-
-@pytest.fixture
-def workcell() -> WorkcellManagerDefinition:
-    """Fixture for creating a WorkcellDefinition."""
-    return WorkcellManagerDefinition(
-        name="Test Workcell",
-    )
 
 
 @pytest.fixture
@@ -122,7 +113,7 @@ def sample_workflow_instance() -> Workflow:
 
 @pytest.fixture
 def test_client(
-    workcell: WorkcellManagerDefinition, redis_server: Redis, mongo_server: Database
+    redis_server: Redis, mongo_server: Database
 ) -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
     # Create a mock context with all required URLs
@@ -144,6 +135,7 @@ def test_client(
     database_name = mongo_server.name
 
     custom_settings = WorkcellManagerSettings(
+        manager_name="Test Workcell",
         mongo_db_url=mongo_url,
         database_name=database_name,
     )
@@ -182,7 +174,6 @@ def test_client(
 
         manager = WorkcellManager(
             settings=custom_settings,
-            definition=workcell,
             redis_connection=redis_server,
             mongo_connection=mongo_server,
             start_engine=False,

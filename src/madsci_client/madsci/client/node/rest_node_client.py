@@ -11,6 +11,7 @@ from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
+from madsci.common.context import get_event_client
 from madsci.common.types.action_types import (
     ActionFiles,
     ActionRequest,
@@ -20,7 +21,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.client_types import RestNodeClientConfig
-from madsci.common.types.event_types import Event
+from madsci.common.types.event_types import Event, EventType
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -80,17 +81,32 @@ class RestNodeClient(AbstractNodeClient):
     )
 
     def __init__(
-        self, url: AnyUrl, config: Optional[RestNodeClientConfig] = None
-    ) -> "RestNodeClient":
+        self,
+        url: AnyUrl,
+        config: Optional[RestNodeClientConfig] = None,
+        event_client: Optional[EventClient] = None,
+    ) -> None:
         """
         Initialize the client.
 
         Args:
             url: The URL of the node to connect to.
-            config: Client configuration for retry and timeout settings. If not provided, uses default NodeClientConfig.
+            config: Client configuration for retry and timeout settings.
+                   If not provided, uses default RestNodeClientConfig.
+            event_client: Optional EventClient to use for logging.
+                         If not provided, uses context client or creates new.
         """
         super().__init__(url)
-        self.logger = EventClient()
+
+        # Use injected client, context client, or create new
+        if event_client is not None:
+            self.logger = event_client
+        else:
+            self.logger = get_event_client(
+                node_url=str(url),
+                component_type="RestNodeClient",
+            )
+
         self.config = config if config is not None else RestNodeClientConfig()
         self.session = create_http_session(config=self.config)
 
@@ -141,9 +157,18 @@ class RestNodeClient(AbstractNodeClient):
 
         except Exception as e:
             if hasattr(e, "response") and e.response is not None:
-                self.logger.error(f"{e.response.status_code}: {e.response.text}")
+                self.logger.error(
+                    "REST node action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    status_code=e.response.status_code,
+                    response_text=e.response.text,
+                )
             else:
-                self.logger.error(str(e))
+                self.logger.error(
+                    "REST node action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    error=str(e),
+                )
             raise e
 
     def _create_action(
@@ -382,7 +407,11 @@ class RestNodeClient(AbstractNodeClient):
 
         except Exception as e:
             self.logger.error(
-                f"Failed to fetch files for action {action_name} with ID {action_id}: {traceback.format_exc()}"
+                "Failed to fetch files for action",
+                event_type=EventType.LOG_ERROR,
+                action_name=action_name,
+                action_id=action_id,
+                traceback=traceback.format_exc(),
             )
             raise e
         finally:

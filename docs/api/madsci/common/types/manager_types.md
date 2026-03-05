@@ -7,12 +7,15 @@ Classes
 
 `ManagerDefinition(**data: Any)`
 :   Definition for a MADSci Manager.
-
+    
+    .. deprecated:: 0.7.0
+        Definition files are removed. Use :class:`ManagerSettings` instead.
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -46,18 +49,23 @@ Classes
     `name: str`
     :
 
+    ### Methods
+
+    `model_post_init(self, _ManagerDefinition__context: Any) ‑> None`
+    :   Emit deprecation warning on instantiation.
+
 `ManagerHealth(**data: Any)`
 :   Base health status for MADSci Manager services.
-
+    
     This class provides common health check fields that all managers need.
     Manager-specific health classes should inherit from this class and add
     additional fields for database connections, external dependencies, etc.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -86,23 +94,44 @@ Classes
     `model_config`
     :
 
-`ManagerSettings(**values: Any)`
+    `version: str | None`
+    :
+
+`ManagerSettings(**kwargs: Any)`
 :   Base settings class for MADSci Manager services.
-
+    
     This class provides common configuration fields that all managers need,
-    such as server URL and manager definition file path.
-
+    such as server URL, manager identity, and operational parameters.
+    
     Manager-specific settings classes should inherit from this class and:
     1. Add their specific configuration parameters
     2. Set appropriate env_prefix, env_file, toml_file, etc. parameters
     3. Override default values as needed (especially server_url default port)
-
-    Create a new model by parsing and validating input data from keyword arguments.
-
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
-
-    `self` is explicitly positional-only to allow `self` as a field name.
+    
+    By default, manager settings also search ``managers/`` and ``config/``
+    subdirectories under the settings directory when walk-up discovery does
+    not find a configuration file.  This allows lab layouts like::
+    
+        my-lab/
+        ├── settings.yaml              # shared settings
+        └── managers/
+            └── events.settings.yaml   # manager-specific overrides
+    
+    Initialize settings with walk-up file discovery.
+    
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
+    
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
+    
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -122,7 +151,37 @@ Classes
 
     ### Class variables
 
-    `manager_definition: str | pathlib.Path`
+    `enable_registry_resolution: bool`
+    :
+
+    `lab_url: pydantic.networks.AnyUrl | None`
+    :
+
+    `manager_description: str | None`
+    :
+
+    `manager_id: str | None`
+    :
+
+    `manager_name: str | None`
+    :
+
+    `manager_type: madsci.common.types.manager_types.ManagerType | None`
+    :
+
+    `otel_enabled: bool`
+    :
+
+    `otel_endpoint: str | None`
+    :
+
+    `otel_exporter: Literal['console', 'otlp', 'none']`
+    :
+
+    `otel_protocol: Literal['grpc', 'http']`
+    :
+
+    `otel_service_name: str | None`
     :
 
     `rate_limit_cleanup_interval: int`
@@ -158,7 +217,7 @@ Classes
     `uvicorn_workers: int | None`
     :
 
-`ManagerType(*args, **kwds)`
+`ManagerType(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Types of Squid Managers.
 
     ### Ancestors (in MRO)

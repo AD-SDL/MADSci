@@ -19,26 +19,24 @@ from madsci.common.object_storage_helpers import (
     upload_file_to_object_storage,
 )
 from madsci.common.types.datapoint_types import (
-    DataManagerDefinition,
     DataManagerHealth,
     DataManagerSettings,
     DataPoint,
     ObjectStorageSettings,
 )
+from madsci.common.types.event_types import EventType
 from minio import Minio
 from pymongo import MongoClient
 
 
-class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition]):
+class DataManager(AbstractManagerBase[DataManagerSettings]):
     """Data Manager REST Server."""
 
     SETTINGS_CLASS = DataManagerSettings
-    DEFINITION_CLASS = DataManagerDefinition
 
     def __init__(
         self,
         settings: Optional[DataManagerSettings] = None,
-        definition: Optional[DataManagerDefinition] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         db_client: Optional[MongoClient] = None,
         **kwargs: Any,
@@ -48,7 +46,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         self._object_storage_settings = object_storage_settings
         self._db_client = db_client
 
-        super().__init__(settings=settings, definition=definition, **kwargs)
+        super().__init__(settings=settings, **kwargs)
 
         # Initialize database and storage
         self._setup_database()
@@ -63,7 +61,11 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         if self._db_client is not None:
             return
 
-        self.logger.info("Validating MongoDB schema version...")
+        self.logger.info(
+            "Validating MongoDB schema version",
+            event_type=EventType.MANAGER_START,
+            database_name=self.settings.database_name,
+        )
 
         schema_file_path = Path(__file__).parent / "schema.json"
         version_checker = MongoDBVersionChecker(
@@ -75,10 +77,16 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
 
         try:
             version_checker.validate_or_fail()
-            self.logger.info("MongoDB version validation completed successfully")
+            self.logger.info(
+                "MongoDB version validation completed successfully",
+                event_type=EventType.MANAGER_START,
+                database_name=self.settings.database_name,
+            )
         except RuntimeError as e:
             self.logger.error(
-                "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!"
+                "Database version mismatch detected; server startup aborted",
+                event_type=EventType.MANAGER_ERROR,
+                database_name=self.settings.database_name,
             )
             raise e
 
@@ -160,6 +168,23 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
             object_storage_settings=self._object_storage_settings,
         )
 
+    @staticmethod
+    def _cleanup_temp_file(path: Path) -> None:
+        """Remove a temporary file (sync helper for async methods)."""
+        path.unlink()
+
+    @staticmethod
+    def _get_storage_path(base_path: str, time: datetime) -> Path:
+        """Resolve and create the date-based storage path (sync helper for async methods)."""
+        path = (
+            Path(base_path).expanduser()
+            / str(time.year)
+            / str(time.month)
+            / str(time.day)
+        )
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
     @post("/datapoint")
     async def create_datapoint(
         self, datapoint: Annotated[str, Form()], files: list[UploadFile] = []
@@ -167,118 +192,131 @@ class DataManager(AbstractManagerBase[DataManagerSettings, DataManagerDefinition
         """Create a new datapoint."""
         datapoint_obj = DataPoint.discriminate(json.loads(datapoint))
 
-        # Handle file uploads if present
-        if files:
-            for file in files:
-                # Check if this is a file datapoint and MinIO is configured
-                if (
-                    datapoint_obj.data_type.value == "file"
-                    and self.minio_client is not None
-                ):
-                    # Use MinIO object storage instead of local storage
-                    # First, save file temporarily to upload to MinIO
+        with self.span(
+            "data.save",
+            attributes={
+                "datapoint.type": str(datapoint_obj.data_type),
+                "datapoint.label": datapoint_obj.label,
+                "datapoint.has_files": bool(files),
+            },
+        ):
+            # Handle file uploads if present
+            if files:
+                for file in files:
+                    # Check if this is a file datapoint and MinIO is configured
+                    if (
+                        datapoint_obj.data_type.value == "file"
+                        and self.minio_client is not None
+                    ):
+                        # Use MinIO object storage instead of local storage
+                        # First, save file temporarily to upload to MinIO
 
-                    with tempfile.NamedTemporaryFile(
-                        delete=False, suffix=f"_{file.filename}"
-                    ) as temp_file:
+                        with tempfile.NamedTemporaryFile(
+                            delete=False, suffix=f"_{file.filename}"
+                        ) as temp_file:
+                            contents = file.file.read()
+                            temp_file.write(contents)
+                            temp_file.flush()
+                            temp_path = Path(temp_file.name)
+
+                        # Upload to MinIO object storage
+                        object_storage_info = self._upload_file_to_minio(
+                            minio_client=self.minio_client,
+                            file_path=temp_path,
+                            filename=file.filename,
+                            label=datapoint_obj.label,
+                            metadata={
+                                "original_datapoint_id": datapoint_obj.datapoint_id
+                            },
+                        )
+
+                        # Clean up temporary file
+                        self._cleanup_temp_file(temp_path)
+
+                        # If upload was successful, store object storage information in database
+                        if object_storage_info:
+                            # Create a combined dictionary with both datapoint and object storage info
+                            datapoint_dict = datapoint_obj.to_mongo()
+                            datapoint_dict.update(object_storage_info)
+                            # Update data_type to indicate this is now an object storage datapoint
+                            datapoint_dict["data_type"] = "object_storage"
+                            self.datapoints.insert_one(datapoint_dict)
+                            # Return the transformed datapoint
+                            return DataPoint.discriminate(datapoint_dict)
+                        # If MinIO upload failed, fall back to local storage
+                        warnings.warn(
+                            "MinIO upload failed, falling back to local file storage",
+                            UserWarning,
+                            stacklevel=2,
+                        )
+                    # Fallback to local storage
+                    time = datetime.now()
+                    path = self._get_storage_path(self.settings.file_storage_path, time)
+                    final_path = path / (
+                        datapoint_obj.datapoint_id + "_" + file.filename
+                    )
+
+                    # Reset file position and save locally
+                    file.file.seek(0)
+                    with Path.open(final_path, "wb") as f:
                         contents = file.file.read()
-                        temp_file.write(contents)
-                        temp_file.flush()
-                        temp_path = Path(temp_file.name)
-
-                    # Upload to MinIO object storage
-                    object_storage_info = self._upload_file_to_minio(
-                        minio_client=self.minio_client,
-                        file_path=temp_path,
-                        filename=file.filename,
-                        label=datapoint_obj.label,
-                        metadata={"original_datapoint_id": datapoint_obj.datapoint_id},
-                    )
-
-                    # Clean up temporary file
-                    temp_path.unlink()
-
-                    # If upload was successful, store object storage information in database
-                    if object_storage_info:
-                        # Create a combined dictionary with both datapoint and object storage info
-                        datapoint_dict = datapoint_obj.to_mongo()
-                        datapoint_dict.update(object_storage_info)
-                        # Update data_type to indicate this is now an object storage datapoint
-                        datapoint_dict["data_type"] = "object_storage"
-                        self.datapoints.insert_one(datapoint_dict)
-                        # Return the transformed datapoint
-                        return DataPoint.discriminate(datapoint_dict)
-                    # If MinIO upload failed, fall back to local storage
-                    warnings.warn(
-                        "MinIO upload failed, falling back to local file storage",
-                        UserWarning,
-                        stacklevel=2,
-                    )
-                # Fallback to local storage
-                time = datetime.now()
-                path = (
-                    Path(self.settings.file_storage_path).expanduser()
-                    / str(time.year)
-                    / str(time.month)
-                    / str(time.day)
-                )
-                path.mkdir(parents=True, exist_ok=True)
-                final_path = path / (datapoint_obj.datapoint_id + "_" + file.filename)
-
-                # Reset file position and save locally
-                file.file.seek(0)
-                with Path.open(final_path, "wb") as f:
-                    contents = file.file.read()
-                    f.write(contents)
-                datapoint_obj.path = str(final_path)
+                        f.write(contents)
+                    datapoint_obj.path = str(final_path)
+                    self.datapoints.insert_one(datapoint_obj.to_mongo())
+                    return datapoint_obj
+            else:
+                # No files - just insert the datapoint (for ValueDataPoint, etc.)
                 self.datapoints.insert_one(datapoint_obj.to_mongo())
                 return datapoint_obj
-        else:
-            # No files - just insert the datapoint (for ValueDataPoint, etc.)
-            self.datapoints.insert_one(datapoint_obj.to_mongo())
-            return datapoint_obj
 
-        return None
+            return None
 
     @get("/datapoint/{datapoint_id}")
     async def get_datapoint(self, datapoint_id: str) -> Any:
         """Look up a datapoint by datapoint_id"""
-        datapoint = self.datapoints.find_one({"_id": datapoint_id})
-        if not datapoint:
-            return JSONResponse(
-                status_code=404,
-                content={"message": f"Datapoint with id {datapoint_id} not found."},
-            )
-        return DataPoint.discriminate(datapoint)
+        with self.span("data.get", attributes={"datapoint.id": datapoint_id}):
+            datapoint = self.datapoints.find_one({"_id": datapoint_id})
+            if not datapoint:
+                return JSONResponse(
+                    status_code=404,
+                    content={"message": f"Datapoint with id {datapoint_id} not found."},
+                )
+            return DataPoint.discriminate(datapoint)
 
     @get("/datapoint/{datapoint_id}/value")
     async def get_datapoint_value(self, datapoint_id: str) -> Response:
         """Returns a specific data point's value. If this is a file, it will return the file."""
-        datapoint = self.datapoints.find_one({"_id": datapoint_id})
-        datapoint = DataPoint.discriminate(datapoint)
-        if datapoint.data_type == "file":
-            return FileResponse(datapoint.path)
-        return JSONResponse(datapoint.value)
+        with self.span("data.value", attributes={"datapoint.id": datapoint_id}):
+            datapoint = self.datapoints.find_one({"_id": datapoint_id})
+            datapoint = DataPoint.discriminate(datapoint)
+            if datapoint.data_type == "file":
+                return FileResponse(datapoint.path)
+            return JSONResponse(datapoint.value)
 
     @get("/datapoints")
     async def get_datapoints(self, number: int = 100) -> Dict[str, Any]:
         """Get the latest datapoints"""
-        datapoint_list = (
-            self.datapoints.find({}).sort("data_timestamp", -1).limit(number).to_list()
-        )
-        return {
-            datapoint["_id"]: DataPoint.discriminate(datapoint)
-            for datapoint in datapoint_list
-        }
+        with self.span("data.list", attributes={"datapoint.limit": number}):
+            datapoint_list = (
+                self.datapoints.find({})
+                .sort("data_timestamp", -1)
+                .limit(number)
+                .to_list()
+            )
+            return {
+                datapoint["_id"]: DataPoint.discriminate(datapoint)
+                for datapoint in datapoint_list
+            }
 
     @post("/datapoints/query")
     async def query_datapoints(self, selector: Any = Body()) -> Dict[str, Any]:  # noqa: B008
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
-        datapoint_list = self.datapoints.find(selector).to_list()
-        return {
-            datapoint["_id"]: DataPoint.discriminate(datapoint)
-            for datapoint in datapoint_list
-        }
+        with self.span("data.query"):
+            datapoint_list = self.datapoints.find(selector).to_list()
+            return {
+                datapoint["_id"]: DataPoint.discriminate(datapoint)
+                for datapoint in datapoint_list
+            }
 
 
 # Main entry point for running the server

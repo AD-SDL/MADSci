@@ -7,14 +7,15 @@ from typing import Any, Callable, Optional, Union
 
 import redis
 from fastapi import HTTPException
-from madsci.common.types.node_types import Node, NodeDefinition
+from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
-    WorkcellManagerDefinition,
+    WorkcellInfo,
     WorkcellManagerSettings,
     WorkcellState,
     WorkcellStatus,
 )
 from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
+from madsci.common.utils import new_ulid_str
 from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
 from pymongo import MongoClient
@@ -33,8 +34,9 @@ class WorkcellStateHandler:
 
     def __init__(
         self,
-        workcell_definition: Optional[WorkcellManagerDefinition] = None,
         workcell_settings: Optional[WorkcellManagerSettings] = None,
+        workcell_id: Optional[str] = None,
+        nodes: Optional[dict[str, str]] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Database] = None,
     ) -> None:
@@ -42,7 +44,10 @@ class WorkcellStateHandler:
         Initialize a StateManager for a given workcell.
         """
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
-        self._workcell_id = workcell_definition.manager_id
+        self._workcell_id = (
+            workcell_id or self.workcell_settings.manager_id or new_ulid_str()
+        )
+        self._nodes_config = nodes or self.workcell_settings.nodes or {}
         self._redis_host = self.workcell_settings.redis_host
         self._redis_port = self.workcell_settings.redis_port
         self._redis_password = self.workcell_settings.redis_password
@@ -55,17 +60,26 @@ class WorkcellStateHandler:
         self.archived_workflows = self.db_connection["archived_workflows"]
         self.workflow_definitions = self.db_connection["workflow_definitions"]
         warnings.filterwarnings("ignore", category=InefficientAccessWarning)
-        self.set_workcell_definition(workcell_definition)
 
     def initialize_workcell_state(self) -> None:
         """
-        Initializes the state of the workcell from the workcell definition.
+        Initializes the state of the workcell from settings.
         """
         self.set_workcell_status(WorkcellStatus(initializing=True))
         self._nodes.clear()
         self.state_change_marker = "0"
+
+        # Initialize the workcell info in Redis from settings
+        workcell_info = WorkcellInfo(
+            name=self.workcell_settings.manager_name or "WorkcellManager",
+            manager_id=self._workcell_id,
+            description=self.workcell_settings.manager_description,
+            nodes={k: AnyUrl(v) for k, v in self._nodes_config.items()},
+        )
+        self.set_workcell_info(workcell_info)
+
         # * Initialize Nodes
-        for key, value in self.get_workcell_definition().nodes.items():
+        for key, value in self._nodes_config.items():
             self.set_node(key, Node(node_url=AnyUrl(value)))
         status = self.get_workcell_status()
         status.initializing = False
@@ -88,14 +102,14 @@ class WorkcellStateHandler:
                 port=int(self._redis_port),
                 db=0,
                 decode_responses=True,
-                password=self._redis_password if self._redis_password else None,
+                password=self._redis_password or None,
             )
         return self._redis_connection
 
     @property
-    def _workcell_definition(self) -> RedisDict:
+    def _workcell_info(self) -> RedisDict:
         return RedisDict(
-            key=f"{self._workcell_prefix}:workcell_definition", redis=self._redis_client
+            key=f"{self._workcell_prefix}:workcell_info", redis=self._redis_client
         )
 
     @property
@@ -150,7 +164,7 @@ class WorkcellStateHandler:
         return WorkcellState(
             status=self.get_workcell_status(),
             workflow_queue=self.get_workflow_queue(),
-            workcell_definition=self.get_workcell_definition(),
+            workcell_info=self.get_workcell_info(),
             nodes=self.get_nodes(),
         )
 
@@ -184,36 +198,32 @@ class WorkcellStateHandler:
         return False
 
     # *Workcell Methods
-    def get_workcell_definition(self) -> WorkcellManagerDefinition:
+    def get_workcell_info(self) -> WorkcellInfo:
         """
-        Returns the current workcell definition as a WorkcellDefinition object
+        Returns the current workcell info as a WorkcellInfo object.
         """
-        return WorkcellManagerDefinition.model_validate(
-            self._workcell_definition.to_dict()
-        )
+        return WorkcellInfo.model_validate(self._workcell_info.to_dict())
 
-    def set_workcell_definition(self, workcell: WorkcellManagerDefinition) -> None:
+    def set_workcell_info(self, workcell: WorkcellInfo) -> None:
         """
-        Sets the active workcell
+        Sets the active workcell info.
         """
-        self.clear_workcell_definition()
-        self._workcell_definition.update(**workcell.model_dump(mode="json"))
+        self.clear_workcell_info()
+        self._workcell_info.update(**workcell.model_dump(mode="json"))
 
-    def clear_workcell_definition(self) -> None:
+    def clear_workcell_info(self) -> None:
         """
-        Empty the workcell definition
+        Empty the workcell info.
         """
-        self._workcell_definition.clear()
+        self._workcell_info.clear()
 
-    def update_workcell_definition(
+    def update_workcell_info(
         self, func: Callable[..., Any], *args: Any, **kwargs: Any
     ) -> None:
         """
-        Updates the workcell definition
+        Updates the workcell info.
         """
-        self.set_workcell_definition(
-            func(self.get_workcell_definition(), *args, **kwargs)
-        )
+        self.set_workcell_info(func(self.get_workcell_info(), *args, **kwargs))
 
     # Workflow Definition Method
     def save_workflow_definition(self, workflow_definition: WorkflowDefinition) -> None:
@@ -399,18 +409,12 @@ class WorkcellStateHandler:
                 continue
         return valid_nodes
 
-    def set_node(
-        self, node_name: str, node: Union[Node, NodeDefinition, dict[str, Any]]
-    ) -> None:
+    def set_node(self, node_name: str, node: Union[Node, dict[str, Any]]) -> None:
         """
         Sets a node by name
         """
         if isinstance(node, Node):
             node_dump = node.model_dump(mode="json")
-        elif isinstance(node, NodeDefinition):
-            node_dump = Node.model_validate(node, from_attributes=True).model_dump(
-                mode="json"
-            )
         else:
             node_dump = Node.model_validate(node).model_dump(mode="json")
         self._nodes[node_name] = node_dump

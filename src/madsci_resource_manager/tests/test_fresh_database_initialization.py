@@ -2,7 +2,6 @@
 
 import pytest
 from madsci.common.types.resource_types.definitions import (
-    ResourceManagerDefinition,
     ResourceManagerSettings,
 )
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
@@ -38,15 +37,13 @@ def test_resource_manager_with_external_interface_skips_validation(
     )
 
     # Create resource manager with external interface
-    settings = ResourceManagerSettings(db_url="dummy://url")  # Should be ignored
-    definition = ResourceManagerDefinition(
-        name="Test External Interface Resource Manager"
+    settings = ResourceManagerSettings(
+        db_url="dummy://url",
+        manager_name="Test External Interface Resource Manager",
     )
 
     # This should work even with fresh database because external interface skips validation
-    manager = ResourceManager(
-        settings=settings, definition=definition, resource_interface=external_interface
-    )
+    manager = ResourceManager(settings=settings, resource_interface=external_interface)
 
     # Verify it can serve requests
     app = manager.create_server()

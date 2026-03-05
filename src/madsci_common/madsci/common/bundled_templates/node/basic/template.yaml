@@ -1,0 +1,42 @@
+name: "Basic Node"
+version: "1.0.0"
+description: "A standalone REST node server for an existing interface"
+category: "node"
+tags: ["basic", "standalone", "minimal"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: node_name
+    type: string
+    description: "Node name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_node"
+
+  - name: node_description
+    type: string
+    description: "Human-readable description of the node"
+    required: true
+    default: "A MADSci REST node"
+
+  - name: port
+    type: integer
+    description: "Default port number for the node REST API"
+    required: true
+    default: 2000
+    min: 1024
+    max: 65535
+
+files:
+  - source: "{{node_name}}_rest_node.py.j2"
+    destination: "{{node_name}}_rest_node.py"
+
+hooks:
+  post_generate:
+    - command: "ruff format {{node_name}}_rest_node.py"
+      description: "Format generated code"
+      continue_on_error: true

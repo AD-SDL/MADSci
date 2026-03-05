@@ -16,13 +16,13 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.squid`
 - Docker: Use `ghcr.io/ad-sdl/madsci_dashboard` for complete setup with UI
-- **Example configuration**: See [example_lab/managers/example_lab.manager.yaml](../../example_lab/managers/example_lab.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_lab.manager.yaml](../../examples/example_lab/managers/example_lab.manager.yaml)
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start complete lab with dashboard
@@ -203,4 +203,4 @@ The Lab Manager provides REST endpoints for lab coordination:
 
 **Full API documentation**: Available at `http://localhost:8000/docs` when running
 
-**Examples**: See [example_lab/](../../example_lab/) for complete lab setup with dashboard integration.
+**Examples**: See [example_lab/](../../examples/example_lab/) for complete lab setup with dashboard integration.

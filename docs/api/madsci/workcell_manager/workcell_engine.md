@@ -8,7 +8,7 @@ Classes
 `Engine(state_handler: madsci.workcell_manager.state_handler.WorkcellStateHandler, data_client: madsci.client.data_client.DataClient)`
 :   Handles scheduling workflows and executing steps on the workcell.
     Pops incoming workflows off a redis-based queue and executes them.
-
+    
     Initialize the scheduler.
 
     ### Methods
@@ -18,7 +18,7 @@ Classes
 
     `handle_data_and_files(self, step: madsci.common.types.step_types.Step, wf: madsci.common.types.workflow_types.Workflow, response: madsci.common.types.action_types.ActionResult) ‑> madsci.common.types.action_types.ActionResult`
     :   Upload non-datapoint results as datapoints and consolidate all datapoint IDs.
-
+        
         This method ensures that all results (JSON data, files) are stored as datapoints
         in the data manager, following the principle of getting data into the data manager ASAP.
         The response datapoints field will contain only ULID strings for efficient storage.
@@ -29,8 +29,14 @@ Classes
     `monitor_action_progress(self, wf: madsci.common.types.workflow_types.Workflow, step: madsci.common.types.step_types.Step, node: madsci.common.types.node_types.Node, client: madsci.client.node.abstract_node_client.AbstractNodeClient, response: madsci.common.types.action_types.ActionResult, request: madsci.common.types.action_types.ActionRequest, action_id: str) ‑> None`
     :   Monitor the progress of the action, querying the action result until it is terminal
 
-    `reset_disconnects(self) ‑> None`
-    :   Reset all disconnected nodes to initializing state.
+    `reconnect_disconnected_nodes(self) ‑> None`
+    :   Periodically retry connecting to disconnected nodes.
+        
+        Runs as a separate daemon thread so it does not block the main engine loop.
+        Only disconnected nodes are retried — connected nodes are unaffected.
+        On success, update_node() naturally restores the node's status from the
+        node's own response. On failure, the node remains disconnected and is
+        retried on the next interval.
 
     `run_next_step(self, await_step_completion: bool = False) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Runs the next step in the workflow with the highest priority. Returns information about the workflow it ran, if any.
@@ -47,14 +53,14 @@ Classes
 
     `update_active_nodes(self, state_manager: madsci.workcell_manager.state_handler.WorkcellStateHandler, update_info: bool = False) ‑> None`
     :   Update all active nodes in the workcell.
-
+        
         Args:
             state_manager: The workcell state handler
             update_info: Whether to update node info in addition to status and state (default: False)
 
     `update_node(self, node_name: str, node: madsci.common.types.node_types.Node, state_manager: madsci.workcell_manager.state_handler.WorkcellStateHandler, update_info: bool = False) ‑> None`
     :   Update a single node's status, state, and optionally info.
-
+        
         Args:
             node_name: The name of the node to update
             node: The node object to update

@@ -11,7 +11,7 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 - **Analysis Integration**: Support for data analysis pipelines and results storage
 
 ## Server Architecture
-- **DataManager class**: Inherits from `AbstractManagerBase[DataManagerSettings, DataManagerDefinition]`
+- **DataManager class**: Inherits from `AbstractManagerBase[DataManagerSettings]`
 - **MongoDB Integration**: Uses `pymongo` for datapoint metadata storage in the `madsci_data` database
 - **MinIO/S3 Integration**: Optional object storage using `minio` client with fallback to local filesystem
 - **FastAPI Server**: Provides REST endpoints with automatic OpenAPI documentation
@@ -55,7 +55,7 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 - `DATA_SERVER_URL`: Server URL (default: `http://localhost:8004`)
 - `DATA_DB_URL`: MongoDB connection string (default: `mongodb://localhost:27017`)
 - `DATA_FILE_STORAGE_PATH`: Local file storage path (default: `~/.madsci/datapoints`)
-- `DATA_MANAGER_DEFINITION`: Path to manager definition YAML file
+
 
 ### ObjectStorageSettings (Environment prefix: `OBJECT_STORAGE_`)
 - `OBJECT_STORAGE_ENDPOINT`: MinIO/S3 endpoint

@@ -1,7 +1,0 @@
-node_name: robotarm_1
-node_id: 01JYFEHVHT6CZAFYCBK47WK140
-node_description: An example robot arm
-node_type: device
-module_name: robotarm
-module_version: 0.0.1
-capabilities: null

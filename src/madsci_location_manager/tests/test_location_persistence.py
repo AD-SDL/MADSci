@@ -1,16 +1,18 @@
-"""Tests for location persistence to YAML definition files."""
+"""Tests for location persistence via Redis state and settings initialization.
 
-from pathlib import Path
+Locations are configured via LocationManagerSettings.locations and persisted
+in Redis at runtime. This module tests:
+1. Locations from settings are properly loaded into Redis on startup.
+2. Locations added/modified/deleted via the API persist in Redis.
+3. The settings export endpoint reflects the initial location configuration.
+"""
 
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
-    LocationManagerDefinition,
     LocationManagerSettings,
-    LocationTransferCapabilities,
-    TransferStepTemplate,
 )
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
@@ -29,310 +31,196 @@ redis_server = create_redis_fixture()
 
 
 @pytest.fixture
-def definition_file(tmp_path):
-    """Create a test definition file."""
-    def_path = tmp_path / "location.manager.yaml"
-
-    # Create initial definition with some locations
-    initial_definition = LocationManagerDefinition(
-        name="Test Location Manager",
-        description="A test location manager instance",
-        locations=[
-            LocationDefinition(
-                location_name="Initial Location 1",
-                location_id=new_ulid_str(),
-                description="First initial location",
-            ),
-            LocationDefinition(
-                location_name="Initial Location 2",
-                location_id=new_ulid_str(),
-                description="Second initial location",
-            ),
-        ],
-    )
-
-    # Write to file
-    initial_definition.to_yaml(def_path)
-    return def_path
+def location_defs():
+    """Create test location definitions for settings."""
+    return [
+        LocationDefinition(
+            location_name="Station Alpha",
+            location_id=new_ulid_str(),
+            description="First station",
+        ),
+        LocationDefinition(
+            location_name="Station Beta",
+            location_id=new_ulid_str(),
+            description="Second station",
+        ),
+    ]
 
 
 @pytest.fixture
-def app(redis_server: Redis, definition_file: Path):
-    """Create a test app with test settings, Redis server, and definition file."""
+def app_with_locations(redis_server: Redis, location_defs):
+    """Create a test app with pre-configured locations in settings."""
     settings = LocationManagerSettings(
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
-        manager_definition=definition_file,
+        locations=location_defs,
     )
 
-    # Load definition from file
-    definition = LocationManagerDefinition.from_yaml(definition_file)
-
-    # Create the app with the Redis connection passed to the LocationManager
-    manager = LocationManager(settings=settings, definition=definition)
-    # Override the state handler's Redis connection to use the test Redis instance
+    manager = LocationManager(settings=settings)
     manager.state_handler._redis_connection = redis_server
-
     return manager.create_server(version="0.1.0")
 
 
 @pytest.fixture
-def client(app):
-    """Create a test client."""
-    return TestClient(app)
+def client_with_locations(app_with_locations):
+    """Create a test client for the app with pre-configured locations."""
+    client = TestClient(app_with_locations)
+    yield client
+    client.close()
 
 
 @pytest.fixture
-def sample_location():
-    """Create a sample location for testing."""
-    return Location(
-        location_id=new_ulid_str(),
-        location_name="Test Location",
-        description="A test location for persistence testing",
-    )
-
-
-def test_add_location_persists_to_yaml(client, sample_location, definition_file):
-    """Test that adding a location persists it to the YAML definition file.
-
-    This test verifies that when a location is added via the API,
-    it is written back to the definition file so it persists across restarts.
-    """
-    # Add a new location via API
-    response = client.post("/location", json=sample_location.model_dump())
-    assert response.status_code == 200
-
-    # Reload the definition from the file
-    reloaded_definition = LocationManagerDefinition.from_yaml(definition_file)
-
-    # Check that the new location is in the definition
-    location_ids = [loc.location_id for loc in reloaded_definition.locations]
-    assert sample_location.location_id in location_ids, (
-        f"Location {sample_location.location_id} not found in reloaded definition. "
-        f"Found location IDs: {location_ids}"
-    )
-
-    # Verify the location details match
-    reloaded_location = next(
-        loc
-        for loc in reloaded_definition.locations
-        if loc.location_id == sample_location.location_id
-    )
-    assert reloaded_location.location_name == sample_location.location_name
-    assert reloaded_location.description == sample_location.description
-
-
-def test_update_location_persists_to_yaml(client, sample_location, definition_file):
-    """Test that updating a location persists changes to the YAML definition file.
-
-    This test verifies that when a location is updated via the API,
-    the changes are written back to the definition file.
-    """
-    # First add the location
-    client.post("/location", json=sample_location.model_dump())
-
-    # Now update it with a new description
-    sample_location.description = "Updated description for persistence test"
-    response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node",
-        json="test_representation_value",
-    )
-    assert response.status_code == 200
-
-    # Reload the definition from the file
-    reloaded_definition = LocationManagerDefinition.from_yaml(definition_file)
-
-    # Check that the location still exists
-    location_ids = [loc.location_id for loc in reloaded_definition.locations]
-    assert sample_location.location_id in location_ids
-
-    # Verify the representation was persisted
-    reloaded_location = next(
-        loc
-        for loc in reloaded_definition.locations
-        if loc.location_id == sample_location.location_id
-    )
-    assert reloaded_location.representations is not None
-    assert "test_node" in reloaded_location.representations
-    assert reloaded_location.representations["test_node"] == "test_representation_value"
-
-
-def test_delete_location_persists_to_yaml(client, sample_location, definition_file):
-    """Test that deleting a location removes it from the YAML definition file.
-
-    This test verifies that when a location is deleted via the API,
-    it is removed from the definition file.
-    """
-    # First add the location
-    client.post("/location", json=sample_location.model_dump())
-
-    # Verify it was added
-    definition_after_add = LocationManagerDefinition.from_yaml(definition_file)
-    location_ids_after_add = [loc.location_id for loc in definition_after_add.locations]
-    assert sample_location.location_id in location_ids_after_add
-
-    # Now delete the location
-    response = client.delete(f"/location/{sample_location.location_id}")
-    assert response.status_code == 200
-
-    # Reload the definition from the file
-    reloaded_definition = LocationManagerDefinition.from_yaml(definition_file)
-
-    # Check that the location is no longer in the definition
-    location_ids = [loc.location_id for loc in reloaded_definition.locations]
-    assert sample_location.location_id not in location_ids, (
-        f"Location {sample_location.location_id} should have been removed from definition. "
-        f"Found location IDs: {location_ids}"
-    )
-
-
-def test_initial_locations_preserved_after_add(
-    client, sample_location, definition_file
-):
-    """Test that initial locations from the definition file are preserved when adding new locations.
-
-    This ensures that adding new locations doesn't overwrite existing locations
-    that were defined in the original YAML file.
-    """
-    # Get the initial locations from the definition
-    initial_definition = LocationManagerDefinition.from_yaml(definition_file)
-    initial_location_ids = [loc.location_id for loc in initial_definition.locations]
-
-    # Add a new location
-    client.post("/location", json=sample_location.model_dump())
-
-    # Reload the definition from the file
-    reloaded_definition = LocationManagerDefinition.from_yaml(definition_file)
-    reloaded_location_ids = [loc.location_id for loc in reloaded_definition.locations]
-
-    # Verify all initial locations are still present
-    for initial_id in initial_location_ids:
-        assert initial_id in reloaded_location_ids, (
-            f"Initial location {initial_id} was lost after adding new location"
-        )
-
-    # Verify the new location is also present
-    assert sample_location.location_id in reloaded_location_ids
-
-
-def test_transfer_capabilities_preserved_during_sync(tmp_path):
-    """Test that transfer_capabilities in the definition are preserved when syncing locations.
-
-    This ensures that non-location parts of the definition (like transfer_capabilities)
-    are not overwritten when updating the location list.
-    """
-    # Create a definition with transfer capabilities
-    def_path = tmp_path / "location_with_transfers.yaml"
-
-    transfer_template = TransferStepTemplate(
-        node_name="test_node",
-        action="transfer",
-        source_argument_name="source",
-        target_argument_name="target",
-        cost_weight=1.5,
-    )
-
-    initial_definition = LocationManagerDefinition(
-        name="Test Location Manager with Transfers",
-        description="A test with transfer capabilities",
-        locations=[],
-        transfer_capabilities=LocationTransferCapabilities(
-            transfer_templates=[transfer_template]
-        ),
-    )
-
-    # Write to file
-    initial_definition.to_yaml(def_path)
-
-    # Since we can't easily create a new Redis instance here,
-    # we'll test this more thoroughly in integration, but at least
-    # verify the structure is correct
-    definition = LocationManagerDefinition.from_yaml(def_path)
-    assert definition.transfer_capabilities is not None
-    assert len(definition.transfer_capabilities.transfer_templates) == 1
-    assert (
-        definition.transfer_capabilities.transfer_templates[0].node_name == "test_node"
-    )
-
-
-def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, tmp_path: Path):
-    """Test that locations existing only in Redis are immediately synced to YAML on startup.
-
-    This test verifies that when the server starts up with locations in Redis
-    that are not in the definition file, those Redis-only locations are immediately
-    written to the YAML file during initialization.
-    """
-    # Create a definition file with one initial location
-    def_path = tmp_path / "location.manager.yaml"
-    initial_location_id = new_ulid_str()
-
-    initial_definition = LocationManagerDefinition(
-        name="Test Location Manager",
-        description="A test location manager instance",
-        locations=[
-            LocationDefinition(
-                location_name="Initial Location",
-                location_id=initial_location_id,
-                description="Initial location from definition file",
-            ),
-        ],
-    )
-    initial_definition.to_yaml(def_path)
-
-    # Create a location that exists only in Redis (simulating a previously API-added location)
-    redis_only_location = Location(
-        location_id=new_ulid_str(),
-        location_name="Redis Only Location",
-        description="This location was added via API and exists only in Redis",
-    )
-
-    # Manually populate Redis with the Redis-only location using a temporary state handler
+def empty_app(redis_server: Redis):
+    """Create a test app with no pre-configured locations."""
     settings = LocationManagerSettings(
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
-        manager_definition=def_path,
     )
 
-    # Create a temporary manager to populate Redis
-    temp_manager = LocationManager(settings=settings, definition=initial_definition)
-    temp_manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings)
+    manager.state_handler._redis_connection = redis_server
+    return manager.create_server(version="0.1.0")
 
-    # Add the Redis-only location directly to Redis (bypassing the API)
-    temp_manager.state_handler.set_location(
-        redis_only_location.location_id, redis_only_location
+
+@pytest.fixture
+def empty_client(empty_app):
+    """Create a test client for the app with no locations."""
+    client = TestClient(empty_app)
+    yield client
+    client.close()
+
+
+# --- Settings-to-Redis initialization tests ---
+
+
+def test_settings_locations_loaded_into_redis(client_with_locations, location_defs):
+    """Locations from settings should be present in Redis after startup."""
+    response = client_with_locations.get("/locations")
+    assert response.status_code == 200
+
+    locations = [Location.model_validate(loc) for loc in response.json()]
+    location_ids = {loc.location_id for loc in locations}
+    expected_ids = {loc_def.location_id for loc_def in location_defs}
+    assert expected_ids.issubset(location_ids)
+
+
+def test_settings_location_names_match(client_with_locations, location_defs):
+    """Location names from settings should match what's stored in Redis."""
+    for loc_def in location_defs:
+        response = client_with_locations.get(f"/location/{loc_def.location_id}")
+        assert response.status_code == 200
+        location = Location.model_validate(response.json())
+        assert location.location_name == loc_def.location_name
+        assert location.description == loc_def.description
+
+
+def test_empty_settings_yields_no_locations(empty_client):
+    """When no locations are configured in settings, Redis should be empty."""
+    response = empty_client.get("/locations")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+# --- Runtime persistence tests ---
+
+
+def test_added_location_persists_in_redis(empty_client):
+    """A location added via the API should be retrievable from Redis."""
+    location = Location(
+        location_id=new_ulid_str(),
+        location_name="Runtime Location",
+        description="Added at runtime",
     )
 
-    # Verify Redis has both locations before we start the actual test
-    redis_locations = temp_manager.state_handler.get_locations()
-    assert len(redis_locations) == 2, (
-        "Redis should have both locations before server startup"
+    response = empty_client.post("/location", json=location.model_dump())
+    assert response.status_code == 200
+
+    # Fetch it back
+    response = empty_client.get(f"/location/{location.location_id}")
+    assert response.status_code == 200
+    fetched = Location.model_validate(response.json())
+    assert fetched.location_id == location.location_id
+    assert fetched.location_name == "Runtime Location"
+
+
+def test_deleted_location_removed_from_redis(empty_client):
+    """A deleted location should no longer be retrievable."""
+    location = Location(
+        location_id=new_ulid_str(),
+        location_name="To Be Deleted",
     )
+    empty_client.post("/location", json=location.model_dump())
 
-    # Now create a fresh manager instance (simulating server restart)
-    # This should trigger the startup sync
-    fresh_definition = LocationManagerDefinition.from_yaml(def_path)
-    fresh_manager = LocationManager(settings=settings, definition=fresh_definition)
-    fresh_manager.state_handler._redis_connection = redis_server
+    # Delete it
+    response = empty_client.delete(f"/location/{location.location_id}")
+    assert response.status_code == 200
 
-    # Create the server to trigger initialization
-    fresh_manager.create_server(version="0.1.0")
+    # Should be gone
+    response = empty_client.get(f"/location/{location.location_id}")
+    assert response.status_code == 404
 
-    # Verify the definition file now contains BOTH locations
-    synced_definition = LocationManagerDefinition.from_yaml(def_path)
-    synced_location_ids = [loc.location_id for loc in synced_definition.locations]
 
-    assert initial_location_id in synced_location_ids, (
-        "Initial location should still be in the definition"
+def test_updated_representation_persists_in_redis(empty_client):
+    """Representations set via the API should persist in Redis."""
+    location = Location(
+        location_id=new_ulid_str(),
+        location_name="Rep Test Location",
     )
-    assert redis_only_location.location_id in synced_location_ids, (
-        "Redis-only location should now be synced to the definition file"
-    )
+    empty_client.post("/location", json=location.model_dump())
 
-    # Verify the Redis-only location details were preserved
-    synced_redis_location = next(
-        loc
-        for loc in synced_definition.locations
-        if loc.location_id == redis_only_location.location_id
+    representation = {"position": [1, 2, 3], "config": "test"}
+    response = empty_client.post(
+        f"/location/{location.location_id}/set_representation/test_robot",
+        json=representation,
     )
-    assert synced_redis_location.location_name == redis_only_location.location_name
-    assert synced_redis_location.description == redis_only_location.description
+    assert response.status_code == 200
+
+    # Fetch and verify
+    response = empty_client.get(f"/location/{location.location_id}")
+    assert response.status_code == 200
+    fetched = Location.model_validate(response.json())
+    assert fetched.representations is not None
+    assert fetched.representations["test_robot"] == representation
+
+
+def test_initial_locations_preserved_after_runtime_add(
+    client_with_locations, location_defs
+):
+    """Adding a new location at runtime should not affect settings-defined locations."""
+    new_location = Location(
+        location_id=new_ulid_str(),
+        location_name="New Runtime Location",
+    )
+    response = client_with_locations.post("/location", json=new_location.model_dump())
+    assert response.status_code == 200
+
+    # Verify all original locations still present
+    response = client_with_locations.get("/locations")
+    assert response.status_code == 200
+    locations = [Location.model_validate(loc) for loc in response.json()]
+    location_ids = {loc.location_id for loc in locations}
+
+    for loc_def in location_defs:
+        assert loc_def.location_id in location_ids
+
+
+# --- Settings export tests ---
+
+
+def test_settings_export_includes_initial_locations(
+    client_with_locations, location_defs
+):
+    """The settings export endpoint should reflect the configured locations."""
+    response = client_with_locations.get("/settings")
+    assert response.status_code == 200
+
+    data = response.json()
+    # Settings export nests fields under "settings"
+    settings_data = data.get("settings", data)
+    assert "locations" in settings_data
+    exported_locations = settings_data["locations"]
+    assert len(exported_locations) == len(location_defs)
+
+    exported_ids = {loc["location_id"] for loc in exported_locations}
+    expected_ids = {loc_def.location_id for loc_def in location_defs}
+    assert exported_ids == expected_ids

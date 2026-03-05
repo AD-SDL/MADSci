@@ -1,6 +1,7 @@
 """Test cases for migration concurrency control and race condition prevention."""
 
 import contextlib
+import shutil
 import tempfile
 import threading
 import time
@@ -30,6 +31,8 @@ class TestMigrationLocking:
         for lock_file in self.temp_dir.glob("*.lock"):
             with contextlib.suppress(FileNotFoundError):
                 lock_file.unlink()
+        # Clean up the temp directory itself to prevent file descriptor leaks
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_single_migration_acquires_lock(self):
         """Test that a single migration successfully acquires lock."""

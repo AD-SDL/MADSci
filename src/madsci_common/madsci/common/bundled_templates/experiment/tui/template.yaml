@@ -1,0 +1,40 @@
+name: "TUI Experiment"
+version: "1.0.0"
+description: "An interactive terminal UI experiment using ExperimentTUI modality"
+category: "experiment"
+tags: ["tui", "interactive", "terminal"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.7.0"
+schema_version: "1.0"
+
+parameters:
+  - name: experiment_name
+    type: string
+    description: "Experiment name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_experiment"
+
+  - name: experiment_description
+    type: string
+    description: "Human-readable description of the experiment"
+    required: true
+    default: "A MADSci experiment"
+
+  - name: author_name
+    type: string
+    description: "Author name"
+    required: false
+    default: ""
+
+files:
+  - source: "{{experiment_name}}_tui.py.j2"
+    destination: "{{experiment_name}}_tui.py"
+
+hooks:
+  post_generate:
+    - command: "ruff format {{experiment_name}}_tui.py"
+      description: "Format generated code"
+      continue_on_error: true

@@ -23,6 +23,7 @@ MADSci is a modular, autonomous, and scalable framework for scientific discovery
 - **Event Management**, enabling distributed logging and event handling across every part of the autonomous lab.
 - **Data Management**, collecting and storing data created by instruments or analysis as part of an experiment.
 - **Location Management**, coordinating multiple different representations of locations in the laboratory and their interactions with resources and nodes.
+- **Observability**, with built-in OpenTelemetry integration for distributed tracing, metrics, and log correlation across the entire lab infrastructure.
 
 <img src="./assets/drawio/madsci_architecture.drawio.svg" alt="Diagram of a MADSci laboratory's Architecture" width=1000/>
 
@@ -46,6 +47,14 @@ MADSci is made up of a number of different modular components, each of which can
 - [Resource Manager](./src/madsci_resource_manager/README.md): For tracking labware, assets, samples, and consumables in an automated or autonomous lab.
 - [Data Manager](./src/madsci_data_manager/README.md): handles capturing, storing, and querying data, in either JSON value or file form, created during the course of an experiment (either collected by instruments, or synthesized during anaylsis)
 - [Squid Lab Manager](./src/madsci_squid/README.md): a central lab configuration manager and dashboard provider for MADSci-powered labs.
+
+### Guides
+
+- [CLI Reference](./docs/guides/cli_reference.md): Complete reference for all 17 CLI commands, options, and aliases.
+- [Template Catalog](./docs/guides/template_catalog.md): All 26 built-in templates with parameters and examples.
+- [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
+- [Observability](./docs/guides/observability.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
+- [Daily Operations](./docs/guides/operator/01-daily-operations.md): Day-to-day lab operations, startup, shutdown, and health checks.
 
 ## Installation
 
@@ -83,15 +92,24 @@ For users new to docker, we recommend checking out our [Docker Guide](https://gi
 
 ### Quick Start
 
-Try MADSci with our complete example lab:
+```bash
+pip install madsci-client
+madsci init my_lab          # Interactive lab setup wizard
+cd my_lab
+madsci start                # Start with Docker
+# or
+madsci start --mode=local   # Start without Docker (pure Python)
+```
+
+Access the dashboard at `http://localhost:8000` to monitor your lab.
+
+To try the complete example lab instead:
 
 ```bash
 git clone https://github.com/AD-SDL/MADSci.git
 cd MADSci
 docker compose up  # Starts all services with example configuration
 ```
-
-Access the dashboard at `http://localhost:8000` to monitor your virtual lab.
 
 ## Configuration
 
@@ -101,8 +119,9 @@ MADSci uses environment variables for configuration with hierarchical precedence
 - **Database connections**: MongoDB/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
+- **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
 
-See [Configuration.md](./Configuration.md) for comprehensive options and [example_lab/](./example_lab/) for working configurations.
+See [Configuration.md](docs/Configuration.md) for comprehensive options, [example_lab/](./examples/example_lab/) for working configurations, and [OBSERVABILITY.md](./docs/guides/observability.md) for OpenTelemetry setup.
 
 ## Roadmap
 
@@ -114,24 +133,80 @@ We're working on bringing the following additional components to MADSci:
 
 ### Learning Resources
 
-1. **[Example Lab](./example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
-2. **[Example Notebooks](./example_lab/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
-3. **Configuration examples**: See [example_lab/managers/](./example_lab/managers/) for manager configurations
+1. **[Example Lab](./examples/example_lab/)**: Complete working lab with virtual instruments (robot arm, liquid handler, plate reader)
+2. **[Example Notebooks](./examples/notebooks)**: Jupyter notebooks covering core concepts and implementation patterns, included in the example lab
+3. **Configuration examples**: See [example_lab/settings.yaml](./examples/example_lab/settings.yaml) and [example_lab/compose.yaml](./examples/example_lab/compose.yaml) for lab configuration
+
+### CLI Overview
+
+MADSci provides a unified CLI (`madsci`) with 17 commands:
+
+| Command | Alias | Description |
+|---------|-------|-------------|
+| `init` | | Initialize a new lab interactively |
+| `new` | `n` | Create components from 26 built-in templates |
+| `start` | | Start lab services (Docker or local mode) |
+| `stop` | | Stop lab services |
+| `status` | `s` | Check service health |
+| `doctor` | `doc` | Run diagnostic checks |
+| `logs` | `l` | View and filter event logs |
+| `run` | | Run workflows or experiments |
+| `validate` | `val` | Validate configuration files |
+| `config` | `cfg` | Export or create configuration files |
+| `backup` | | Create database backups |
+| `registry` | | Manage service registry |
+| `migrate` | | Run database migrations |
+| `tui` | `ui` | Launch interactive terminal interface |
+| `completion` | | Generate shell completions |
+| `commands` | `cmd` | List all commands |
+| `version` | | Show version information |
+
+Run `madsci <command> --help` for details on any command. See [CLI Reference](./docs/guides/cli_reference.md) for full documentation.
+
+### Templates
+
+Generate scaffolding for any MADSci component:
+
+```bash
+madsci new list                       # Browse all 26 templates
+madsci new module                     # Interactive module creation
+madsci new experiment --modality tui  # TUI experiment
+madsci new lab --template standard    # Full lab with Docker Compose
+```
+
+See [Template Catalog](./docs/guides/template_catalog.md) for the complete list.
+
+### TUI (Terminal User Interface)
+
+```bash
+madsci tui    # Launch interactive dashboard
+```
+
+Provides real-time service status, log browsing, node management, and workflow monitoring with auto-refresh.
+
+### Local Mode
+
+Run all managers without Docker using in-memory backends:
+
+```bash
+madsci start --mode=local
+```
+
+Useful for development, testing, and environments without Docker. Data is ephemeral.
+
+### Configuration Management
+
+```bash
+madsci config export event     # Export Event Manager settings to YAML
+madsci config export --all     # Export all manager settings
+madsci config create manager event  # Create a new manager config file
+```
 
 ### Common Usage Patterns
 
-**Starting a basic lab:**
-```bash
-# Use our example lab as a starting point
-cp -r example_lab my_lab
-cd my_lab
-# Modify configurations in managers/ directory
-docker compose up
-```
-
 **Creating custom nodes:**
 ```python
-# See example_lab/example_modules/ for reference implementations
+# See examples/example_lab/example_modules/ for reference implementations
 from madsci.node_module import AbstractNodeModule
 
 class MyInstrument(AbstractNodeModule):
@@ -142,7 +217,7 @@ class MyInstrument(AbstractNodeModule):
 
 **Submitting workflows:**
 ```python
-# See example_lab/workflows/ for workflow definitions
+# See examples/example_lab/workflows/ for workflow definitions
 from madsci.client.workcell_client import WorkcellClient
 
 client = WorkcellClient("http://localhost:8005")

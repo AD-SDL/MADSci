@@ -1,0 +1,90 @@
+# Tutorial 02: First Node Module
+# This tutorial test validates the module creation workflow
+
+name: "Tutorial 02 - First Node Module"
+description: "Test the module creation workflow from Tutorial 2"
+version: "1.0"
+tags:
+  - tutorial
+  - no-docker
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 600.0
+
+steps:
+  - name: "Create module with madsci new"
+    command: "madsci new module --name test_sensor --no-interactive ./test_tutorial_02"
+    timeout: 60.0
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: directory_exists
+        path: "./test_tutorial_02/test_sensor_module"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/src/test_sensor_rest_node.py"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/src/test_sensor_interface.py"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/src/test_sensor_fake_interface.py"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/src/test_sensor_types.py"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/tests/test_test_sensor_interface.py"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/pyproject.toml"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/Dockerfile"
+      - type: file_exists
+        path: "./test_tutorial_02/test_sensor_module/README.md"
+
+  - name: "Validate Python syntax of generated files"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_rest_node.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Validate interface file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_interface.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Validate fake interface file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_fake_interface.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Validate types file syntax"
+    command: "python -m py_compile ./test_tutorial_02/test_sensor_module/src/test_sensor_types.py"
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Run ruff check on generated code"
+    command: "ruff check ./test_tutorial_02/test_sensor_module/src/"
+    continue_on_error: true
+    validations:
+      - type: exit_code
+        expected: 0
+
+  - name: "Run generated tests"
+    command: "pytest ./test_tutorial_02/test_sensor_module/tests/ -v"
+    timeout: 60.0
+    env:
+      PYTHONPATH: "./test_tutorial_02/test_sensor_module/src"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "passed"
+
+
+cleanup:
+  commands:
+    - "rm -rf ./test_tutorial_02"
+  stop_background: true

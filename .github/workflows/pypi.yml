@@ -14,15 +14,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         name: Checkout code
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
       - name: Setup PDM
         uses: pdm-project/setup-pdm@v3
         with:
-          python-version: 3.9
-      - run: pdm install
+          python-version: "3.10"
+      - name: Install dependencies
+        env:
+          PDM_USE_UV: "True"
+        run: pdm install
       - run: pdm publish -p src/madsci_common
       - run: pdm publish -p src/madsci_client
       - run: pdm publish -p src/madsci_node_module
