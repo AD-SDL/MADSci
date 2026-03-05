@@ -1555,7 +1555,7 @@ files = [
 
 [[package]]
 name = "madsci-client"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_client"
 summary = ""
@@ -1572,7 +1572,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-common"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_common"
 summary = ""
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-data-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_data_manager"
 summary = ""
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-event-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_event_manager"
 summary = ""
@@ -1631,7 +1631,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-application"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_experiment_application"
 summary = ""
@@ -1646,7 +1646,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-experiment-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_experiment_manager"
 summary = ""
@@ -1657,7 +1657,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-location-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_location_manager"
 summary = ""
@@ -1669,7 +1669,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-node-module"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_node_module"
 summary = ""
@@ -1681,7 +1681,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-resource-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_resource_manager"
 summary = ""
@@ -1694,7 +1694,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-squid"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_squid"
 summary = ""
@@ -1706,7 +1706,7 @@ dependencies = [
 
 [[package]]
 name = "madsci-workcell-manager"
-version = "0.7.0rc1"
+version = "0.7.0"
 editable = true
 path = "./src/madsci_workcell_manager"
 summary = ""
