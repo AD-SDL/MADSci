@@ -69,7 +69,7 @@
 | src/madsci\_common/madsci/common/local\_backends/\_\_init\_\_.py                                   |        0 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/local\_backends/inmemory\_collection.py                           |      213 |       27 |     87% |104, 259, 306, 316, 331-332, 358, 367, 369-371, 374-378, 383-393, 406, 408 |
 | src/madsci\_common/madsci/common/local\_backends/inmemory\_redis.py                                |      125 |        4 |     97% |   255-258 |
-| src/madsci\_common/madsci/common/manager\_base.py                                                  |      197 |       48 |     76% |93-95, 171, 186-190, 249-251, 318-321, 351, 368-369, 382-384, 390-391, 471, 475-481, 490-491, 611-652, 676-677 |
+| src/madsci\_common/madsci/common/manager\_base.py                                                  |      204 |       51 |     75% |94-96, 172, 187-191, 250-252, 319-322, 352, 369-370, 383-385, 391-392, 472, 476-482, 491-492, 603-605, 625-666, 690-691 |
 | src/madsci\_common/madsci/common/middleware.py                                                     |      117 |       17 |     85% |19-20, 49, 59-65, 78-88, 214, 247 |
 | src/madsci\_common/madsci/common/migration/\_\_init\_\_.py                                         |        3 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/migration/converter.py                                            |      128 |       10 |     92% |182-185, 218, 399-400, 413-415 |
@@ -78,6 +78,7 @@
 | src/madsci\_common/madsci/common/mongodb\_version\_checker.py                                      |      145 |       31 |     79% |64, 89, 98, 103-110, 139, 160-171, 276-283, 292, 336-343, 369-370, 384-391, 395, 399-401 |
 | src/madsci\_common/madsci/common/nodes.py                                                          |        7 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/object\_storage\_helpers.py                                       |      107 |       35 |     67% |43-50, 60-66, 84-90, 128, 197-202, 209-214, 224, 235-241, 292-297, 310-316, 332-353 |
+| src/madsci\_common/madsci/common/openapi\_utils.py                                                 |       43 |       39 |      9% |23-42, 47-68, 85-95 |
 | src/madsci\_common/madsci/common/otel/\_\_init\_\_.py                                              |        6 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/otel/bootstrap.py                                                 |      170 |       63 |     63% |42-50, 104, 116-117, 120-125, 194-195, 198-217, 233-242, 245-276, 304-309, 312-333, 348-364, 377 |
 | src/madsci\_common/madsci/common/otel/fastapi\_instrumentation.py                                  |       14 |        4 |     71% | 23, 32-34 |
@@ -115,7 +116,7 @@
 | src/madsci\_common/madsci/common/types/manager\_types.py                                           |       54 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/migration\_types.py                                         |       59 |        1 |     98% |       143 |
 | src/madsci\_common/madsci/common/types/mongodb\_migration\_types.py                                |      214 |      116 |     46% |85, 106, 130-131, 151, 160, 166, 192, 198, 201-204, 207, 219-228, 249-263, 267-272, 294-298, 304-320, 324-334, 339-349, 353-360, 364, 368, 372, 386-442, 459-491 |
-| src/madsci\_common/madsci/common/types/node\_types.py                                              |      180 |        6 |     97% |428, 507, 521, 530, 542, 572 |
+| src/madsci\_common/madsci/common/types/node\_types.py                                              |      180 |        8 |     96% |428, 507, 515, 521, 530, 538, 542, 572 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                         |       37 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/registry\_types.py                                          |       41 |        1 |     98% |        86 |
 | src/madsci\_common/madsci/common/types/resource\_types/\_\_init\_\_.py                             |      296 |       46 |     84% |119, 163, 240, 250, 271, 276, 280, 284, 325, 338, 344, 366, 370, 404, 426, 430, 478-482, 512, 555, 560-561, 572-588, 591-600, 607-609, 640, 655, 684-687, 724-727, 764, 769, 779, 783 |
@@ -175,7 +176,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                         |      271 |       77 |     72% |124-181, 208-209, 255, 267-271, 295-296, 307, 317-320, 328-339, 371-375, 393-398, 415-419, 435, 437, 443, 472-473, 477-486, 511-512, 549-550, 565, 576, 613-623, 630-631 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                          |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                          |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                          | **22149** | **7124** | **68%** |           |
+| **TOTAL**                                                                                          | **22199** | **7168** | **68%** |           |
 
 
 ## Setup coverage badge
