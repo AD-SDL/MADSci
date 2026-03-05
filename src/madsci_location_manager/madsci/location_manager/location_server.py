@@ -99,7 +99,7 @@ class LocationManager(
                 allow_transfers=location_def.allow_transfers,
             )
 
-            self.state_handler.add_location(location.location_id, location)
+            self.state_handler.add_location(location)
 
     def _initialize_location_resource(
         self, location_def: LocationDefinition
@@ -284,7 +284,7 @@ class LocationManager(
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
         with ownership_context():
-            result = self.state_handler.add_location(location.location_id, location)
+            result = self.state_handler.add_location(location)
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
             # Sync locations to definition file

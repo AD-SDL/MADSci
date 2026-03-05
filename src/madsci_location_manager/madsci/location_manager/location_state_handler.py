@@ -125,9 +125,9 @@ class LocationStateHandler:
             location_obj = Location.model_validate(location)
             location_dump = location_obj.model_dump(mode="json")
             location = location_obj
-        if location["location_name"] in self._locations:
+        if location_dump["location_name"] in self._locations:
             return False
-        self._locations[location["location_name"]] = location_dump
+        self._locations[location_dump["location_name"]] = location_dump
         self.mark_state_changed()
         return True
 
@@ -154,15 +154,15 @@ class LocationStateHandler:
             location_obj = Location.model_validate(location)
             location_dump = location_obj.model_dump(mode="json")
             location = location_obj
-        if location["location_name"] not in self._locations:
+        if location_dump["location_name"] not in self._locations:
             raise KeyError(f"Location {location['location_name']} does not exist")
         if (
-            self.get_location(location["location_name"]).location_id
+            self.get_location(location_dump["location_name"]).location_id
             != location.location_id
         ):
             raise ValueError(
-                f"Location name {location['location_name']} is already in use by a different location. make sure to use the right id"
+                f"Location name {location_dump['location_name']} is already in use by a different location. make sure to use the right id"
             )
-        self._locations[location["location_name"]] = location_dump
+        self._locations[location_dump["location_name"]] = location_dump
         self.mark_state_changed()
         return Location
