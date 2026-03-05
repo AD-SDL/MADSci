@@ -16,11 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.git/` now acts as a walk-up boundary for settings file discovery
 
 #### Settings Directory with Walk-Up Discovery
-- `_settings_dir` keyword argument on all `MadsciBaseSettings` subclasses for walk-up config file resolution
-- `MADSCI_SETTINGS_DIR` environment variable for activating walk-up discovery
+- `_settings_dir` keyword argument on all `MadsciBaseSettings` subclasses for overriding the walk-up starting directory
+- `MADSCI_SETTINGS_DIR` environment variable for overriding the walk-up starting directory
 - `--settings-dir` CLI option on `madsci start`, `madsci start manager`, `madsci start node`, and `madsci config export`
 - Walk-up resolves each filename independently: shared `settings.yaml` in a parent dir coexists with `node.settings.yaml` in a child dir
-- Backward compatible: without `_settings_dir` or `MADSCI_SETTINGS_DIR`, existing CWD-relative behavior is preserved exactly
+- Walk-up discovery is always active from CWD by default; `_settings_dir` and `MADSCI_SETTINGS_DIR` override the starting directory for walk-up, not whether walk-up is used
 
 #### CLI (17 commands)
 - `madsci init` - Interactive lab initialization wizard
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `madsci logs` - Event log viewing with `--follow`, `--level`, `--grep`, `--since` filters
 - `madsci run` - Workflow and experiment execution
 - `madsci validate` - Configuration and definition file validation
-- `madsci config` - Configuration management (export, create, show)
+- `madsci config` - Configuration management (export, create)
 - `madsci backup` - Database backup creation (PostgreSQL and MongoDB)
 - `madsci registry` - Service registry management
 - `madsci migrate` - Database migration tooling
@@ -71,8 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Local Mode
 - `madsci start --mode=local` runs all managers in-process without Docker
-- In-memory drop-in backends for all database operations
-- Ephemeral data storage for development and testing
+- In-memory drop-in backends for MongoDB and Redis operations; SQLite drop-in for PostgreSQL (Resource Manager)
+- Local data storage for development and testing without external database dependencies
 
 #### Configuration Management
 - `madsci config export` for exporting configuration to YAML with secret redaction
@@ -83,25 +83,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Experiment Application
 - `ExperimentBase` propagates lab context URLs to instance attributes for robust client creation across async boundaries and Jupyter cells
+- `ExperimentScript` for run-once experiment scripts
+- `ExperimentNotebook` for Jupyter-friendly experiments with cell-based execution
 - `ExperimentTUI` thread-safe pause/cancel controls using `threading.Event` for safe cross-thread state management
+- `ExperimentNode` REST node modality for workcell-managed experiment execution
 - Example experiments: `example_experiment.py` (ExperimentScript) and `example_experiment_tui.py` (ExperimentTUI) in `examples/`
 
 #### Node Module Framework
 - `NodeInfo.from_config()` for creating node info from configuration
 - Migration tools for database schema management
-- Service registry for dynamic service discovery
+
+#### Context and Ownership Systems
+- `MadsciContext` settings class replacing `MadsciCLIConfig` for unified server URL configuration
+- `madsci_context()` context manager for propagating server URL configuration across components
+- `GlobalMadsciContext` singleton for application-wide server URL configuration
+- `@with_madsci_context` and `@madsci_context_class` decorators for function and class-level context
+- `madsci.common.ownership` module for tracking ownership metadata (user, experiment, workflow, node)
+- `ownership_context()` context manager for hierarchical ownership propagation
+- `@with_ownership` and `@ownership_class` decorators for function and class-level ownership context
+
+#### Registry Subsystem
+- `IdentityResolver` for resolving component names to stable ULIDs (local registry -> lab registry -> generate new)
+- `LocalRegistryManager` with walk-up `.madsci/` discovery for file-based identity persistence
+- `LockManager` with heartbeat-based stale lock detection for process-level coordination
+
+#### Event Manager Analytics and Retention
+- Event archiving via `/events/archive` endpoint (by event IDs or date cutoff)
+- MongoDB TTL index for automatic hard-deletion of archived events
+- Background retention task for periodic event archiving
+- `UtilizationAnalyzer` for session-based system and node utilization analysis
+- `TimeSeriesAnalyzer` for timezone-aware time-series utilization reports (daily, hourly, weekly)
+- `CSVExporter` for exporting utilization, user, and session reports to CSV
+
+#### Workflow Admin Commands
+- `pause_workflow()` and `cancel_workflow()` workflow engine utilities
+- `AdminCommands` enum expanded with PAUSE, RESUME, CANCEL, LOCK, UNLOCK
+- Workflow cancellation retries until reaching a cancellable node or timeout
+- Retry workflow from last failed step
 
 #### Testing
 - 2600+ automated tests
 - 150+ template validation tests
 - CLI tests using Click's CliRunner
 - E2E test harness with tutorial validation
+- YAML-driven `E2ETestRunner` framework in `madsci.common.testing` with validator registry and conditional step execution
 
 #### Observability
-- OpenTelemetry integration for distributed tracing
+- OpenTelemetry integration for distributed tracing, metrics, and log correlation
+- `structlog` integration for per-instance structured logging in EventClient
 - Structured logging with hierarchical context propagation
 - `event_client_context()` and `get_event_client()` for context management
 - Per-manager OTEL configuration via environment variables
+- `structlog_config.py` module with configurable processor pipelines (JSON/console output, OTEL context, hierarchy context)
 
 #### Workflow Status Display
 - New `WorkflowDisplay` class in `madsci.client.workflow_display` with three rendering backends:
@@ -114,7 +147,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Paused/queued workflow indicators in all three backends
 - Formatted error prompts for workflow failure/cancellation with retry options
 
+#### Developer Experience
+- Automatic Rich traceback handler installed on `madsci.common` import for prettier exception output
+- `MadsciDeveloperSettings` with `MADSCI_DISABLE_RICH_TRACEBACKS` and `MADSCI_RICH_TRACEBACKS_SHOW_LOCALS` environment variables
+- OpenAPI spec auto-export and Redoc REST API documentation for all 7 managers (`docs/api-specs/`)
+- `devbox.json` for reproducible development environments via Nix-based devbox
+
+#### New Type Modules
+- `interface_types.py`: Base settings for hardware interfaces (Serial, Socket, USB)
+- `module_types.py`: Module and node settings hierarchy for module development
+- `registry_types.py`: Registry entries, locks, and component type definitions
+- `migration_types.py`: Migration status and output format types
+- `backup_types.py`: PostgreSQL and MongoDB backup settings
+- `client_types.py`: `MadsciClientConfig` with standardized retry, timeout, and pooling configuration
+- `context_types.py`: `MadsciContext` unified server URL settings
+
 ### Changed
+
+- Minimum Python version raised from 3.9.1 to 3.10.0 across all packages
 
 #### Workcell Node Reconnect Behavior
 - Replaced disruptive `reset_disconnects()` (which reset **all** nodes to `initializing`) with a non-disruptive `reconnect_disconnected_nodes()` daemon thread that retries only disconnected nodes
@@ -131,8 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default paths for manager runtime data (PIDs, logs, backups, workcell files, datapoints) now resolve to a project-local `.madsci/` directory via walk-up instead of always `~/.madsci/`. If no `.madsci/` or `.git/` directory is found in the directory tree, `~/.madsci/` is still used as the fallback. Set `MADSCI_SETTINGS_DIR` to override the resolution start directory.
 - Backup subdirectory layout changed: `.madsci/mongodb/backups` -> `.madsci/backups/mongodb`, `.madsci/postgresql/backups` -> `.madsci/backups/postgresql`
 - Definition files fully purged from runtime code: all managers now use settings-only configuration (`AbstractManagerBase[Settings]` pattern)
-- `update_node_files` defaults to `False` (was `True`)
-- `load_definition()` replaces `load_or_create_definition()` as the primary API
+- `update_node_files` setting removed from production code (was `True` by default; remains only in test mocks)
 - Settings consolidation for structural config overrides
 - Opt-in registry resolution in manager base
 - Docker reorganization: Dockerfiles and entrypoint scripts moved to `docker/` directory; compose files split into `compose.yaml`, `compose.infra.yaml`, and `compose.otel.yaml`
@@ -144,14 +193,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Example lab now uses modern `settings.yaml` + `.env` dual-layer configuration instead of `*_MANAGER_DEFINITION` environment variables
 - Example lab definition files fully deprecated: structural data (locations, transfer capabilities, resource templates, workcell nodes) extracted into standalone YAML files and inline settings; `*_manager_definition` keys removed from `settings.yaml`
 - Migration tests decoupled from the live example lab using versioned fixture data (`fixtures/migration/v0.6/`)
+- Added required dependencies: `structlog`, `rich`, `opentelemetry-api`, `httpx`
+- Added optional dependency groups: `otel-exporters` and `tui` (madsci.client), `otel` and `otel-instrumentation` (madsci.common)
 
 ### Removed
-- `WorkcellManagerDefinition` replaced by `WorkcellInfo` for runtime state and `WorkcellManagerSettings` for configuration
 - `example_app.py` removed (used deprecated `ExperimentApplication` and `NodeDefinition`)
 - `lab_definition_path` parameter removed from `LocalRunner` (was accepted but never used)
+- `load_or_create_definition()` and `load_definition()` removed entirely from the codebase
 
 ### Deprecated
 - Definition files hard-deprecated in v0.7.0
 - `NodeDefinition` files (use `NodeInfo.from_config()` instead)
+- `NodeConfig` replaces `NodeDefinition` as the primary node configuration type
 - `ManagerDefinition` files (use `ManagerSettings` instead)
-- `load_or_create_definition()` (use `load_definition()` instead)
+- `WorkcellManagerDefinition` deprecated in favor of `WorkcellInfo` for runtime state and `WorkcellManagerSettings` for configuration
