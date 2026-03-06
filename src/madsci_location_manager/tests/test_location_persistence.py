@@ -170,13 +170,13 @@ def test_updated_representation_persists_in_redis(empty_client):
 
     representation = {"position": [1, 2, 3], "config": "test"}
     response = empty_client.post(
-        f"/location/{location.location_id}/set_representation/test_robot",
+        f"/location/{location.location_name}/set_representation/test_robot",
         json=representation,
     )
     assert response.status_code == 200
 
     # Fetch and verify
-    response = empty_client.get(f"/location/{location.location_id}")
+    response = empty_client.get(f"/location/{location.location_name}")
     assert response.status_code == 200
     fetched = Location.model_validate(response.json())
     assert fetched.representations is not None
