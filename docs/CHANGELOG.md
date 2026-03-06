@@ -5,6 +5,27 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-03-05
+
+### Added
+
+#### Node Registry Resolution
+- Nodes now resolve stable IDs from the ID Registry at startup, matching the manager pattern
+- Added `enable_registry_resolution`, `registry_lock_timeout`, and `lab_url` fields to `NodeConfig`
+- `AbstractNode.__init__()` calls `IdentityResolver.resolve_with_info()` to look up or create a stable `node_id`
+- `atexit` handler releases the registry lock on node shutdown for graceful handoff
+- Nodes that fail registry resolution fall back to a generated ULID (non-fatal) unless lock contention exhausts the retry window (fatal `RegistryLockError`)
+
+### Fixed
+
+#### Manager Registry Lock Retry + Shutdown Release
+- `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet
+- Added `registry_lock_timeout` field to `ManagerSettings` (default 60.0s, should be at least 2x the lock TTL of 30s)
+- `RegistryLockError` is now fatal (re-raised) — managers cannot start without a stable identity
+- `atexit.register(self.release_identity)` ensures the registry lock is released on process exit
+- `IdentityResolver.resolve()` and `resolve_with_info()` now accept a `retry_timeout` parameter, passed through to `LocalRegistryManager.resolve()`
+- `LocalRegistryManager.resolve()` implements retry loop: on `RegistryLockError`, retries every 2s until `retry_timeout` elapses
+
 ## [0.7.0] - 2026-03-04
 
 ### Added

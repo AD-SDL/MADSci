@@ -74,7 +74,7 @@ Classes
         
         Call this during shutdown to clean up all resources.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, retry_timeout: float | None = None) ‑> str`
     :   Resolve a name to an ID.
         
         This is the primary method for components to get their identity.
@@ -85,6 +85,9 @@ Classes
             name: Component name (e.g., "liquidhandler_1").
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to
+                :meth:`LocalRegistryManager.resolve`.
         
         Returns:
             The component's ID (ULID).
@@ -92,7 +95,7 @@ Classes
         Raises:
             RegistryLockError: If the name is already locked by another process.
 
-    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
+    `resolve_with_info(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, retry_timeout: float | None = None) ‑> madsci.common.types.registry_types.RegistryResolveResult`
     :   Resolve a name and return detailed information.
         
         Like resolve(), but returns additional information about where
@@ -102,6 +105,8 @@ Classes
             name: Component name.
             component_type: Type of component.
             metadata: Optional metadata.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to :meth:`resolve`.
         
         Returns:
             RegistryResolveResult with ID and source information.

@@ -89,6 +89,23 @@ class NodeConfig(
         description="Version of the node module implementation.",
     )
 
+    # Registry resolution
+    enable_registry_resolution: bool = Field(
+        default=True,
+        title="Enable Registry Resolution",
+        description="When true, resolve node_id from the ID Registry at startup for stable identity across restarts.",
+    )
+    lab_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Lab URL",
+        description="Lab Manager URL for distributed registry coordination.",
+    )
+    registry_lock_timeout: float = Field(
+        default=60.0,
+        title="Registry Lock Timeout",
+        description="Seconds to retry registry lock acquisition on contention at startup. Should be at least 2x the lock TTL (30s) to survive ungraceful container restarts.",
+    )
+
 
 class RestNodeConfig(NodeConfig):
     """Default Configuration for a MADSci Node that communicates over REST."""

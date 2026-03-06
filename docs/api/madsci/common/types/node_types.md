@@ -171,6 +171,12 @@ Classes
 
     ### Class variables
 
+    `enable_registry_resolution: bool`
+    :
+
+    `lab_url: pydantic.networks.AnyUrl | None`
+    :
+
     `module_name: str | None`
     :
 
@@ -184,6 +190,9 @@ Classes
     :
 
     `node_type: madsci.common.types.node_types.NodeType | None`
+    :
+
+    `registry_lock_timeout: float`
     :
 
     `state_update_interval: float | None`
