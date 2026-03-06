@@ -90,12 +90,12 @@ class LocationStateHandler:
         return False
 
     # Location Management Methods
-    def get_location(self, location_id: str) -> Optional[Location]:
+    def get_location(self, location_name: str) -> Optional[Location]:
         """
         Returns a location by ID
         """
         try:
-            location_data = self._locations.get(location_id)
+            location_data = self._locations.get(location_name)
             if location_data is None:
                 return None
             return Location.model_validate(location_data)
@@ -107,15 +107,15 @@ class LocationStateHandler:
         Returns all locations as a list
         """
         valid_locations = []
-        for location_id in self._locations:
+        for location_name in self._locations:
             try:
-                location_data = self._locations[location_id]
+                location_data = self._locations[location_name]
                 valid_locations.append(Location.model_validate(location_data))
             except ValidationError:
                 continue
         return valid_locations
 
-    def add_location(self, location: Union[Location, dict[str, Any]]) -> bool:
+    def add_location(self, location: Union[Location, dict[str, Any]]) -> Optional[Location]:
         """
         Sets a location by ID and returns the stored location
         """
@@ -126,10 +126,10 @@ class LocationStateHandler:
             location_dump = location_obj.model_dump(mode="json")
             location = location_obj
         if location_dump["location_name"] in self._locations:
-            return False
+            return None
         self._locations[location_dump["location_name"]] = location_dump
         self.mark_state_changed()
-        return True
+        return location
 
     def delete_location(self, location_name: str) -> bool:
         """
@@ -144,7 +144,7 @@ class LocationStateHandler:
         except KeyError:
             return False
 
-    def update_location(self, location: Location) -> Location:
+    def update_location(self, location: Union[Location, dict]) -> Location:
         """
         Updates a location and returns the updated location.
         """
@@ -165,4 +165,4 @@ class LocationStateHandler:
             )
         self._locations[location_dump["location_name"]] = location_dump
         self.mark_state_changed()
-        return Location
+        return location

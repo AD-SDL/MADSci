@@ -110,7 +110,7 @@ def test_add_location(client, sample_location):
 
     returned_location = Location.model_validate(response.json())
     assert returned_location.location_id == sample_location.location_id
-    assert returned_location.name == sample_location.name
+    assert returned_location.location_name == sample_location.location_name
 
 
 def test_get_location(client, sample_location):
@@ -119,7 +119,7 @@ def test_get_location(client, sample_location):
     client.post("/location", json=sample_location.model_dump())
 
     # Then get it
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
 
     returned_location = Location.model_validate(response.json())
@@ -138,12 +138,12 @@ def test_delete_location(client, sample_location):
     client.post("/location", json=sample_location.model_dump())
 
     # Then delete it
-    response = client.delete(f"/location/{sample_location.location_id}")
+    response = client.delete(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
     assert "deleted successfully" in response.json()["message"]
 
     # Verify it's gone
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 404
 
 
@@ -161,7 +161,7 @@ def test_set_representations(client, sample_location):
     # Test setting a dictionary representation
     dict_representation = {"key1": "value1", "key2": "value2"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node",
+        f"/location/{sample_location.location_name}/set_representation/test_node",
         json=dict_representation,
     )
     assert response.status_code == 200
@@ -173,7 +173,7 @@ def test_set_representations(client, sample_location):
     # Test setting a string representation
     string_representation = "simple_string_location"
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node_2",
+        f"/location/{sample_location.location_name}/set_representation/test_node_2",
         json=string_representation,
     )
     assert response.status_code == 200
@@ -185,7 +185,7 @@ def test_set_representations(client, sample_location):
     # Test setting a list representation
     list_representation = [1, 2, 3, 4]
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node_3",
+        f"/location/{sample_location.location_name}/set_representation/test_node_3",
         json=list_representation,
     )
     assert response.status_code == 200
@@ -203,7 +203,7 @@ def test_attach_resource(client, sample_location):
     # Attach a resource
     resource_id = "test_resource_id"
     response = client.post(
-        f"/location/{sample_location.location_id}/attach_resource",
+        f"/location/{sample_location.location_name}/attach_resource",
         params={"resource_id": resource_id},
     )
     assert response.status_code == 200
@@ -270,7 +270,7 @@ def test_location_state_persistence(client, sample_location):
     # Set representation (dictionary is stored as the representation for test_robot node)
     representation = {"position": [1, 2, 3], "config": "test_config"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_robot",
+        f"/location/{sample_location.location_name}/set_representation/test_robot",
         json=representation,
     )
     assert response.status_code == 200
@@ -278,13 +278,13 @@ def test_location_state_persistence(client, sample_location):
     # Attach a resource
     resource_id = "test_resource_123"
     response = client.post(
-        f"/location/{sample_location.location_id}/attach_resource",
+        f"/location/{sample_location.location_name}/attach_resource",
         params={"resource_id": resource_id},
     )
     assert response.status_code == 200
 
     # Verify all data persists by fetching the location
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
 
     location = Location.model_validate(response.json())
@@ -391,10 +391,10 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis, tmp_pa
     manager = LocationManager(settings=settings, definition=definition)
     manager.resource_client = mock_resource_client
     manager.state_handler._redis_connection = redis_server
-
+    print(manager.definition)
     # Run initialization to simulate startup behavior
     manager._initialize_locations_from_definition()
-
+    
     # Verify that create_resource_from_template was called
     assert mock_resource_client.create_resource_from_template.call_count == 1
 
@@ -411,7 +411,8 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis, tmp_pa
     client = TestClient(manager.create_server())
     response = client.get("/locations")
     assert response.status_code == 200
-
+    print(response)
+    print(response.json())
     locations = [Location.model_validate(loc) for loc in response.json()]
     assert len(locations) == 1
     assert locations[0].resource_id == "test_resource_123"

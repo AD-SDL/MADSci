@@ -134,7 +134,7 @@ def test_update_location_persists_to_yaml(client, sample_location, definition_fi
     # Now update it with a new description
     sample_location.description = "Updated description for persistence test"
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node",
+        f"/location/{sample_location.location_name}/set_representation/test_node",
         json="test_representation_value",
     )
     assert response.status_code == 200
@@ -172,7 +172,7 @@ def test_delete_location_persists_to_yaml(client, sample_location, definition_fi
     assert sample_location.location_id in location_ids_after_add
 
     # Now delete the location
-    response = client.delete(f"/location/{sample_location.location_id}")
+    response = client.delete(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
 
     # Reload the definition from the file
@@ -298,8 +298,7 @@ def test_startup_sync_redis_only_locations_to_yaml(redis_server: Redis, tmp_path
     temp_manager.state_handler._redis_connection = redis_server
 
     # Add the Redis-only location directly to Redis (bypassing the API)
-    temp_manager.state_handler.set_location(
-        redis_only_location.location_id, redis_only_location
+    temp_manager.state_handler.add_location(redis_only_location
     )
 
     # Verify Redis has both locations before we start the actual test
