@@ -7,12 +7,12 @@ Classes
 
 `BackupLockContext(lock_manager: madsci.common.backup_tools.postgres_backup.BackupLockManager, db_url: str)`
 :   Context manager for database backup locks.
-
+    
     Initialize the backup lock context.
 
 `BackupLockManager()`
 :   Manages exclusive locks for backup operations.
-
+    
     Initialize the backup lock manager.
 
     ### Methods
@@ -22,9 +22,9 @@ Classes
 
 `PostgreSQLBackupTool(settings: madsci.common.types.backup_types.PostgreSQLBackupSettings, logger: madsci.client.event_client.EventClient | None = None)`
 :   Standalone PostgreSQL backup and restore tool.
-
+    
     Initialize PostgreSQL backup tool.
-
+    
     Args:
         settings: PostgreSQL backup configuration
         logger: Optional event client for logging

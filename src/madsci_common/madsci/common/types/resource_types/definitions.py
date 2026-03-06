@@ -1,6 +1,6 @@
 """Pydantic Models for Resource Definitions, used to define default resources for a node or workcell."""
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional, TypeAlias, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.auth_types import OwnershipInfo
@@ -8,9 +8,10 @@ from madsci.common.types.base_types import (
     ConfigDict,
     MadsciBaseModel,
     MadsciSQLModel,
-    PathLike,
     PositiveInt,
     PositiveNumber,
+    prefixed_alias_generator,
+    prefixed_model_validator,
 )
 from madsci.common.types.manager_types import (
     ManagerDefinition,
@@ -23,6 +24,7 @@ from madsci.common.utils import new_name_str, new_ulid_str
 from pydantic import AfterValidator, AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic.types import Discriminator, Tag
+from pydantic_settings import SettingsConfigDict
 from sqlalchemy.dialects.postgresql import JSON
 from sqlmodel import Field as SQLField
 
@@ -34,38 +36,54 @@ def single_letter_or_digit_validator(value: str) -> str:
     return value
 
 
-GridIndex = Union[
-    int,
-    Annotated[str, AfterValidator(single_letter_or_digit_validator)],
+LetterOrDigitStr: TypeAlias = Annotated[
+    str, AfterValidator(single_letter_or_digit_validator)
 ]
-GridIndex2D = tuple[GridIndex, GridIndex]
-GridIndex3D = tuple[GridIndex, GridIndex, GridIndex]
+"""A string constrained to a single letter or digit."""
+
+GridIndex: TypeAlias = Union[int, LetterOrDigitStr]
+GridIndex2D: TypeAlias = tuple[GridIndex, GridIndex]
+GridIndex3D: TypeAlias = tuple[GridIndex, GridIndex, GridIndex]
 
 
 class ResourceManagerSettings(
     ManagerSettings,
-    env_file=(".env", "resources.env"),
-    toml_file=("settings.toml", "resources.settings.toml"),
-    yaml_file=("settings.yaml", "resources.settings.yaml"),
-    json_file=("settings.json", "resources.settings.json"),
+    env_file=(".env", "resource.env", "resources.env"),
+    toml_file=("settings.toml", "resource.settings.toml", "resources.settings.toml"),
+    yaml_file=("settings.yaml", "resource.settings.yaml", "resources.settings.yaml"),
+    json_file=("settings.json", "resource.settings.json", "resources.settings.json"),
     env_prefix="RESOURCE_",
 ):
     """Settings for the MADSci Resource Manager."""
+
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("resource"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("resource")
+
+    # Structural config (inline in settings.yaml)
+    default_templates: Optional[list["TemplateDefinition"]] = Field(
+        default=None,
+        title="Default Templates",
+        description="Default resource template definitions to create or update on manager startup.",
+    )
 
     server_url: AnyUrl = Field(
         title="Resource Server URL",
         description="The URL of the resource manager server.",
         default="http://localhost:8003",
     )
-    manager_definition: PathLike = Field(
-        title="Resource Manager Definition File",
-        description="Path to the resource manager definition file to use.",
-        default="resource.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.RESOURCE_MANAGER,
     )
     db_url: str = Field(
         title="Database URL",
         description="The URL of the database for the resource manager.",
         default="postgresql://madsci:madsci@localhost:5432/resources",
+        json_schema_extra={"secret": True},
     )
 
 

@@ -21,13 +21,16 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageDataPoint,
     ValueDataPoint,
 )
-from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo
+from madsci.common.types.node_types import Node, NodeCapabilities, NodeInfo, NodeStatus
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardFile,
     ParameterFeedForwardJson,
 )
 from madsci.common.types.step_types import Step, StepParameters
-from madsci.common.types.workcell_types import WorkcellManagerDefinition
+from madsci.common.types.workcell_types import (
+    WorkcellInfo,
+    WorkcellManagerSettings,
+)
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
     Workflow,
@@ -72,11 +75,11 @@ test_node = Node(
 @pytest.fixture
 def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
-    workcell_def = WorkcellManagerDefinition(
-        name="Test Workcell",
+    workcell_settings = WorkcellManagerSettings(
+        manager_name="Test Workcell",
     )
     return WorkcellStateHandler(
-        workcell_definition=workcell_def, redis_connection=redis_server
+        workcell_settings=workcell_settings, redis_connection=redis_server
     )
 
 
@@ -110,6 +113,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
         mock_location_client.return_value = mock_location_client_instance
 
         warnings.simplefilter("ignore", UserWarning)
+        state_handler.initialize_workcell_state()
         engine = Engine(state_handler=state_handler, data_client=DataClient())
         engine.state_handler.set_node(node_name="node1", node=test_node)
         return engine
@@ -118,7 +122,7 @@ def engine(state_handler: WorkcellStateHandler) -> Engine:
 def test_engine_initialization(engine: Engine) -> None:
     """Test the initialization of the Engine."""
     assert engine.state_handler is not None
-    assert engine.workcell_definition.name == "Test Workcell"
+    assert engine.workcell_info.name == "Test Workcell"
 
 
 def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
@@ -128,7 +132,7 @@ def test_run_next_step_no_ready_workflows(engine: Engine) -> None:
 
 
 def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
-    """Test run_next_step when no workflows are ready."""
+    """Test that nodes are marked disconnected on connection failure."""
     with patch(
         "madsci.client.node.rest_node_client.RestNodeClient.get_status",
         side_effect=Exception("Connection failed"),
@@ -136,10 +140,34 @@ def test_disconnect_node_on_connection_failure(engine: Engine) -> None:
         engine.update_active_nodes(engine.state_handler)
         for node in engine.state_handler.get_nodes().values():
             assert node.status.disconnected is True
-        engine.reset_disconnects()
-        for node in engine.state_handler.get_nodes().values():
-            assert node.status.initializing is True
-            assert node.status.disconnected is False
+
+
+def test_reconnect_disconnected_node(engine: Engine) -> None:
+    """Test that a disconnected node is reconnected when update_node succeeds."""
+    # First disconnect the node
+    with patch(
+        "madsci.client.node.rest_node_client.RestNodeClient.get_status",
+        side_effect=Exception("Connection failed"),
+    ):
+        engine.update_active_nodes(engine.state_handler)
+    for node in engine.state_handler.get_nodes().values():
+        assert node.status.disconnected is True
+
+    # Now let the node respond successfully — update_node() should restore status
+    with (
+        patch(
+            "madsci.client.node.rest_node_client.RestNodeClient.get_status",
+            return_value=NodeStatus(),
+        ),
+        patch(
+            "madsci.client.node.rest_node_client.RestNodeClient.get_state",
+            return_value={},
+        ),
+    ):
+        for name, node in engine.state_handler.get_nodes().items():
+            engine.update_node(name, node, engine.state_handler)
+    for node in engine.state_handler.get_nodes().values():
+        assert node.status.disconnected is False
 
 
 def test_run_next_step_with_ready_workflow(
@@ -1212,9 +1240,7 @@ class TestDatapointHandlingMethod:
             mock_engine = MagicMock()
             mock_engine.data_client = mock_data_client
             mock_engine.state_handler = mock_state_handler
-            mock_engine.workcell_definition = WorkcellManagerDefinition(
-                name="Test Workcell"
-            )
+            mock_engine.workcell_info = WorkcellInfo(name="Test Workcell")
 
             # Bind the method to our mock
             result = Engine.handle_data_and_files(mock_engine, step, workflow, response)

@@ -5,15 +5,24 @@ Configuration types for MADSci backup operations.
 Classes
 -------
 
-`BaseBackupSettings(**values: Any)`
+`BaseBackupSettings(**kwargs: Any)`
 :   Common backup configuration settings.
-
-    Create a new model by parsing and validating input data from keyword arguments.
-
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
-
-    `self` is explicitly positional-only to allow `self` as a field name.
+    
+    Initialize settings with walk-up file discovery.
+    
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
+    
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
+    
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -45,15 +54,24 @@ Classes
     `convert_backup_dir_to_path(v: str | pathlib.Path) ‑> pathlib.Path`
     :   Convert backup_dir to Path object.
 
-`MongoDBBackupSettings(**values: Any)`
+`MongoDBBackupSettings(**kwargs: Any)`
 :   MongoDB-specific backup settings.
-
-    Create a new model by parsing and validating input data from keyword arguments.
-
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
-
-    `self` is explicitly positional-only to allow `self` as a field name.
+    
+    Initialize settings with walk-up file discovery.
+    
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
+    
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
+    
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -73,15 +91,24 @@ Classes
     `mongo_db_url: pydantic.networks.AnyUrl`
     :
 
-`PostgreSQLBackupSettings(**values: Any)`
+`PostgreSQLBackupSettings(**kwargs: Any)`
 :   PostgreSQL-specific backup settings.
-
-    Create a new model by parsing and validating input data from keyword arguments.
-
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
-
-    `self` is explicitly positional-only to allow `self` as a field name.
+    
+    Initialize settings with walk-up file discovery.
+    
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
+    
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
+    
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 

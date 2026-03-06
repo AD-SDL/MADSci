@@ -21,6 +21,7 @@ from madsci.common.types.datapoint_types import (
     DataPointTypeEnum,
     ObjectStorageSettings,
 )
+from madsci.common.types.event_types import EventType
 from madsci.common.utils import create_http_session, extract_datapoint_ids
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
@@ -54,8 +55,9 @@ class DataClient:
         )
         self.logger = EventClient()
         if self.data_server_url is None:
-            self.logger.warn(
+            self.logger.log_warning(
                 "No URL provided for the data client. Cannot persist datapoints.",
+                event_type=EventType.LOG_WARNING,
                 warning_category=MadsciLocalOnlyWarning,
             )
         self._local_datapoints = {}
@@ -116,6 +118,7 @@ class DataClient:
             else:
                 self.logger.warn(
                     "Cannot access object_storage datapoint: MinIO client not configured",
+                    event_type=EventType.LOG_WARNING,
                 )
 
         # Handle file datapoints
@@ -126,7 +129,9 @@ class DataClient:
                         return f.read()
                 except Exception as e:
                     self.logger.warn(
-                        f"Failed to read file from path: {e!s}",
+                        "Failed to read file from path",
+                        event_type=EventType.LOG_WARNING,
+                        error=str(e),
                     )
 
         # Handle value datapoints
@@ -438,7 +443,12 @@ class DataClient:
                 result[datapoint_id] = datapoint
             except Exception as e:
                 # Log warning but continue with other datapoints
-                self.logger.warn(f"Failed to fetch datapoint {datapoint_id}: {e}")
+                self.logger.warn(
+                    "Failed to fetch datapoint",
+                    event_type=EventType.LOG_WARNING,
+                    datapoint_id=str(datapoint_id),
+                    error=str(e),
+                )
 
         return result
 

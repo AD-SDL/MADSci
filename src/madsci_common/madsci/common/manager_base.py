@@ -5,9 +5,11 @@ This module provides a base class for all MADSci manager services,
 standardizing common patterns and reducing code duplication.
 """
 
+import contextlib
+import sys
 from abc import ABCMeta
-from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar
+from importlib.metadata import version as pkg_version
+from typing import Any, ContextManager, Generic, Optional, TypeVar
 
 import uvicorn
 from classy_fastapi import Routable, get
@@ -16,14 +18,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from madsci.client.client_mixin import MadsciClientMixin
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.middleware import RateLimitMiddleware
+from madsci.common.middleware import EventClientContextMiddleware, RateLimitMiddleware
+from madsci.common.openapi_utils import deduplicate_discriminated_unions
+from madsci.common.otel import (
+    OtelBootstrapConfig,
+    configure_otel,
+    get_otel_runtime,
+    instrument_fastapi,
+    instrument_requests,
+)
 from madsci.common.ownership import global_ownership_info
-from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
+from madsci.common.types.base_types import MadsciBaseSettings
+from madsci.common.types.event_types import EventClientConfig, EventType
 from madsci.common.types.manager_types import ManagerHealth, ManagerSettings
+from madsci.common.utils import new_ulid_str
 
 # Type variables for generic typing
 SettingsT = TypeVar("SettingsT", bound=MadsciBaseSettings)
-DefinitionT = TypeVar("DefinitionT", bound=MadsciBaseModel)
 
 
 # Create a compatible metaclass for both ABC and Routable
@@ -33,7 +44,7 @@ class ManagerBaseMeta(ABCMeta, type(Routable)):
 
 class AbstractManagerBase(
     MadsciClientMixin,
-    Generic[SettingsT, DefinitionT],
+    Generic[SettingsT],
     Routable,
     metaclass=ManagerBaseMeta,
 ):
@@ -41,27 +52,22 @@ class AbstractManagerBase(
     Abstract base class for MADSci manager services using classy-fastapi.
 
     This class provides common functionality for all managers including:
-    - Settings and definition management
+    - Settings management
     - Logging setup
     - FastAPI app configuration
-    - Standard endpoints (info, definition)
+    - Standard endpoints (health, settings)
     - CORS middleware
     - Server lifecycle management
 
     Type Parameters:
         SettingsT: The manager's settings class (must inherit from MadsciBaseSettings)
-        DefinitionT: The manager's definition class (must inherit from MadsciBaseModel)
 
     Class Attributes:
         SETTINGS_CLASS: The settings class for this manager (set by subclasses)
-        DEFINITION_CLASS: The definition class for this manager (set by subclasses)
-        ENABLE_ROOT_DEFINITION_ENDPOINT: Whether to enable the root definition endpoint (default: True)
     """
 
     # Class attributes to be set by subclasses
     SETTINGS_CLASS: Optional[type[MadsciBaseSettings]] = None
-    DEFINITION_CLASS: Optional[type[MadsciBaseModel]] = None
-    ENABLE_ROOT_DEFINITION_ENDPOINT: bool = True
 
     def __init_subclass__(cls) -> None:
         """
@@ -69,7 +75,6 @@ class AbstractManagerBase(
 
         This override handles the __abstractmethods__ issue that occurs when
         combining ABC with classy-fastapi's Routable in generic classes.
-        Also conditionally excludes the root endpoint based on ENABLE_ROOT_DEFINITION_ENDPOINT.
         """
         # Import here to avoid circular dependencies and to match classy-fastapi's pattern
         import inspect  # noqa: PLC0415
@@ -85,13 +90,6 @@ class AbstractManagerBase(
                 obj = getattr(cls, obj_name)
                 if inspect.isfunction(obj) and hasattr(obj, "_endpoint"):
                     endpoint = obj._endpoint
-                    # Skip root definition endpoint if disabled
-                    if (
-                        not cls.ENABLE_ROOT_DEFINITION_ENDPOINT
-                        and obj_name == "get_definition_root"
-                        and endpoint.path == "/"
-                    ):
-                        continue
                     endpoints.append(endpoint)
             except AttributeError:
                 # Some attributes may not be accessible during class construction
@@ -101,7 +99,6 @@ class AbstractManagerBase(
     def __init__(
         self,
         settings: Optional[SettingsT] = None,
-        definition: Optional[DefinitionT] = None,
         **kwargs: Any,
     ) -> None:
         """
@@ -109,20 +106,53 @@ class AbstractManagerBase(
 
         Args:
             settings: Manager settings instance
-            definition: Manager definition instance
             **kwargs: Additional arguments passed to subclasses
         """
         super().__init__()
 
-        # Initialize settings and definition
+        # Initialize settings
         self._settings = settings or self.create_default_settings()
-        self._definition = definition or self.load_or_create_definition()
+
+        # Generate a manager_id if not provided
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and not self._settings.manager_id
+        ):
+            self._settings.manager_id = new_ulid_str()
+
+        # Resolve identity from registry if enabled
+        self._resolver = None
+        if (
+            isinstance(self._settings, ManagerSettings)
+            and self._settings.enable_registry_resolution
+        ):
+            self._resolve_identity_from_registry()
 
         # Setup logging
         self.setup_logging()
-        self.logger.info(self._settings)
-        self.logger.info(self._definition)
-        self.logger.info(get_current_madsci_context())
+        self.logger.info(
+            "Manager settings loaded",
+            event_type=EventType.MANAGER_START,
+            settings=self._settings.model_dump_safe()
+            if hasattr(self._settings, "model_dump_safe")
+            else self._settings.model_dump(mode="json"),
+        )
+        self.logger.info(
+            "MADSci context initialized",
+            event_type=EventType.MANAGER_START,
+            context=get_current_madsci_context().model_dump(mode="json"),
+        )
+
+        self._otel_runtime = None
+        if getattr(self._settings, "otel_enabled", False):
+            self._setup_otel()
+        else:
+            # If OTEL was configured elsewhere in the process (e.g., a shared
+            # bootstrap in a multi-service runtime), keep access to the runtime
+            # so spans can still be created.
+            self._otel_runtime = get_otel_runtime()
+
+        self._tracer = self._otel_runtime.tracer if self._otel_runtime else None
 
         # Setup ownership context
         self.setup_ownership()
@@ -130,15 +160,22 @@ class AbstractManagerBase(
         # Initialize manager-specific components
         self.initialize(**kwargs)
 
+    def span(
+        self, name: str, *, attributes: Optional[dict[str, Any]] = None
+    ) -> ContextManager[Any]:
+        """Create a best-effort span context manager.
+
+        This is intended for higher-level manager operations (not every log line).
+        """
+
+        if self._tracer is None:
+            return contextlib.nullcontext()
+        return self._tracer.start_as_current_span(name, attributes=attributes)
+
     @property
     def settings(self) -> SettingsT:
         """Get the manager settings."""
         return self._settings
-
-    @property
-    def definition(self) -> DefinitionT:
-        """Get the manager definition."""
-        return self._definition
 
     @property
     def logger(self) -> EventClient:
@@ -152,18 +189,6 @@ class AbstractManagerBase(
                 f"{self.__class__.__name__} must set SETTINGS_CLASS class attribute"
             )
         return self.SETTINGS_CLASS()
-
-    def get_definition_path(self) -> Path:
-        """Get the path to the definition file."""
-        return Path(self.settings.manager_definition).expanduser()
-
-    def create_default_definition(self) -> DefinitionT:
-        """Create a default definition instance for this manager."""
-        if self.DEFINITION_CLASS is None:
-            raise NotImplementedError(
-                f"{self.__class__.__name__} must set DEFINITION_CLASS class attribute"
-            )
-        return self.DEFINITION_CLASS(name=f"Default {self.__class__.__name__}")
 
     def initialize(self, **kwargs: Any) -> None:
         """
@@ -184,16 +209,125 @@ class AbstractManagerBase(
         The EventClient is created via the mixin's lazy initialization.
         """
         # Set the name for the EventClient
-        if hasattr(self, "_definition") and self._definition:
-            self.name = f"{self._definition.name}"
+        self.name = self._resolve_name()
+
+        # Propagate manager's OTEL settings to the EventClient config
+        # so that the EventClient will also export logs via OTLP
+        if getattr(self._settings, "otel_enabled", False):
+            self.event_client_config = EventClientConfig(
+                name=self.name,
+                otel_enabled=True,
+                otel_service_name=getattr(self._settings, "otel_service_name", None),
+                otel_exporter=getattr(self._settings, "otel_exporter", "console"),
+                otel_endpoint=getattr(self._settings, "otel_endpoint", None),
+                otel_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+            )
 
         # Use the mixin's event_client property (lazy initialization)
         # This creates the EventClient if it doesn't exist
         self._logger = self.event_client
 
+    def _setup_otel(self) -> None:
+        """Best-effort OTEL bootstrap for manager processes."""
+
+        try:
+            service_name = getattr(self._settings, "otel_service_name", None) or (
+                f"madsci.{self.__class__.__name__.lower()}"
+            )
+            self._otel_runtime = configure_otel(
+                OtelBootstrapConfig(
+                    enabled=True,
+                    service_name=service_name,
+                    service_version="unknown",
+                    exporter=getattr(self._settings, "otel_exporter", "console"),
+                    otlp_endpoint=getattr(self._settings, "otel_endpoint", None),
+                    otlp_protocol=getattr(self._settings, "otel_protocol", "grpc"),
+                )
+            )
+
+            # Instrument outbound HTTP (requests) if optional deps are installed.
+            instrument_requests(enabled=True)
+        except Exception:
+            self._otel_runtime = None
+            self.logger.warning(
+                "OpenTelemetry setup failed; continuing without OTEL",
+                event_type=EventType.MANAGER_ERROR,
+                exc_info=True,
+            )
+
+    def _resolve_name(self) -> str:
+        """Resolve the manager name from settings.
+
+        Checks settings.manager_name first, then falls back to the class name.
+        """
+        if isinstance(self._settings, ManagerSettings) and self._settings.manager_name:
+            return self._settings.manager_name
+        return self.__class__.__name__
+
+    def _resolve_identity_from_registry(self) -> None:
+        """Resolve manager identity from the ID Registry.
+
+        Uses IdentityResolver to look up or create a stable ID for this
+        manager. The resolved ID is written back to settings.manager_id.
+        Resolution failures are non-fatal: a warning is logged and the
+        settings' existing ID is kept.
+        """
+        try:
+            # Lazy import to avoid circular dependencies
+            from madsci.common.registry.identity_resolver import (  # noqa: PLC0415
+                IdentityResolver,
+            )
+
+            lab_url = (
+                self._settings.lab_url
+                if isinstance(self._settings, ManagerSettings)
+                else None
+            )
+            self._resolver = IdentityResolver(lab_url=lab_url)
+
+            name = self._resolve_name()
+
+            result = self._resolver.resolve_with_info(
+                name=name,
+                component_type="manager",
+                metadata={"manager_class": self.__class__.__name__},
+            )
+
+            # Update the settings' ID field
+            if isinstance(self._settings, ManagerSettings):
+                self._settings.manager_id = result.id
+
+        except Exception:
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "Registry identity resolution failed; using settings ID",
+                exc_info=True,
+            )
+
+    def release_identity(self) -> None:
+        """Release the registry lock for this manager's identity.
+
+        Should be called during shutdown to allow other instances to
+        acquire the same name.
+        """
+        if self._resolver is None:
+            return
+
+        try:
+            self._resolver.release(self._resolve_name())
+        except Exception:
+            import logging  # noqa: PLC0415
+
+            logging.getLogger(__name__).warning(
+                "Failed to release registry identity",
+                exc_info=True,
+            )
+
     def setup_ownership(self) -> None:
         """Setup ownership context for the manager."""
-        global_ownership_info.manager_id = self._definition.manager_id
+        if isinstance(self._settings, ManagerSettings):
+            global_ownership_info.manager_id = self._settings.manager_id
 
     def get_health(self) -> ManagerHealth:
         """
@@ -207,16 +341,55 @@ class AbstractManagerBase(
             ManagerHealth: The current health status
         """
         try:
+            otel_enabled = bool(
+                getattr(self._settings, "otel_enabled", False)
+                and self._otel_runtime
+                and self._otel_runtime.enabled
+            )
+
+            extras: dict[str, Any] = {}
+            if getattr(self._settings, "otel_enabled", False):
+                extras.update(
+                    {
+                        "otel.enabled": otel_enabled,
+                        "otel.exporter_type": getattr(
+                            self._settings, "otel_exporter", None
+                        ),
+                        "otel.endpoint": getattr(self._settings, "otel_endpoint", None),
+                    }
+                )
+
             # Basic health check - if we can create a ManagerHealth object,
             # the manager is at least partially functional
             return ManagerHealth(
                 healthy=True,
                 description="Manager is running normally.",
+                **extras,
             )
         except Exception as e:
             return ManagerHealth(
                 healthy=False, description=f"Health check failed: {e!s}"
             )
+
+    def _resolve_package_version(self) -> str | None:
+        """Resolve the installed package version for this manager."""
+        try:
+            # Use the class's qualname-derived module. When run as __main__,
+            # type(self).__module__ is '__main__', so we fall back to the
+            # actual module spec or the class's declared module path.
+            module = type(self).__module__
+            if module == "__main__":
+                # Recover the real module name from the __spec__
+                spec = sys.modules["__main__"].__spec__
+                if spec and spec.name:
+                    module = spec.name
+
+            module_parts = module.split(".")
+            if len(module_parts) >= 2:
+                package_name = ".".join(module_parts[:2])
+                return pkg_version(package_name)
+        except Exception:
+            return None
 
     @get("/health")
     def health_endpoint(self) -> ManagerHealth:
@@ -230,49 +403,95 @@ class AbstractManagerBase(
         Returns:
             ManagerHealth: The current health status
         """
-        return self.get_health()
+        health = self.get_health()
+        if health.version is None:
+            health.version = self._resolve_package_version()
+        return health
 
-    @get("/")
-    def get_definition_root(self) -> DefinitionT:
+    @get("/settings")
+    def get_settings_endpoint(
+        self,
+        include_defaults: bool = True,
+        include_schema: bool = False,
+    ) -> dict[str, Any]:
         """
-        Return the manager definition at the root endpoint.
+        Export current settings for backup/replication.
 
-        This endpoint is automatically inherited by all manager subclasses.
+        This endpoint allows exporting the current manager settings in a format
+        suitable for backup, documentation, or replicating the configuration
+        to another environment. Secrets are always redacted from the API
+        endpoint for safety.
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
 
         Returns:
-            DefinitionT: The manager definition
+            dict: Settings as a dictionary with sensitive fields redacted.
         """
-        return self.definition
+        return self.get_settings_export(
+            include_defaults=include_defaults,
+            include_schema=include_schema,
+            include_secrets=False,
+        )
 
-    @get("/definition")
-    def get_definition_alt(self) -> DefinitionT:
+    def get_settings_export(
+        self,
+        include_defaults: bool = True,
+        include_schema: bool = False,
+        include_secrets: bool = False,
+    ) -> dict[str, Any]:
         """
-        Return the manager definition at the /definition endpoint.
+        Export current settings for backup/replication.
 
-        This endpoint is automatically inherited by all manager subclasses.
+        This method allows programmatic access to the current manager settings
+        in a format suitable for backup, documentation, or replicating the
+        configuration to another environment.
+
+        Sensitive fields are identified via field-level metadata:
+        - Fields with ``json_schema_extra={"secret": True}``
+        - Fields typed as ``SecretStr`` / ``SecretBytes``
+
+        Args:
+            include_defaults: If True, include fields with default values.
+                             If False, only include non-default settings.
+            include_schema: If True, include JSON schema for documentation.
+            include_secrets: If True, include actual secret values.
+                            Defaults to False (secrets are redacted).
 
         Returns:
-            DefinitionT: The manager definition
+            dict: Settings as a dictionary with the following structure:
+                - "settings": The settings values (secrets redacted by default)
+                - "schema" (optional): JSON schema if include_schema is True
+                - "schema_title" (optional): Settings class name if include_schema is True
         """
-        return self.definition
-
-    def load_or_create_definition(self) -> DefinitionT:
-        """Load definition from file or create default."""
-        # Get settings first (create if not set)
-        if not hasattr(self, "_settings") or self._settings is None:
-            self._settings = self.create_default_settings()
-
-        def_path = self.get_definition_path()
-        if def_path.exists():
-            definition = self.DEFINITION_CLASS.from_yaml(def_path)
+        if hasattr(self._settings, "model_dump_safe"):
+            data = self._settings.model_dump_safe(include_secrets=include_secrets)
         else:
-            definition = self.create_default_definition()
+            data = self._settings.model_dump(mode="json")
 
-        # Only log if logger is initialized
-        if hasattr(self, "_logger"):
-            self.logger.info(f"Writing to definition file: {def_path}")
-        definition.to_yaml(def_path)
-        return definition
+        if not include_defaults:
+            # Only include fields that differ from defaults
+            try:
+                defaults = type(self._settings)().model_dump(mode="json")
+                data = {k: v for k, v in data.items() if data.get(k) != defaults.get(k)}
+            except Exception:
+                import logging  # noqa: PLC0415
+
+                logging.getLogger(__name__).debug(
+                    "Could not create default settings instance for comparison",
+                    exc_info=True,
+                )
+
+        result: dict[str, Any] = {"settings": data}
+
+        if include_schema:
+            # Include JSON schema for documentation purposes
+            result["schema"] = type(self._settings).model_json_schema()
+            result["schema_title"] = type(self._settings).__name__
+
+        return result
 
     def configure_app(self, app: FastAPI) -> None:
         """
@@ -307,26 +526,19 @@ class AbstractManagerBase(
                 cleanup_interval=self._settings.rate_limit_cleanup_interval,
                 exempt_ips=exempt_ips,
             )
-            # Build log message with both long and short window info
-            log_msg = (
-                f"Rate limiting enabled: {self._settings.rate_limit_requests} requests "
-                f"per {self._settings.rate_limit_window} seconds"
-            )
-            if (
-                self._settings.rate_limit_short_requests is not None
-                and self._settings.rate_limit_short_window is not None
-            ):
-                log_msg += (
-                    f", burst limit: {self._settings.rate_limit_short_requests} requests "
-                    f"per {self._settings.rate_limit_short_window} seconds"
-                )
             # Add exempt IPs info to log message
             actual_exempt_ips = (
                 exempt_ips if exempt_ips is not None else {"127.0.0.1", "::1"}
             )
-            if actual_exempt_ips:
-                log_msg += f", exempt IPs: {', '.join(sorted(actual_exempt_ips))}"
-            self.logger.info(log_msg)
+            self.logger.info(
+                "Rate limiting enabled",
+                event_type=EventType.MANAGER_START,
+                rate_limit_requests=self._settings.rate_limit_requests,
+                rate_limit_window_seconds=self._settings.rate_limit_window,
+                short_requests_limit=self._settings.rate_limit_short_requests,
+                short_time_window_seconds=self._settings.rate_limit_short_window,
+                exempt_ips=sorted(actual_exempt_ips) if actual_exempt_ips else [],
+            )
 
         # Add CORS middleware by default
         app.add_middleware(
@@ -335,6 +547,14 @@ class AbstractManagerBase(
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
+        )
+
+        # Add EventClient context middleware for hierarchical logging
+        # This establishes per-request context that includes request_id, path, etc.
+        manager_name = self._resolve_name()
+        app.add_middleware(
+            EventClientContextMiddleware,
+            manager_name=manager_name,
         )
 
     # Server creation and lifecycle methods
@@ -349,18 +569,42 @@ class AbstractManagerBase(
         Returns:
             FastAPI: The configured FastAPI application
         """
+        manager_name = self._resolve_name()
+        manager_description = (
+            self._settings.manager_description
+            if isinstance(self._settings, ManagerSettings)
+            and self._settings.manager_description
+            else f"{manager_name} Manager"
+        )
+
         app = FastAPI(
-            title=self._definition.name,
-            description=self._definition.description
-            or f"{self._definition.name} Manager",
+            title=manager_name,
+            description=manager_description,
             **kwargs,
         )
 
         # Configure the app (middleware, etc.)
         self.configure_app(app)
 
+        # Instrument inbound HTTP (FastAPI) if OTEL is enabled.
+        if self._otel_runtime and self._otel_runtime.enabled:
+            instrument_fastapi(app, enabled=True)
+
         # Include the router from this Routable class
         app.include_router(self.router)
+
+        # Wrap the OpenAPI schema generator so that the /docs and /redoc
+        # endpoints serve a deduplicated spec.  Pydantic inlines discriminated
+        # unions at every usage site; for recursive types this creates circular
+        # schemas that crash Swagger UI and Redoc.
+        _original_openapi = app.openapi
+
+        def _patched_openapi() -> dict:
+            schema = _original_openapi()
+            deduplicate_discriminated_unions(schema)
+            return schema
+
+        app.openapi = _patched_openapi  # type: ignore[method-assign]
 
         return app
 
@@ -393,14 +637,20 @@ class AbstractManagerBase(
         if isinstance(self._settings, ManagerSettings):
             if self._settings.uvicorn_workers is not None:
                 uvicorn_kwargs.setdefault("workers", self._settings.uvicorn_workers)
-                self.logger.info(f"Uvicorn workers: {self._settings.uvicorn_workers}")
+                self.logger.info(
+                    "Uvicorn workers configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_workers=self._settings.uvicorn_workers,
+                )
 
             if self._settings.uvicorn_limit_concurrency is not None:
                 uvicorn_kwargs.setdefault(
                     "limit_concurrency", self._settings.uvicorn_limit_concurrency
                 )
                 self.logger.info(
-                    f"Uvicorn concurrency limit: {self._settings.uvicorn_limit_concurrency}"
+                    "Uvicorn concurrency limit configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_concurrency=self._settings.uvicorn_limit_concurrency,
                 )
 
             if self._settings.uvicorn_limit_max_requests is not None:
@@ -408,7 +658,9 @@ class AbstractManagerBase(
                     "limit_max_requests", self._settings.uvicorn_limit_max_requests
                 )
                 self.logger.info(
-                    f"Uvicorn max requests per worker: {self._settings.uvicorn_limit_max_requests}"
+                    "Uvicorn max requests configured",
+                    event_type=EventType.MANAGER_START,
+                    uvicorn_limit_max_requests=self._settings.uvicorn_limit_max_requests,
                 )
 
         uvicorn.run(

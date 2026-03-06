@@ -4,6 +4,7 @@ import contextlib
 import inspect
 import logging
 import time
+import warnings
 from pathlib import Path
 from typing import Annotated, Optional, Union, get_type_hints
 
@@ -54,19 +55,19 @@ def dummy_node():
         def __init__(self):
             """Initialize without calling parent __init__ to avoid file dependencies."""
             self.config = TestNodeConfig(test_required_param=42)
-            self.node_definition = NodeDefinition(
-                node_name="test_node",
-                node_id=new_ulid_str(),
-                module_name="test_module",
-                module_version="0.0.1",
-            )
-            self.node_info = NodeInfo.from_node_def_and_config(
-                self.node_definition, self.config
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                _node_def = NodeDefinition(
+                    node_name="test_node",
+                    node_id=new_ulid_str(),
+                    module_name="test_module",
+                    module_version="0.0.1",
+                )
+            self.node_info = NodeInfo.from_node_def_and_config(_node_def, self.config)
             self.action_handlers = {}
             self.action_history = {}
             self.node_state = {}
-            self.logger = self.event_client = EventClient()
+            self.logger = self.event_client = EventClient(event_server_url=None)
             self.resource_client = ResourceClient(event_client=self.event_client)
             self.data_client = DataClient()
             self.node_status = NodeStatus(ready=True)
@@ -153,8 +154,8 @@ class TestNodeConfiguration:
             module_name="config_test",
             config_overrides={"test_required_param": 42},
         )
-        assert node.node_definition.node_name == "Config Test Node"
-        assert node.node_definition.module_name == "config_test"
+        assert node.node_info.node_name == "Config Test Node"
+        assert node.node_info.module_name == "config_test"
         assert node.config.test_required_param == 42
 
     def test_node_factory_with_optional_params(self, test_node_factory) -> None:
@@ -444,19 +445,19 @@ class MockNode(AbstractNode):
     def __init__(self):
         """Initialize without calling parent __init__ to avoid file dependencies."""
         self.config = LocalTestNodeConfig()
-        self.node_definition = NodeDefinition(
-            node_name="test_node",
-            node_id=new_ulid_str(),
-            module_name="test_module",
-            module_version="0.0.1",
-        )
-        self.node_info = NodeInfo.from_node_def_and_config(
-            self.node_definition, self.config
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _node_def = NodeDefinition(
+                node_name="test_node",
+                node_id=new_ulid_str(),
+                module_name="test_module",
+                module_version="0.0.1",
+            )
+        self.node_info = NodeInfo.from_node_def_and_config(_node_def, self.config)
         self.action_handlers = {}
         self.action_history = {}
         self.node_state = {}
-        self.logger = self.event_client = EventClient()
+        self.logger = self.event_client = EventClient(event_server_url=None)
         self.resource_client = ResourceClient(event_client=self.event_client)
         self.data_client = DataClient()
         self.node_status = NodeStatus(ready=True)
@@ -525,6 +526,35 @@ class MockNode(AbstractNode):
         return f"Dict: {data}"
 
 
+def wait_for_action_completion(
+    node: AbstractNode, action_id: str, timeout: float = 5.0
+) -> ActionResult:
+    """Wait for an action to complete and return the final result.
+
+    Args:
+        node: The node running the action
+        action_id: The action ID to wait for
+        timeout: Maximum time to wait in seconds
+
+    Returns:
+        The final ActionResult
+
+    Raises:
+        AssertionError: If the action doesn't complete within timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        result = node.get_action_result(action_id)
+        if result.status in [
+            ActionStatus.SUCCEEDED,
+            ActionStatus.FAILED,
+            ActionStatus.CANCELLED,
+        ]:
+            return result
+        time.sleep(0.01)  # Check every 10ms
+    raise AssertionError(f"Action {action_id} timed out after {timeout} seconds")
+
+
 class TestComplexTypeHandling:
     """Test Optional[LocationArgument] and other complex type handling in node actions."""
 
@@ -538,7 +568,8 @@ class TestComplexTypeHandling:
         request = ActionRequest(
             action_name="action_with_optional_location", args={"speed": 50}
         )
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "No movement" in result.json_result
 
@@ -559,7 +590,8 @@ class TestComplexTypeHandling:
             },
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         # This should succeed if the fix is applied
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
@@ -582,7 +614,8 @@ class TestComplexTypeHandling:
             },
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
         )
@@ -597,7 +630,8 @@ class TestComplexTypeHandling:
             args={"target": "string_location", "speed": 100},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "string_location" in result.json_result
 
@@ -609,7 +643,8 @@ class TestComplexTypeHandling:
             action_name="action_with_optional_custom_model", args={}
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
         assert "No data" in result.json_result
 
@@ -622,7 +657,8 @@ class TestComplexTypeHandling:
             args={"data": {"value": "test_value", "count": 42}},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         # This should succeed if the fix is applied
         assert result.status.value == "succeeded", (
             f"Expected success but got {result.status}: {result.errors}"
@@ -639,7 +675,8 @@ class TestComplexTypeHandling:
             args={"data": {"value": "test_value", "count": 10}},
         )
 
-        result = node.run_action(request)
+        node.run_action(request)
+        result = wait_for_action_completion(node, request.action_id)
         assert result.status.value == "succeeded"
 
 
@@ -657,19 +694,21 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -708,19 +747,21 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -761,19 +802,21 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -814,19 +857,21 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)
@@ -866,19 +911,21 @@ class TestAnnotatedPathInNode:
             def __init__(self):
                 """Initialize without calling parent __init__ to avoid file dependencies."""
                 self.config = TestNodeConfig(test_required_param=42)
-                self.node_definition = NodeDefinition(
-                    node_name="test_node",
-                    node_id=new_ulid_str(),
-                    module_name="test_module",
-                    module_version="0.0.1",
-                )
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    _node_def = NodeDefinition(
+                        node_name="test_node",
+                        node_id=new_ulid_str(),
+                        module_name="test_module",
+                        module_version="0.0.1",
+                    )
                 self.node_info = NodeInfo.from_node_def_and_config(
-                    self.node_definition, self.config
+                    _node_def, self.config
                 )
                 self.action_handlers = {}
                 self.action_history = {}
                 self.node_state = {}
-                self.logger = self.event_client = EventClient()
+                self.logger = self.event_client = EventClient(event_server_url=None)
                 self.resource_client = ResourceClient(event_client=self.event_client)
                 self.data_client = DataClient()
                 self.node_status = NodeStatus(ready=True)

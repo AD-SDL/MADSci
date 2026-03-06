@@ -7,12 +7,12 @@ Classes
 
 `CapacityCostConfig(**data: Any)`
 :   Configuration for capacity-aware cost adjustments.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -42,12 +42,12 @@ Classes
 
 `Location(**data: Any)`
 :   A location in the lab.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -93,12 +93,12 @@ Classes
 
 `LocationArgument(**data: Any)`
 :   Location Argument to be used by MADSCI nodes.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -136,12 +136,12 @@ Classes
 
 `LocationDefinition(**data: Any)`
 :   The Definition of a Location in a setup.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -187,12 +187,12 @@ Classes
 
 `LocationManagerDefinition(**data: Any)`
 :   Definition for a LocationManager.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -222,12 +222,12 @@ Classes
 
 `LocationManagerHealth(**data: Any)`
 :   Health status for the Location Manager.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -247,15 +247,24 @@ Classes
     `redis_connected: bool | None`
     :
 
-`LocationManagerSettings(**values: Any)`
+`LocationManagerSettings(**kwargs: Any)`
 :   Settings for the LocationManager.
-
-    Create a new model by parsing and validating input data from keyword arguments.
-
-    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
-    validated to form a valid model.
-
-    `self` is explicitly positional-only to allow `self` as a field name.
+    
+    Initialize settings with walk-up file discovery.
+    
+    Configuration file paths (YAML, JSON, TOML, .env) are resolved via
+    walk-up discovery from a starting directory. Each filename walks up
+    independently, so ``node.settings.yaml`` can resolve in the node dir
+    while ``settings.yaml`` resolves in the lab root.
+    
+    The starting directory is determined by (in priority order):
+    1. ``_settings_dir`` keyword argument
+    2. ``MADSCI_SETTINGS_DIR`` environment variable
+    3. Current working directory (default)
+    
+    Args:
+        _settings_dir: Starting directory for walk-up file discovery.
+        **kwargs: Forwarded to ``BaseSettings.__init__``.
 
     ### Ancestors (in MRO)
 
@@ -266,7 +275,10 @@ Classes
 
     ### Class variables
 
-    `manager_definition: str | pathlib.Path`
+    `locations: list['LocationDefinition'] | None`
+    :
+
+    `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
     `redis_host: str`
@@ -281,14 +293,17 @@ Classes
     `server_url: pydantic.networks.AnyUrl`
     :
 
+    `transfer_capabilities: madsci.common.types.location_types.LocationTransferCapabilities | None`
+    :
+
 `LocationReservation(**data: Any)`
 :   Reservation of a MADSci Location.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -320,12 +335,12 @@ Classes
 
 `LocationTransferCapabilities(**data: Any)`
 :   Transfer capabilities for a location manager.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -349,12 +364,12 @@ Classes
 
 `TransferGraphEdge(**data: Any)`
 :   Represents a transfer path between two locations.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -381,12 +396,12 @@ Classes
 
 `TransferStepTemplate(**data: Any)`
 :   Template for transfer steps between compatible locations.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -422,12 +437,12 @@ Classes
 
 `TransferTemplateOverrides(**data: Any)`
 :   Override transfer templates for specific source/destination patterns.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

@@ -33,14 +33,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Setup Pages
         uses: actions/configure-pages@v3
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
       - name: Setup PDM
-        uses: pdm-project/setup-pdm@v3
+        uses: pdm-project/setup-pdm@v4
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pdm install -G:all
+        env:
+          PDM_USE_UV: "True"
+        run: pdm install
       - name: Generate API documentation
-        run: pdm run pdoc --output-dir docs/api/ --force madsci
+        run: |
+          pdm run pdoc --output-dir docs/api/ --force madsci
+          # Strip machine-specific pointer addresses to keep docs deterministic
+          python -c "import re, pathlib; [f.write_text(re.sub(r'[\s\xa0]at[\s\xa0]0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
+      - name: Export OpenAPI specs
+        run: pdm run python scripts/export_openapi.py
+      - name: Generate REST API docs
+        run: pdm run python scripts/generate_redoc.py
       - uses: actions/setup-node@v4
         with:
           node-version: 18.x
@@ -48,6 +59,10 @@ jobs:
         run: npm install -g mystmd
       - name: Build HTML Assets
         run: myst build --html
+      - name: Copy REST API static pages into build
+        run: |
+          mkdir -p _build/html/docs/rest-api/
+          cp docs/rest-api/*.html _build/html/docs/rest-api/ 2>/dev/null || true
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

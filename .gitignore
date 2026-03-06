@@ -324,5 +324,11 @@ src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
 .claude/
 agent_docs/
 
+# Scratch directory for local testing
+.scratch/
+
+# Generated REST API docs (Redoc HTML pages)
+docs/rest-api/*.html
+
 # MyST build outputs
 _build

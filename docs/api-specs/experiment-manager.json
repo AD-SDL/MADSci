@@ -1,0 +1,1130 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ExperimentManager",
+    "description": "ExperimentManager Manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/experiment/{experiment_id}/cancel": {
+      "post": {
+        "summary": "Cancel Experiment",
+        "description": "Cancel an experiment by ID.",
+        "operationId": "cancel_experiment_experiment__experiment_id__cancel_post",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment/{experiment_id}/continue": {
+      "post": {
+        "summary": "Continue Experiment",
+        "description": "Continue an experiment by ID.",
+        "operationId": "continue_experiment_experiment__experiment_id__continue_post",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment/{experiment_id}/end": {
+      "post": {
+        "summary": "End Experiment",
+        "description": "End an experiment by ID.",
+        "operationId": "end_experiment_experiment__experiment_id__end_post",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment/{experiment_id}/fail": {
+      "post": {
+        "summary": "Fail Experiment",
+        "description": "Fail an experiment by ID.",
+        "operationId": "fail_experiment_experiment__experiment_id__fail_post",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment/{experiment_id}": {
+      "get": {
+        "summary": "Get Experiment",
+        "description": "Get an experiment by ID.",
+        "operationId": "get_experiment_experiment__experiment_id__get",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiments": {
+      "get": {
+        "summary": "Get Experiments",
+        "description": "Get the latest experiments.",
+        "operationId": "get_experiments_experiments_get",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Get Settings Endpoint",
+        "description": "Export current settings for backup/replication.\n\nThis endpoint allows exporting the current manager settings in a format\nsuitable for backup, documentation, or replicating the configuration\nto another environment. Secrets are always redacted from the API\nendpoint for safety.\n\nArgs:\n    include_defaults: If True, include fields with default values.\n                     If False, only include non-default settings.\n    include_schema: If True, include JSON schema for documentation.\n\nReturns:\n    dict: Settings as a dictionary with sensitive fields redacted.",
+        "operationId": "get_settings_endpoint_settings_get",
+        "parameters": [
+          {
+            "name": "include_defaults",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Defaults"
+            }
+          },
+          {
+            "name": "include_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Schema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Endpoint",
+        "description": "Health check endpoint for the manager.\n\nThis endpoint is automatically inherited by all manager subclasses.\nManagers that override get_health() will automatically have their\ncustom health checks exposed through this endpoint.\n\nReturns:\n    ManagerHealth: The current health status",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment/{experiment_id}/pause": {
+      "post": {
+        "summary": "Pause Experiment",
+        "description": "Pause an experiment by ID.",
+        "operationId": "pause_experiment_experiment__experiment_id__pause_post",
+        "parameters": [
+          {
+            "name": "experiment_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Experiment Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/experiment": {
+      "post": {
+        "summary": "Start Experiment",
+        "description": "Start a new experiment.",
+        "operationId": "start_experiment_experiment_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExperimentRegistration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ExperimentDesign": {
+        "properties": {
+          "experiment_name": {
+            "type": "string",
+            "title": "Experiment Name",
+            "description": "The name of the experiment."
+          },
+          "experiment_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment Description",
+            "description": "A description of the experiment."
+          },
+          "resource_conditions": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceInLocationCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/NoResourceInLocationCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceFieldCheckCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceChildFieldCheckCondition"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "condition_type",
+                "mapping": {
+                  "no_resource_present": "#/components/schemas/NoResourceInLocationCondition",
+                  "resource_child_field_check": "#/components/schemas/ResourceChildFieldCheckCondition",
+                  "resource_field_check": "#/components/schemas/ResourceFieldCheckCondition",
+                  "resource_present": "#/components/schemas/ResourceInLocationCondition"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Resource Conditions",
+            "description": "The starting layout of resources required for the experiment."
+          },
+          "ownership_info": {
+            "$ref": "#/components/schemas/OwnershipInfo",
+            "title": "Ownership Info",
+            "description": "Information about the users, campaigns, etc. that this design is owned by."
+          }
+        },
+        "type": "object",
+        "required": [
+          "experiment_name"
+        ],
+        "title": "ExperimentDesign",
+        "description": "A design for a MADSci experiment."
+      },
+      "ExperimentRegistration": {
+        "properties": {
+          "experiment_design": {
+            "$ref": "#/components/schemas/ExperimentDesign"
+          },
+          "run_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Name"
+          },
+          "run_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "experiment_design"
+        ],
+        "title": "ExperimentRegistration",
+        "description": "Experiment Run Registration request body"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "NoResourceInLocationCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "no_resource_present",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "no_resource_present"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The ID of the location to check for a resource in"
+          },
+          "location_name": {
+            "type": "string",
+            "title": "Location",
+            "description": "The name of the location to check for a resource in"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the location's container resource",
+            "default": 0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "location_name"
+        ],
+        "title": "NoResourceInLocationCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "OperatorTypeEnum": {
+        "type": "string",
+        "enum": [
+          "is_greater_than",
+          "is_less_than",
+          "is_equal_to",
+          "is_greater_than_or_equal_to",
+          "is_less_than_or_equal_to"
+        ],
+        "title": "OperatorTypeEnum",
+        "description": "Comparison operators for value checks"
+      },
+      "OwnershipInfo": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User ID",
+            "description": "The ID of the user who owns the object."
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment ID",
+            "description": "The ID of the experiment that owns the object."
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign ID",
+            "description": "The ID of the campaign that owns the object."
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project ID",
+            "description": "The ID of the project that owns the object."
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node ID",
+            "description": "The ID of the node that owns the object."
+          },
+          "workcell_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workcell ID",
+            "description": "The ID of the workcell that owns the object."
+          },
+          "lab_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lab ID",
+            "description": "The ID of the lab that owns the object."
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step ID",
+            "description": "The ID of the step that owns the object."
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow ID",
+            "description": "The ID of the workflow that owns the object."
+          },
+          "manager_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager ID",
+            "description": "The ID of the manager that owns the object."
+          }
+        },
+        "type": "object",
+        "title": "OwnershipInfo",
+        "description": "Information about the ownership of a MADSci object."
+      },
+      "ResourceChildFieldCheckCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_child_field_check",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_child_field_check"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The id of the resource to check a quality of"
+          },
+          "resource_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Name",
+            "description": "The name of the resource to check a quality of"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "The field to evaluate against the operator"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/OperatorTypeEnum",
+            "title": "Operator",
+            "description": "The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the container resource",
+            "default": 0
+          },
+          "target_value": {
+            "title": "Target Value",
+            "description": "the target value for the field"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "field",
+          "operator",
+          "target_value"
+        ],
+        "title": "ResourceChildFieldCheckCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "ResourceFieldCheckCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_field_check",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_field_check"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The id of the resource to check a quality of"
+          },
+          "resource_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Name",
+            "description": "The name of the resource to check a quality of"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "The field to evaluate against the operator"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/OperatorTypeEnum",
+            "title": "Operator",
+            "description": "The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+          },
+          "target_value": {
+            "title": "Target Value",
+            "description": "the target value for the field"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "field",
+          "operator",
+          "target_value"
+        ],
+        "title": "ResourceFieldCheckCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "ResourceInLocationCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_present",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_present"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The ID of the location to check for a resource in"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The name of the location to check for a resource in"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the location's container resource",
+            "default": 0
+          },
+          "resource_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Class",
+            "description": "Check that the resource in this location is of a certain class"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ResourceInLocationCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

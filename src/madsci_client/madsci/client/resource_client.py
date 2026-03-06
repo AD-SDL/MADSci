@@ -9,9 +9,10 @@ from typing import Any, ClassVar, Optional, Union
 
 import requests
 from madsci.client.event_client import EventClient
-from madsci.common.context import get_current_madsci_context
+from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import ResourceClientConfig
+from madsci.common.types.event_types import EventType
 from madsci.common.types.resource_types import (
     GridIndex2D,
     GridIndex3D,
@@ -232,6 +233,7 @@ class ResourceClient:
         self.config = config if config is not None else ResourceClientConfig()
         self.session = create_http_session(config=self.config)
 
+        _configured_url = self.resource_server_url
         if self.resource_server_url is not None:
             start_time = time.time()
             while time.time() - start_time < 20:
@@ -244,16 +246,30 @@ class ResourceClient:
                 except Exception:
                     time.sleep(1)
             else:
-                raise ConnectionError(
-                    f"Could not connect to the resource manager at {self.resource_server_url}."
-                )
+                self.resource_server_url = None  # Fall back to local-only mode
         self.local_resources = {}
-        self.logger = event_client if event_client is not None else EventClient()
-        if self.resource_server_url is None:
-            self.logger.warning(
-                "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
-                warning_category=MadsciLocalOnlyWarning,
+        # Use injected client, context client, or create new
+        if event_client is not None:
+            self.logger = event_client
+        else:
+            self.logger = get_event_client(
+                component_type="ResourceClient",
+                resource_server=str(_configured_url) if _configured_url else None,
             )
+        if self.resource_server_url is None:
+            if _configured_url is not None:
+                self.logger.warning(
+                    "Could not connect to the resource manager at %s. Falling back to local-only mode. Resource operations will not be persisted to a server.",
+                    _configured_url,
+                    event_type=EventType.LOG_WARNING,
+                    warning_category=MadsciLocalOnlyWarning,
+                )
+            else:
+                self.logger.warning(
+                    "ResourceClient initialized without a URL. Resource operations will be local-only and won't be persisted to a server. Local-only mode has limited functionality and should be used only for basic development purposes only. DO NOT USE LOCAL-ONLY MODE FOR PRODUCTION.",
+                    event_type=EventType.LOG_WARNING,
+                    warning_category=MadsciLocalOnlyWarning,
+                )
         self._client_id = new_ulid_str()
 
     def _wrap_resource(
@@ -312,7 +328,8 @@ class ResourceClient:
             ResourceDataModels: The initialized resource as returned by the server.
         """
         self.logger.warning(
-            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead."
+            "THIS METHOD IS DEPRECATED AND WILL BE REMOVED IN A FUTURE VERSION! Use Template methods instead.",
+            event_type=EventType.LOG_WARNING,
         )
         if self.resource_server_url:
             response = self.session.post(
@@ -328,7 +345,8 @@ class ResourceClient:
             )
         else:
             self.logger.warning(
-                "Local-only mode does not check to see if an existing resource match already exists."
+                "Local-only mode does not check to see if an existing resource match already exists.",
+                event_type=EventType.LOG_WARNING,
             )
             resource = Resource.discriminate(resource_definition)
             self.local_resources[resource.resource_id] = resource
@@ -426,7 +444,9 @@ class ResourceClient:
             )
         else:
             self.logger.warning(
-                "Local-only mode does not currently search through child resources to get children."
+                "Local-only mode does not currently search through child resources to get children.",
+                event_type=EventType.LOG_WARNING,
+                resource_id=resource_id,
             )
             resource = self.local_resources.get(resource_id)
         return self._wrap_resource(resource)
@@ -494,7 +514,10 @@ class ResourceClient:
                 f"{self.resource_server_url}resource/{resource.resource_id}"
             )
         else:
-            self.logger.error("Local-only mode does not currently support querying.")
+            self.logger.error(
+                "Local-only mode does not currently support querying.",
+                event_type=EventType.LOG_ERROR,
+            )
             raise NotImplementedError(
                 "Local-only mode does not currently support querying."
             )
@@ -574,7 +597,8 @@ class ResourceClient:
             response.raise_for_status()
         else:
             self.logger.error(
-                "Local-only mode does not currently support querying history."
+                "Local-only mode does not currently support querying history.",
+                event_type=EventType.LOG_ERROR,
             )
             raise NotImplementedError(
                 "Local-only mode does not currently support querying history."
@@ -605,7 +629,8 @@ class ResourceClient:
             )
         else:
             self.logger.error(
-                "Local-only mode does not currently support restoring resources."
+                "Local-only mode does not currently support restoring resources.",
+                event_type=EventType.LOG_ERROR,
             )
             raise NotImplementedError(
                 "Local-only mode does not currently support restoring resources."
@@ -1098,8 +1123,11 @@ class ResourceClient:
             # If versions are different, update the template
             if version != existing_template.version:
                 self.logger.info(
-                    f"Template '{template_name}' exists with version {existing_template.version}. "
-                    f"Updating to version {version}..."
+                    "Template exists; updating version",
+                    event_type=EventType.RESOURCE_UPDATE,
+                    template_name=template_name,
+                    existing_version=existing_template.version,
+                    target_version=version,
                 )
                 updated_template = self.update_template(
                     template_name=template_name,
@@ -1124,16 +1152,25 @@ class ResourceClient:
                     },
                 )
                 self.logger.info(
-                    f"Updated template '{template_name}' to version {version}"
+                    "Template updated",
+                    event_type=EventType.RESOURCE_UPDATE,
+                    template_name=template_name,
+                    version=version,
                 )
                 return updated_template
             self.logger.info(
-                f"Using existing template '{template_name}' version {existing_template.version}"
+                "Using existing template",
+                event_type=EventType.LOG_INFO,
+                template_name=template_name,
+                version=existing_template.version,
             )
             return existing_template
 
         self.logger.info(
-            f"Template '{template_name}' not found, creating new template version {version}..."
+            "Template not found; creating",
+            event_type=EventType.RESOURCE_CREATE,
+            template_name=template_name,
+            version=version,
         )
         new_template = self.create_template(
             resource=resource,
@@ -1144,7 +1181,12 @@ class ResourceClient:
             created_by=created_by,
             version=version,
         )
-        self.logger.info(f"Created template '{template_name}' version {version}")
+        self.logger.info(
+            "Template created",
+            event_type=EventType.RESOURCE_CREATE,
+            template_name=template_name,
+            version=version,
+        )
         return new_template
 
     def create_template(
@@ -1551,16 +1593,27 @@ class ResourceClient:
                 )
 
                 self.logger.info(
-                    f"Acquired lock on resource {resource_id} for client {locked_resource.locked_by}"
+                    "Acquired lock on resource",
+                    event_type=EventType.RESOURCE_ALLOCATE,
+                    resource_id=resource_id,
+                    client_id=self._client_id,
+                    locked_by=locked_resource.locked_by,
                 )
                 return self._wrap_resource(locked_resource)
             self.logger.warning(
-                f"Failed to acquire lock on resource {resource_id} for client {self._client_id}"
+                "Failed to acquire lock on resource",
+                event_type=EventType.LOG_WARNING,
+                resource_id=resource_id,
+                client_id=self._client_id,
             )
             return None
         # Local-only mode implementation
         if resource_id not in self.local_resources:
-            self.logger.warning(f"Resource {resource_id} not found in local resources")
+            self.logger.warning(
+                "Resource not found in local resources",
+                event_type=EventType.LOG_WARNING,
+                resource_id=resource_id,
+            )
             return None
 
         # Simple local locking - just mark as locked
@@ -1568,7 +1621,11 @@ class ResourceClient:
         try:
             if local_resource.locked_by and local_resource.locked_by != self._client_id:
                 self.logger.warning(
-                    f"Resource {resource_id} already locked by {local_resource.locked_by}"
+                    "Resource already locked",
+                    event_type=EventType.LOG_WARNING,
+                    resource_id=resource_id,
+                    locked_by=local_resource.locked_by,
+                    client_id=self._client_id,
                 )
                 return None
         except AttributeError:
@@ -1579,7 +1636,12 @@ class ResourceClient:
         local_resource.locked_by = self._client_id
         local_resource.locked_until = datetime.now() + timedelta(seconds=lock_duration)
 
-        self.logger.info(f"Acquired local lock on resource {resource_id}")
+        self.logger.info(
+            "Acquired local lock on resource",
+            event_type=EventType.RESOURCE_ALLOCATE,
+            resource_id=resource_id,
+            client_id=self._client_id,
+        )
         return self._wrap_resource(local_resource)
 
     def release_lock(
@@ -1620,23 +1682,38 @@ class ResourceClient:
                     unlocked_resource.resource_url = f"{self.resource_server_url}resource/{unlocked_resource.resource_id}"
 
                     self.logger.info(
-                        f"Released lock on resource {resource_id} for client {self._client_id}"
+                        "Released lock on resource",
+                        event_type=EventType.RESOURCE_RELEASE,
+                        resource_id=resource_id,
+                        client_id=self._client_id,
                     )
                     return self._wrap_resource(unlocked_resource)
 
             except requests.HTTPError as e:
                 if e.response.status_code == 403:
                     self.logger.warning(
-                        f"Access denied: {e.response.json().get('detail', str(e))}"
+                        "Access denied releasing lock",
+                        event_type=EventType.LOG_WARNING,
+                        resource_id=resource_id,
+                        client_id=self._client_id,
+                        detail=e.response.json().get("detail", str(e)),
                     )
                     return None
-                self.logger.error(f"Error releasing lock: {e}")
+                self.logger.error(
+                    "Error releasing lock",
+                    event_type=EventType.LOG_ERROR,
+                    resource_id=resource_id,
+                    client_id=self._client_id,
+                    error=str(e),
+                )
                 raise e
         else:
             # Local-only mode implementation
             if resource_id not in self.local_resources:
                 self.logger.warning(
-                    f"Resource {resource_id} not found in local resources"
+                    "Resource not found in local resources",
+                    event_type=EventType.LOG_WARNING,
+                    resource_id=resource_id,
                 )
                 return None
 
@@ -1650,7 +1727,11 @@ class ResourceClient:
                     and local_resource.locked_by != self._client_id
                 ):
                     self.logger.warning(
-                        f"Cannot release lock on {resource_id}: not owned by {self._client_id}"
+                        "Cannot release lock; not owner",
+                        event_type=EventType.LOG_WARNING,
+                        resource_id=resource_id,
+                        client_id=self._client_id,
+                        locked_by=local_resource.locked_by,
                     )
                     return None
             except AttributeError:
@@ -1661,7 +1742,12 @@ class ResourceClient:
             local_resource.locked_by = None
             local_resource.locked_until = None
 
-            self.logger.info(f"Released local lock on resource {resource_id}")
+            self.logger.info(
+                "Released local lock on resource",
+                event_type=EventType.RESOURCE_RELEASE,
+                resource_id=resource_id,
+                client_id=self._client_id,
+            )
             return self._wrap_resource(local_resource)
 
     def is_locked(
@@ -1848,7 +1934,12 @@ class ResourceClient:
             try:
                 self.release_lock(locked_res, client_id=client_id)
             except Exception as cleanup_error:
-                self.logger.error(f"Error cleaning up lock: {cleanup_error}")
+                self.logger.error(
+                    "Error cleaning up lock",
+                    event_type=EventType.LOG_ERROR,
+                    client_id=client_id,
+                    error=str(cleanup_error),
+                )
 
     def _release_all_locks(
         self,
@@ -1865,7 +1956,14 @@ class ResourceClient:
                 self.release_lock(locked_resource, client_id=client_id)
 
             except Exception as e:
-                self.logger.error(f"Error releasing lock on resource: {e}")
+                resource_id = getattr(locked_resource, "resource_id", None)
+                self.logger.error(
+                    "Error releasing lock on resource",
+                    event_type=EventType.LOG_ERROR,
+                    client_id=client_id,
+                    resource_id=resource_id,
+                    error=str(e),
+                )
 
     def _refresh_before_release(self, locked_resource: ResourceDataModels) -> None:
         """Refresh a resource before releasing its lock."""
@@ -1879,7 +1977,9 @@ class ResourceClient:
                 self.update_resource(locked_resource)
         except Exception as refresh_error:
             self.logger.error(
-                f"Error refreshing resource before release: {refresh_error}"
+                "Error refreshing resource before release",
+                event_type=EventType.LOG_ERROR,
+                error=str(refresh_error),
             )
 
     def query_resource_hierarchy(

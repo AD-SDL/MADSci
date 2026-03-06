@@ -18,15 +18,15 @@ See the main [README](../../README.md#installation) for installation options. Th
 
 - PyPI: `pip install madsci.event_manager`
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
-- **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../example_lab/managers/example_event.manager.yaml)
+- **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../examples/example_lab/managers/example_event.manager.yaml)
 
-**Dependencies**: MongoDB database (see the [example_lab](../../example_lab/))
+**Dependencies**: MongoDB database (see the [example_lab](../../examples/example_lab/))
 
 ## Usage
 
 ### Quick Start
 
-Use the [example_lab](../../example_lab/) as a starting point:
+Use the [example_lab](../../examples/example_lab/) as a starting point:
 
 ```bash
 # Start with working example
@@ -45,7 +45,7 @@ For custom deployments, create an Event Manager definition:
 madsci manager add -t event_manager
 ```
 
-See [example_event.manager.yaml](../../example_lab/managers/example_event.manager.yaml) for configuration options.
+See [example_event.manager.yaml](../../examples/example_lab/managers/example_event.manager.yaml) for configuration options.
 
 ### Client
 
@@ -56,18 +56,35 @@ from madsci.client.event_client import EventClient
 from madsci.common.types.event_types import Event, EventLogLevel, EventType
 
 event_client = EventClient(
+    name="my_component",
     event_server="http://localhost:8001", # Update with the host/port you configured for your EventManager server
 )
 
-event_client.log_info("This logs a simple string at the INFO level, with event_type LOG_INFO")
-# Alternative: event_client.info("Same as log_info")
+# Modern structlog-style API (recommended)
+event_client.info("This logs a simple string at the INFO level")
+event_client.debug("Debug message with context", key="value", count=42)
+event_client.warning("Warning with structured data", resource_id="res-123")
+event_client.error("Error occurred", exc_info=True)  # Includes traceback
+
+# With event types for structured querying
+event_client.info(
+    "Workflow completed",
+    event_type=EventType.WORKFLOW_COMPLETE,
+    workflow_id="wf-123",
+    duration_ms=1500,
+)
+
+# Context binding for persistent metadata
+event_client = event_client.bind(experiment_id="exp-456")
+event_client.info("All subsequent logs include experiment_id")
+
+# Legacy API (still supported)
 event = Event(
     event_type=EventType.NODE_CREATE,
     log_level=EventLogLevel.DEBUG,
-    event_data="This logs a NODE_CREATE event at the DEBUG level. The event_data field should contain relevant data about the event (in this case, something like the NodeDefinition, for instance)"
+    event_data="This logs a NODE_CREATE event at the DEBUG level."
 )
 event_client.log(event)
-event_client.log_warning(event) # Log the same event, but override the log level.
 
 # Get the 50 most recent events
 event_client.get_events(number=50)
@@ -76,6 +93,50 @@ event_client.query_events({"source": {"node_id": "01JJ4S0WNGEF5FQAZG5KDGJRBV"}})
 
 event_client.alert(event) # Will force firing any configured alert notifiers on this event
 ```
+
+### Logging with Context
+
+Use the EventClient context system for hierarchical logging across components:
+
+```python
+from madsci.common.context import event_client_context, get_event_client
+
+# Establish context at entry points
+with event_client_context(name="my_experiment", experiment_id="exp-123") as logger:
+    logger.info("Starting experiment")
+
+    # All nested operations share context
+    with event_client_context(name="workflow", workflow_id="wf-456") as wf_logger:
+        wf_logger.info("Running workflow")  # Includes both experiment_id and workflow_id
+
+# In library code, inherit context automatically
+def utility_function():
+    logger = get_event_client()  # Uses context if available
+    logger.info("Utility running")
+```
+
+See the [Logging Guide](../../docs/guides/logging.md) for comprehensive documentation on structured logging and context management.
+
+### OpenTelemetry Integration
+
+The EventClient integrates with OpenTelemetry for distributed tracing:
+
+```python
+from madsci.client.event_client import EventClient, EventClientConfig
+
+config = EventClientConfig(
+    otel_enabled=True,
+    otel_service_name="my_service",
+    otel_exporter="otlp",
+    otel_endpoint="http://localhost:4317",
+)
+client = EventClient(name="traced_component", config=config)
+
+# Events automatically include trace_id and span_id
+client.info("Traced event")  # Correlated with distributed traces
+```
+
+See the [Observability Guide](../../docs/guides/observability.md) for the full observability stack setup.
 
 ### Alerts
 
@@ -245,7 +306,7 @@ The Event Manager requires MongoDB for event storage. For local development:
    ```
 
 2. **Using the example lab**:
-   The [example_lab](../../example_lab/) includes a pre-configured MongoDB instance.
+   The [example_lab](../../examples/example_lab/) includes a pre-configured MongoDB instance.
 
 3. **Configuration**:
    Set the database URL in your environment or manager configuration:

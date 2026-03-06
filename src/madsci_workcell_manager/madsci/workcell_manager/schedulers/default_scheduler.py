@@ -4,6 +4,7 @@ import traceback
 from datetime import datetime, timedelta
 
 from madsci.common.types.action_types import ActionStatus
+from madsci.common.types.event_types import EventType
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import (
     SchedulerMetadata,
@@ -40,7 +41,7 @@ class Scheduler(AbstractScheduler):
                 if wf.status.current_step_index < len(wf.steps):
                     step = wf.steps[wf.status.current_step_index]
                     updated_step = prepare_workflow_step(
-                        self.workcell_definition,
+                        self.workcell_info,
                         self.state_handler,
                         step,
                         wf,
@@ -57,7 +58,10 @@ class Scheduler(AbstractScheduler):
 
             except Exception as e:
                 self.logger.error(
-                    f"Error in scheduler while evaluating workflow {wf.workflow_id}: {traceback.format_exc()}"
+                    "Error in scheduler while evaluating workflow",
+                    event_type=EventType.MANAGER_ERROR,
+                    workflow_id=wf.workflow_id,
+                    traceback=traceback.format_exc(),
                 )
                 metadata.ready_to_run = False
                 metadata.reasons.append(f"Exception in scheduler: {e}")

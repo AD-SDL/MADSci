@@ -5,11 +5,11 @@ Base Node Module helper classes.
 Classes
 -------
 
-`AbstractNode(node_definition: madsci.common.types.node_types.NodeDefinition | None = None, node_config: madsci.common.types.node_types.NodeConfig | None = None)`
+`AbstractNode(node_config: madsci.common.types.node_types.NodeConfig | None = None)`
 :   Base Node implementation, protocol agnostic, all node class definitions should inherit from or be based on this.
-
+    
     Note that this class is abstract: it is intended to be inherited from, not used directly.
-
+    
     Initialize the node class.
 
     ### Ancestors (in MRO)
@@ -37,14 +37,11 @@ Classes
     `config_model: ClassVar[type[madsci.common.types.node_types.NodeConfig]]`
     :   The node config model class. This is the class that will be used to instantiate self.config.
 
-    `logger: ClassVar[madsci.client.event_client.EventClient]`
-    :   The event logger for this node
+    `logger: ClassVar[madsci.client.event_client.EventClient | None]`
+    :   The event logger for this node (initialized lazily via _configure_clients)
 
     `module_version: ClassVar[str]`
     :   The version of the module. Should match the version in the node definition.
-
-    `node_definition: ClassVar[madsci.common.types.node_types.NodeDefinition]`
-    :   The node definition.
 
     `node_state: ClassVar[dict[str, Any]]`
     :   The state of the node.
@@ -59,21 +56,21 @@ Classes
 
     `create_and_upload_file_datapoint(self, file_path: str | pathlib.Path, label: str | None = None) ‑> str`
     :   Create a FileDataPoint and upload it to the data manager.
-
+        
         Args:
             file_path: Path to the file to store
             label: Optional label for the datapoint
-
+        
         Returns:
             The ULID string ID of the uploaded datapoint
 
     `create_and_upload_value_datapoint(self, value: Any, label: str | None = None) ‑> str`
     :   Create a ValueDataPoint and upload it to the data manager.
-
+        
         Args:
             value: JSON-serializable value to store
             label: Optional label for the datapoint
-
+        
         Returns:
             The ULID string ID of the uploaded datapoint
 
@@ -115,6 +112,9 @@ Classes
 
     `start_node(self) ‑> None`
     :   Called once to start the node.
+        
+        Establishes node context for hierarchical logging. All logging
+        within this node will include node-specific context (node_name, node_id).
 
     `startup_handler(self) ‑> None`
     :   Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources.
@@ -130,24 +130,24 @@ Classes
 
     `upload_datapoint(self, datapoint: madsci.common.types.datapoint_types.DataPoint) ‑> str`
     :   Upload a datapoint to the data manager and return its ID.
-
+        
         Args:
             datapoint: DataPoint object to upload
-
+        
         Returns:
             The ULID string ID of the uploaded datapoint
-
+        
         Raises:
             Exception: If upload fails
 
     `upload_datapoints(self, datapoints: list[madsci.common.types.datapoint_types.DataPoint]) ‑> list[str]`
     :   Upload multiple datapoints to the data manager and return their IDs.
-
+        
         Args:
             datapoints: List of DataPoint objects to upload
-
+        
         Returns:
             List of ULID string IDs of the uploaded datapoints
-
+        
         Raises:
             Exception: If any upload fails

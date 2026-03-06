@@ -4,7 +4,11 @@ from datetime import datetime
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
-from madsci.common.types.base_types import MadsciBaseModel, PathLike
+from madsci.common.types.base_types import (
+    MadsciBaseModel,
+    prefixed_alias_generator,
+    prefixed_model_validator,
+)
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -15,6 +19,7 @@ from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
+from pydantic_settings import SettingsConfigDict
 
 
 class LocationArgument(MadsciBaseModel):
@@ -312,15 +317,33 @@ class LocationManagerSettings(
 ):
     """Settings for the LocationManager."""
 
+    model_config = SettingsConfigDict(
+        alias_generator=prefixed_alias_generator("location"),
+        populate_by_name=True,
+    )
+    _accept_prefixed_keys = prefixed_model_validator("location")
+
+    # Structural config (inline in settings.yaml)
+    locations: Optional[list["LocationDefinition"]] = Field(
+        default=None,
+        title="Locations",
+        description="Location definitions managed by this LocationManager.",
+    )
+    transfer_capabilities: Optional["LocationTransferCapabilities"] = Field(
+        default=None,
+        title="Transfer Capabilities",
+        description="Transfer capabilities configuration for this LocationManager.",
+    )
+
     server_url: AnyUrl = Field(
         title="Server URL",
         description="The URL where this manager's server runs.",
         default="http://localhost:8006/",
     )
-    manager_definition: PathLike = Field(
-        title="Location Manager Definition File",
-        description="Path to the location manager definition file to use.",
-        default="location.manager.yaml",
+    manager_type: Optional[ManagerType] = Field(
+        title="Manager Type",
+        description="The type of manager.",
+        default=ManagerType.LOCATION_MANAGER,
     )
     redis_host: str = Field(
         title="Redis Host",
@@ -336,6 +359,7 @@ class LocationManagerSettings(
         title="Redis Password",
         description="The password for the Redis server (if required).",
         default=None,
+        json_schema_extra={"secret": True},
     )
 
 

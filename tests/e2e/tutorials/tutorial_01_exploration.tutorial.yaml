@@ -1,0 +1,53 @@
+# Tutorial 01: Exploration
+# Validates the exploration tutorial - CLI tools and basic concepts
+
+name: "Tutorial 01: Exploration"
+description: "Validates the exploration tutorial - CLI tools and basic concepts"
+version: "1.0"
+tags:
+  - tutorial
+  - quick
+  - no-docker
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+timeout: 120.0
+
+steps:
+  - name: "Check madsci CLI is available"
+    command: "madsci --help"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Usage"
+
+  - name: "Run madsci version"
+    command: "madsci version"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "madsci"
+
+  - name: "Run madsci doctor"
+    command: "madsci doctor"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Python"
+
+  - name: "List available templates"
+    command: "madsci new list"
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "module"
+
+cleanup:
+  stop_background: true

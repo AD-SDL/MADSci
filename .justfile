@@ -39,9 +39,25 @@ check: checks
 ruff-unsafe:
   @ruff check . --fix --unsafe-fixes
 
+# Export OpenAPI specs from all managers
+api-specs:
+  @python scripts/export_openapi.py
+  @echo "✅ OpenAPI specs exported to docs/api-specs/"
+
+# Generate REST API documentation (Redoc HTML pages)
+rest-api-docs: api-specs
+  @python scripts/generate_redoc.py
+  @echo "✅ Redoc pages generated in docs/rest-api/"
+
+# Check that committed OpenAPI specs are up-to-date
+api-specs-check:
+  @python scripts/export_openapi.py --check
+
 # Generate API documentation with pdoc
-docs:
+docs: rest-api-docs
   @pdm run pdoc --output-dir docs/api/ --force madsci
+  @# Strip machine-specific pointer addresses from generated docs to avoid noisy diffs
+  @python -c "import re, pathlib; [f.write_text(re.sub(r'[\s\xa0]at[\s\xa0]0x[0-9a-fA-F]+>', '>', f.read_text())) for f in pathlib.Path('docs/api').rglob('*.md')]"
   @echo "✅ API documentation generated in docs/api/"
 
 # Build the project
@@ -69,6 +85,10 @@ pdm-install-all:
 pdm-build:
   @pdm build
 
+# Run the full UX verification suite
+verify-ux: checks test
+  @echo "UX verification complete"
+
 # Run automated tests
 test *args:
   @pytest {{args}}
@@ -91,7 +111,8 @@ coverage-xml:
 
 # Build docker images
 dcb: env
-  @docker compose build
+  @docker compose --profile build build madsci
+  @docker compose --profile build build madsci_dashboard
 
 # Start the example lab
 up *args: env
@@ -188,17 +209,21 @@ show-version:
 
 # Run the node notebook
 node_e2e_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/node_notebook.ipynb
+  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/node_notebook.ipynb
 
 # Run the experiment notebook
 experiment_e2e_tests:
-  docker compose run --rm workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/experiment_notebook.ipynb
+  docker compose --profile testing run --rm e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/experiment_notebook.ipynb
 
 backup_e2e_tests:
-  docker compose run --rm --no-deps workcell_manager python -m nbconvert --to notebook --inplace --stdout --execute ./notebooks/backup_and_migration.ipynb
+  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/backup_and_migration.ipynb
 
 # Run the integration tests
 e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
 
+# Start with observability stack
+otel *args: env
+  @docker compose --profile otel up {{args}}
+
 # Run the full pipeline including e2e tests
-all: down pipeupd e2e_tests down
+all: down pipeupd e2e_tests down docs checks

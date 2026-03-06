@@ -19,7 +19,7 @@ An incomplete list of integrated devices and services available for use in your 
 | pe_icp_module            | PerkinsElmer Syngistix ICP                    | [pe_icp_module](https://github.com/AD-SDL/pe_icp_module) |
 | sciclops_module          | Hudson Sciclops Platecrane                    | [sciclops_module](https://github.com/AD-SDL/sciclops_module) |
 | liconic_module           | Liconic STX Incubator                         | [liconic_module](https://github.com/AD-SDL/liconic_module) |
-| bmg_module               | BMG Vantastar Microplate Readerr              | [bmg_module](https://github.com/AD-SDL/bmg_module) |
+| bmg_module               | BMG Vantastar Microplate Reader               | [bmg_module](https://github.com/AD-SDL/bmg_module) |
 | vention_rail_module      | Vention Rack and Pinion Linear Rail           | [vention_rail_module](https://github.com/AD-SDL/vention_rail_module) |
 | labjack_module           | LabJack DAQ Devices                           | [labjack_module](https://github.com/AD-SDL/labjack_module) |
 | pal_module               | PAL System Automated Sample Preparation Robot | [pal_module](https://github.com/AD-SDL/pal_module) |

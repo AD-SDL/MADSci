@@ -5,7 +5,7 @@ Enums for MADSci Resource Types.
 Classes
 -------
 
-`AssetTypeEnum(*args, **kwds)`
+`AssetTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Asset.
 
     ### Ancestors (in MRO)
@@ -21,7 +21,7 @@ Classes
     `container`
     :
 
-`ConsumableTypeEnum(*args, **kwds)`
+`ConsumableTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Consumable.
 
     ### Ancestors (in MRO)
@@ -40,7 +40,7 @@ Classes
     `discrete_consumable`
     :
 
-`ContainerTypeEnum(*args, **kwds)`
+`ContainerTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Type for a MADSci Container.
 
     ### Ancestors (in MRO)
@@ -77,7 +77,7 @@ Classes
     `voxel_grid`
     :
 
-`ResourceTypeEnum(*args, **kwds)`
+`ResourceTypeEnum(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   Enum for all resource base types.
 
     ### Ancestors (in MRO)

@@ -14,7 +14,6 @@ from madsci.common.types.resource_types import (
 )
 from madsci.common.types.resource_types.definitions import (
     ResourceDefinition,
-    ResourceManagerDefinition,
     ResourceManagerSettings,
     SlotResourceDefinition,
     TemplateDefinition,
@@ -59,21 +58,25 @@ def interface(postgres_engine: Engine) -> ResourceInterface:
 @pytest.fixture
 def test_client(interface: ResourceInterface) -> TestClient:
     """Resource ServerTest Client Fixture"""
-    resource_manager_definition = ResourceManagerDefinition(
-        name="Test Resource Manager"
+    settings = ResourceManagerSettings(
+        manager_name="Test Resource Manager",
     )
     manager = ResourceManager(
-        definition=resource_manager_definition,
+        settings=settings,
         resource_interface=interface,
     )
     app = manager.create_server()
-    return TestClient(app)
+    client = TestClient(app)
+    yield client
+    client.close()
 
 
-def test_definition(test_client: TestClient) -> None:
-    """Test the definition endpoint for the Resource Manager's server."""
-    result = test_client.get("/definition").json()
-    ResourceManagerDefinition.model_validate(result)
+def test_settings(test_client: TestClient) -> None:
+    """Test the settings endpoint for the Resource Manager's server."""
+    result = test_client.get("/settings")
+    assert result.status_code == 200
+    settings_data = result.json()
+    assert settings_data["settings"]["manager_name"] == "Test Resource Manager"
 
 
 def test_add_valid_resource(test_client: TestClient) -> None:
@@ -1120,18 +1123,14 @@ def test_default_template_initialization(interface: ResourceInterface) -> None:
         version="1.0.0",
     )
 
-    definition = ResourceManagerDefinition(
-        name="Test Resource Manager with Templates",
-        resource_manager_id=new_ulid_str(),
+    settings = ResourceManagerSettings(
+        manager_name="Test Resource Manager with Templates",
+        manager_id=new_ulid_str(),
         default_templates=[template_def],
     )
 
-    settings = ResourceManagerSettings()
-
     # Create ResourceManager instance with interface - this should initialize templates
-    manager = ResourceManager(
-        settings=settings, definition=definition, resource_interface=interface
-    )
+    manager = ResourceManager(settings=settings, resource_interface=interface)
 
     # Verify the template was created
     templates = manager._resource_interface.query_templates()

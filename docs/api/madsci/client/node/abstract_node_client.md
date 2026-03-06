@@ -7,7 +7,7 @@ Classes
 
 `AbstractNodeClient(url: pydantic.networks.AnyUrl)`
 :   Base Node Client, protocol agnostic, all node clients should inherit from or be based on this.
-
+    
     Initialize the client.
 
     ### Descendants

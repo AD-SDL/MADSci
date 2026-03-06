@@ -33,9 +33,7 @@ def create_minio_client(
             access_key=object_storage_settings.access_key,
             secret_key=object_storage_settings.secret_key,
             secure=object_storage_settings.secure,
-            region=object_storage_settings.region
-            if object_storage_settings.region
-            else None,
+            region=object_storage_settings.region or None,
         )
 
         try:

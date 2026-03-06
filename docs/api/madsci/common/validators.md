@@ -10,7 +10,7 @@ Functions
 
 `create_dict_promoter(key_func: Callable[[Any], str]) ‑> Callable[[Any], dict[str, Any]]`
 :   Creates a validator that promotes a list to a dictionary using a specified attribute as the key.
-
+    
     Example usage:
         from pydantic import field_validator
         validate_nodes_to_dict = field_validator("nodes", mode="before")(create_dict_promoter("node_name"))

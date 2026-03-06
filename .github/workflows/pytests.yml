@@ -25,19 +25,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
       - name: Setup PDM
         uses: pdm-project/setup-pdm@v3
         with:
-          python-version: 3.9
-
+          python-version: "3.10"
       - name: Install dependencies
+        env:
+          PDM_USE_UV: "True"
         run: pdm install
 
       - uses: extractions/setup-just@v2
         name: Setup Just
 
-      - name: Install dependencies and initialize everything
-        run: just init
+      - name: Check OpenAPI spec freshness
+        run: pdm run python scripts/export_openapi.py --check
 
       - name: Test with pytest
         run: pdm run pytest --cov --cov-report=term-missing

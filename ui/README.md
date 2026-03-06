@@ -347,4 +347,4 @@ Long-running sessions may accumulate data. Refresh browser periodically during d
 3. **Console Debugging**: Store state available as `window.store` in development
 4. **Network Tab**: Monitor API calls for debugging connection issues
 
-**Development**: See [example_lab/](../../example_lab/) for complete development setup with live dashboard integration.
+**Development**: See [example_lab/](../../examples/example_lab/) for complete development setup with live dashboard integration.

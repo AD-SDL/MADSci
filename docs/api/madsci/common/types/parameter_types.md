@@ -7,19 +7,19 @@ Classes
 
 `ParameterFeedForwardFile(**data: Any)`
 :   Definition of a workflow parameter that is fed forward from a previous step (file).
-
+    
     Notes
     -----
     - Either 'step' or 'label' must be provided.
     - If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.
     - If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.
     - If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -47,19 +47,19 @@ Classes
 
 `ParameterFeedForwardJson(**data: Any)`
 :   Definition of a workflow parameter that is fed forward from a previous step (JSON value).
-
+    
     Notes
     -----
     - Either 'step' or 'label' must be provided.
     - If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.
     - If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.
     - If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -87,12 +87,12 @@ Classes
 
 `ParameterInputFile(**data: Any)`
 :   Definition of a workflow parameter input file
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -111,12 +111,12 @@ Classes
 
 `ParameterInputJson(**data: Any)`
 :   Definition of a workflow parameter input value
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -138,12 +138,12 @@ Classes
 
 `WorkflowParameter(**data: Any)`
 :   Definition of a workflow parameter
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

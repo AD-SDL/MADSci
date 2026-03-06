@@ -7,7 +7,7 @@ Classes
 
 `EmailAlerts(config: madsci.common.types.event_types.EmailAlertsConfig, logger: madsci.client.event_client.EventClient | None = None)`
 :   Class for sending email alerts.
-
+    
     Create an instance of EmailAlerts with the provided configuration.
 
     ### Methods

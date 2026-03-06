@@ -1,0 +1,79 @@
+# Basic Test Tutorial
+# This is a simple example of an E2E test definition that validates
+# basic MADSci functionality without requiring Docker.
+
+name: Basic MADSci Test
+description: >
+  A simple test that validates basic Python and command execution
+  without requiring any external services.
+version: "1.0"
+tags:
+  - basic
+  - quick
+  - no-docker
+
+requirements:
+  python: ">=3.10"
+  docker: false
+
+mode: python
+
+steps:
+  - name: Create a Python file
+    command: |
+      cat > test_script.py << 'EOF'
+      def greet(name: str) -> str:
+          return f"Hello, {name}!"
+
+      if __name__ == "__main__":
+          print(greet("MADSci"))
+      EOF
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: file_exists
+        path: test_script.py
+      - type: file_contains
+        path: test_script.py
+        pattern: "def greet"
+      - type: python_syntax
+        path: test_script.py
+
+  - name: Run the Python script
+    command: python test_script.py
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: output_contains
+        pattern: "Hello, MADSci!"
+
+  - name: Create a directory structure
+    command: mkdir -p my_module/subdir
+    validations:
+      - type: exit_code
+        expected: 0
+      - type: directory_exists
+        path: my_module
+      - type: directory_exists
+        path: my_module/subdir
+
+  - name: Create module file
+    command: |
+      cat > my_module/__init__.py << 'EOF'
+      """My test module."""
+      __version__ = "0.1.0"
+      EOF
+    validations:
+      - type: file_exists
+        path: my_module/__init__.py
+      - type: file_contains
+        path: my_module/__init__.py
+        pattern: "__version__"
+
+cleanup:
+  files:
+    - test_script.py
+    - my_module
+  stop_background: true
+
+timeout: 60.0

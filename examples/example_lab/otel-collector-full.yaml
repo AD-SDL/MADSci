@@ -1,0 +1,88 @@
+# OpenTelemetry Collector Configuration - Full Observability Stack
+#
+# This configuration receives OTLP telemetry and exports to:
+# - Jaeger (traces)
+# - Prometheus (metrics via remote write)
+# - Loki (logs)
+# - Debug output (for troubleshooting)
+#
+# Used by compose.otel.yaml for the full observability stack.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch telemetry for efficient export
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+    send_batch_max_size: 2048
+
+  # Add resource attributes for better identification
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: upsert
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 15
+
+exporters:
+  # Debug output for troubleshooting
+  debug:
+    verbosity: basic
+
+  # Jaeger for traces (via OTLP)
+  # Jaeger is configured to listen on port 14317 for OTLP gRPC to avoid conflict
+  # with the collector's own OTLP receiver on port 4317
+  otlp/jaeger:
+    endpoint: localhost:14317
+    tls:
+      insecure: true
+
+  # Prometheus remote write for metrics
+  prometheusremotewrite:
+    endpoint: http://localhost:9090/api/v1/write
+    tls:
+      insecure: true
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Loki for logs
+  loki:
+    endpoint: http://localhost:3100/loki/api/v1/push
+    default_labels_enabled:
+      exporter: true
+      job: true
+      instance: true
+      level: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [otlp/jaeger, debug]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheusremotewrite, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [loki, debug]
+
+  telemetry:
+    logs:
+      level: info

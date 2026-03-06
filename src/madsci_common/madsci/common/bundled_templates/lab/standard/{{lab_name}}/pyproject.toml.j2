@@ -1,0 +1,16 @@
+[project]
+name = "{{ lab_name }}"
+version = "0.1.0"
+description = "{{ lab_description }}"
+requires-python = ">=3.10"
+
+dependencies = [
+    "madsci-client>=0.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+    "python-dotenv>=1.0.0",
+]

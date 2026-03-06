@@ -1,0 +1,36 @@
+ARG BASE_IMAGE=ghcr.io/ad-sdl/madsci:latest
+FROM ${BASE_IMAGE}
+LABEL org.opencontainers.image.source=https://github.com/AD-SDL/MADSci/
+LABEL org.opencontainers.image.description="The Modular Autonomous Discovery for Science (MADSci) toolkit's docker image which includes a compiled version of the Dashboard."
+LABEL org.opencontainers.image.licenses=MIT
+
+# User configuration
+ARG USER_ID=9999
+ARG GROUP_ID=9999
+ARG CONTAINER_USER=madsci
+
+# Note: Python virtualenv (MADSCI_VENV, VIRTUAL_ENV, PATH) is inherited from base image
+# The venv is located at /home/madsci/MADSci/.venv
+# Verify the virtualenv is properly configured
+RUN echo "Verifying virtualenv..." && \
+	which python && \
+	python --version && \
+	python -c "import sys; print(f'Python executable: {sys.executable}')" && \
+	python -c "import madsci; print(f'MADSci package found at: {madsci.__file__}')" && \
+	echo "Virtualenv verification complete."
+
+# * Install node dependencies
+RUN mkdir -p /tmp/node_dependencies
+COPY ui/package.json /tmp/node_dependencies/package.json
+COPY ui/yarn.lock /tmp/node_dependencies/yarn.lock
+WORKDIR /tmp/node_dependencies
+RUN yarn install
+
+# * Copy in UI files and build
+COPY ui/ /home/${CONTAINER_USER}/MADSci/ui/
+RUN ln -s /tmp/node_dependencies/node_modules /home/${CONTAINER_USER}/MADSci/ui/node_modules && cp -f /tmp/node_dependencies/yarn.lock /home/${CONTAINER_USER}/MADSci/ui/yarn.lock
+WORKDIR /home/${CONTAINER_USER}/MADSci/ui
+RUN npm run build
+RUN rm -rf node_modules
+
+WORKDIR /home/${CONTAINER_USER}

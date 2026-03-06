@@ -7,7 +7,7 @@ Classes
 
 `TimeSeriesAnalyzer(utilization_analyzer: madsci.event_manager.utilization_analyzer.UtilizationAnalyzer)`
 :   Analyzes utilization data over time with proper session attribution.
-
+    
     Initialize with existing UtilizationAnalyzer instance.
 
     ### Methods
@@ -29,7 +29,7 @@ Classes
 
 `TimezoneHandler(user_timezone: str = 'America/Chicago')`
 :   Handle timezone conversions with improved error handling.
-
+    
     Initialize with user timezone, defaulting to America/Chicago.
 
     ### Methods

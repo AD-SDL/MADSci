@@ -12,7 +12,7 @@ Thank you for your interest in contributing to MADSci! This guide will help you 
 
 ### Prerequisites
 
-- **Python 3.9+**: Required for all MADSci components
+- **Python 3.10+**: Required for all MADSci components
 - **[PDM](https://pdm-project.org/)**: For dependency management and virtual environments
 - **[Docker](https://docs.docker.com/engine/install/)**: Required for services, integration tests, and end-to-end tests
   - Alternatives: [Rancher Desktop](https://rancherdesktop.io/), [Podman](https://podman.io/)
@@ -36,6 +36,22 @@ just list
 # Start example lab for testing
 just up
 ```
+
+> **Note: PDM lockfile and uv compatibility**
+>
+> The `pdm.lock` file in this repository was generated using [uv as the resolver](https://pdm-project.org/latest/usage/uv/). If you encounter resolver errors when running `pdm install` (or `just init`), you have two options:
+>
+> 1. **Install uv and configure PDM to use it (recommended):**
+>    ```bash
+>    pip install uv  # or see https://docs.astral.sh/uv/getting-started/installation/
+>    pdm config use_uv true
+>    ```
+> 2. **Delete the lockfile** so PDM regenerates it with the standard resolver:
+>    ```bash
+>    rm pdm.lock
+>    ```
+>
+> After either option, re-run `just init` (or `pdm install -G:all`).
 
 ### Development Commands
 
@@ -78,7 +94,7 @@ Each manager service follows this structure:
 **Configuration:**
 - Environment variables with hierarchical precedence
 - Each manager has unique prefix (e.g., `WORKCELL_`, `EVENT_`)
-- See [Configuration.md](./Configuration.md) for full details
+- See [Configuration.md](docs/Configuration.md) for full details
 
 ### Dev Container Support
 
@@ -197,7 +213,7 @@ MADSci uses environment variables for configuration. The repository includes a `
    - **Development**: Most developers can use the defaults and don't need a `.env` file at all
    - **Production**: Create a `.env` file with only production-specific overrides
 
-For a complete list of available configuration options, see [Configuration.md](./Configuration.md).
+For a complete list of available configuration options, see [Configuration.md](docs/Configuration.md).
 
 ## Code of Conduct
 

@@ -1,0 +1,2099 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "WorkcellManager",
+    "description": "WorkcellManager Manager",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/node": {
+      "post": {
+        "summary": "Add Node",
+        "description": "Add a node to the workcell's node list",
+        "operationId": "add_node_node_post",
+        "parameters": [
+          {
+            "name": "node_name",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Name"
+            }
+          },
+          {
+            "name": "node_url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Url"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/{workflow_id}/cancel": {
+      "post": {
+        "summary": "Cancel Workflow",
+        "description": "Cancel a specific workflow.",
+        "operationId": "cancel_workflow_workflow__workflow_id__cancel_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/active": {
+      "get": {
+        "summary": "Get Active Workflows",
+        "description": "Get active workflows.",
+        "operationId": "get_active_workflows_workflows_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/archived": {
+      "get": {
+        "summary": "Get Archived Workflows",
+        "description": "Get archived workflows.",
+        "operationId": "get_archived_workflows_workflows_archived_get",
+        "parameters": [
+          {
+            "name": "number",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/node/{node_name}": {
+      "get": {
+        "summary": "Get Node",
+        "description": "Get information about about a specific node.",
+        "operationId": "get_node_node__node_name__get",
+        "parameters": [
+          {
+            "name": "node_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes": {
+      "get": {
+        "summary": "Get Nodes",
+        "description": "Get info on the nodes in the workcell.",
+        "operationId": "get_nodes_nodes_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "summary": "Get Settings Endpoint",
+        "description": "Export current settings for backup/replication.\n\nThis endpoint allows exporting the current manager settings in a format\nsuitable for backup, documentation, or replicating the configuration\nto another environment. Secrets are always redacted from the API\nendpoint for safety.\n\nArgs:\n    include_defaults: If True, include fields with default values.\n                     If False, only include non-default settings.\n    include_schema: If True, include JSON schema for documentation.\n\nReturns:\n    dict: Settings as a dictionary with sensitive fields redacted.",
+        "operationId": "get_settings_endpoint_settings_get",
+        "parameters": [
+          {
+            "name": "include_defaults",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": true,
+              "title": "Include Defaults"
+            }
+          },
+          {
+            "name": "include_schema",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Schema"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/state": {
+      "get": {
+        "summary": "Get State",
+        "description": "Get the current state of the workcell.",
+        "operationId": "get_state_state_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workcell": {
+      "get": {
+        "summary": "Get Workcell",
+        "description": "Get the currently running workcell info.",
+        "operationId": "get_workcell_workcell_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/{workflow_id}": {
+      "get": {
+        "summary": "Get Workflow",
+        "description": "Get info on a specific workflow.",
+        "operationId": "get_workflow_workflow__workflow_id__get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow_definition/{workflow_definition_id}": {
+      "get": {
+        "summary": "Get Workflow Definition",
+        "description": "Parses the payload and workflow files, and then pushes a workflow job onto the redis queue\n\nParameters\n----------\nWorkflow Definition ID: str\n- the workflow definition ID\n\nReturns\n-------\nresponse: WorkflowDefinition\n- a workflow run object for the requested run_id",
+        "operationId": "get_workflow_definition_workflow_definition__workflow_definition_id__get",
+        "parameters": [
+          {
+            "name": "workflow_definition_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Definition Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/queue": {
+      "get": {
+        "summary": "Get Workflow Queue",
+        "description": "Get all queued workflows.",
+        "operationId": "get_workflow_queue_workflows_queue_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Endpoint",
+        "description": "Health check endpoint for the manager.\n\nThis endpoint is automatically inherited by all manager subclasses.\nManagers that override get_health() will automatically have their\ncustom health checks exposed through this endpoint.\n\nReturns:\n    ManagerHealth: The current health status",
+        "operationId": "health_endpoint_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/{workflow_id}/pause": {
+      "post": {
+        "summary": "Pause Workflow",
+        "description": "Pause a running workflow.",
+        "operationId": "pause_workflow_workflow__workflow_id__pause_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/{workflow_id}/resume": {
+      "post": {
+        "summary": "Resume Workflow",
+        "description": "Resume a paused workflow.",
+        "operationId": "resume_workflow_workflow__workflow_id__resume_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow/{workflow_id}/retry": {
+      "post": {
+        "summary": "Retry Workflow",
+        "description": "Retry an existing workflow from a specific step.",
+        "operationId": "retry_workflow_workflow__workflow_id__retry_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "index",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": -1,
+              "title": "Index"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/{command}": {
+      "post": {
+        "summary": "Send Admin Command",
+        "description": "Send an admin command to all capable nodes.",
+        "operationId": "send_admin_command_admin__command__post",
+        "parameters": [
+          {
+            "name": "command",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Command"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/{command}/{node}": {
+      "post": {
+        "summary": "Send Admin Command To Node",
+        "description": "Send admin command to a node.",
+        "operationId": "send_admin_command_to_node_admin__command___node__post",
+        "parameters": [
+          {
+            "name": "command",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Command"
+            }
+          },
+          {
+            "name": "node",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Node"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow": {
+      "post": {
+        "summary": "Start Workflow",
+        "description": "Parses the payload and workflow files, and then pushes a workflow job onto the redis queue\n\nParameters\n----------\nworkflow: YAML string\n- The workflow yaml file\nparameters: Optional[Dict[str, Any]] = {}\n- Dynamic values to insert into the workflow file\nownership_info: Optional[OwnershipInfo]\n- Information about the experiments, users, etc. that own this workflow\nsimulate: bool\n- whether to use real robots or not\nvalidate_only: bool\n- whether to validate the workflow without queueing it\n\nReturns\n-------\nresponse: Workflow\n- a workflow run object for the requested run_id",
+        "operationId": "start_workflow_workflow_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_start_workflow_workflow_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow_definition": {
+      "post": {
+        "summary": "Submit Workflow Definition",
+        "description": "Parses the payload and workflow files, and then pushes a workflow job onto the redis queue\n\nParameters\n----------\nworkflow_definition: YAML string\n- The workflow_definition yaml file\n\n\nReturns\n-------\nresponse: Workflow Definition ID\n- the workflow definition ID",
+        "operationId": "submit_workflow_definition_workflow_definition_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowDefinition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_start_workflow_workflow_post": {
+        "properties": {
+          "workflow_definition_id": {
+            "type": "string",
+            "title": "Workflow Definition Id"
+          },
+          "ownership_info": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Info"
+          },
+          "json_inputs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Json Inputs"
+          },
+          "file_input_paths": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Input Paths"
+          },
+          "files": {
+            "items": {
+              "type": "string",
+              "contentMediaType": "application/octet-stream"
+            },
+            "type": "array",
+            "title": "Files",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_definition_id"
+        ],
+        "title": "Body_start_workflow_workflow_post"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LocationArgument": {
+        "properties": {
+          "representation": {
+            "title": "Location Representation",
+            "description": "The representation of the location specific to the node."
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Id"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Name"
+          },
+          "reservation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocationReservation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "representation"
+        ],
+        "title": "LocationArgument",
+        "description": "Location Argument to be used by MADSCI nodes."
+      },
+      "LocationReservation": {
+        "properties": {
+          "owned_by": {
+            "$ref": "#/components/schemas/OwnershipInfo",
+            "title": "Owned By",
+            "description": "Who has ownership of the reservation."
+          },
+          "created": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created Datetime",
+            "description": "When the reservation was created."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Start Datetime",
+            "description": "When the reservation starts."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End Datetime",
+            "description": "When the reservation ends."
+          }
+        },
+        "type": "object",
+        "required": [
+          "owned_by",
+          "created",
+          "start",
+          "end"
+        ],
+        "title": "LocationReservation",
+        "description": "Reservation of a MADSci Location."
+      },
+      "NoResourceInLocationCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "no_resource_present",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "no_resource_present"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The ID of the location to check for a resource in"
+          },
+          "location_name": {
+            "type": "string",
+            "title": "Location",
+            "description": "The name of the location to check for a resource in"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the location's container resource",
+            "default": 0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "location_name"
+        ],
+        "title": "NoResourceInLocationCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "OperatorTypeEnum": {
+        "type": "string",
+        "enum": [
+          "is_greater_than",
+          "is_less_than",
+          "is_equal_to",
+          "is_greater_than_or_equal_to",
+          "is_less_than_or_equal_to"
+        ],
+        "title": "OperatorTypeEnum",
+        "description": "Comparison operators for value checks"
+      },
+      "OwnershipInfo": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User ID",
+            "description": "The ID of the user who owns the object."
+          },
+          "experiment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experiment ID",
+            "description": "The ID of the experiment that owns the object."
+          },
+          "campaign_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Campaign ID",
+            "description": "The ID of the campaign that owns the object."
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project ID",
+            "description": "The ID of the project that owns the object."
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node ID",
+            "description": "The ID of the node that owns the object."
+          },
+          "workcell_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workcell ID",
+            "description": "The ID of the workcell that owns the object."
+          },
+          "lab_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lab ID",
+            "description": "The ID of the lab that owns the object."
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step ID",
+            "description": "The ID of the step that owns the object."
+          },
+          "workflow_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow ID",
+            "description": "The ID of the workflow that owns the object."
+          },
+          "manager_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manager ID",
+            "description": "The ID of the manager that owns the object."
+          }
+        },
+        "type": "object",
+        "title": "OwnershipInfo",
+        "description": "Information about the ownership of a MADSci object."
+      },
+      "ParameterFeedForwardFile": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parameter_type": {
+            "type": "string",
+            "const": "feed_forward_file",
+            "title": "Parameter Type",
+            "default": "feed_forward_file"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Step"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "data_type": {
+            "type": "string",
+            "enum": [
+              "file",
+              "object_storage"
+            ],
+            "title": "Data Type",
+            "default": "file"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ParameterFeedForwardFile",
+        "description": "Definition of a workflow parameter that is fed forward from a previous step (file).\n\nNotes\n-----\n- Either 'step' or 'label' must be provided.\n- If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.\n- If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.\n- If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label."
+      },
+      "ParameterFeedForwardJson": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parameter_type": {
+            "type": "string",
+            "const": "feed_forward_json",
+            "title": "Parameter Type",
+            "default": "feed_forward_json"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Step"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "data_type": {
+            "type": "string",
+            "const": "json",
+            "title": "Data Type",
+            "default": "json"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ParameterFeedForwardJson",
+        "description": "Definition of a workflow parameter that is fed forward from a previous step (JSON value).\n\nNotes\n-----\n- Either 'step' or 'label' must be provided.\n- If only 'step' is provided, the parameter value will be taken from the step with the matching index or key. If there are multiple datapoints, the first will be used.\n- If only 'label' is provided, the parameter value will be taken from the most recent datapoint with the matching label.\n- If both 'step' and 'label' are provided, the parameter value will be taken from the matching step and label."
+      },
+      "ParameterInputFile": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parameter_type": {
+            "type": "string",
+            "const": "file_input",
+            "title": "Parameter Type",
+            "default": "file_input"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ParameterInputFile",
+        "description": "Definition of a workflow parameter input file"
+      },
+      "ParameterInputJson": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parameter_type": {
+            "type": "string",
+            "const": "json_input",
+            "title": "Parameter Type",
+            "default": "json_input"
+          },
+          "default": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key"
+        ],
+        "title": "ParameterInputJson",
+        "description": "Definition of a workflow parameter input value"
+      },
+      "ResourceChildFieldCheckCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_child_field_check",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_child_field_check"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The id of the resource to check a quality of"
+          },
+          "resource_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Name",
+            "description": "The name of the resource to check a quality of"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "The field to evaluate against the operator"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/OperatorTypeEnum",
+            "title": "Operator",
+            "description": "The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the container resource",
+            "default": 0
+          },
+          "target_value": {
+            "title": "Target Value",
+            "description": "the target value for the field"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "field",
+          "operator",
+          "target_value"
+        ],
+        "title": "ResourceChildFieldCheckCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "ResourceFieldCheckCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_field_check",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_field_check"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The id of the resource to check a quality of"
+          },
+          "resource_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Name",
+            "description": "The name of the resource to check a quality of"
+          },
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "The field to evaluate against the operator"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/OperatorTypeEnum",
+            "title": "Operator",
+            "description": "The check (is_greater_than, is_less_than or is_equal_to etc.) to evaluate the field by"
+          },
+          "target_value": {
+            "title": "Target Value",
+            "description": "the target value for the field"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "field",
+          "operator",
+          "target_value"
+        ],
+        "title": "ResourceFieldCheckCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "ResourceInLocationCondition": {
+        "properties": {
+          "condition_type": {
+            "type": "string",
+            "const": "resource_present",
+            "title": "Condition Type",
+            "description": "The type of condition to check",
+            "default": "resource_present"
+          },
+          "condition_name": {
+            "type": "string",
+            "title": "Condition Name",
+            "description": "Name of the Condition",
+            "default": "A Condition"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The ID of the location to check for a resource in"
+          },
+          "location_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location",
+            "description": "The name of the location to check for a resource in"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 2,
+                "minItems": 2
+              },
+              {
+                "prefixItems": [
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  {
+                    "anyOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                ],
+                "type": "array",
+                "maxItems": 3,
+                "minItems": 3
+              }
+            ],
+            "title": "Key",
+            "description": "The key to check in the location's container resource",
+            "default": 0
+          },
+          "resource_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Class",
+            "description": "Check that the resource in this location is of a certain class"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ResourceInLocationCondition",
+        "description": "A condition that checks if a resource is present"
+      },
+      "StepDefinition": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Name",
+            "description": "The name of the step."
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Key",
+            "description": "A unique key for the step."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Description",
+            "description": "A description of the step."
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Action",
+            "description": "The action to perform in this step."
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Name",
+            "description": "Name of the target node to run on. Omit for built-in workcell actions."
+          },
+          "args": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Step Arguments",
+            "description": "Arguments for the step action."
+          },
+          "files": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ParameterInputFile"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParameterFeedForwardFile"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "parameter_type",
+                    "mapping": {
+                      "feed_forward_file": "#/components/schemas/ParameterFeedForwardFile",
+                      "file_input": "#/components/schemas/ParameterInputFile"
+                    }
+                  }
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Step File Arguments",
+            "description": "Files to be used in the step. Key is the name of the argument, value is a file parameter key or definition"
+          },
+          "locations": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/LocationArgument"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Step Location Arguments",
+            "description": "Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object."
+          },
+          "conditions": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ResourceInLocationCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/NoResourceInLocationCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceFieldCheckCondition"
+                },
+                {
+                  "$ref": "#/components/schemas/ResourceChildFieldCheckCondition"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "condition_type",
+                "mapping": {
+                  "no_resource_present": "#/components/schemas/NoResourceInLocationCondition",
+                  "resource_child_field_check": "#/components/schemas/ResourceChildFieldCheckCondition",
+                  "resource_field_check": "#/components/schemas/ResourceFieldCheckCondition",
+                  "resource_present": "#/components/schemas/ResourceInLocationCondition"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Step Conditions",
+            "description": "Conditions that must be met before running the step"
+          },
+          "data_labels": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Step Data Labels",
+            "description": "Data labels for the results of the step. Maps from the names of the outputs of the action to the names of the data labels."
+          },
+          "use_parameters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StepParameters"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Parameters in Step",
+            "description": "Parameters from the workflow to use in this step."
+          }
+        },
+        "type": "object",
+        "title": "StepDefinition",
+        "description": "A definition of a step in a workflow."
+      },
+      "StepParameters": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Name",
+            "description": "The name of the step."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Description",
+            "description": "A description of the step."
+          },
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Action",
+            "description": "The action to perform in the step."
+          },
+          "node": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Name",
+            "description": "Name of the node to run on"
+          },
+          "args": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Step Arguments",
+            "description": "Arguments for the step action."
+          },
+          "locations": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "$ref": "#/components/schemas/AnyParameterInputJsonModel"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Step Location Arguments",
+            "description": "Locations to be used in the step. Key is the name of the argument, value is the name of the location, or a Location object."
+          }
+        },
+        "type": "object",
+        "title": "StepParameters",
+        "description": "The set of values that are parameterized in the step, depending on either workflow inputs or outputs from prior steps."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WorkflowDefinition": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "workflow_definition_id": {
+            "type": "string",
+            "title": "Workflow Definition Id"
+          },
+          "definition_metadata": {
+            "$ref": "#/components/schemas/WorkflowMetadata"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowParameters"
+              },
+              {
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ParameterInputJson"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParameterInputFile"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParameterFeedForwardJson"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ParameterFeedForwardFile"
+                    }
+                  ],
+                  "discriminator": {
+                    "propertyName": "parameter_type",
+                    "mapping": {
+                      "feed_forward_file": "#/components/schemas/ParameterFeedForwardFile",
+                      "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
+                      "file_input": "#/components/schemas/ParameterInputFile",
+                      "json_input": "#/components/schemas/ParameterInputJson"
+                    }
+                  }
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Parameters"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepDefinition"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "WorkflowDefinition",
+        "description": "Grand container that pulls all info of a workflow together"
+      },
+      "WorkflowMetadata": {
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Version",
+            "default": ""
+          },
+          "ownership_info": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OwnershipInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "WorkflowMetadata",
+        "description": "Metadata container"
+      },
+      "WorkflowParameters": {
+        "properties": {
+          "json_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterInputJson"
+            },
+            "type": "array",
+            "title": "Json Inputs"
+          },
+          "file_inputs": {
+            "items": {
+              "$ref": "#/components/schemas/ParameterInputFile"
+            },
+            "type": "array",
+            "title": "File Inputs"
+          },
+          "feed_forward": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ParameterFeedForwardJson"
+                },
+                {
+                  "$ref": "#/components/schemas/ParameterFeedForwardFile"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Feed Forward"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowParameters",
+        "description": "container for all of the workflow parameters"
+      },
+      "AnyParameterInputJsonModel": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ParameterInputJson"
+          },
+          {
+            "$ref": "#/components/schemas/ParameterFeedForwardJson"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "parameter_type",
+          "mapping": {
+            "feed_forward_json": "#/components/schemas/ParameterFeedForwardJson",
+            "json_input": "#/components/schemas/ParameterInputJson"
+          }
+        }
+      }
+    }
+  }
+}

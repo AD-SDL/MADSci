@@ -1,7 +1,6 @@
 """MongoDB version checking and validation for MADSci."""
 
 import json
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Union
@@ -103,7 +102,10 @@ class MongoDBVersionChecker:
             return SemanticVersion.parse(schema_version)
         except Exception as e:
             self.logger.error(
-                f"Error reading schema version from {self.schema_file_path}: {e}"
+                "Error reading schema version",
+                schema_file_path=str(self.schema_file_path),
+                error=str(e),
+                exc_info=True,
             )
             raise RuntimeError(f"Cannot determine expected schema version: {e}") from e
 
@@ -139,9 +141,12 @@ class MongoDBVersionChecker:
             # Get the latest version entry
             return SemanticVersion.parse(version_record["version"])
 
-        except Exception:
+        except Exception as e:
             self.logger.error(
-                f"Error getting database version: {traceback.format_exc()}"
+                "Error getting database version",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
             )
             return None
 
@@ -189,12 +194,14 @@ class MongoDBVersionChecker:
             if not collection_names:
                 # Completely fresh database - needs migration (may be auto-initialized in validate_or_fail)
                 self.logger.info(
-                    f"Fresh database {self.database_name} detected - needs initialization"
+                    "Fresh database detected - needs initialization",
+                    database_name=self.database_name,
                 )
                 return True, expected_schema_version, None
             # Some other error occurred
             self.logger.warning(
-                f"Cannot determine database version for {self.database_name}"
+                "Cannot determine database version",
+                database_name=self.database_name,
             )
             return True, expected_schema_version, None
 
@@ -203,22 +210,33 @@ class MongoDBVersionChecker:
             if db_version == SemanticVersion(0, 0, 0):
                 cmds = self.get_migration_commands()
                 self.logger.warning(
-                    f"Database {self.database_name} exists but has no version tracking. Migration required."
+                    "Database exists but has no version tracking; migration required",
+                    database_name=self.database_name,
                 )
                 self.logger.info(
                     "To enable version tracking, run the migration tool using one of the following:"
                 )
-                self.logger.info(f"  • Bare metal:     {cmds['bare_metal']}")
-                self.logger.info(f"  • Docker Compose: {cmds['docker_compose']}")
+                self.logger.info(
+                    "Migration command (bare metal)", command=cmds["bare_metal"]
+                )
+                self.logger.info(
+                    "Migration command (docker compose)",
+                    command=cmds["docker_compose"],
+                )
             else:
                 self.logger.warning(
-                    f"Schema version mismatch in {self.database_name}: "
-                    f"Expected schema v{expected_schema_version}, Database v{db_version}"
+                    "Schema version mismatch",
+                    database_name=self.database_name,
+                    expected_schema_version=str(expected_schema_version),
+                    database_version=str(db_version),
                 )
             return True, expected_schema_version, db_version
 
         self.logger.info(
-            f"Database {self.database_name} schema version {db_version} matches expected version {expected_schema_version}"
+            "Database schema version matches expected version",
+            database_name=self.database_name,
+            database_version=str(db_version),
+            expected_schema_version=str(expected_schema_version),
         )
         return False, expected_schema_version, db_version
 
@@ -239,7 +257,9 @@ class MongoDBVersionChecker:
             collection_names = self.database.list_collection_names()
             if not collection_names:
                 self.logger.info(
-                    f"Auto-initializing fresh database {self.database_name} with schema version {expected}"
+                    "Auto-initializing fresh database with schema version",
+                    database_name=self.database_name,
+                    expected_schema_version=str(expected),
                 )
                 try:
                     # Create schema_versions collection and record initial version
@@ -248,11 +268,18 @@ class MongoDBVersionChecker:
                         expected, f"Auto-initialized schema version {expected}"
                     )
                     self.logger.info(
-                        f"Successfully auto-initialized database {self.database_name} with version {expected}"
+                        "Successfully auto-initialized database",
+                        database_name=self.database_name,
+                        schema_version=str(expected),
                     )
                     return
                 except Exception as e:
-                    self.logger.error(f"Failed to auto-initialize database: {e}")
+                    self.logger.error(
+                        "Failed to auto-initialize database",
+                        database_name=self.database_name,
+                        error=str(e),
+                        exc_info=True,
+                    )
                     raise RuntimeError(
                         f"Failed to auto-initialize database: {e}"
                     ) from e
@@ -266,13 +293,20 @@ class MongoDBVersionChecker:
 
             cmds = self.get_migration_commands()
             self.logger.error(error_msg)
-            self.logger.error(f"Expected schema version: {expected}")
-            self.logger.error(f"Database version: {current}")
+            self.logger.error(
+                "Expected schema version", expected_schema_version=str(expected)
+            )
+            self.logger.error("Database version", database_version=str(current))
             self.logger.error(
                 "Please run the migration tool with one of the following:"
             )
-            self.logger.error(f"  • Bare metal:     {cmds['bare_metal']}")
-            self.logger.error(f"  • Docker Compose: {cmds['docker_compose']}")
+            self.logger.error(
+                "Migration command (bare metal)", command=cmds["bare_metal"]
+            )
+            self.logger.error(
+                "Migration command (docker compose)",
+                command=cmds["docker_compose"],
+            )
             raise RuntimeError(
                 f"{error_msg}!\n"
                 f"Expected: {expected}\nCurrent: {current}\n"
@@ -295,11 +329,17 @@ class MongoDBVersionChecker:
             )
 
             self.logger.info(
-                f"Schema versions collection created for {self.database_name}"
+                "Schema versions collection created",
+                database_name=self.database_name,
             )
 
         except Exception as e:
-            self.logger.error(f"Error creating schema versions collection: {e}")
+            self.logger.error(
+                "Error creating schema versions collection",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def record_version(
@@ -328,15 +368,26 @@ class MongoDBVersionChecker:
                 # Update existing record
                 schema_versions.replace_one({"version": version_str}, version_doc)
                 self.logger.info(
-                    f"Updated existing database version record: {version_str}"
+                    "Updated existing database version record",
+                    database_name=self.database_name,
+                    version=version_str,
                 )
             else:
                 # Create new record
                 schema_versions.insert_one(version_doc)
-                self.logger.info(f"Recorded new database version: {version_str}")
+                self.logger.info(
+                    "Recorded new database version",
+                    database_name=self.database_name,
+                    version=version_str,
+                )
 
         except Exception as e:
-            self.logger.error(f"Error recording version: {e}")
+            self.logger.error(
+                "Error recording database version",
+                database_name=self.database_name,
+                error=str(e),
+                exc_info=True,
+            )
             raise
 
     def database_exists(self) -> bool:

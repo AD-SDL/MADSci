@@ -1,0 +1,153 @@
+# MADSci Example Lab - Manager, Node, and Test Services
+#
+# Usage Notes:
+# 1. Environment variables can be set in `.env` or directly in the shell.
+# 2. Services use the pre-built madsci image (build via `docker compose --profile build build` from root).
+# 3. Services are configured to use host network mode to simplify port configuration.
+# 4. Services restart unless stopped manually.
+
+include:
+  - compose.infra.yaml
+  - compose.otel.yaml
+
+# * Common configuration
+x-madsci-service: &madsci-service
+  image: ghcr.io/ad-sdl/madsci:latest
+  environment:
+    - USER_ID=${USER_ID:-1000}
+    - GROUP_ID=${GROUP_ID:-1000}
+  network_mode: host
+  env_file:
+    - ./.env
+    - path: ../../.env
+      required: false
+  volumes:
+    - .:/home/madsci/example_lab
+    - ../notebooks:/home/madsci/notebooks
+    - ../../.madsci:/home/madsci/.madsci
+    - ../../src:/home/madsci/MADSci/src
+  restart: unless-stopped
+  working_dir: /home/madsci/example_lab
+
+services:
+  # *Managers
+
+  lab_manager:
+    <<: *madsci-service
+    container_name: lab_manager
+    image: ghcr.io/ad-sdl/madsci_dashboard:latest
+    command: python -m madsci.squid.lab_server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "${LAB_SERVER_URL:-http://localhost:8000}/health", "||", "exit", "1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - event_manager
+
+  event_manager:
+    <<: *madsci-service
+    container_name: event_manager
+    command: python -m madsci.event_manager.event_server
+    depends_on:
+      - madsci_mongodb
+
+  experiment_manager:
+    <<: *madsci-service
+    container_name: experiment_manager
+    command: python -m madsci.experiment_manager.experiment_server
+    depends_on:
+      - madsci_mongodb
+      - lab_manager
+
+  resource_manager:
+    <<: *madsci-service
+    container_name: resource_manager
+    command: python -m madsci.resource_manager.resource_server
+    depends_on:
+      - madsci_postgres
+      - event_manager
+
+  data_manager:
+    <<: *madsci-service
+    container_name: data_manager
+    command: python -m madsci.data_manager.data_server
+    depends_on:
+      - madsci_mongodb
+      - event_manager
+
+  location_manager:
+    <<: *madsci-service
+    container_name: location_manager
+    command: python -m madsci.location_manager.location_server
+    depends_on:
+      - madsci_redis
+      - event_manager
+      - resource_manager
+
+  workcell_manager:
+    <<: *madsci-service
+    container_name: workcell_manager
+    command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0
+    depends_on:
+      - madsci_redis
+      - madsci_mongodb
+      - resource_manager
+      - event_manager
+      - location_manager
+
+  # *Nodes
+
+  liquidhandler_1:
+    <<: *madsci-service
+    container_name: liquidhandler_1
+    environment:
+      - NODE_NAME=liquidhandler_1
+      - NODE_MODULE_NAME=liquidhandler
+      - NODE_URL=http://localhost:2000
+    command: python example_modules/liquidhandler.py
+
+  liquidhandler_2:
+    <<: *madsci-service
+    container_name: liquidhandler_2
+    environment:
+      - NODE_NAME=liquidhandler_2
+      - NODE_MODULE_NAME=liquidhandler
+      - NODE_URL=http://localhost:2001
+    command: python example_modules/liquidhandler.py
+
+  robotarm_1:
+    <<: *madsci-service
+    container_name: robotarm_1
+    environment:
+      - NODE_NAME=robotarm_1
+      - NODE_MODULE_NAME=robotarm
+      - NODE_URL=http://localhost:2002
+    command: python example_modules/robotarm.py
+
+  platereader_1:
+    <<: *madsci-service
+    container_name: platereader_1
+    environment:
+      - NODE_NAME=platereader_1
+      - NODE_MODULE_NAME=platereader
+      - NODE_URL=http://localhost:2003
+    command: python example_modules/platereader.py
+
+  advanced_example_node:
+    <<: *madsci-service
+    container_name: advanced_example_node
+    environment:
+      - NODE_NAME=advanced_example_node
+      - NODE_MODULE_NAME=advanced_example_node
+      - NODE_URL=http://localhost:2004
+    command: python example_modules/advanced_example_module.py
+
+  # *E2E Test Runner
+
+  e2e_test_runner:
+    <<: *madsci-service
+    profiles:
+      - testing
+    restart: "no"

@@ -49,6 +49,12 @@ class TimeSeriesAnalyzer:
                 )
 
             # Generate summary report
+            if parsed_start is None or parsed_end is None:
+                return {
+                    "error": "start_time and end_time are required",
+                    "details": "Both parameters must be provided as ISO strings",
+                }
+
             return self.generate_summary_report(
                 parsed_start, parsed_end, analysis_type, user_timezone
             )
@@ -174,7 +180,9 @@ class TimeSeriesAnalyzer:
         # Store analysis type for use in attribution logic
         self._current_analysis_type = analysis_type
         logger.info(
-            f"Generating {analysis_type} summary report for timezone {user_timezone}"
+            "Generating utilization summary report (%s) for timezone %s",
+            analysis_type,
+            user_timezone,
         )
 
         # Validate and determine analysis period
@@ -221,7 +229,7 @@ class TimeSeriesAnalyzer:
                 user_timezone,
             )
         except Exception as e:
-            logger.error(f"Error creating summary report: {e}")
+            logger.error("Error creating utilization summary report", exc_info=True)
             return self._create_error_response(
                 f"Failed to generate summary: {e!s}",
                 analysis_type,
@@ -254,12 +262,14 @@ class TimeSeriesAnalyzer:
                 }
 
             logger.info(
-                f"Analysis period determined: {analysis_start} to {analysis_end}"
+                "Analysis period determined: %s to %s",
+                analysis_start,
+                analysis_end,
             )
             return {"period": (analysis_start, analysis_end)}
 
         except Exception as e:
-            logger.error(f"Exception in analysis period determination: {e}")
+            logger.error("Exception determining analysis period", exc_info=True)
             return {
                 "error": f"Failed to determine analysis period: {e!s}",
                 "details": str(e),
@@ -281,9 +291,9 @@ class TimeSeriesAnalyzer:
             )
             if all_sessions is None:
                 all_sessions = []
-            logger.info(f"Found {len(all_sessions)} sessions")
-        except Exception as e:
-            logger.error(f"Error finding sessions: {e}")
+            logger.info("Found %s sessions", len(all_sessions))
+        except Exception:
+            logger.error("Error finding sessions", exc_info=True)
             all_sessions = []
 
         # Determine bucket type and create time buckets
@@ -295,7 +305,11 @@ class TimeSeriesAnalyzer:
             )
             if time_buckets is None:
                 time_buckets = []
-            logger.info(f"Created {len(time_buckets)} time buckets")
+            logger.info(
+                "Created %s time buckets for %s analysis",
+                len(time_buckets),
+                analysis_type,
+            )
 
             return {
                 "sessions": all_sessions,
@@ -303,7 +317,7 @@ class TimeSeriesAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error creating time buckets: {e}")
+            logger.error("Error creating time buckets", exc_info=True)
             return {"error": f"Failed to create time buckets: {e!s}"}
 
     def _get_time_bucket_hours(self, analysis_type: str) -> Union[int, str]:
@@ -348,7 +362,7 @@ class TimeSeriesAnalyzer:
             return {"reports": bucket_reports}
 
         except Exception as e:
-            logger.error(f"Error creating bucket reports: {e}")
+            logger.error("Error creating bucket reports", exc_info=True)
             return {"error": f"Failed to create bucket reports: {e!s}"}
 
     def _create_weekly_bucket_reports(
@@ -458,7 +472,7 @@ class TimeSeriesAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error in weekly bucket report generation: {e}")
+            logger.error("Error generating weekly bucket report", exc_info=True)
             return self._create_error_weekly_bucket_report(
                 bucket_start, bucket_end, bucket_index, period_info, str(e)
             )
@@ -523,6 +537,16 @@ class TimeSeriesAnalyzer:
 
         session_start = session.get("start_time")
         session_end = session.get("end_time")
+
+        if not isinstance(session_start, datetime) or not isinstance(
+            session_end, datetime
+        ):
+            return None
+
+        if not isinstance(session_start, datetime) or not isinstance(
+            session_end, datetime
+        ):
+            return None
 
         if not session_start or not session_end:
             return None
@@ -609,8 +633,8 @@ class TimeSeriesAnalyzer:
                 if session_report and isinstance(session_report, dict):
                     session_util = session_report.get("system_utilization_percent", 0)
                     return session_report, session_util
-            except Exception as e:
-                logger.error(f"Error analyzing session for weekly report: {e}")
+            except Exception:
+                logger.error("Error analyzing session for weekly report", exc_info=True)
 
         return {}, 0
 
@@ -806,7 +830,11 @@ class TimeSeriesAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error processing daily bucket {bucket_index}: {e}")
+            logger.error(
+                "Error processing daily bucket %s",
+                bucket_index,
+                exc_info=True,
+            )
             return self._create_error_daily_bucket_report(bucket_index, str(e))
 
     def _extract_and_validate_daily_bucket_data(
@@ -831,13 +859,14 @@ class TimeSeriesAnalyzer:
         # Validate and adjust bucket times
         if bucket_start < start_time or bucket_end > end_time:
             logger.warning(
-                f"Daily bucket {bucket_index} extends outside analysis period, clipping to bounds"
+                "Daily bucket %s extends outside analysis period, clipping to bounds",
+                bucket_index,
             )
             bucket_start = max(bucket_start, start_time)
             bucket_end = min(bucket_end, end_time)
 
         if not bucket_start or not bucket_end or bucket_start >= bucket_end:
-            logger.warning(f"Invalid bucket times for daily bucket {bucket_index}")
+            logger.warning("Invalid bucket times for daily bucket %s", bucket_index)
             return None
 
         return {
@@ -877,9 +906,11 @@ class TimeSeriesAnalyzer:
                         day_node_utilizations, session_result["node_data"]
                     )
 
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    f"Error processing session for daily bucket {bucket_index}: {e}"
+                    "Error processing session for daily bucket %s",
+                    bucket_index,
+                    exc_info=True,
                 )
                 continue
 
@@ -920,8 +951,8 @@ class TimeSeriesAnalyzer:
             session_report = self.analyzer._analyze_session_utilization(session)
             if not isinstance(session_report, dict):
                 session_report = {}
-        except Exception as e:
-            logger.error(f"Error analyzing session for daily bucket: {e}")
+        except Exception:
+            logger.error("Error analyzing session for daily bucket", exc_info=True)
             session_report = {}
 
         # Extract session metrics with safety checks
@@ -950,8 +981,8 @@ class TimeSeriesAnalyzer:
                         and overlap_start <= exp["event_timestamp"] <= overlap_end
                     )
                 ]
-            except Exception as e:
-                logger.error(f"Error filtering session experiments: {e}")
+            except Exception:
+                logger.error("Error filtering session experiments", exc_info=True)
 
         session_fragment = {
             "session_type": session.get("session_type", "unknown"),
@@ -1027,9 +1058,11 @@ class TimeSeriesAnalyzer:
                         "total": day_data["total_runtime"],
                     },
                 }
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    f"Error processing final node utilization for {node_id}: {e}"
+                    "Error processing final node utilization for %s",
+                    node_id,
+                    exc_info=True,
                 )
                 continue
 
@@ -1196,7 +1229,9 @@ class TimeSeriesAnalyzer:
             )
 
         except Exception as e:
-            logger.error(f"Error processing bucket {bucket_index}: {e}")
+            logger.error(
+                "Error processing monthly bucket %s", bucket_index, exc_info=True
+            )
             return self._create_error_bucket_report(bucket_index, str(e))
 
     def _extract_and_validate_bucket_data(
@@ -1219,15 +1254,20 @@ class TimeSeriesAnalyzer:
             period_info = {"type": "period", "display": user_start.strftime("%Y-%m")}
 
         # Validate and adjust bucket times
-        if bucket_start < start_time or bucket_end > end_time:
+        if (
+            bucket_start is not None
+            and bucket_end is not None
+            and (bucket_start < start_time or bucket_end > end_time)
+        ):
             logger.warning(
-                f"Bucket {bucket_index} extends outside analysis period, clipping to bounds"
+                "Bucket %s extends outside analysis period, clipping to bounds",
+                bucket_index,
             )
             bucket_start = max(bucket_start, start_time)
             bucket_end = min(bucket_end, end_time)
 
         if not bucket_start or not bucket_end or bucket_start >= bucket_end:
-            logger.warning(f"Invalid bucket times for bucket {bucket_index}")
+            logger.warning("Invalid bucket times for bucket %s", bucket_index)
             return None
 
         return {
@@ -1244,8 +1284,12 @@ class TimeSeriesAnalyzer:
         try:
             experiments = self._get_experiments_in_time_period(bucket_start, bucket_end)
             return experiments if experiments is not None else []
-        except Exception as e:
-            logger.error(f"Error getting experiments for bucket {bucket_index}: {e}")
+        except Exception:
+            logger.error(
+                "Error getting experiments for bucket %s",
+                bucket_index,
+                exc_info=True,
+            )
             return []
 
     def _process_all_sessions_for_month(
@@ -1279,9 +1323,11 @@ class TimeSeriesAnalyzer:
                         month_node_utilizations, session_result["node_data"]
                     )
 
-            except Exception as e:
+            except Exception:
                 logger.error(
-                    f"Error processing session for month bucket {bucket_index}: {e}"
+                    "Error processing session for month bucket %s",
+                    bucket_index,
+                    exc_info=True,
                 )
                 continue
 
@@ -1305,6 +1351,11 @@ class TimeSeriesAnalyzer:
         session_start = session.get("start_time")
         session_end = session.get("end_time")
 
+        if not isinstance(session_start, datetime) or not isinstance(
+            session_end, datetime
+        ):
+            return None
+
         # Calculate overlap
         overlap_start = max(bucket_start, session_start)
         overlap_end = min(bucket_end, session_end)
@@ -1319,8 +1370,8 @@ class TimeSeriesAnalyzer:
             session_report = self.analyzer._analyze_session_utilization(session)
             if not isinstance(session_report, dict):
                 session_report = {}
-        except Exception as e:
-            logger.error(f"Error analyzing session: {e}")
+        except Exception:
+            logger.error("Error analyzing session", exc_info=True)
             session_report = {}
 
         # Extract session metrics with safety checks
@@ -1447,7 +1498,9 @@ class TimeSeriesAnalyzer:
                 }
             except Exception as e:
                 logger.error(
-                    f"Error processing final node utilization for {node_id}: {e}"
+                    "Error processing final node utilization for %s: %s",
+                    node_id,
+                    e,
                 )
                 continue
 
@@ -1559,7 +1612,7 @@ class TimeSeriesAnalyzer:
                     experiment_events = events
                     break
             except Exception as e:
-                logger.warning(f"Experiment query failed: {e}")
+                logger.warning("Experiment query failed: %s", e)
                 continue
 
         # Parse and validate timestamps
@@ -1583,7 +1636,7 @@ class TimeSeriesAnalyzer:
                             }
                         )
             except Exception as e:
-                logger.warning(f"Error processing experiment event: {e}")
+                logger.warning("Error processing experiment event: %s", e)
                 continue
 
         return valid_experiments
@@ -1600,7 +1653,8 @@ class TimeSeriesAnalyzer:
 
         try:
             logger.info(
-                f"Creating summary report from {len(bucket_reports) if bucket_reports else 0} bucket reports"
+                "Creating summary report from %s bucket reports",
+                len(bucket_reports) if bucket_reports else 0,
             )
 
             # Validate input parameters
@@ -1650,7 +1704,9 @@ class TimeSeriesAnalyzer:
             )
 
             logger.info(
-                f"Final summary: {len(node_summary_clean)} nodes, {len(workcell_summary_clean)} workcells"
+                "Final summary: %s nodes, %s workcells",
+                len(node_summary_clean),
+                len(workcell_summary_clean),
             )
 
             return {
@@ -1719,7 +1775,7 @@ class TimeSeriesAnalyzer:
             }
 
         except Exception as e:
-            logger.error(f"Error in summary report creation: {e}")
+            logger.error("Error in summary report creation: %s", e)
             # Ensure we have valid start_time and end_time for error response
             period_start = start_time.isoformat() if start_time else None
             period_end = end_time.isoformat() if end_time else None
@@ -1773,7 +1829,8 @@ class TimeSeriesAnalyzer:
 
             if "error" in bucket_report:
                 logger.warning(
-                    f"Skipping bucket report with error: {bucket_report.get('error')}"
+                    "Skipping bucket report with error: %s",
+                    bucket_report.get("error"),
                 )
                 continue
 
@@ -2006,7 +2063,7 @@ class TimeSeriesAnalyzer:
                     "total_busy_hours": round(data["busy_hours"], 2),
                 }
             except Exception as e:
-                logger.error(f"Error processing node summary for {node_id}: {e}")
+                logger.error("Error processing node summary for %s: %s", node_id, e)
                 continue
 
         return node_summary_clean
@@ -2060,7 +2117,9 @@ class TimeSeriesAnalyzer:
                 }
             except Exception as e:
                 logger.error(
-                    f"Error processing workcell summary for {workcell_id}: {e}"
+                    "Error processing workcell summary for %s: %s",
+                    workcell_id,
+                    e,
                 )
                 continue
 
@@ -2127,7 +2186,7 @@ class TimeSeriesAnalyzer:
             return {"average_utilization": average_utilization, "peak_info": peak_info}
 
         except Exception as e:
-            logger.error(f"Error calculating system metrics: {e}")
+            logger.error("Error calculating system metrics: %s", e)
             return {
                 "average_utilization": 0,
                 "peak_info": {
@@ -2230,7 +2289,7 @@ class TimeSeriesAnalyzer:
             bucket_date = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
             return self._format_period_display_by_type(bucket_date, analysis_type)
         except Exception as e:
-            logger.warning(f"Error parsing start_time for peak period: {e}")
+            logger.warning("Error parsing start_time for peak period: %s", e)
             return None
 
     def _format_period_display_by_type(
@@ -2400,7 +2459,7 @@ class TimeSeriesAnalyzer:
                     )
                     break
             except Exception as e:
-                logger.warning(f"Error querying experiment events: {e}")
+                logger.warning("Error querying experiment events: %s", e)
                 continue
 
         return experiment_events
@@ -2471,7 +2530,7 @@ class TimeSeriesAnalyzer:
                 if experiment_detail:
                     complete_details.append(experiment_detail)
             except Exception as e:
-                logger.error(f"Error processing experiment {exp_id}: {e}")
+                logger.error("Error processing experiment %s: %s", exp_id, e)
                 continue
 
         return complete_details
@@ -2577,7 +2636,7 @@ class TimeSeriesAnalyzer:
         try:
             complete_details.sort(key=lambda x: x.get("start_time", ""))
         except Exception as e:
-            logger.warning(f"Error sorting experiment details: {e}")
+            logger.warning("Error sorting experiment details: %s", e)
 
         return complete_details
 
@@ -2702,7 +2761,7 @@ class TimeSeriesAnalyzer:
                         return name.strip()
 
         except Exception as e:
-            logger.warning(f"Error looking up workcell name in events: {e}")
+            logger.warning("Error looking up workcell name in events: %s", e)
 
         # Fallback to generated name
         return f"Workcell {workcell_id[-8:]}"
@@ -2724,6 +2783,12 @@ class TimeSeriesAnalyzer:
             tz_handler = TimezoneHandler(user_timezone)
 
             # Convert times to user timezone
+            if start_time is None or end_time is None:
+                logger.error(
+                    "start_time or end_time is None in time bucket creation",
+                )
+                return []
+
             user_times = self._convert_to_user_timezone(
                 tz_handler, start_time, end_time
             )
@@ -2737,11 +2802,11 @@ class TimeSeriesAnalyzer:
                 bucket_hours, current_user_time, end_user_time, tz_handler
             )
 
-            logger.info(f"Successfully created {len(buckets)} time buckets")
+            logger.info("Successfully created %s time buckets", len(buckets))
             return buckets
 
         except Exception as e:
-            logger.error(f"Error in time bucket creation: {e}")
+            logger.error("Error in time bucket creation: %s", e)
             return []
 
     def _validate_time_inputs(
@@ -2755,7 +2820,9 @@ class TimeSeriesAnalyzer:
 
         if start_time >= end_time:
             logger.error(
-                f"Invalid time range: start_time ({start_time}) >= end_time ({end_time})"
+                "Invalid time range: start_time (%s) >= end_time (%s)",
+                start_time,
+                end_time,
             )
             return False
 
@@ -2796,9 +2863,13 @@ class TimeSeriesAnalyzer:
             return self._create_weekly_buckets(
                 current_user_time, end_user_time, tz_handler
             )
-        return self._create_hourly_buckets(
-            bucket_hours, current_user_time, end_user_time, tz_handler
-        )
+        if isinstance(bucket_hours, int):
+            return self._create_hourly_buckets(
+                bucket_hours, current_user_time, end_user_time, tz_handler
+            )
+
+        logger.warning("Invalid bucket_hours for hourly buckets: %s", bucket_hours)
+        return []
 
     def _create_monthly_buckets(
         self,
@@ -2826,7 +2897,7 @@ class TimeSeriesAnalyzer:
                 current_user_time = next_month
 
             except Exception as e:
-                logger.error(f"Error creating monthly bucket: {e}")
+                logger.error("Error creating monthly bucket: %s", e)
                 break
 
         return buckets
@@ -2857,7 +2928,7 @@ class TimeSeriesAnalyzer:
                 current_user_time = bucket_end_user
 
             except Exception as e:
-                logger.error(f"Error creating daily bucket: {e}")
+                logger.error("Error creating daily bucket: %s", e)
                 break
 
         return buckets
@@ -2894,7 +2965,7 @@ class TimeSeriesAnalyzer:
             return buckets
 
         except Exception as e:
-            logger.error(f"Error creating weekly buckets: {e}")
+            logger.error("Error creating weekly buckets: %s", e)
             return []
 
     def _create_hourly_buckets(
@@ -2923,7 +2994,7 @@ class TimeSeriesAnalyzer:
             return buckets
 
         except Exception as e:
-            logger.error(f"Error creating hourly/custom buckets: {e}")
+            logger.error("Error creating hourly/custom buckets: %s", e)
             return []
 
     def _get_next_month(self, current_time: datetime) -> datetime:
@@ -2994,7 +3065,9 @@ class TimezoneHandler:
             self.utc_tz = pytz.UTC
         except Exception as e:
             logger.error(
-                f"Error initializing timezone handler with {user_timezone}: {e}"
+                "Error initializing timezone handler with %s: %s",
+                user_timezone,
+                e,
             )
             # Fallback to UTC
             self.user_tz = pytz.UTC
@@ -3011,7 +3084,7 @@ class TimezoneHandler:
                 utc_datetime = self.utc_tz.localize(utc_datetime)
             return utc_datetime.astimezone(self.user_tz)
         except Exception as e:
-            logger.error(f"Error converting UTC to user time: {e}")
+            logger.error("Error converting UTC to user time: %s", e)
             return None
 
     def user_to_utc_time(self, user_datetime: datetime) -> Optional[datetime]:
@@ -3025,5 +3098,5 @@ class TimezoneHandler:
                 user_datetime = self.user_tz.localize(user_datetime)
             return user_datetime.astimezone(self.utc_tz).replace(tzinfo=None)
         except Exception as e:
-            logger.error(f"Error converting user time to UTC: {e}")
+            logger.error("Error converting user time to UTC: %s", e)
             return None

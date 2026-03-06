@@ -7,12 +7,12 @@ Classes
 
 `Step(**data: Any)`
 :   A runtime representation of a step in a workflow.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -55,12 +55,12 @@ Classes
 
 `StepDefinition(**data: Any)`
 :   A definition of a step in a workflow.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)
@@ -117,12 +117,12 @@ Classes
 
 `StepParameters(**data: Any)`
 :   The set of values that are parameterized in the step, depending on either workflow inputs or outputs from prior steps.
-
+    
     Create a new model by parsing and validating input data from keyword arguments.
-
+    
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
     validated to form a valid model.
-
+    
     `self` is explicitly positional-only to allow `self` as a field name.
 
     ### Ancestors (in MRO)

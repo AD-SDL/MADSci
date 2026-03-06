@@ -1,8 +1,11 @@
-name: Docker Image
+name: Build Docker Images
 
 on:
-  push: # * Run for every push
-    branches: [ "*" ]
+  pull_request:
+  push:
+    # Only run on main branch and tags to avoid duplicates with pull_request
+    # PRs will trigger via pull_request event, pushes to main/tags run here
+    branches: [ "main" ]
     tags: [ '*' ]
   schedule: # Run on Tuesday's at 12:00
     - cron: '0 12 * * 2'
@@ -64,7 +67,7 @@ jobs:
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          file: Dockerfile
+          file: docker/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -130,7 +133,7 @@ jobs:
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
           context: .
-          file: Dockerfile.dashboard
+          file: docker/Dockerfile.dashboard
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

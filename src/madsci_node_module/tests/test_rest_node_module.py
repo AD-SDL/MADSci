@@ -20,7 +20,7 @@ from madsci.common.types.action_types import (
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.event_types import Event
-from madsci.common.types.node_types import NodeDefinition, NodeInfo, NodeStatus
+from madsci.common.types.node_types import NodeInfo, NodeStatus
 from madsci.node_module.abstract_node_module import AbstractNode
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -824,28 +824,34 @@ class EnhancedTestNode(TestNode):
         return {"processed": param, "file_size": input_file.stat().st_size}
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def enhanced_test_node():
-    """Create an enhanced test node instance."""
-    node_definition = NodeDefinition(
-        node_name="Enhanced Test Node",
-        module_name="enhanced_test_node",
-        description="An enhanced test node module for automated testing.",
-    )
+    """Create an enhanced test node instance.
 
+    Uses module scope to avoid creating a new node for each test,
+    significantly improving test performance.
+    """
     node = EnhancedTestNode(
-        node_definition=node_definition,
         node_config=TestNodeConfig(
             test_required_param=1,
+            node_name="Enhanced Test Node",
+            module_name="enhanced_test_node",
+            enable_rate_limiting=False,  # Disable rate limiting for tests
         ),
     )
     node.start_node(testing=True)
-    return node
+    yield node
+    # Cleanup after all tests in module
+    if hasattr(node, "event_client") and node.event_client:
+        node.event_client.close()
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def enhanced_client(enhanced_test_node):
-    """Create a test client for the enhanced node."""
+    """Create a test client for the enhanced node.
+
+    Uses module scope to reuse the same client across all tests.
+    """
     with TestClient(enhanced_test_node.rest_api) as client:
         time.sleep(0.1)  # Wait for startup to complete
 
@@ -1623,16 +1629,11 @@ class TestProposalExampleActionResultHandling:
                     f.write("test file content")
                     return Path(f.name)
 
-        node_definition = NodeDefinition(
-            node_name="Proposal Test Node",
-            module_name="proposal_test_node",
-            description="A test node module for testing the action result handling proposal.",
-        )
-
         test_node = ProposalTestNode(
-            node_definition=node_definition,
             node_config=TestNodeConfig(
                 test_required_param=1,
+                node_name="Proposal Test Node",
+                module_name="proposal_test_node",
             ),
         )
         test_node.start_node(testing=True)
@@ -1886,31 +1887,39 @@ class VarArgsTestNode(RestNode):
         }
 
 
-@pytest.fixture
-def var_args_test_node() -> VarArgsTestNode:
-    """Return a VarArgsTestNode instance for testing."""
-    node_definition = NodeDefinition(
-        node_name="Var Args Test Node",
-        module_name="var_args_test_node",
-        description="A test node module for testing *args and **kwargs.",
-    )
+@pytest.fixture(scope="module")
+def var_args_test_node():
+    """Return a VarArgsTestNode instance for testing.
 
-    return VarArgsTestNode(
-        node_definition=node_definition,
+    Uses module scope to avoid creating a new node for each test,
+    significantly improving test performance.
+    """
+    node = VarArgsTestNode(
         node_config=TestNodeConfig(
             test_required_param=1,
+            node_name="Var Args Test Node",
+            module_name="var_args_test_node",
+            enable_rate_limiting=False,  # Disable rate limiting for tests
         ),
     )
+    yield node
+    # Cleanup after all tests in module
+    if hasattr(node, "event_client") and node.event_client:
+        node.event_client.close()
 
 
-@pytest.fixture
-def var_args_test_client(var_args_test_node: VarArgsTestNode) -> TestClient:
-    """Return a TestClient instance for var_args testing."""
+@pytest.fixture(scope="module")
+def var_args_test_client(var_args_test_node: VarArgsTestNode):
+    """Return a TestClient instance for var_args testing.
+
+    Uses module scope to reuse the same client across all tests.
+    """
     # Call parent's start_node to trigger startup logic
     AbstractNode.start_node(var_args_test_node)
     # Now start the REST API
     var_args_test_node.start_node(testing=True)
-    return TestClient(var_args_test_node.rest_api)
+    with TestClient(var_args_test_node.rest_api) as client:
+        yield client
 
 
 class TestNestedTypeAnnotationHandling:

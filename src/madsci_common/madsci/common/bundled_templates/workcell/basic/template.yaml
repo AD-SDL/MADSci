@@ -1,0 +1,30 @@
+name: "Basic Workcell"
+version: "1.0.0"
+description: "A basic workcell configuration"
+category: "workcell"
+tags: ["basic", "starter"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: workcell_name
+    type: string
+    description: "Workcell name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_workcell"
+
+  - name: workcell_description
+    type: string
+    description: "Human-readable description of the workcell"
+    required: true
+    default: "A MADSci workcell"
+
+files:
+  - source: "{{workcell_name}}.workcell.yaml.j2"
+    destination: "{{workcell_name}}.workcell.yaml"
+  - source: ".env.example.j2"
+    destination: ".env.example"
