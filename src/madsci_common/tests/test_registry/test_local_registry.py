@@ -211,26 +211,34 @@ class TestResolveRetry:
             # First registry acquires the lock
             id1 = registry1.resolve("test_node", "node")
 
-            # Release the lock in a background thread after a short delay
-            def release_later():
-                time.sleep(1.0)
-                registry1.release("test_node")
+            # Resolve in a background thread so the main thread can
+            # release the lock deterministically (no sleep-based timing).
+            started = threading.Event()
+            result: dict = {}
 
-            t = threading.Thread(target=release_later, daemon=True)
+            def resolve_in_thread():
+                started.set()
+                result["id"] = registry2.resolve(
+                    "test_node",
+                    "node",
+                    retry_timeout=10.0,
+                )
+
+            t = threading.Thread(target=resolve_in_thread, daemon=True)
             t.start()
 
-            # Second registry retries and should succeed once the lock
-            # is released
-            id2 = registry2.resolve(
-                "test_node",
-                "node",
-                retry_timeout=10.0,
-            )
+            # Wait until the background thread has started, then release
+            # the lock so the retry can succeed.
+            assert started.wait(timeout=5.0)
+            registry1.release("test_node")
+
+            t.join(timeout=10.0)
+            assert not t.is_alive(), "Resolve thread did not complete"
+            id2 = result["id"]
             assert id1 == id2
 
             # Clean up
             registry2.release("test_node")
-            t.join(timeout=5)
 
     def test_resolve_retry_timeout_raises(self):
         """RegistryLockError is raised after retry_timeout expires."""

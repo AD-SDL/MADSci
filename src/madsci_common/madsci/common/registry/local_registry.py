@@ -24,6 +24,9 @@ from madsci.common.utils import new_ulid_str
 
 logger = logging.getLogger(__name__)
 
+RETRY_INTERVAL_SECONDS: float = 2.0
+"""Interval in seconds between resolve() retry attempts on lock contention."""
+
 
 class RegistryError(Exception):
     """General registry error."""
@@ -145,8 +148,9 @@ class LocalRegistryManager:
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
             retry_timeout: When set and a ``RegistryLockError`` occurs,
-                retry every 2 seconds until this many seconds have elapsed.
-                When ``None`` (default), fail immediately on lock contention.
+                retry every ``RETRY_INTERVAL_SECONDS`` until this many
+                seconds have elapsed.  When ``None`` (default), fail
+                immediately on lock contention.
 
         Returns:
             The component's ID (ULID).
@@ -172,7 +176,7 @@ class LocalRegistryManager:
                     name,
                     remaining,
                 )
-                time.sleep(min(2.0, remaining))
+                time.sleep(min(RETRY_INTERVAL_SECONDS, remaining))
 
     def _resolve_once(
         self,

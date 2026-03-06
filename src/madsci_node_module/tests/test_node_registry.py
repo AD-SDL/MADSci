@@ -47,8 +47,7 @@ class TestNodeRegistryResolution:
 
         assert node._resolver is None
 
-    @patch("madsci.node_module.abstract_node_module.IdentityResolver", create=True)
-    def test_resolver_called_when_enabled(self, mock_resolver_cls: MagicMock) -> None:
+    def test_resolver_called_when_enabled(self) -> None:
         """When registry resolution is enabled, resolver should update node_info.node_id."""
         resolved_id = new_ulid_str()
         mock_resolver = MagicMock()
@@ -59,7 +58,7 @@ class TestNodeRegistryResolution:
             is_new=False,
             source="local",
         )
-        mock_resolver_cls.return_value = mock_resolver
+        mock_resolver_cls = MagicMock(return_value=mock_resolver)
 
         config = TestNodeConfig(
             test_required_param=1,
@@ -93,8 +92,7 @@ class TestNodeRegistryResolution:
         assert node.node_info.node_id is not None
         assert len(node.node_info.node_id) > 0
 
-    @patch("madsci.node_module.abstract_node_module.IdentityResolver", create=True)
-    def test_stable_id_across_restarts(self, mock_resolver_cls: MagicMock) -> None:
+    def test_stable_id_across_restarts(self) -> None:
         """Two sequential node instances with the same name should get the same ID."""
         stable_id = new_ulid_str()
         mock_resolver = MagicMock()
@@ -105,7 +103,7 @@ class TestNodeRegistryResolution:
             is_new=False,
             source="local",
         )
-        mock_resolver_cls.return_value = mock_resolver
+        mock_resolver_cls = MagicMock(return_value=mock_resolver)
 
         with patch(
             "madsci.common.registry.identity_resolver.IdentityResolver",
@@ -179,8 +177,7 @@ class TestNodeRegistryResolution:
         # Should not raise
         node._release_registry_identity()
 
-    @patch("madsci.node_module.abstract_node_module.IdentityResolver", create=True)
-    def test_node_name_used_for_resolution(self, mock_resolver_cls: MagicMock) -> None:
+    def test_node_name_used_for_resolution(self) -> None:
         """The node name should be used for registry lookup."""
         resolved_id = new_ulid_str()
         mock_resolver = MagicMock()
@@ -191,7 +188,7 @@ class TestNodeRegistryResolution:
             is_new=True,
             source="local",
         )
-        mock_resolver_cls.return_value = mock_resolver
+        mock_resolver_cls = MagicMock(return_value=mock_resolver)
 
         config = TestNodeConfig(
             test_required_param=1,
