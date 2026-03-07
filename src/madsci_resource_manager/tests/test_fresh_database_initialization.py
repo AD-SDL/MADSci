@@ -40,6 +40,7 @@ def test_resource_manager_with_external_interface_skips_validation(
     settings = ResourceManagerSettings(
         db_url="dummy://url",
         manager_name="Test External Interface Resource Manager",
+        enable_registry_resolution=False,
     )
 
     # This should work even with fresh database because external interface skips validation

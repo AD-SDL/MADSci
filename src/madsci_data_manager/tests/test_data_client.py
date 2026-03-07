@@ -42,7 +42,9 @@ mongo_client = create_mongo_fixture()
 @pytest.fixture
 def test_client(mongo_client: MongoClient) -> TestClient:
     """Data Server Test Client Fixture"""
-    settings = DataManagerSettings(manager_name="Test Data Manager")
+    settings = DataManagerSettings(
+        manager_name="Test Data Manager", enable_registry_resolution=False
+    )
     manager = DataManager(
         settings=settings,
         db_client=mongo_client,

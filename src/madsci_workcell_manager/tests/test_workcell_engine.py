@@ -77,6 +77,7 @@ def state_handler(redis_server: Redis) -> WorkcellStateHandler:
     """Fixture for creating a WorkcellRedisHandler."""
     workcell_settings = WorkcellManagerSettings(
         manager_name="Test Workcell",
+        enable_registry_resolution=False,
     )
     return WorkcellStateHandler(
         workcell_settings=workcell_settings, redis_connection=redis_server

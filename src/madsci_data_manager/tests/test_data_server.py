@@ -40,7 +40,9 @@ db_connection = create_mongo_fixture()
 @pytest.fixture
 def test_manager(db_connection: Database) -> DataManager:
     """Data Manager Fixture"""
-    settings = DataManagerSettings(manager_name="test_data_manager")
+    settings = DataManagerSettings(
+        manager_name="test_data_manager", enable_registry_resolution=False
+    )
     manager = DataManager(settings=settings, db_client=db_connection.client)
     return manager
 
@@ -452,6 +454,7 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         # Create DataManager with MinIO config
         settings = DataManagerSettings(
             manager_name="test_data_manager_with_minio",
+            enable_registry_resolution=False,
         )
 
         manager = DataManager(
@@ -536,6 +539,7 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
     # No mocks - use real MinIO from the fixture
     settings = DataManagerSettings(
         manager_name="test_data_manager_with_minio",
+        enable_registry_resolution=False,
     )
 
     manager = DataManager(

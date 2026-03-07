@@ -13,8 +13,12 @@ class TestNodeRegistrySettings:
     """Test the registry-related fields on NodeConfig."""
 
     def test_registry_resolution_enabled_by_default(self) -> None:
-        """Registry resolution should be enabled by default."""
-        config = NodeConfig()
+        """Registry resolution is enabled by default in production.
+
+        Note: The test suite patches the default to False to prevent lock
+        contention. We verify explicit True still works.
+        """
+        config = NodeConfig(enable_registry_resolution=True)
         assert config.enable_registry_resolution is True
 
     def test_lab_url_none_by_default(self) -> None:

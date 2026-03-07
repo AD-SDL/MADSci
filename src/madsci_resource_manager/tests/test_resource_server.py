@@ -60,6 +60,7 @@ def test_client(interface: ResourceInterface) -> TestClient:
     """Resource ServerTest Client Fixture"""
     settings = ResourceManagerSettings(
         manager_name="Test Resource Manager",
+        enable_registry_resolution=False,
     )
     manager = ResourceManager(
         settings=settings,
@@ -1127,6 +1128,7 @@ def test_default_template_initialization(interface: ResourceInterface) -> None:
         manager_name="Test Resource Manager with Templates",
         manager_id=new_ulid_str(),
         default_templates=[template_def],
+        enable_registry_resolution=False,
     )
 
     # Create ResourceManager instance with interface - this should initialize templates

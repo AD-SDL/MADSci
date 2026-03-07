@@ -55,6 +55,7 @@ def test_client(interface: ResourceInterface) -> TestClient:
     """Resource ServerTest Client Fixture"""
     settings = ResourceManagerSettings(
         manager_name="Test Resource Manager",
+        enable_registry_resolution=False,
     )
     manager = ResourceManager(
         settings=settings,

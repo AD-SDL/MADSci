@@ -44,6 +44,7 @@ def test_manager() -> TestManager:
     settings = TestManagerSettings(
         manager_name="Test Manager",
         manager_type=ManagerType.EVENT_MANAGER,
+        enable_registry_resolution=False,
     )
     return TestManager(settings=settings)
 
@@ -84,6 +85,7 @@ def test_inherited_routes_with_custom_subclass() -> None:
     settings = TestManagerSettings(
         manager_name="Custom Manager",
         manager_type=ManagerType.EVENT_MANAGER,
+        enable_registry_resolution=False,
     )
     manager = CustomManager(settings=settings)
     app = manager.create_server()
@@ -115,6 +117,7 @@ def test_manager_with_overridden_health() -> None:
     settings = TestManagerSettings(
         manager_name="Override Manager",
         manager_type=ManagerType.EVENT_MANAGER,
+        enable_registry_resolution=False,
     )
     manager = HealthOverrideManager(settings=settings)
     app = manager.create_server()
@@ -138,6 +141,7 @@ def test_settings_endpoint_returns_data() -> None:
     settings = TestManagerSettings(
         manager_name="Default Manager",
         manager_type=ManagerType.EVENT_MANAGER,
+        enable_registry_resolution=False,
     )
     manager = DefaultManager(settings=settings)
     app = manager.create_server()

@@ -30,7 +30,7 @@ class TestArgumentParsingNode(RestNode):
     """Test node for argument parsing tests."""
 
     __test__ = False
-    config: TestConfig = TestConfig()
+    config: TestConfig = TestConfig(enable_registry_resolution=False)
     config_model = TestConfig
 
     def startup_handler(self) -> None:

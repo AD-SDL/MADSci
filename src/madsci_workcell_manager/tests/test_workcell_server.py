@@ -54,7 +54,9 @@ mongo_server = create_mongo_fixture()
 @pytest.fixture
 def test_client(redis_server: Redis, mongo_server: Database) -> TestClient:
     """Workcell Server Test Client Fixture"""
-    settings = WorkcellManagerSettings(manager_name="Test Workcell")
+    settings = WorkcellManagerSettings(
+        manager_name="Test Workcell", enable_registry_resolution=False
+    )
     manager = WorkcellManager(
         settings=settings,
         redis_connection=redis_server,

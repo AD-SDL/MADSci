@@ -42,6 +42,7 @@ def stress_test_manager() -> TestManager:
         rate_limit_requests=100,
         rate_limit_window=10,
         rate_limit_exempt_ips=[],  # Disable localhost exemption for stress testing
+        enable_registry_resolution=False,
     )
     return TestManager(settings=settings)
 

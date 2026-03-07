@@ -34,6 +34,7 @@ def test_client(db_connection: Database) -> TestClient:
     """Test client fixture for the Experiment Manager's server."""
     settings = ExperimentManagerSettings(
         manager_name="test_experiment_manager",
+        enable_registry_resolution=False,
     )
     manager = ExperimentManager(
         settings=settings,

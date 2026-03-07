@@ -138,6 +138,7 @@ def test_client(
         manager_name="Test Workcell",
         mongo_db_url=mongo_url,
         database_name=database_name,
+        enable_registry_resolution=False,
     )
 
     with (

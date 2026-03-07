@@ -54,6 +54,7 @@ def app_with_locations(redis_server: Redis, location_defs):
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=location_defs,
+        enable_registry_resolution=False,
     )
 
     manager = LocationManager(settings=settings)
@@ -75,6 +76,7 @@ def empty_app(redis_server: Redis):
     settings = LocationManagerSettings(
         redis_host=redis_server.connection_pool.connection_kwargs["host"],
         redis_port=redis_server.connection_pool.connection_kwargs["port"],
+        enable_registry_resolution=False,
     )
 
     manager = LocationManager(settings=settings)

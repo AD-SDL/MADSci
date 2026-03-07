@@ -25,6 +25,7 @@ from pytest_mock_resources import MongoConfig, create_mongo_fixture
 event_manager_settings = EventManagerSettings(
     manager_name="test_event_manager",
     email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
+    enable_registry_resolution=False,
 )
 
 
@@ -43,6 +44,7 @@ def test_client(db_connection: Database) -> TestClient:
     settings = EventManagerSettings(
         manager_name="test_event_manager",
         email_alerts=EmailAlertsConfig(email_addresses=["test@example.com"]),
+        enable_registry_resolution=False,
     )
     manager = EventManager(
         settings=settings,
@@ -559,6 +561,7 @@ class TestBackgroundRetentionTask:
             retention_enabled=True,
             soft_delete_after_days=1,  # Archive events older than 1 day
             archive_batch_size=10,
+            enable_registry_resolution=False,
         )
         manager = EventManager(
             settings=settings,
@@ -610,6 +613,7 @@ class TestBackgroundRetentionTask:
             soft_delete_after_days=1,
             archive_batch_size=2,  # 2 events per batch
             max_batches_per_run=2,  # Max 2 batches = 4 events max
+            enable_registry_resolution=False,
         )
         manager = EventManager(
             settings=settings,
@@ -649,6 +653,7 @@ class TestBackgroundRetentionTask:
             manager_name="test_event_manager",
             retention_enabled=True,
             soft_delete_after_days=30,
+            enable_registry_resolution=False,
         )
         manager = EventManager(
             settings=settings,
@@ -673,7 +678,7 @@ class TestRetentionErrorHandling:
 
     def test_default_fail_on_retention_error_is_false(self) -> None:
         """Test that fail_on_retention_error defaults to False."""
-        settings = EventManagerSettings()
+        settings = EventManagerSettings(enable_registry_resolution=False)
         assert settings.fail_on_retention_error is False
 
     def test_retention_settings_configuration(self) -> None:
@@ -686,6 +691,7 @@ class TestRetentionErrorHandling:
             archive_batch_size=500,
             max_batches_per_run=50,
             fail_on_retention_error=True,
+            enable_registry_resolution=False,
         )
         assert settings.retention_enabled is True
         assert settings.soft_delete_after_days == 60
