@@ -62,7 +62,7 @@ class TestEventClientOtelIntegration:
         with tracer.start_as_current_span("test-span"):
             captured: list[Event] = []
 
-            def _capture(event: Event, retrying: bool = False) -> None:  # noqa: ARG001
+            def _capture(event: Event) -> None:
                 captured.append(event)
 
             client._send_event_to_event_server = _capture  # type: ignore[method-assign]
@@ -108,8 +108,6 @@ class TestEventClientOtelIntegration:
         assert client._otel_runtime is not None
         assert client._otel_event_counter is not None
         assert client._otel_send_latency_histogram is not None
-        assert client._otel_buffer_size_gauge is not None
-        assert client._otel_retry_counter is not None
 
     # Metrics collection assertions are covered by
     # test_event_client_otel_metrics_subprocess.py to avoid process-global OTEL
