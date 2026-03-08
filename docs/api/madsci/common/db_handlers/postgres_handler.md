@@ -29,13 +29,13 @@ Classes
     `close(self) ‑> None`
     :   Release database connections and resources.
 
-    `create_all_tables(self, metadata: Any) ‑> None`
+    `create_all_tables(self, metadata: Union[MetaData, Any]) ‑> None`
     :   Create all tables defined in the given metadata.
         
         Args:
             metadata: A ``sqlalchemy.MetaData`` or ``sqlmodel.SQLModel.metadata`` object.
 
-    `get_engine(self) ‑> Any`
+    `get_engine(self) ‑> Union[Engine, Any]`
     :   Return the SQLAlchemy Engine instance.
 
     `ping(self) ‑> bool`

@@ -140,7 +140,7 @@ Classes
     `model_config`
     :
 
-`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, db_connection: pymongo.synchronous.database.Database | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, **kwargs: Any)`
+`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, db_connection: ForwardRef('Database') | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, **kwargs: Any)`
 :   Event Manager REST Server.
     
     Initialize the Event Manager.

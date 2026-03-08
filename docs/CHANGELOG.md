@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### EventClient Retry Removal
 - Removed the async retry queue from `EventClient` (background thread, `_event_buffer`, `_retrying`, `_shutdown` state, OTEL buffer-size gauge and retry counter metrics)
 - Event delivery is now synchronous and fire-once; callers should handle failures explicitly
+- Added `madsci.eventclient.send_failures` OTEL counter and upgraded failure logging from `warning` to `error` with structured kwargs (`event_type`, `event_id`)
+
+#### DataManager MinIO Handler Consolidation
+- All MinIO operations now routed through `MinioHandler` abstraction; removed direct `self.minio_client` usage
+- `_setup_object_storage()` wraps legacy `Minio` clients in `RealMinioHandler` (same pattern as other managers wrapping raw connections)
+
+#### Legacy Constructor Parameter Deprecation
+- Legacy database connection parameters (`db_connection`, `db_client`, `redis_connection`, `mongo_connection`) now emit `DeprecationWarning` across all 6 managers and 2 state handlers
 
 #### OpenTelemetry Logging Migration
 - Migrated from deprecated `opentelemetry.sdk._logs.LoggingHandler` to `LoggingInstrumentor` from the `opentelemetry-instrumentation-logging` package
@@ -47,6 +55,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed `pytest-mock-resources` dependency; all tests use in-memory database handlers (no Docker required for unit/integration tests)
 
 ### Fixed
+
+#### Weakref atexit Handlers
+- Manager and node `atexit` handlers now use `weakref.ref` to avoid preventing GC of discarded instances (e.g. in notebook scenarios)
+- Added `_atexit_registered` guard to prevent accumulating duplicate handlers on repeated calls
+
+#### LoggingInstrumentor Double-Instrumentation Guard
+- `configure_otel()` now checks `is_instrumented_by_opentelemetry` before calling `LoggingInstrumentor().instrument()`, preventing duplicate instrumentation when called multiple times (e.g. in test suites)
+
+#### EventManager Lazy pymongo Imports
+- Moved top-level `import pymongo` and `from pymongo import errors` behind `TYPE_CHECKING` guard and into methods, allowing the module to be imported without pymongo installed (in-memory-only usage)
+
+#### InMemoryMongoHandler `_client` Safety
+- `InMemoryMongoHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
+
+#### Handler ABC Return Type Annotations
+- Improved return type annotations on handler ABC methods: `MongoHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
 
 #### Manager Registry Lock Retry + Shutdown Release
 - `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet

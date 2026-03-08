@@ -1,6 +1,7 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
 import json
+import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, ClassVar, Optional, Union
@@ -74,6 +75,18 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         **kwargs: Any,
     ) -> None:
         """Initialize the WorkcellManager."""
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if mongo_connection is not None:
+            warnings.warn(
+                "The 'mongo_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
         self.redis_handler = redis_handler

@@ -1,12 +1,21 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 import asyncio
+import warnings
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    Dict,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
-import pymongo
 from classy_fastapi import delete, get, post
 from fastapi import FastAPI, Query
 from fastapi.exceptions import HTTPException
@@ -31,8 +40,9 @@ from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pydantic import BaseModel, model_validator
-from pymongo import errors
-from pymongo.synchronous.database import Database
+
+if TYPE_CHECKING:
+    from pymongo.synchronous.database import Database
 
 # =============================================================================
 # Request/Response Models for new endpoints
@@ -100,11 +110,17 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
     def __init__(
         self,
         settings: Optional[EventManagerSettings] = None,
-        db_connection: Optional[Database] = None,
+        db_connection: Optional["Database"] = None,
         mongo_handler: Optional[MongoHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Event Manager."""
+        if db_connection is not None:
+            warnings.warn(
+                "The 'db_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         # Store additional dependencies before calling super().__init__
         self._mongo_handler = mongo_handler
         self._db_connection = db_connection
@@ -429,7 +445,10 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 mongo_data = event.to_mongo()
                 try:
                     self.events.insert_one(mongo_data)
-                except errors.DuplicateKeyError:
+                except Exception as insert_err:
+                    # Handle duplicate key errors gracefully
+                    if "DuplicateKeyError" not in type(insert_err).__name__:
+                        raise
                     self.logger.warning(
                         "Duplicate event ID - skipping insert",
                         event_type=EventType.DATA_STORE,
@@ -519,7 +538,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
         event_list = (
             self.events.find(query)
-            .sort("event_timestamp", pymongo.DESCENDING)
+            .sort("event_timestamp", -1)
             .skip(offset)
             .limit(number)
             .to_list()
@@ -647,7 +666,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
             query = {"archived": True}
             event_list = (
                 self.events.find(query)
-                .sort("archived_at", pymongo.DESCENDING)
+                .sort("archived_at", -1)
                 .skip(offset)
                 .limit(number)
                 .to_list()

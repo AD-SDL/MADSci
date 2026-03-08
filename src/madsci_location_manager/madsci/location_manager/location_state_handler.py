@@ -29,6 +29,12 @@ class LocationStateHandler:
         """
         Initialize a LocationStateHandler.
         """
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.settings = settings
         self._manager_id = manager_id
 

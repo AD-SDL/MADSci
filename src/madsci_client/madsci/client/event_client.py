@@ -147,6 +147,7 @@ class EventClient:
         self._otel_runtime = None
         self._otel_event_counter = None
         self._otel_send_latency_histogram = None
+        self._otel_send_failure_counter = None
         if self.config.otel_enabled:
             self._setup_otel()
 
@@ -191,6 +192,11 @@ class EventClient:
             description="Latency of sending events to EventManager",
             unit="ms",
         )
+        self._otel_send_failure_counter = meter.create_counter(
+            name="madsci.eventclient.send_failures",
+            description="Number of failed event deliveries to EventManager",
+            unit="1",
+        )
 
     def _record_otel_event(
         self, *, level: EventLogLevel, event_type: EventType
@@ -216,6 +222,18 @@ class EventClient:
             return
         self._otel_send_latency_histogram.record(
             latency_ms,
+            {
+                "event.type": event_type.value,
+            },
+        )
+
+    def _record_otel_send_failure(self, *, event_type: EventType) -> None:
+        if not (self._otel_runtime and self._otel_runtime.enabled):
+            return
+        if self._otel_send_failure_counter is None:
+            return
+        self._otel_send_failure_counter.add(
+            1,
             {
                 "event.type": event_type.value,
             },
@@ -1077,8 +1095,13 @@ class EventClient:
             )
 
         except Exception:
-            self.logger.warning(
+            self._record_otel_send_failure(
+                event_type=event.event_type or EventType.UNKNOWN,
+            )
+            self.logger.error(
                 "Failed to send event to event server; event persisted locally only",
+                event_type=str(event.event_type),
+                event_id=event.event_id,
                 exc_info=True,
             )
 

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import contextlib
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from pymongo.collection import Collection
 
 
 class MongoHandler(ABC):
@@ -20,7 +23,7 @@ class MongoHandler(ABC):
     """
 
     @abstractmethod
-    def get_collection(self, name: str) -> Any:
+    def get_collection(self, name: str) -> Union[Collection, Any]:
         """Return a collection-like object for the given name.
 
         The returned object supports the pymongo Collection interface:
@@ -132,6 +135,7 @@ class InMemoryMongoHandler(MongoHandler):
             database_name: Name for the database (used when creating a new client).
         """
         if database is not None:
+            self._client = None
             self._database = database
         else:
             from madsci.common.local_backends.inmemory_collection import (  # noqa: PLC0415

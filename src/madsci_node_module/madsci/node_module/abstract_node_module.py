@@ -5,6 +5,7 @@ import contextlib
 import inspect
 import logging
 import threading
+import weakref
 from pathlib import Path
 from typing import (
     Annotated,
@@ -119,6 +120,7 @@ class AbstractNode(MadsciClientMixin):
 
         # Resolve stable identity from registry if enabled
         self._resolver = None
+        self._atexit_registered = False
         if self.config.enable_registry_resolution:
             self._resolve_identity_from_registry()
 
@@ -226,7 +228,16 @@ class AbstractNode(MadsciClientMixin):
 
             self.node_info.node_id = result.id
 
-            atexit.register(self._release_registry_identity)
+            if not self._atexit_registered:
+                ref = weakref.ref(self)
+
+                def _release_on_exit(weak_ref: weakref.ref = ref) -> None:
+                    obj = weak_ref()
+                    if obj is not None:
+                        obj._release_registry_identity()
+
+                atexit.register(_release_on_exit)
+                self._atexit_registered = True
 
         except RegistryLockError:
             raise

@@ -1,5 +1,6 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import warnings
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -48,6 +49,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.redis_connection = redis_connection
         self.redis_handler = redis_handler
         super().__init__(settings=settings, **kwargs)

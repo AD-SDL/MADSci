@@ -70,7 +70,7 @@ Classes
     `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
     :   Execute a database command (e.g. ``ping``).
 
-    `get_collection(self, name: str) ‑> Any`
+    `get_collection(self, name: str) ‑> Union[Collection, Any]`
     :   Return a collection-like object for the given name.
         
         The returned object supports the pymongo Collection interface:

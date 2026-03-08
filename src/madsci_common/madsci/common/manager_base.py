@@ -8,6 +8,7 @@ standardizing common patterns and reducing code duplication.
 import atexit
 import contextlib
 import sys
+import weakref
 from abc import ABCMeta
 from importlib.metadata import version as pkg_version
 from typing import Any, ContextManager, Generic, Optional, TypeVar
@@ -123,6 +124,7 @@ class AbstractManagerBase(
 
         # Resolve identity from registry if enabled
         self._resolver = None
+        self._atexit_registered = False
         if (
             isinstance(self._settings, ManagerSettings)
             and self._settings.enable_registry_resolution
@@ -311,7 +313,16 @@ class AbstractManagerBase(
                 self._settings.manager_id = result.id
 
             # Release the lock on process exit (graceful shutdown)
-            atexit.register(self.release_identity)
+            if not self._atexit_registered:
+                ref = weakref.ref(self)
+
+                def _release_on_exit(weak_ref: weakref.ref = ref) -> None:
+                    obj = weak_ref()
+                    if obj is not None:
+                        obj.release_identity()
+
+                atexit.register(_release_on_exit)
+                self._atexit_registered = True
 
         except RegistryLockError:
             # Lock contention after retry exhaustion is fatal — the

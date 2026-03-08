@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import contextlib
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Union
+
+if TYPE_CHECKING:
+    from sqlalchemy import Engine, MetaData
 
 
 class PostgresHandler(ABC):
@@ -20,11 +23,11 @@ class PostgresHandler(ABC):
     """
 
     @abstractmethod
-    def get_engine(self) -> Any:
+    def get_engine(self) -> Union[Engine, Any]:
         """Return the SQLAlchemy Engine instance."""
 
     @abstractmethod
-    def create_all_tables(self, metadata: Any) -> None:
+    def create_all_tables(self, metadata: Union[MetaData, Any]) -> None:
         """Create all tables defined in the given metadata.
 
         Args:

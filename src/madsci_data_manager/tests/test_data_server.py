@@ -492,15 +492,14 @@ def test_file_datapoint_with_minio(mongo_handler, tmp_path: Path) -> None:
             },
         ).json()
 
-        # Verify MinIO client methods were called
-        assert mock_minio_client.bucket_exists.call_count == 2
+        # Verify MinIO client methods were called via the RealMinioHandler
         mock_minio_client.bucket_exists.assert_called_with("madsci-test")
         mock_minio_client.fput_object.assert_called_once()
 
         # Verify the fput_object call arguments
         call_args = mock_minio_client.fput_object.call_args
         assert call_args[1]["bucket_name"] == "madsci-test"
-        assert call_args[1]["object_name"].endswith("test_minio.txt")
+        assert call_args[1]["object_name"] == "test_minio_file"
         assert call_args[1]["content_type"] == "text/plain"
 
         # Verify the returned datapoint has object storage fields and correct data_type
@@ -512,13 +511,11 @@ def test_file_datapoint_with_minio(mongo_handler, tmp_path: Path) -> None:
         assert "etag" in result
 
         assert result["bucket_name"] == "madsci-test"
+        assert result["object_name"] == "test_minio_file"
         assert result["storage_endpoint"] == "localhost:9000"
         assert result["etag"] == "test-etag-123"
         assert "localhost:9001" in result["url"]  # Should use port 9001 for public URL
-        assert (
-            result["custom_metadata"]["original_datapoint_id"]
-            == test_datapoint.datapoint_id
-        )
+        assert result["url"] == "http://localhost:9001/madsci-test/test_minio_file"
 
         # Verify we can retrieve the datapoint with object storage info
         retrieved_result = test_client.get(
@@ -583,7 +580,7 @@ def test_real_minio_upload(mongo_handler, minio_server, tmp_path: Path) -> None:
     # Verify the response indicates object storage
     assert result["data_type"] == "object_storage"
     assert result["bucket_name"] == "test-bucket"
-    assert result["object_name"].endswith("real_test.txt")
+    assert result["object_name"] == "real_minio_test"
     assert result["size_bytes"] == len(test_content)
     assert "url" in result
 

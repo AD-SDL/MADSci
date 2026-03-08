@@ -139,7 +139,7 @@ Classes
     `close(self) ‑> None`
     :   Release Redis connections and resources.
 
-    `create_dict(self, key: str) ‑> Any`
+    `create_dict(self, key: str) ‑> <class 'collections.abc.MutableMapping'>`
     :   Create a dict-like object backed by Redis.
         
         Returns an object supporting ``__getitem__``, ``__setitem__``,
@@ -152,7 +152,7 @@ Classes
         Returns an object supporting ``append``, ``remove``,
         ``__iter__``, ``__len__``, ``__contains__``.
 
-    `create_lock(self, key: str, auto_release_time: int = 60) ‑> Any`
+    `create_lock(self, key: str, auto_release_time: int = 60) ‑> ContextManager`
     :   Create a distributed lock.
         
         Returns an object supporting context manager protocol

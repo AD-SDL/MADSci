@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import contextlib
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from collections.abc import MutableMapping
+from typing import Any, ContextManager, Optional
 
 
 class RedisHandler(ABC):
@@ -45,7 +46,7 @@ class RedisHandler(ABC):
         """Release Redis connections and resources."""
 
     @abstractmethod
-    def create_dict(self, key: str) -> Any:
+    def create_dict(self, key: str) -> MutableMapping:
         """Create a dict-like object backed by Redis.
 
         Returns an object supporting ``__getitem__``, ``__setitem__``,
@@ -62,7 +63,7 @@ class RedisHandler(ABC):
         """
 
     @abstractmethod
-    def create_lock(self, key: str, auto_release_time: int = 60) -> Any:
+    def create_lock(self, key: str, auto_release_time: int = 60) -> ContextManager:
         """Create a distributed lock.
 
         Returns an object supporting context manager protocol

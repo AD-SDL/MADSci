@@ -1,6 +1,7 @@
 """Experiment Manager implementation using the new AbstractManagerBase class."""
 
 import datetime
+import warnings
 from pathlib import Path
 from typing import Any, Optional
 
@@ -36,6 +37,18 @@ class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
         **kwargs: Any,
     ) -> None:
         """Initialize the Experiment Manager."""
+        if db_client is not None:
+            warnings.warn(
+                "The 'db_client' parameter is deprecated. Use 'mongo_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if db_connection is not None:
+            warnings.warn(
+                "The 'db_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         # Store additional dependencies before calling super().__init__
         self._mongo_handler = mongo_handler
         self._db_client = db_client

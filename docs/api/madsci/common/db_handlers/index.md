@@ -252,7 +252,7 @@ Classes
     `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
     :   Execute a database command (e.g. ``ping``).
 
-    `get_collection(self, name: str) ‑> Any`
+    `get_collection(self, name: str) ‑> Union[Collection, Any]`
     :   Return a collection-like object for the given name.
         
         The returned object supports the pymongo Collection interface:
@@ -288,13 +288,13 @@ Classes
     `close(self) ‑> None`
     :   Release database connections and resources.
 
-    `create_all_tables(self, metadata: Any) ‑> None`
+    `create_all_tables(self, metadata: Union[MetaData, Any]) ‑> None`
     :   Create all tables defined in the given metadata.
         
         Args:
             metadata: A ``sqlalchemy.MetaData`` or ``sqlmodel.SQLModel.metadata`` object.
 
-    `get_engine(self) ‑> Any`
+    `get_engine(self) ‑> Union[Engine, Any]`
     :   Return the SQLAlchemy Engine instance.
 
     `ping(self) ‑> bool`
@@ -486,7 +486,7 @@ Classes
     `close(self) ‑> None`
     :   Release Redis connections and resources.
 
-    `create_dict(self, key: str) ‑> Any`
+    `create_dict(self, key: str) ‑> <class 'collections.abc.MutableMapping'>`
     :   Create a dict-like object backed by Redis.
         
         Returns an object supporting ``__getitem__``, ``__setitem__``,
@@ -499,7 +499,7 @@ Classes
         Returns an object supporting ``append``, ``remove``,
         ``__iter__``, ``__len__``, ``__contains__``.
 
-    `create_lock(self, key: str, auto_release_time: int = 60) ‑> Any`
+    `create_lock(self, key: str, auto_release_time: int = 60) ‑> ContextManager`
     :   Create a distributed lock.
         
         Returns an object supporting context manager protocol

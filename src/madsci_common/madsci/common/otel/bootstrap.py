@@ -334,7 +334,9 @@ def _configure_logging(
 
     # Use LoggingInstrumentor to automatically bridge stdlib logging → OTEL.
     if _LOGGING_INSTRUMENTOR_AVAILABLE:
-        LoggingInstrumentor().instrument(set_logging_format=True)
+        instrumentor = LoggingInstrumentor()
+        if not instrumentor.is_instrumented_by_opentelemetry:
+            instrumentor.instrument(set_logging_format=True)
 
     return logger_provider
 

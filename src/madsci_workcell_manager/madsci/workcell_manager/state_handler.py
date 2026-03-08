@@ -46,6 +46,18 @@ class WorkcellStateHandler:
         """
         Initialize a StateManager for a given workcell.
         """
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+        if mongo_connection is not None:
+            warnings.warn(
+                "The 'mongo_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.workcell_settings = workcell_settings or WorkcellManagerSettings()
         self._workcell_id = (
             workcell_id or self.workcell_settings.manager_id or new_ulid_str()
