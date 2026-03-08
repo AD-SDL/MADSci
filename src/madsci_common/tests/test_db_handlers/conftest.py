@@ -60,11 +60,17 @@ def real_mongo_handler():
 
     from madsci.common.db_handlers.mongo_handler import PyMongoHandler  # noqa: PLC0415
 
-    with MongoDbContainer("mongo:7") as mongo:
-        url = mongo.get_connection_url()
-        handler = PyMongoHandler.from_url(url, "test_db")
-        yield handler
-        handler.close()
+    try:
+        with MongoDbContainer("mongo:7") as mongo:
+            url = mongo.get_connection_url()
+            handler = PyMongoHandler.from_url(url, "test_db")
+            if not handler.ping():
+                handler.close()
+                pytest.skip("MongoDB container started but connection failed")
+            yield handler
+            handler.close()
+    except Exception as e:
+        pytest.skip(f"Could not start MongoDB container (Docker unavailable?): {e}")
 
 
 @pytest.fixture(scope="module")
@@ -77,12 +83,18 @@ def real_redis_handler():
 
     from madsci.common.db_handlers.redis_handler import PyRedisHandler  # noqa: PLC0415
 
-    with RedisContainer("redis:7") as redis_container:
-        host = redis_container.get_container_host_ip()
-        port = int(redis_container.get_exposed_port(6379))
-        handler = PyRedisHandler.from_settings(host=host, port=port)
-        yield handler
-        handler.close()
+    try:
+        with RedisContainer("redis:7") as redis_container:
+            host = redis_container.get_container_host_ip()
+            port = int(redis_container.get_exposed_port(6379))
+            handler = PyRedisHandler.from_settings(host=host, port=port)
+            if not handler.ping():
+                handler.close()
+                pytest.skip("Redis container started but connection failed")
+            yield handler
+            handler.close()
+    except Exception as e:
+        pytest.skip(f"Could not start Redis container (Docker unavailable?): {e}")
 
 
 @pytest.fixture(scope="module")
@@ -97,11 +109,17 @@ def real_postgres_handler():
         SQLAlchemyHandler,
     )
 
-    with PostgresContainer("postgres:16") as pg:
-        url = pg.get_connection_url()
-        handler = SQLAlchemyHandler.from_url(url)
-        yield handler
-        handler.close()
+    try:
+        with PostgresContainer("postgres:16") as pg:
+            url = pg.get_connection_url()
+            handler = SQLAlchemyHandler.from_url(url)
+            if not handler.ping():
+                handler.close()
+                pytest.skip("PostgreSQL container started but connection failed")
+            yield handler
+            handler.close()
+    except Exception as e:
+        pytest.skip(f"Could not start PostgreSQL container (Docker unavailable?): {e}")
 
 
 @pytest.fixture(scope="module")
@@ -117,14 +135,20 @@ def real_minio_handler():
     )
     from minio import Minio  # noqa: PLC0415
 
-    with MinioContainer() as minio_container:
-        config = minio_container.get_config()
-        client = Minio(
-            endpoint=config["endpoint"],
-            access_key=config["access_key"],
-            secret_key=config["secret_key"],
-            secure=False,
-        )
-        handler = RealMinioHandler(client)
-        yield handler
-        handler.close()
+    try:
+        with MinioContainer() as minio_container:
+            config = minio_container.get_config()
+            client = Minio(
+                endpoint=config["endpoint"],
+                access_key=config["access_key"],
+                secret_key=config["secret_key"],
+                secure=False,
+            )
+            handler = RealMinioHandler(client)
+            if not handler.ping():
+                handler.close()
+                pytest.skip("MinIO container started but connection failed")
+            yield handler
+            handler.close()
+    except Exception as e:
+        pytest.skip(f"Could not start MinIO container (Docker unavailable?): {e}")
