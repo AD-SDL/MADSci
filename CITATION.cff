@@ -1,0 +1,74 @@
+cff-version: "1.2.0"
+authors:
+- family-names: Lewis
+  given-names: Ryan D.
+  orcid: "https://orcid.org/0000-0002-3000-2811"
+- family-names: Ginsburg
+  given-names: Tobias S.
+  orcid: "https://orcid.org/0000-0001-5908-2782"
+- family-names: Ozgulbas
+  given-names: Doga
+  orcid: "https://orcid.org/0000-0003-3653-4779"
+- family-names: Stone
+  given-names: Casey
+  orcid: "https://orcid.org/0009-0006-9208-4046"
+- family-names: Stroka
+  given-names: Abraham
+  orcid: "https://orcid.org/0009-0001-9448-1583"
+- family-names: Cleary
+  given-names: Aileen
+  orcid: "https://orcid.org/0000-0002-5336-9026"
+- family-names: Foster
+  given-names: Ian T.
+  orcid: "https://orcid.org/0000-0003-2129-5269"
+- family-names: Paulson
+  given-names: Noah
+  orcid: "https://orcid.org/0000-0002-3548-9120"
+contact:
+- family-names: Paulson
+  given-names: Noah
+  orcid: "https://orcid.org/0000-0002-3548-9120"
+doi: 10.5281/zenodo.18879108
+message: If you use this software, please cite our article in the
+  Journal of Open Source Software.
+preferred-citation:
+  authors:
+  - family-names: Lewis
+    given-names: Ryan D.
+    orcid: "https://orcid.org/0000-0002-3000-2811"
+  - family-names: Ginsburg
+    given-names: Tobias S.
+    orcid: "https://orcid.org/0000-0001-5908-2782"
+  - family-names: Ozgulbas
+    given-names: Doga
+    orcid: "https://orcid.org/0000-0003-3653-4779"
+  - family-names: Stone
+    given-names: Casey
+    orcid: "https://orcid.org/0009-0006-9208-4046"
+  - family-names: Stroka
+    given-names: Abraham
+    orcid: "https://orcid.org/0009-0001-9448-1583"
+  - family-names: Cleary
+    given-names: Aileen
+    orcid: "https://orcid.org/0000-0002-5336-9026"
+  - family-names: Foster
+    given-names: Ian T.
+    orcid: "https://orcid.org/0000-0003-2129-5269"
+  - family-names: Paulson
+    given-names: Noah
+    orcid: "https://orcid.org/0000-0002-3548-9120"
+  date-published: 2026-03-06
+  doi: 10.21105/joss.09416
+  issn: 2475-9066
+  issue: 119
+  journal: Journal of Open Source Software
+  publisher:
+    name: Open Journals
+  start: 9416
+  title: "MADSci: A modular Python-based framework to enable autonomous
+    science"
+  type: article
+  url: "https://joss.theoj.org/papers/10.21105/joss.09416"
+  volume: 11
+title: "MADSci: A modular Python-based framework to enable autonomous
+  science"
