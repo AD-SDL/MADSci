@@ -14,6 +14,7 @@ from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
 from madsci.common.backup_tools import MongoDBBackupTool
+from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.backup_types import MongoDBBackupSettings
@@ -30,7 +31,7 @@ from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pydantic import BaseModel, model_validator
-from pymongo import MongoClient, errors
+from pymongo import errors
 from pymongo.synchronous.database import Database
 
 # =============================================================================
@@ -100,10 +101,12 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         self,
         settings: Optional[EventManagerSettings] = None,
         db_connection: Optional[Database] = None,
+        mongo_handler: Optional[MongoHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Event Manager."""
         # Store additional dependencies before calling super().__init__
+        self._mongo_handler = mongo_handler
         self._db_connection = db_connection
         super().__init__(settings=settings, **kwargs)
 
@@ -114,9 +117,8 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         """Initialize manager-specific components."""
         super().initialize(**kwargs)
 
-        # Skip version validation if an external db_connection was provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self._db_connection is not None:
+        # Skip version validation if an external handler/connection was provided (e.g., in tests)
+        if self._mongo_handler is not None or self._db_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
                 "External db_connection provided, skipping MongoDB version validation",
@@ -165,11 +167,17 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
-        if self._db_connection is None:
-            db_client = MongoClient(str(self.settings.mongo_db_url))
-            self._db_connection = db_client[self.settings.database_name]
+        if self._mongo_handler is None:
+            if self._db_connection is None:
+                self._mongo_handler = PyMongoHandler.from_url(
+                    str(self.settings.mongo_db_url),
+                    self.settings.database_name,
+                )
+            else:
+                # Legacy path: wrap an externally provided Database object
+                self._mongo_handler = PyMongoHandler(self._db_connection)
 
-        self.events = self._db_connection[self.settings.collection_name]
+        self.events = self._mongo_handler.get_collection(self.settings.collection_name)
 
         # Setup indexes for retention and query performance
         self._setup_indexes()
@@ -243,8 +251,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
         try:
             # Test database connection
-            self._db_connection.command("ping")
-            health.db_connected = True
+            health.db_connected = self._mongo_handler.ping()
 
             # Get total event count
             health.total_events = self.events.count_documents({})

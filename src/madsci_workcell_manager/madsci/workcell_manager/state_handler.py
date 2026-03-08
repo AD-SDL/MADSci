@@ -5,8 +5,13 @@ State management for the WorkcellManager
 import warnings
 from typing import Any, Callable, Optional, Union
 
-import redis
 from fastapi import HTTPException
+from madsci.common.db_handlers import (
+    MongoHandler,
+    PyMongoHandler,
+    PyRedisHandler,
+    RedisHandler,
+)
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellInfo,
@@ -16,10 +21,7 @@ from madsci.common.types.workcell_types import (
 )
 from madsci.common.types.workflow_types import Workflow, WorkflowDefinition
 from madsci.common.utils import new_ulid_str
-from pottery import InefficientAccessWarning, RedisDict, RedisList, Redlock
 from pydantic import AnyUrl, ValidationError
-from pymongo import MongoClient
-from pymongo.synchronous.database import Database
 
 
 class WorkcellStateHandler:
@@ -29,7 +31,6 @@ class WorkcellStateHandler:
     """
 
     state_change_marker = "0"
-    _redis_connection: Any = None
     shutdown: bool = False
 
     def __init__(
@@ -38,7 +39,9 @@ class WorkcellStateHandler:
         workcell_id: Optional[str] = None,
         nodes: Optional[dict[str, str]] = None,
         redis_connection: Optional[Any] = None,
-        mongo_connection: Optional[Database] = None,
+        mongo_connection: Optional[Any] = None,
+        redis_handler: Optional[RedisHandler] = None,
+        mongo_handler: Optional[MongoHandler] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
@@ -48,18 +51,44 @@ class WorkcellStateHandler:
             workcell_id or self.workcell_settings.manager_id or new_ulid_str()
         )
         self._nodes_config = nodes or self.workcell_settings.nodes or {}
-        self._redis_host = self.workcell_settings.redis_host
-        self._redis_port = self.workcell_settings.redis_port
-        self._redis_password = self.workcell_settings.redis_password
-        self._redis_connection = redis_connection
-        if mongo_connection is not None:
-            self.db_connection = mongo_connection
+
+        # Initialize Redis handler
+        if redis_handler is not None:
+            self._redis_handler = redis_handler
+        elif redis_connection is not None:
+            self._redis_handler = PyRedisHandler(redis_connection)
         else:
-            self.db_client = MongoClient(str(self.workcell_settings.mongo_db_url))
-            self.db_connection = self.db_client["workcell_manager"]
-        self.archived_workflows = self.db_connection["archived_workflows"]
-        self.workflow_definitions = self.db_connection["workflow_definitions"]
-        warnings.filterwarnings("ignore", category=InefficientAccessWarning)
+            self._redis_handler = PyRedisHandler.from_settings(
+                host=str(self.workcell_settings.redis_host),
+                port=int(self.workcell_settings.redis_port),
+                password=self.workcell_settings.redis_password or None,
+            )
+
+        # Initialize MongoDB handler
+        if mongo_handler is not None:
+            self._mongo_handler = mongo_handler
+        elif mongo_connection is not None:
+            self._mongo_handler = PyMongoHandler(mongo_connection)
+        else:
+            self._mongo_handler = PyMongoHandler.from_url(
+                str(self.workcell_settings.mongo_db_url),
+                self.workcell_settings.database_name or "workcell_manager",
+            )
+
+        self.archived_workflows = self._mongo_handler.get_collection(
+            "archived_workflows"
+        )
+        self.workflow_definitions = self._mongo_handler.get_collection(
+            "workflow_definitions"
+        )
+
+        # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
+        try:
+            from pottery import InefficientAccessWarning  # noqa: PLC0415
+
+            warnings.filterwarnings("ignore", category=InefficientAccessWarning)
+        except ImportError:
+            pass
 
     def initialize_workcell_state(self) -> None:
         """
@@ -91,68 +120,46 @@ class WorkcellStateHandler:
         return f"madsci:workcell:{self._workcell_id}"
 
     @property
-    def _redis_client(self) -> Any:
-        """
-        Returns a redis.Redis client, but only creates one connection.
-        MyPy can't handle Redis object return types for some reason, so no type-hinting.
-        """
-        if self._redis_connection is None:
-            self._redis_connection = redis.Redis(
-                host=str(self._redis_host),
-                port=int(self._redis_port),
-                db=0,
-                decode_responses=True,
-                password=self._redis_password or None,
-            )
-        return self._redis_connection
+    def _workcell_info(self) -> Any:
+        return self._redis_handler.create_dict(f"{self._workcell_prefix}:workcell_info")
 
     @property
-    def _workcell_info(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:workcell_info", redis=self._redis_client
+    def _nodes(self) -> Any:
+        return self._redis_handler.create_dict(f"{self._workcell_prefix}:nodes")
+
+    @property
+    def _workflow_queue(self) -> Any:
+        return self._redis_handler.create_list(
+            f"{self._workcell_prefix}:workflow_queue"
         )
 
     @property
-    def _nodes(self) -> RedisDict:
-        return RedisDict(key=f"{self._workcell_prefix}:nodes", redis=self._redis_client)
-
-    @property
-    def _workflow_queue(self) -> RedisList:
-        return RedisList(
-            key=f"{self._workcell_prefix}:workflow_queue", redis=self._redis_client
+    def _active_workflows(self) -> Any:
+        return self._redis_handler.create_dict(
+            f"{self._workcell_prefix}:active_workflows"
         )
 
     @property
-    def _active_workflows(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:active_workflows", redis=self._redis_client
-        )
+    def _workcell_status(self) -> Any:
+        return self._redis_handler.create_dict(f"{self._workcell_prefix}:status")
 
-    @property
-    def _workcell_status(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._workcell_prefix}:status", redis=self._redis_client
-        )
-
-    def wc_state_lock(self) -> Redlock:
+    def wc_state_lock(self) -> Any:
         """
         Gets a lock on the workcell's state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us (i.e., in the engine).
         """
-        return Redlock(
-            key=f"{self._workcell_prefix}:state_lock",
-            masters={self._redis_client},
+        return self._redis_handler.create_lock(
+            f"{self._workcell_prefix}:state_lock",
             auto_release_time=60,
         )
 
-    def node_lock(self, node_name: str) -> Redlock:
+    def node_lock(self, node_name: str) -> Any:
         """
         Gets a lock on a specific node's state. This should be called before any state updates are made to a node,
         or where we don't want the node's state to be changing underneath us (i.e., in the engine).
         """
-        return Redlock(
-            key=f"{self._workcell_prefix}:node:{node_name}:lock",
-            masters={self._redis_client},
+        return self._redis_handler.create_lock(
+            f"{self._workcell_prefix}:node:{node_name}:lock",
             auto_release_time=60,
         )
 
@@ -185,11 +192,11 @@ class WorkcellStateHandler:
 
     def mark_state_changed(self) -> int:
         """Marks the state as changed and returns the current state change counter"""
-        return int(self._redis_client.incr(f"{self._workcell_prefix}:state_changed"))
+        return int(self._redis_handler.incr(f"{self._workcell_prefix}:state_changed"))
 
     def has_state_changed(self) -> bool:
         """Returns True if the state has changed since the last time this method was called"""
-        state_change_marker = self._redis_client.get(
+        state_change_marker = self._redis_handler.get(
             f"{self._workcell_prefix}:state_changed"
         )
         if state_change_marker != self.state_change_marker:
@@ -434,3 +441,8 @@ class WorkcellStateHandler:
         Updates the state of a node.
         """
         self.set_node(node_name, func(self.get_node(node_name), *args, **kwargs))
+
+    def close(self) -> None:
+        """Release Redis and MongoDB connections."""
+        self._redis_handler.close()
+        self._mongo_handler.close()

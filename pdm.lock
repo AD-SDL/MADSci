@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:798f1d12a1bdf6611a8962ad5194f42e0307d77592f00438f11cccc25ab50052"
+content_hash = "sha256:cc4327d0a0fed66eaa39b619d327513c73c6070da61d281e79a2f1ead4b6ba9f"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -1044,6 +1044,20 @@ summary = ""
 files = [
     {file = "dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af"},
     {file = "dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f"},
+]
+
+[[package]]
+name = "docker"
+version = "7.1.0"
+summary = ""
+dependencies = [
+    "pywin32; sys_platform == \"win32\"",
+    "requests",
+    "urllib3",
+]
+files = [
+    {file = "docker-7.1.0-py3-none-any.whl", hash = "sha256:c96b93b7f0a746f9e77d325bcfb87422a3d8bd4f03136ae8a85b37f1898d5fc0"},
+    {file = "docker-7.1.0.tar.gz", hash = "sha256:ad8c70e6e3f8926cb8a92619b832b4ea5299e2831c14284663184e200546fa6c"},
 ]
 
 [[package]]
@@ -3881,51 +3895,6 @@ files = [
 ]
 
 [[package]]
-name = "pytest-mock-resources"
-version = "2.12.4"
-summary = ""
-dependencies = [
-    "pytest",
-    "sqlalchemy",
-    "typing-extensions",
-]
-files = [
-    {file = "pytest_mock_resources-2.12.4-py3-none-any.whl", hash = "sha256:9e737cdf9e67b7ce1b9b1da0373b377339b65d206ef5e1237ac8591934429e7e"},
-    {file = "pytest_mock_resources-2.12.4.tar.gz", hash = "sha256:f3734b2f1eb851bc3c44375bd1fccc1571770a190ad16f1efa7655f436be2bf3"},
-]
-
-[[package]]
-name = "pytest-mock-resources"
-version = "2.12.4"
-extras = ["docker"]
-summary = ""
-dependencies = [
-    "filelock",
-    "pytest-mock-resources==2.12.4",
-    "python-on-whales",
-]
-files = [
-    {file = "pytest_mock_resources-2.12.4-py3-none-any.whl", hash = "sha256:9e737cdf9e67b7ce1b9b1da0373b377339b65d206ef5e1237ac8591934429e7e"},
-    {file = "pytest_mock_resources-2.12.4.tar.gz", hash = "sha256:f3734b2f1eb851bc3c44375bd1fccc1571770a190ad16f1efa7655f436be2bf3"},
-]
-
-[[package]]
-name = "pytest-mock-resources"
-version = "2.12.4"
-extras = ["mongo"]
-summary = ""
-dependencies = [
-    "filelock",
-    "pymongo",
-    "pytest-mock-resources==2.12.4",
-    "python-on-whales",
-]
-files = [
-    {file = "pytest_mock_resources-2.12.4-py3-none-any.whl", hash = "sha256:9e737cdf9e67b7ce1b9b1da0373b377339b65d206ef5e1237ac8591934429e7e"},
-    {file = "pytest_mock_resources-2.12.4.tar.gz", hash = "sha256:f3734b2f1eb851bc3c44375bd1fccc1571770a190ad16f1efa7655f436be2bf3"},
-]
-
-[[package]]
 name = "pytest-timeout"
 version = "2.4.0"
 summary = ""
@@ -3968,19 +3937,6 @@ files = [
 ]
 
 [[package]]
-name = "python-on-whales"
-version = "0.80.0"
-summary = ""
-dependencies = [
-    "pydantic",
-    "typing-extensions",
-]
-files = [
-    {file = "python_on_whales-0.80.0-py3-none-any.whl", hash = "sha256:3a7207899e5189695e54859a4c49461306c67fe8545a7eb53f884e342550c37d"},
-    {file = "python_on_whales-0.80.0.tar.gz", hash = "sha256:0f18dda93a621dc34c5c26d0dbdc20003dca07a02114c4ce60910c4afb12c1ac"},
-]
-
-[[package]]
 name = "python-ulid"
 version = "3.1.0"
 summary = ""
@@ -4010,6 +3966,28 @@ summary = ""
 files = [
     {file = "pytz-2026.1.post1-py2.py3-none-any.whl", hash = "sha256:f2fd16142fda348286a75e1a524be810bb05d444e5a081f37f7affc635035f7a"},
     {file = "pytz-2026.1.post1.tar.gz", hash = "sha256:3378dde6a0c3d26719182142c56e60c7f9af7e968076f31aae569d72a0358ee1"},
+]
+
+[[package]]
+name = "pywin32"
+version = "311"
+summary = ""
+files = [
+    {file = "pywin32-311-cp310-cp310-win32.whl", hash = "sha256:d03ff496d2a0cd4a5893504789d4a15399133fe82517455e78bad62efbb7f0a3"},
+    {file = "pywin32-311-cp310-cp310-win_amd64.whl", hash = "sha256:797c2772017851984b97180b0bebe4b620bb86328e8a884bb626156295a63b3b"},
+    {file = "pywin32-311-cp310-cp310-win_arm64.whl", hash = "sha256:0502d1facf1fed4839a9a51ccbcc63d952cf318f78ffc00a7e78528ac27d7a2b"},
+    {file = "pywin32-311-cp311-cp311-win32.whl", hash = "sha256:184eb5e436dea364dcd3d2316d577d625c0351bf237c4e9a5fabbcfa5a58b151"},
+    {file = "pywin32-311-cp311-cp311-win_amd64.whl", hash = "sha256:3ce80b34b22b17ccbd937a6e78e7225d80c52f5ab9940fe0506a1a16f3dab503"},
+    {file = "pywin32-311-cp311-cp311-win_arm64.whl", hash = "sha256:a733f1388e1a842abb67ffa8e7aad0e70ac519e09b0f6a784e65a136ec7cefd2"},
+    {file = "pywin32-311-cp312-cp312-win32.whl", hash = "sha256:750ec6e621af2b948540032557b10a2d43b0cee2ae9758c54154d711cc852d31"},
+    {file = "pywin32-311-cp312-cp312-win_amd64.whl", hash = "sha256:b8c095edad5c211ff31c05223658e71bf7116daa0ecf3ad85f3201ea3190d067"},
+    {file = "pywin32-311-cp312-cp312-win_arm64.whl", hash = "sha256:e286f46a9a39c4a18b319c28f59b61de793654af2f395c102b4f819e584b5852"},
+    {file = "pywin32-311-cp313-cp313-win32.whl", hash = "sha256:f95ba5a847cba10dd8c4d8fefa9f2a6cf283b8b88ed6178fa8a6c1ab16054d0d"},
+    {file = "pywin32-311-cp313-cp313-win_amd64.whl", hash = "sha256:718a38f7e5b058e76aee1c56ddd06908116d35147e133427e59a3983f703a20d"},
+    {file = "pywin32-311-cp313-cp313-win_arm64.whl", hash = "sha256:7b4075d959648406202d92a2310cb990fea19b535c7f4a78d3f5e10b926eeb8a"},
+    {file = "pywin32-311-cp314-cp314-win32.whl", hash = "sha256:b7a2c10b93f8986666d0c803ee19b5990885872a7de910fc460f9b0c2fbf92ee"},
+    {file = "pywin32-311-cp314-cp314-win_amd64.whl", hash = "sha256:3aca44c046bd2ed8c90de9cb8427f581c479e594e99b5c0bb19b29c10fd6cb87"},
+    {file = "pywin32-311-cp314-cp314-win_arm64.whl", hash = "sha256:a508e2d9025764a8270f93111a970e1d0fbfc33f4153b388bb649b7eec4f9b42"},
 ]
 
 [[package]]
@@ -4626,6 +4604,64 @@ summary = ""
 files = [
     {file = "tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55"},
     {file = "tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a"},
+]
+
+[[package]]
+name = "testcontainers"
+version = "4.14.1"
+summary = ""
+dependencies = [
+    "docker",
+    "python-dotenv",
+    "typing-extensions",
+    "urllib3",
+    "wrapt",
+]
+files = [
+    {file = "testcontainers-4.14.1-py3-none-any.whl", hash = "sha256:03dfef4797b31c82e7b762a454b6afec61a2a512ad54af47ab41e4fa5415f891"},
+    {file = "testcontainers-4.14.1.tar.gz", hash = "sha256:316f1bb178d829c003acd650233e3ff3c59a833a08d8661c074f58a4fbd42a64"},
+]
+
+[[package]]
+name = "testcontainers"
+version = "4.14.1"
+extras = ["minio"]
+summary = ""
+dependencies = [
+    "minio",
+    "testcontainers==4.14.1",
+]
+files = [
+    {file = "testcontainers-4.14.1-py3-none-any.whl", hash = "sha256:03dfef4797b31c82e7b762a454b6afec61a2a512ad54af47ab41e4fa5415f891"},
+    {file = "testcontainers-4.14.1.tar.gz", hash = "sha256:316f1bb178d829c003acd650233e3ff3c59a833a08d8661c074f58a4fbd42a64"},
+]
+
+[[package]]
+name = "testcontainers"
+version = "4.14.1"
+extras = ["mongodb"]
+summary = ""
+dependencies = [
+    "pymongo",
+    "testcontainers==4.14.1",
+]
+files = [
+    {file = "testcontainers-4.14.1-py3-none-any.whl", hash = "sha256:03dfef4797b31c82e7b762a454b6afec61a2a512ad54af47ab41e4fa5415f891"},
+    {file = "testcontainers-4.14.1.tar.gz", hash = "sha256:316f1bb178d829c003acd650233e3ff3c59a833a08d8661c074f58a4fbd42a64"},
+]
+
+[[package]]
+name = "testcontainers"
+version = "4.14.1"
+extras = ["redis"]
+summary = ""
+dependencies = [
+    "redis",
+    "testcontainers==4.14.1",
+]
+files = [
+    {file = "testcontainers-4.14.1-py3-none-any.whl", hash = "sha256:03dfef4797b31c82e7b762a454b6afec61a2a512ad54af47ab41e4fa5415f891"},
+    {file = "testcontainers-4.14.1.tar.gz", hash = "sha256:316f1bb178d829c003acd650233e3ff3c59a833a08d8661c074f58a4fbd42a64"},
 ]
 
 [[package]]

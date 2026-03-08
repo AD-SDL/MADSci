@@ -11,6 +11,8 @@ from classy_fastapi import get, post
 from fastapi import Form, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
+from madsci.common.db_handlers.minio_handler import MinioHandler
+from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.object_storage_helpers import (
@@ -39,12 +41,16 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         settings: Optional[DataManagerSettings] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         db_client: Optional[MongoClient] = None,
+        mongo_handler: Optional[MongoHandler] = None,
+        minio_handler: Optional[MinioHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Data Manager."""
         # Store additional dependencies before calling super().__init__
         self._object_storage_settings = object_storage_settings
         self._db_client = db_client
+        self._mongo_handler = mongo_handler
+        self._minio_handler = minio_handler
 
         super().__init__(settings=settings, **kwargs)
 
@@ -56,9 +62,8 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         """Initialize manager-specific components."""
         super().initialize(**kwargs)
 
-        # Skip version validation if an external db_client was provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self._db_client is not None:
+        # Skip version validation if an external handler/connection was provided (e.g., in tests)
+        if self._mongo_handler is not None or self._db_client is not None:
             return
 
         self.logger.info(
@@ -92,34 +97,48 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
-        if self._db_client is None:
-            self._db_client = MongoClient(str(self.settings.mongo_db_url))
+        if self._mongo_handler is None:
+            if self._db_client is not None:
+                # Legacy path: wrap an externally provided MongoClient
+                db = self._db_client[self.settings.database_name]
+                self._mongo_handler = PyMongoHandler(db)
+            else:
+                self._mongo_handler = PyMongoHandler.from_url(
+                    str(self.settings.mongo_db_url),
+                    self.settings.database_name,
+                )
 
-        datapoints_db = self._db_client[self.settings.database_name]
-        self.datapoints = datapoints_db[self.settings.collection_name]
+        self.datapoints = self._mongo_handler.get_collection(
+            self.settings.collection_name
+        )
 
     def _setup_object_storage(self) -> None:
         """Setup MinIO object storage client."""
-        self.minio_client = create_minio_client(
-            object_storage_settings=self._object_storage_settings
-        )
+        if self._minio_handler is not None:
+            # Handler provided directly (e.g., InMemoryMinioHandler for tests)
+            self.minio_client = None
+        else:
+            self.minio_client = create_minio_client(
+                object_storage_settings=self._object_storage_settings
+            )
 
     def get_health(self) -> DataManagerHealth:
         """Get the health status of the Data Manager."""
         health = DataManagerHealth()
 
         try:
-            # Test database connection
-            self._db_client.admin.command("ping")
-            health.db_connected = True
+            # Test database connection via handler
+            health.db_connected = self._mongo_handler.ping()
 
             # Get total datapoints count
             health.total_datapoints = self.datapoints.count_documents({})
 
             # Test storage accessibility
             try:
-                if self.minio_client:
-                    # Try to list buckets to verify MinIO connectivity
+                if self._minio_handler is not None:
+                    health.storage_accessible = self._minio_handler.ping()
+                elif self.minio_client:
+                    # Legacy path: try to list buckets to verify MinIO connectivity
                     list(self.minio_client.list_buckets())
                     health.storage_accessible = True
                 else:

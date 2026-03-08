@@ -1,39 +1,56 @@
 """Test fresh database initialization functionality."""
 
 import pytest
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.common.types.resource_types.definitions import (
     ResourceManagerSettings,
 )
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.resource_interface import ResourceInterface
 from madsci.resource_manager.resource_server import ResourceManager
-from madsci.resource_manager.resource_tables import create_session
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine, inspect, text
+from madsci.resource_manager.resource_tables import ResourceTable, create_session
+from sqlalchemy import inspect, text
 from starlette.testclient import TestClient
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
+@pytest.fixture
+def fresh_sqlite_handler():
+    """Create a fresh SQLiteHandler with NO tables created (empty database)."""
+    handler = SQLiteHandler()
+    yield handler
+    handler.close()
 
 
-# Create a fresh Postgres fixture for fresh database tests (no tables created by default)
-fresh_postgres_engine = create_postgres_fixture()
+@pytest.fixture
+def sqlite_handler_with_tables():
+    """Create a SQLiteHandler with resource tables already created.
+
+    Creates tables individually to avoid the ResourceHistoryTable
+    autoincrement composite PK issue with SQLite.
+    """
+    handler = SQLiteHandler()
+    engine = handler.get_engine()
+    # Create tables individually - skip ResourceHistoryTable which uses
+    # autoincrement composite PKs (not supported by SQLite)
+    for table in ResourceTable.metadata.sorted_tables:
+        if table.name != "resource_history":
+            table.create(engine, checkfirst=True)
+    yield handler
+    handler.close()
 
 
 def test_resource_manager_with_external_interface_skips_validation(
-    fresh_postgres_engine: Engine,
+    sqlite_handler_with_tables: SQLiteHandler,
 ) -> None:
     """Test that providing external resource interface skips validation (existing test pattern)."""
+    engine = sqlite_handler_with_tables.get_engine()
 
     # Create external interface (this is the existing test pattern that works)
     def sessionmaker():
-        return create_session(fresh_postgres_engine)
+        return create_session(engine)
 
     external_interface = ResourceInterface(
-        engine=fresh_postgres_engine, sessionmaker=sessionmaker
+        postgres_handler=sqlite_handler_with_tables, sessionmaker=sessionmaker
     )
 
     # Create resource manager with external interface
@@ -54,9 +71,11 @@ def test_resource_manager_with_external_interface_skips_validation(
     assert health_response.status_code == 200
 
 
-def test_version_checker_fresh_database(fresh_postgres_engine: Engine) -> None:
+def test_version_checker_fresh_database(fresh_sqlite_handler: SQLiteHandler) -> None:
     """Test version checker behavior with fresh database."""
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # Fresh database should have no version
     db_version = version_checker.get_database_version()
@@ -78,10 +97,11 @@ def test_auto_initialization_methods_exist():
     assert callable(ResourceManager._auto_initialize_fresh_database)
 
 
-def test_fresh_database_detection(fresh_postgres_engine: Engine) -> None:
+def test_fresh_database_detection(fresh_sqlite_handler: SQLiteHandler) -> None:
     """Test that is_fresh_database correctly detects fresh databases."""
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
-    version_checker.engine = fresh_postgres_engine
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # Fresh database should be detected as fresh
     assert version_checker.is_fresh_database() is True, (
@@ -89,12 +109,13 @@ def test_fresh_database_detection(fresh_postgres_engine: Engine) -> None:
     )
 
 
-def test_fresh_database_auto_initialization(fresh_postgres_engine: Engine) -> None:
+def test_fresh_database_auto_initialization(
+    fresh_sqlite_handler: SQLiteHandler,
+) -> None:
     """Test that validate_or_fail auto-initializes fresh databases."""
-    # Create a version checker that uses the existing engine directly
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
-    # Replace the engine with the fresh one to avoid connection issues
-    version_checker.engine = fresh_postgres_engine
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # This should auto-initialize without raising an error
     version_checker.validate_or_fail()
@@ -119,11 +140,12 @@ def test_fresh_database_auto_initialization(fresh_postgres_engine: Engine) -> No
 
 
 def test_fresh_database_auto_init_does_not_require_migration_after(
-    fresh_postgres_engine: Engine,
+    fresh_sqlite_handler: SQLiteHandler,
 ) -> None:
     """Test that after auto-initialization, no further migration is needed."""
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
-    version_checker.engine = fresh_postgres_engine
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # Auto-initialize
     version_checker.validate_or_fail()
@@ -140,14 +162,15 @@ def test_fresh_database_auto_init_does_not_require_migration_after(
 
 
 def test_fresh_database_auto_init_creates_version_table(
-    fresh_postgres_engine: Engine,
+    fresh_sqlite_handler: SQLiteHandler,
 ) -> None:
     """Test that auto-initialization creates the schema version table."""
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
-    version_checker.engine = fresh_postgres_engine
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # Initially no schema version table
-    inspector = inspect(fresh_postgres_engine)
+    inspector = inspect(engine)
     initial_tables = inspector.get_table_names()
     assert "madsci_schema_version" not in initial_tables, (
         "Schema version table should not exist initially"
@@ -157,7 +180,7 @@ def test_fresh_database_auto_init_creates_version_table(
     version_checker.validate_or_fail()
 
     # Schema version table should now exist
-    inspector = inspect(fresh_postgres_engine)
+    inspector = inspect(engine)
     final_tables = inspector.get_table_names()
     assert "madsci_schema_version" in final_tables, (
         "Schema version table should exist after auto-initialization"
@@ -165,14 +188,15 @@ def test_fresh_database_auto_init_creates_version_table(
 
 
 def test_existing_database_without_version_tracking_still_requires_migration(
-    fresh_postgres_engine: Engine,
+    fresh_sqlite_handler: SQLiteHandler,
 ) -> None:
     """Test that existing databases without version tracking still require migration."""
-    version_checker = DatabaseVersionChecker(str(fresh_postgres_engine.url))
-    version_checker.engine = fresh_postgres_engine
+    engine = fresh_sqlite_handler.get_engine()
+    version_checker = DatabaseVersionChecker(str(engine.url))
+    version_checker.engine = engine
 
     # Create a resource-related table to make it not fresh
-    with fresh_postgres_engine.connect() as conn:
+    with engine.connect() as conn:
         conn.execute(text("CREATE TABLE resource (id VARCHAR(26) PRIMARY KEY)"))
         conn.commit()
 

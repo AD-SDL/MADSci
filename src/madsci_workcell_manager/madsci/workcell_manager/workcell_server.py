@@ -15,6 +15,7 @@ from madsci.client.location_client import (
 from madsci.common.context import (
     get_current_madsci_context,
 )
+from madsci.common.db_handlers import MongoHandler, RedisHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
@@ -43,7 +44,6 @@ from madsci.workcell_manager.workflow_utils import (
     pause_workflow,
     save_workflow_files,
 )
-from pymongo.synchronous.database import Database
 from ulid import ULID
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -67,13 +67,17 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         self,
         settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
-        mongo_connection: Optional[Database] = None,
+        mongo_connection: Optional[Any] = None,
+        redis_handler: Optional[RedisHandler] = None,
+        mongo_handler: Optional[MongoHandler] = None,
         start_engine: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize the WorkcellManager."""
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
+        self.redis_handler = redis_handler
+        self.mongo_handler = mongo_handler
         self.start_engine = start_engine
 
         super().__init__(settings=settings, **kwargs)
@@ -90,12 +94,12 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         manager_name = self._resolve_name()
         manager_id = self.settings.manager_id
 
-        # Skip version validation if external mongo_connection was provided (e.g., in tests)
+        # Skip version validation if external connections or handlers were provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self.mongo_connection is not None:
-            # External connection provided, likely in test context - skip version validation
+        if self.mongo_connection is not None or self.mongo_handler is not None:
+            # External connection/handler provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo_connection provided, skipping MongoDB version validation",
+                "External mongo connection/handler provided, skipping MongoDB version validation",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
@@ -113,6 +117,8 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
+                redis_handler=self.redis_handler,
+                mongo_handler=self.mongo_handler,
             )
 
             # Initialize clients
@@ -174,6 +180,8 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
+            redis_handler=self.redis_handler,
+            mongo_handler=self.mongo_handler,
         )
 
         # Initialize clients using MadsciClientMixin
@@ -244,13 +252,9 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         health = WorkcellManagerHealth()
 
         try:
-            # Test Redis connection if configured
-            if (
-                hasattr(self.state_handler, "_redis_client")
-                and self.state_handler._redis_client
-            ):
-                self.state_handler._redis_client.ping()
-                health.redis_connected = True
+            # Test Redis connection via handler
+            if hasattr(self.state_handler, "_redis_handler"):
+                health.redis_connected = self.state_handler._redis_handler.ping()
             else:
                 health.redis_connected = None
 

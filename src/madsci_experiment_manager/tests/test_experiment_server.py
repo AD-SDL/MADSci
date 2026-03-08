@@ -1,13 +1,13 @@
 """
 Test the Experiment Manager's REST server.
 
-Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires_
-a working docker installation.
+Uses in-memory MongoDB handler for fast, Docker-free tests.
 """
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -16,21 +16,18 @@ from madsci.common.types.experiment_types import (
     ExperimentStatus,
 )
 from madsci.experiment_manager.experiment_server import ExperimentManager
-from pymongo.database import Database
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
-
-
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Congifure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8.0")
-
-
-db_connection = create_mongo_fixture()
 
 
 @pytest.fixture()
-def test_client(db_connection: Database) -> TestClient:
+def mongo_handler():
+    """Create an InMemoryMongoHandler for testing."""
+    handler = InMemoryMongoHandler(database_name="test_experiments")
+    yield handler
+    handler.close()
+
+
+@pytest.fixture()
+def test_client(mongo_handler) -> TestClient:
     """Test client fixture for the Experiment Manager's server."""
     settings = ExperimentManagerSettings(
         manager_name="test_experiment_manager",
@@ -38,7 +35,7 @@ def test_client(db_connection: Database) -> TestClient:
     )
     manager = ExperimentManager(
         settings=settings,
-        db_connection=db_connection,
+        mongo_handler=mongo_handler,
     )
     app = manager.create_server()
     client = TestClient(app)

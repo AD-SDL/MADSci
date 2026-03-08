@@ -1,8 +1,7 @@
 """
 Test the Event Manager's REST server.
 
-Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires_
-a working docker installation.
+Uses in-memory MongoDB handler for fast, Docker-free tests.
 """
 
 import asyncio
@@ -12,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.common.types.event_types import (
     EmailAlertsConfig,
     Event,
@@ -19,8 +19,6 @@ from madsci.common.types.event_types import (
     EventType,
 )
 from madsci.event_manager.event_server import EventManager
-from pymongo.synchronous.database import Database
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 event_manager_settings = EventManagerSettings(
     manager_name="test_event_manager",
@@ -29,17 +27,16 @@ event_manager_settings = EventManagerSettings(
 )
 
 
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Configure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8.0")
+@pytest.fixture()
+def mongo_handler():
+    """Create an InMemoryMongoHandler for testing."""
+    handler = InMemoryMongoHandler(database_name="test_events")
+    yield handler
+    handler.close()
 
 
-db_connection = create_mongo_fixture()
-
-
-@pytest.fixture
-def test_client(db_connection: Database) -> TestClient:
+@pytest.fixture()
+def test_client(mongo_handler) -> TestClient:
     """Event Server Test Client Fixture"""
     settings = EventManagerSettings(
         manager_name="test_event_manager",
@@ -48,7 +45,7 @@ def test_client(db_connection: Database) -> TestClient:
     )
     manager = EventManager(
         settings=settings,
-        db_connection=db_connection,
+        mongo_handler=mongo_handler,
     )
     app = manager.create_server()
     client = TestClient(app)
@@ -553,7 +550,7 @@ class TestTTLIndex:
 class TestBackgroundRetentionTask:
     """Test the background retention task functionality."""
 
-    def test_archive_old_events_method(self, db_connection: Database) -> None:
+    def test_archive_old_events_method(self, mongo_handler) -> None:
         """Test that _archive_old_events correctly archives old events."""
         # Create manager with retention enabled and short soft_delete period for testing
         settings = EventManagerSettings(
@@ -565,7 +562,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            db_connection=db_connection,
+            mongo_handler=mongo_handler,
         )
 
         # Create old events (2 days ago)
@@ -602,9 +599,7 @@ class TestBackgroundRetentionTask:
         doc = manager.events.find_one({"_id": recent_event.event_id})
         assert doc["archived"] is False
 
-    def test_archive_old_events_respects_batch_limit(
-        self, db_connection: Database
-    ) -> None:
+    def test_archive_old_events_respects_batch_limit(self, mongo_handler) -> None:
         """Test that _archive_old_events respects max_batches_per_run limit."""
         # Create manager with small batch limits
         settings = EventManagerSettings(
@@ -617,7 +612,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            db_connection=db_connection,
+            mongo_handler=mongo_handler,
         )
 
         # Create 10 old events
@@ -645,9 +640,7 @@ class TestBackgroundRetentionTask:
         archived_docs = list(manager.events.find({"archived": True}))
         assert len(archived_docs) == 8
 
-    def test_archive_old_events_no_events_to_archive(
-        self, db_connection: Database
-    ) -> None:
+    def test_archive_old_events_no_events_to_archive(self, mongo_handler) -> None:
         """Test that _archive_old_events handles case with no events to archive."""
         settings = EventManagerSettings(
             manager_name="test_event_manager",
@@ -657,7 +650,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            db_connection=db_connection,
+            mongo_handler=mongo_handler,
         )
 
         # Create only recent events

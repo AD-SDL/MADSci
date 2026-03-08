@@ -14,7 +14,7 @@ docs = [
 dev = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
-    "pytest-mock-resources[docker,mongo]>=2.12.2",
+    "testcontainers[mongodb,redis,postgres,minio]>=4.8.0",
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
@@ -31,6 +31,9 @@ dev = [
 
 [tool.pytest.ini_options]
 timeout = 10
+markers = [
+    "integration: tests that require Docker containers (deselect with '-m \"not integration\"')",
+]
 
 [tool.pydantic_settings_export]
 project_dir = "."

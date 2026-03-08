@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.data_client import DataClient
+from madsci.common.db_handlers import InMemoryRedisHandler
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionFailed,
@@ -40,22 +41,10 @@ from madsci.common.types.workflow_types import (
 from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
-from pytest_mock_resources import RedisConfig, create_redis_fixture
-from redis import Redis
 
 from madsci_workcell_manager.madsci.workcell_manager.workflow_utils import (
     insert_parameters,
 )
-
-
-# Create a Redis server fixture for testing
-@pytest.fixture(scope="session")
-def pmr_redis_config() -> RedisConfig:
-    """Configure the Redis server."""
-    return RedisConfig(image="redis:7.4")
-
-
-redis_server = create_redis_fixture()
 
 test_node = Node(
     node_url="http://node-url",
@@ -73,14 +62,14 @@ test_node = Node(
 
 
 @pytest.fixture
-def state_handler(redis_server: Redis) -> WorkcellStateHandler:
-    """Fixture for creating a WorkcellRedisHandler."""
+def state_handler() -> WorkcellStateHandler:
+    """Fixture for creating a WorkcellStateHandler with in-memory Redis."""
     workcell_settings = WorkcellManagerSettings(
         manager_name="Test Workcell",
         enable_registry_resolution=False,
     )
     return WorkcellStateHandler(
-        workcell_settings=workcell_settings, redis_connection=redis_server
+        workcell_settings=workcell_settings, redis_handler=InMemoryRedisHandler()
     )
 
 

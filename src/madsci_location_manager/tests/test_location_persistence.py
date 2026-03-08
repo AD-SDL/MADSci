@@ -9,6 +9,7 @@ in Redis at runtime. This module tests:
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
     LocationDefinition,
@@ -16,18 +17,14 @@ from madsci.common.types.location_types import (
 )
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
-from pytest_mock_resources import RedisConfig, create_redis_fixture
-from redis import Redis
 
 
-# Create a Redis server fixture for testing
-@pytest.fixture(scope="session")
-def pmr_redis_config() -> RedisConfig:
-    """Configure the Redis server."""
-    return RedisConfig(image="redis:7.4")
-
-
-redis_server = create_redis_fixture()
+@pytest.fixture
+def redis_handler():
+    """Create an InMemoryRedisHandler for testing."""
+    handler = InMemoryRedisHandler()
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
@@ -48,17 +45,14 @@ def location_defs():
 
 
 @pytest.fixture
-def app_with_locations(redis_server: Redis, location_defs):
-    """Create a test app with pre-configured locations in settings."""
+def app_with_locations(redis_handler, location_defs):
+    """Create a test app with pre-configured locations and in-memory Redis handler."""
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=location_defs,
         enable_registry_resolution=False,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     return manager.create_server(version="0.1.0")
 
 
@@ -71,16 +65,13 @@ def client_with_locations(app_with_locations):
 
 
 @pytest.fixture
-def empty_app(redis_server: Redis):
+def empty_app(redis_handler):
     """Create a test app with no pre-configured locations."""
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         enable_registry_resolution=False,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     return manager.create_server(version="0.1.0")
 
 

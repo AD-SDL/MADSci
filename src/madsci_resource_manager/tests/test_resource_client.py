@@ -7,6 +7,7 @@ from unittest.mock import patch
 import httpx
 import pytest
 from madsci.client.resource_client import ResourceClient, ResourceWrapper
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     Asset,
@@ -24,30 +25,28 @@ from madsci.resource_manager.resource_interface import (
 )
 from madsci.resource_manager.resource_server import ResourceManager
 from madsci.resource_manager.resource_tables import Resource, create_session
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
 from starlette.testclient import TestClient
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
-
-
-# Create a Postgres fixture
-postgres_engine = create_postgres_fixture(ResourceTable)
+@pytest.fixture
+def sqlite_handler():
+    """Create a fresh SQLiteHandler for each test."""
+    handler = SQLiteHandler()
+    handler.create_all_tables(ResourceTable.metadata)
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def interface(postgres_engine: Engine) -> ResourceInterface:
+def interface(sqlite_handler: SQLiteHandler) -> ResourceInterface:
     """Resource Table Interface Fixture"""
+    engine = sqlite_handler.get_engine()
 
     def sessionmaker() -> SQLModelSession:
-        return create_session(postgres_engine)
+        return create_session(engine)
 
-    return ResourceInterface(engine=postgres_engine, sessionmaker=sessionmaker)
+    return ResourceInterface(postgres_handler=sqlite_handler, sessionmaker=sessionmaker)
 
 
 @pytest.fixture

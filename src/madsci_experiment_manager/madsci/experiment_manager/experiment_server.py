@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 from classy_fastapi import get, post
 from fastapi import HTTPException
+from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.types.event_types import EventType
@@ -31,10 +32,12 @@ class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
         settings: Optional[ExperimentManagerSettings] = None,
         db_client: Optional[MongoClient] = None,
         db_connection: Optional[Database] = None,
+        mongo_handler: Optional[MongoHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Experiment Manager."""
         # Store additional dependencies before calling super().__init__
+        self._mongo_handler = mongo_handler
         self._db_client = db_client
         self._db_connection = db_connection
 
@@ -47,12 +50,15 @@ class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
         """Initialize manager-specific components."""
         super().initialize(**kwargs)
 
-        # Skip version validation if external db_client or db_connection was provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self._db_client is not None or self._db_connection is not None:
+        # Skip version validation if an external handler/connection was provided (e.g., in tests)
+        if (
+            self._mongo_handler is not None
+            or self._db_client is not None
+            or self._db_connection is not None
+        ):
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
-                "External db_client or db_connection provided, skipping MongoDB version validation",
+                "External db_connection provided, skipping MongoDB version validation",
                 event_type=EventType.MANAGER_START,
             )
             return
@@ -91,12 +97,24 @@ class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
-        if self._db_connection is None:
-            if self._db_client is None:
-                self._db_client = MongoClient(str(self.settings.mongo_db_url))
-            self._db_connection = self._db_client[self.settings.database_name]
+        if self._mongo_handler is None:
+            if self._db_connection is not None:
+                # Legacy path: wrap an externally provided Database object
+                self._mongo_handler = PyMongoHandler(self._db_connection)
+            elif self._db_client is not None:
+                # Legacy path: wrap an externally provided MongoClient
+                self._mongo_handler = PyMongoHandler(
+                    self._db_client[self.settings.database_name]
+                )
+            else:
+                self._mongo_handler = PyMongoHandler.from_url(
+                    str(self.settings.mongo_db_url),
+                    self.settings.database_name,
+                )
 
-        self.experiments = self._db_connection[self.settings.collection_name]
+        self.experiments = self._mongo_handler.get_collection(
+            self.settings.collection_name
+        )
 
     def get_health(self) -> ExperimentManagerHealth:
         """Get the health status of the Experiment Manager."""
@@ -104,14 +122,7 @@ class ExperimentManager(AbstractManagerBase[ExperimentManagerSettings]):
 
         try:
             # Test database connection
-            if self._db_client is not None:
-                self._db_client.admin.command("ping")
-            elif self._db_connection is not None:
-                # Use the database connection directly to ping
-                self._db_connection.client.admin.command("ping")
-            else:
-                raise Exception("No database connection available")
-            health.db_connected = True
+            health.db_connected = self._mongo_handler.ping()
 
             # Get total experiments count
             health.total_experiments = self.experiments.count_documents({})

@@ -6,6 +6,7 @@ import fastapi
 from classy_fastapi import delete, get, post, put
 from fastapi import HTTPException
 from fastapi.params import Body
+from madsci.common.db_handlers.postgres_handler import PostgresHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
@@ -76,12 +77,24 @@ class ResourceManager(AbstractManagerBase[ResourceManagerSettings]):
         self,
         settings: Optional[ResourceManagerSettings] = None,
         resource_interface: Optional[ResourceInterface] = None,
+        postgres_handler: Optional[PostgresHandler] = None,
         **kwargs: Any,
     ) -> None:
-        """Initialize the Resource Manager."""
+        """Initialize the Resource Manager.
+
+        Args:
+            settings: Resource manager settings.
+            resource_interface: Pre-built ResourceInterface instance. If provided,
+                the manager will use it directly and skip database version validation.
+            postgres_handler: PostgresHandler instance for database access. If provided
+                (and resource_interface is not), a ResourceInterface will be created
+                using this handler.
+            **kwargs: Additional keyword arguments passed to AbstractManagerBase.
+        """
         # Store additional dependencies before calling super().__init__
         self._resource_interface = resource_interface
         self._external_resource_interface = resource_interface is not None
+        self._postgres_handler = postgres_handler
 
         super().__init__(settings=settings, **kwargs)
 
@@ -94,9 +107,14 @@ class ResourceManager(AbstractManagerBase[ResourceManagerSettings]):
     def _setup_resource_interface(self) -> None:
         """Setup the resource interface."""
         if not self._resource_interface:
-            self._resource_interface = ResourceInterface(
-                url=self.settings.db_url, logger=self.logger
-            )
+            if self._postgres_handler is not None:
+                self._resource_interface = ResourceInterface(
+                    postgres_handler=self._postgres_handler, logger=self.logger
+                )
+            else:
+                self._resource_interface = ResourceInterface(
+                    url=self.settings.db_url, logger=self.logger
+                )
             self.logger.info(
                 "Initialized resource interface",
                 event_type=EventType.MANAGER_START,
