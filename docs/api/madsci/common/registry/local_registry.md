@@ -5,6 +5,12 @@ Local registry manager for MADSci ID Registry.
 This module provides the local file-based registry that stores component
 name-to-ID mappings on each machine.
 
+Variables
+---------
+
+`RETRY_INTERVAL_SECONDS: float`
+:   Interval in seconds between resolve() retry attempts on lock contention.
+
 Classes
 -------
 
@@ -147,8 +153,9 @@ Classes
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
             retry_timeout: When set and a ``RegistryLockError`` occurs,
-                retry every 2 seconds until this many seconds have elapsed.
-                When ``None`` (default), fail immediately on lock contention.
+                retry every ``RETRY_INTERVAL_SECONDS`` until this many
+                seconds have elapsed.  When ``None`` (default), fail
+                immediately on lock contention.
         
         Returns:
             The component's ID (ULID).

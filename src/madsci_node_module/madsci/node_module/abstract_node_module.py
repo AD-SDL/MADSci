@@ -143,6 +143,23 @@ class AbstractNode(MadsciClientMixin):
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
 
+    def close(self) -> None:
+        """Release registry identity and clean up client resources.
+
+        This method is idempotent and safe to call multiple times.
+        Call this before reassigning a node variable to a new node
+        with the same name (e.g. in notebook cells) to avoid
+        ``RegistryLockError`` from lingering heartbeat threads.
+        """
+        self._release_registry_identity()
+        self._resolver = None
+        self.teardown_clients()
+
+    def __del__(self) -> None:
+        """Best-effort cleanup when the node is garbage-collected."""
+        with contextlib.suppress(Exception):
+            self.close()
+
     def start_node(self) -> None:
         """
         Called once to start the node.

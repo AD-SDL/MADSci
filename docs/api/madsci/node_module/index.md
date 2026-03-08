@@ -79,6 +79,14 @@ Classes
 
     ### Methods
 
+    `close(self) ‑> None`
+    :   Release registry identity and clean up client resources.
+        
+        This method is idempotent and safe to call multiple times.
+        Call this before reassigning a node variable to a new node
+        with the same name (e.g. in notebook cells) to avoid
+        ``RegistryLockError`` from lingering heartbeat threads.
+
     `create_and_upload_file_datapoint(self, file_path: str | pathlib.Path, label: str | None = None) ‑> str`
     :   Create a FileDataPoint and upload it to the data manager.
         

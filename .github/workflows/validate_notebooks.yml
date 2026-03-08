@@ -1,4 +1,4 @@
-name: End-to-End Tests
+name: Validate Example Notebooks
 
 on:
   workflow_run:
@@ -22,7 +22,7 @@ env:
 
 
 jobs:
-  e2e_tests:
+  validate_notebooks:
     runs-on: ubuntu-latest
     # Only run if the docker workflow succeeded, or if triggered manually
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
@@ -116,8 +116,8 @@ jobs:
           echo ""
           echo "=== Lab Manager Logs (last 30 lines) ==="
           docker compose logs lab_manager --tail=30
-      - name: Run the experiment notebook
-        run: timeout 15m just e2e_tests
+      - name: Validate example notebooks
+        run: timeout 15m just validate_notebooks
       - name: Show service logs on failure
         if: failure()
         run: |

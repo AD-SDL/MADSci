@@ -325,6 +325,11 @@ class AbstractManagerBase(
                 exc_info=True,
             )
 
+    def __del__(self) -> None:
+        """Best-effort cleanup when the manager is garbage-collected."""
+        with contextlib.suppress(Exception):
+            self.release_identity()
+
     def release_identity(self) -> None:
         """Release the registry lock for this manager's identity.
 

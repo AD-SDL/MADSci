@@ -277,8 +277,9 @@ Classes
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
             retry_timeout: When set and a ``RegistryLockError`` occurs,
-                retry every 2 seconds until this many seconds have elapsed.
-                When ``None`` (default), fail immediately on lock contention.
+                retry every ``RETRY_INTERVAL_SECONDS`` until this many
+                seconds have elapsed.  When ``None`` (default), fail
+                immediately on lock contention.
         
         Returns:
             The component's ID (ULID).
