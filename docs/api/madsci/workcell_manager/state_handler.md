@@ -5,7 +5,7 @@ State management for the WorkcellManager
 Classes
 -------
 
-`WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: pymongo.synchronous.database.Database | None = None)`
+`WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None)`
 :   Manages state for a MADSci Workcell, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
     
@@ -29,6 +29,9 @@ Classes
 
     `clear_workcell_info(self) ‑> None`
     :   Empty the workcell info.
+
+    `close(self) ‑> None`
+    :   Release Redis and MongoDB connections.
 
     `delete_active_workflow(self, workflow_id: str) ‑> None`
     :   Deletes an active workflow by ID
@@ -90,7 +93,7 @@ Classes
     `mark_state_changed(self) ‑> int`
     :   Marks the state as changed and returns the current state change counter
 
-    `node_lock(self, node_name: str) ‑> pottery.redlock.Redlock`
+    `node_lock(self, node_name: str) ‑> Any`
     :   Gets a lock on a specific node's state. This should be called before any state updates are made to a node,
         or where we don't want the node's state to be changing underneath us (i.e., in the engine).
 
@@ -124,6 +127,6 @@ Classes
     `update_workflow_queue(self) ‑> None`
     :   Sets the workflow queue based on the current state of the workflows
 
-    `wc_state_lock(self) ‑> pottery.redlock.Redlock`
+    `wc_state_lock(self) ‑> Any`
     :   Gets a lock on the workcell's state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us (i.e., in the engine).

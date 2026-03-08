@@ -7,6 +7,7 @@ Sub-modules
 * madsci.common.backup_tools
 * madsci.common.context
 * madsci.common.data_manipulation
+* madsci.common.db_handlers
 * madsci.common.deprecation
 * madsci.common.exceptions
 * madsci.common.local_backends

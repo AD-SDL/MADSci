@@ -46,14 +46,22 @@ Classes
 `InMemoryRedisDict(*, key: str, redis: Any)`
 :   Drop-in replacement for ``pottery.RedisDict``.
     
-    Supports: ``[]``, ``del``, ``in``, ``update()``, ``clear()``,
-    ``to_dict()``, ``items()``, ``get()``, ``iter()``, ``len()``,
-    ``model_validate`` passthrough via ``to_dict()``.
+    Inherits from ``MutableMapping`` so Pydantic's ``model_validate``
+    treats it as a dict-like, matching the behavior of ``pottery.RedisDict``.
     
     Multiple instances created with the same *key* and *redis* client share
     the same underlying storage, mirroring Redis semantics.
     
     Initialize a shared-storage dict keyed by *key*.
+
+    ### Ancestors (in MRO)
+
+    * collections.abc.MutableMapping
+    * collections.abc.Mapping
+    * collections.abc.Collection
+    * collections.abc.Sized
+    * collections.abc.Iterable
+    * collections.abc.Container
 
     ### Methods
 
