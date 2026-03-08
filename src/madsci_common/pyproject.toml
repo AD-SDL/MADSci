@@ -48,6 +48,7 @@ otel-instrumentation = [
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-instrumentation-asgi>=0.41b0",
     "opentelemetry-instrumentation-requests>=0.41b0",
+    "opentelemetry-instrumentation-logging>=0.41b0",
 ]
 
 [project.scripts]

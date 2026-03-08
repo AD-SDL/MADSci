@@ -15,7 +15,7 @@ from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
 
 try:
-    from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+    from opentelemetry.sdk._logs import LoggerProvider
     from opentelemetry.sdk._logs.export import (
         BatchLogRecordProcessor,
         ConsoleLogRecordExporter,
@@ -39,8 +39,16 @@ try:
     )
 
     _SDK_AVAILABLE = True
+
+    try:
+        from opentelemetry.instrumentation.logging import LoggingInstrumentor
+
+        _LOGGING_INSTRUMENTOR_AVAILABLE = True
+    except ImportError:
+        _LOGGING_INSTRUMENTOR_AVAILABLE = False
 except ImportError:
     _SDK_AVAILABLE = False
+    _LOGGING_INSTRUMENTOR_AVAILABLE = False
 
     if TYPE_CHECKING:
         from opentelemetry.sdk._logs import LoggerProvider
@@ -77,7 +85,6 @@ class OtelRuntime:
     tracer_provider: Optional[TracerProvider] = None
     meter_provider: Optional[MeterProvider] = None
     logger_provider: Optional[LoggerProvider] = None
-    otel_log_handler: Optional[logging.Handler] = None
     in_memory_span_exporter: Optional[InMemorySpanExporter] = None
     in_memory_metric_reader: Optional[InMemoryMetricReader] = None
 
@@ -151,7 +158,7 @@ def configure_otel(config: OtelBootstrapConfig) -> OtelRuntime:
     )
     metrics.set_meter_provider(meter_provider)
 
-    logger_provider, otel_log_handler = _configure_logging(
+    logger_provider = _configure_logging(
         config=config, resource=resource, otlp_endpoint=otlp_endpoint
     )
 
@@ -160,7 +167,6 @@ def configure_otel(config: OtelBootstrapConfig) -> OtelRuntime:
         tracer_provider=tracer_provider,
         meter_provider=meter_provider,
         logger_provider=logger_provider,
-        otel_log_handler=otel_log_handler,
         in_memory_span_exporter=in_memory_span_exporter,
         in_memory_metric_reader=in_memory_metric_reader,
     )
@@ -283,11 +289,13 @@ def _configure_logging(
     config: OtelBootstrapConfig,
     resource: Resource,
     otlp_endpoint: Optional[str],
-) -> tuple[LoggerProvider, logging.Handler]:
+) -> LoggerProvider:
     """Configure OTEL LoggerProvider with appropriate exporter.
 
-    Returns the LoggerProvider and a logging.Handler that bridges stdlib
-    logging to OTEL log records.
+    Uses ``LoggingInstrumentor`` (from ``opentelemetry-instrumentation-logging``)
+    to automatically bridge stdlib logging to OTEL log records via the global
+    ``LoggerProvider``.  Falls back gracefully when the instrumentation package
+    is not installed.
     """
     logger_provider = LoggerProvider(resource=resource)
 
@@ -296,19 +304,11 @@ def _configure_logging(
         logger_provider.add_log_record_processor(
             SimpleLogRecordProcessor(ConsoleLogRecordExporter())
         )
-        set_logger_provider(logger_provider)
-        handler = LoggingHandler(logger_provider=logger_provider)
-        return logger_provider, handler
-
-    if config.exporter == "console":
+    elif config.exporter == "console":
         logger_provider.add_log_record_processor(
             BatchLogRecordProcessor(ConsoleLogRecordExporter())
         )
-        set_logger_provider(logger_provider)
-        handler = LoggingHandler(logger_provider=logger_provider)
-        return logger_provider, handler
-
-    if config.exporter == "otlp":
+    elif config.exporter == "otlp":
         if not otlp_endpoint:
             raise ValueError("otlp_endpoint is required when exporter='otlp'")
         if config.otlp_protocol == "grpc":
@@ -328,14 +328,15 @@ def _configure_logging(
                 BatchLogRecordProcessor(OTLPLogExporter(endpoint=otlp_endpoint))
             )
 
-        set_logger_provider(logger_provider)
-        handler = LoggingHandler(logger_provider=logger_provider)
-        return logger_provider, handler
-
-    # exporter == "none" - no exporter, but still provide handler for trace context
+    # Set the global logger provider so the instrumentor (and any other
+    # consumer) can pick it up.
     set_logger_provider(logger_provider)
-    handler = LoggingHandler(logger_provider=logger_provider)
-    return logger_provider, handler
+
+    # Use LoggingInstrumentor to automatically bridge stdlib logging → OTEL.
+    if _LOGGING_INSTRUMENTOR_AVAILABLE:
+        LoggingInstrumentor().instrument(set_logging_format=True)
+
+    return logger_provider
 
 
 def collect_metrics(runtime: OtelRuntime) -> Optional[Any]:

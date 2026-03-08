@@ -168,10 +168,6 @@ class EventClient:
             )
 
             self._setup_otel_metrics()
-
-            # Attach OTEL log handler to bridge stdlib logs to OTEL
-            if self._otel_runtime.otel_log_handler is not None:
-                self.logger.addHandler(self._otel_runtime.otel_log_handler)
         except Exception:
             self._otel_runtime = None
             self.logger.warning(

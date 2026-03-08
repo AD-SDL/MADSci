@@ -25,6 +25,7 @@ dev = [
     "opentelemetry-instrumentation-fastapi>=0.60b1",
     "opentelemetry-instrumentation-asgi>=0.60b1",
     "opentelemetry-instrumentation-requests>=0.60b1",
+    "opentelemetry-instrumentation-logging>=0.60b1",
     "pytest-asyncio>=1.3.0",
     "papermill>=2.7.0",
 ]

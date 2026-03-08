@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:cc4327d0a0fed66eaa39b619d327513c73c6070da61d281e79a2f1ead4b6ba9f"
+content_hash = "sha256:3b7efc02f7544408f7c1d53e29affbb1a69816e19162128a288f5fb6d812a40a"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -2886,6 +2886,19 @@ dependencies = [
 files = [
     {file = "opentelemetry_instrumentation_fastapi-0.61b0-py3-none-any.whl", hash = "sha256:a1a844d846540d687d377516b2ff698b51d87c781b59f47c214359c4a241047c"},
     {file = "opentelemetry_instrumentation_fastapi-0.61b0.tar.gz", hash = "sha256:3a24f35b07c557ae1bbc483bf8412221f25d79a405f8b047de8b670722e2fa9f"},
+]
+
+[[package]]
+name = "opentelemetry-instrumentation-logging"
+version = "0.61b0"
+summary = ""
+dependencies = [
+    "opentelemetry-api",
+    "opentelemetry-instrumentation",
+]
+files = [
+    {file = "opentelemetry_instrumentation_logging-0.61b0-py3-none-any.whl", hash = "sha256:6d87e5ded6a0128d775d41511f8380910a1b610671081d16efb05ac3711c0074"},
+    {file = "opentelemetry_instrumentation_logging-0.61b0.tar.gz", hash = "sha256:feaa30b700acd2a37cc81db5f562ab0c3a5b6cc2453595e98b72c01dcf649584"},
 ]
 
 [[package]]
