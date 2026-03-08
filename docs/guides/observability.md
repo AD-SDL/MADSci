@@ -181,12 +181,22 @@ Configuration files are located in `examples/example_lab/otel/`:
    - `{job=~".+"}` - All logs
    - `{service_name="madsci.event"}` - Logs from Event Manager
 
+## Log Bridge
+
+When OTEL is enabled, MADSci automatically bridges Python's standard `logging` module to the OTEL log pipeline using `LoggingInstrumentor` from the `opentelemetry-instrumentation-logging` package. This means:
+
+- All stdlib log records are automatically exported to the OTEL collector
+- Trace context (`trace_id`, `span_id`) is injected into every log record
+- No manual log handler configuration is needed — the bridge is set up during OTEL bootstrap
+
+This replaces the older `LoggingHandler` approach (deprecated in the OpenTelemetry SDK) and is included as a dependency of `madsci_common`.
+
 ## Trace Correlation
 
 When OTEL is enabled, MADSci automatically:
 
 1. **Propagates trace context** across HTTP requests between services
-2. **Includes trace_id/span_id** in structured log events
+2. **Includes trace_id/span_id** in structured log events (via the `LoggingInstrumentor` bridge)
 3. **Links logs to traces** via Grafana's derived fields
 
 This allows you to:
@@ -253,6 +263,7 @@ This observability stack is designed for development and demonstration. For prod
 ## Further Reading
 
 - [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+- [OpenTelemetry Logging Instrumentation](https://opentelemetry-python-contrib.readthedocs.io/en/latest/instrumentation/logging/logging.html)
 - [Jaeger Documentation](https://www.jaegertracing.io/docs/)
 - [Prometheus Documentation](https://prometheus.io/docs/)
 - [Grafana Loki Documentation](https://grafana.com/docs/loki/latest/)

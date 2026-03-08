@@ -404,8 +404,9 @@ with ownership_context(experiment_id="exp-123", workflow_id="wf-456") as info:
 ```
 
 ### Testing
-- Uses pytest with docker containers for integration tests
-- Mock resources for database testing
+- Uses pytest with in-memory database handlers for most tests (no Docker required)
+- Docker is only needed for end-to-end tests against the full service stack
+- Database handler abstractions (`db_handlers/`) provide injectable in-memory implementations for all database backends
 - Component tests are located in each package's `tests/` directory
 - **IMPORTANT**: Use `pytest` directly instead of `python -m pytest` for running tests
 
@@ -427,7 +428,7 @@ src/madsci_common/
 ## Important Notes
 
 - Python 3.10+ required
-- Docker required for running services and some tests
+- Docker required for running services and end-to-end tests (most unit/integration tests use in-memory handlers)
 - Pre-commit hooks enforce code quality standards
 - The project is currently in beta with potential breaking changes
 - Each package can be used independently or composed together

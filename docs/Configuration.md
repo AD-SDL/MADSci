@@ -624,6 +624,52 @@ Configuration for the Lab (Squid) client.
 | `LAB_CLIENT_RATE_LIMIT_WARNING_THRESHOLD` | `number`              | `0.8`                   | Threshold (as fraction of limit) at which to log warnings about approaching rate limits | `0.8`                   |
 | `LAB_CLIENT_RATE_LIMIT_RESPECT_LIMITS`    | `boolean`             | `false`                 | Whether to proactively delay requests when approaching rate limits                      | `false`                 |
 
+## NodeConfig
+
+Basic Configuration for a MADSci Node.
+
+**Environment Prefix**: `NODE_`
+
+| Name                              | Type                     | Default | Description                                                                                                                                             | Example |
+|-----------------------------------|--------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `NODE_STATUS_UPDATE_INTERVAL`     | `number` \| `NoneType`   | `2.0`   | The interval in seconds at which the node should update its status.                                                                                     | `2.0`   |
+| `NODE_STATE_UPDATE_INTERVAL`      | `number` \| `NoneType`   | `2.0`   | The interval in seconds at which the node should update its state.                                                                                      | `2.0`   |
+| `NODE_NODE_NAME`                  | `string` \| `NoneType`   | `null`  | Name for this node. If not set, defaults to the class name.                                                                                             | `null`  |
+| `NODE_NODE_ID`                    | `string` \| `NoneType`   | `null`  | Unique ID for this node. If not set, a new ULID is generated.                                                                                           | `null`  |
+| `NODE_NODE_TYPE`                  | `NodeType` \| `NoneType` | `null`  | The type of thing this node provides an interface for.                                                                                                  | `null`  |
+| `NODE_MODULE_NAME`                | `string` \| `NoneType`   | `null`  | Name of the node module implementation.                                                                                                                 | `null`  |
+| `NODE_MODULE_VERSION`             | `string` \| `NoneType`   | `null`  | Version of the node module implementation.                                                                                                              | `null`  |
+| `NODE_ENABLE_REGISTRY_RESOLUTION` | `boolean`                | `true`  | When true, resolve node_id from the ID Registry at startup for stable identity across restarts.                                                         | `true`  |
+| `NODE_LAB_URL`                    | `AnyUrl` \| `NoneType`   | `null`  | Lab Manager URL for distributed registry coordination.                                                                                                  | `null`  |
+| `NODE_REGISTRY_LOCK_TIMEOUT`      | `number`                 | `60.0`  | Seconds to retry registry lock acquisition on contention at startup. Should be at least 2x the lock TTL (30s) to survive ungraceful container restarts. | `60.0`  |
+
+## RestNodeConfig
+
+Default Configuration for a MADSci Node that communicates over REST.
+
+**Environment Prefix**: `NODE_`
+
+| Name                               | Type                     | Default                    | Description                                                                                                                                                            | Example                    |
+|------------------------------------|--------------------------|----------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------|
+| `NODE_STATUS_UPDATE_INTERVAL`      | `number` \| `NoneType`   | `2.0`                      | The interval in seconds at which the node should update its status.                                                                                                    | `2.0`                      |
+| `NODE_STATE_UPDATE_INTERVAL`       | `number` \| `NoneType`   | `2.0`                      | The interval in seconds at which the node should update its state.                                                                                                     | `2.0`                      |
+| `NODE_NODE_NAME`                   | `string` \| `NoneType`   | `null`                     | Name for this node. If not set, defaults to the class name.                                                                                                            | `null`                     |
+| `NODE_NODE_ID`                     | `string` \| `NoneType`   | `null`                     | Unique ID for this node. If not set, a new ULID is generated.                                                                                                          | `null`                     |
+| `NODE_NODE_TYPE`                   | `NodeType` \| `NoneType` | `null`                     | The type of thing this node provides an interface for.                                                                                                                 | `null`                     |
+| `NODE_MODULE_NAME`                 | `string` \| `NoneType`   | `null`                     | Name of the node module implementation.                                                                                                                                | `null`                     |
+| `NODE_MODULE_VERSION`              | `string` \| `NoneType`   | `null`                     | Version of the node module implementation.                                                                                                                             | `null`                     |
+| `NODE_ENABLE_REGISTRY_RESOLUTION`  | `boolean`                | `true`                     | When true, resolve node_id from the ID Registry at startup for stable identity across restarts.                                                                        | `true`                     |
+| `NODE_LAB_URL`                     | `AnyUrl` \| `NoneType`   | `null`                     | Lab Manager URL for distributed registry coordination.                                                                                                                 | `null`                     |
+| `NODE_REGISTRY_LOCK_TIMEOUT`       | `number`                 | `60.0`                     | Seconds to retry registry lock acquisition on contention at startup. Should be at least 2x the lock TTL (30s) to survive ungraceful container restarts.                | `60.0`                     |
+| `NODE_URL` \| `NODE_URL`           | `AnyUrl`                 | `"http://127.0.0.1:2000/"` | The URL used to communicate with the node. This is the base URL for the REST API.                                                                                      | `"http://127.0.0.1:2000/"` |
+| `NODE_UVICORN_KWARGS`              | `object`                 | `{"limit_concurrency":10}` | Configuration for the Uvicorn server that runs the REST API. By default, sets limit_concurrency=10 to protect against connection exhaustion attacks.                   | `{"limit_concurrency":10}` |
+| `NODE_ENABLE_RATE_LIMITING`        | `boolean`                | `true`                     | Enable rate limiting middleware for the REST API.                                                                                                                      | `true`                     |
+| `NODE_RATE_LIMIT_REQUESTS`         | `integer`                | `100`                      | Maximum number of requests allowed per long time window (only used if enable_rate_limiting is True).                                                                   | `100`                      |
+| `NODE_RATE_LIMIT_WINDOW`           | `integer`                | `60`                       | Long time window in seconds for rate limiting (only used if enable_rate_limiting is True).                                                                             | `60`                       |
+| `NODE_RATE_LIMIT_SHORT_REQUESTS`   | `integer` \| `NoneType`  | `50`                       | Maximum number of requests allowed per short time window for burst protection (only used if enable_rate_limiting is True). If None, short window limiting is disabled. | `50`                       |
+| `NODE_RATE_LIMIT_SHORT_WINDOW`     | `integer` \| `NoneType`  | `1`                        | Short time window for burst protection in seconds (only used if enable_rate_limiting is True). If None, short window limiting is disabled.                             | `1`                        |
+| `NODE_RATE_LIMIT_CLEANUP_INTERVAL` | `integer`                | `300`                      | Interval in seconds between cleanup operations to prevent memory leaks (only used if enable_rate_limiting is True).                                                    | `300`                      |
+
 ## PostgreSQLBackupSettings
 
 PostgreSQL-specific backup settings.

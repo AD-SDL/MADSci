@@ -250,23 +250,26 @@ docker compose up -d
 
 ### Option B: Pure Python (No Docker)
 
-Install the managers locally:
+The easiest way to run managers locally without Docker is using MADSci's built-in local mode, which automatically uses in-memory backends:
 
 ```bash
 pip install madsci-event-manager madsci-workcell-manager
+
+# Start all managers in-process with in-memory backends
+madsci start --mode=local
 ```
 
-Start them in separate terminals:
+Alternatively, start them individually in separate terminals:
 
 ```bash
-# Terminal 1: Event Manager (needs MongoDB - use in-memory for testing)
-python -m madsci.event_manager
+# Terminal 1: Event Manager
+madsci start manager event
 
-# Terminal 2: Workcell Manager (needs Redis - use in-memory for testing)
-python -m madsci.workcell_manager
+# Terminal 2: Workcell Manager
+madsci start manager workcell
 ```
 
-**Note**: Pure Python mode with in-memory storage is for development only. Production should use Docker.
+**Note**: Local/in-memory mode is for development only. Production should use Docker with real database backends.
 
 ## Step 4: Start Your Nodes
 

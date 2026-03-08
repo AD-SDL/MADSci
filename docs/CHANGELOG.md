@@ -5,9 +5,17 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.7.1] - 2026-03-05
+## [0.7.1] - 2026-03-08
 
 ### Added
+
+#### Database Handler Abstractions
+- New `madsci.common.db_handlers` package with abstract base classes (`MongoHandler`, `RedisHandler`, `PostgresHandler`, `MinioHandler`) and both real and in-memory implementations
+- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealMinioHandler`
+- In-memory implementations: `InMemoryMongoHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryMinioHandler`
+- All 6 database-backed managers now accept optional handler constructor parameters (`mongo_handler`, `minio_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
+- `LocalRunner` updated to use handler abstractions instead of raw in-memory clients
+- `InMemoryCollection` gained projection support, `replace_one()`, `client` property, and `list_collection_names()`
 
 #### Node Registry Resolution
 - Nodes now resolve stable IDs from the ID Registry at startup, matching the manager pattern
@@ -15,6 +23,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AbstractNode.__init__()` calls `IdentityResolver.resolve_with_info()` to look up or create a stable `node_id`
 - `atexit` handler releases the registry lock on node shutdown for graceful handoff
 - Nodes that fail registry resolution fall back to a generated ULID (non-fatal) unless lock contention exhausts the retry window (fatal `RegistryLockError`)
+
+#### Node Lifecycle Management
+- `AbstractNode.close()` method for explicit registry lock cleanup, recommended for notebook users who reassign node variables
+- `AbstractNode.__del__()` and `AbstractManagerBase.__del__()` for GC-based identity release as a fallback
+
+### Changed
+
+#### EventClient Retry Removal
+- Removed the async retry queue from `EventClient` (background thread, `_event_buffer`, `_retrying`, `_shutdown` state, OTEL buffer-size gauge and retry counter metrics)
+- Event delivery is now synchronous and fire-once; callers should handle failures explicitly
+
+#### OpenTelemetry Logging Migration
+- Migrated from deprecated `opentelemetry.sdk._logs.LoggingHandler` to `LoggingInstrumentor` from the `opentelemetry-instrumentation-logging` package
+- Added `opentelemetry-instrumentation-logging` as a dependency of `madsci_common`
+- Eliminates 44+ deprecation warnings from the OTEL SDK
+
+#### Test Infrastructure
+- Isolated test suite from shared registry via root `conftest.py` that patches `enable_registry_resolution` defaults to `False` and redirects `MADSCI_REGISTRY_PATH` to a temp file
+- Replaced `nbconvert` with `papermill` for notebook validation; CI workflow renamed from `e2e_tests` to `validate_notebooks`
+- Testcontainer fixtures now skip gracefully (`pytest.skip()`) when Docker containers are unavailable instead of hard-failing
+- Added `PortWaitStrategy` to fix testcontainer host port-forwarding race condition on macOS/Rancher Desktop
+- Removed `pytest-mock-resources` dependency; all tests use in-memory database handlers (no Docker required for unit/integration tests)
 
 ### Fixed
 
@@ -25,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `atexit.register(self.release_identity)` ensures the registry lock is released on process exit
 - `IdentityResolver.resolve()` and `resolve_with_info()` now accept a `retry_timeout` parameter, passed through to `LocalRegistryManager.resolve()`
 - `LocalRegistryManager.resolve()` implements retry loop: on `RegistryLockError`, retries every 2s until `retry_timeout` elapses
+
+#### Other Fixes
+- Fixed timezone-naive datetime comparison bug in `ResourceInterface` lock checks
+- Fixed `DatabaseVersionChecker` to only create `SchemaVersionTable` (not all tables) during version checks
 
 ## [0.7.0] - 2026-03-04
 
