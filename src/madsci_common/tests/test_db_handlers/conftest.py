@@ -59,9 +59,14 @@ def real_mongo_handler():
         pytest.skip("testcontainers[mongodb] not installed")
 
     from madsci.common.db_handlers.mongo_handler import PyMongoHandler  # noqa: PLC0415
+    from testcontainers.core.wait_strategies import PortWaitStrategy  # noqa: PLC0415
 
     try:
         with MongoDbContainer("mongo:7") as mongo:
+            # MongoDbContainer._connect() only checks container logs, not host
+            # port reachability. Wait for host-side port forwarding (can lag on
+            # macOS/Rancher Desktop VM networking).
+            PortWaitStrategy(27017).wait_until_ready(mongo)
             url = mongo.get_connection_url()
             handler = PyMongoHandler.from_url(url, "test_db")
             if not handler.ping():
@@ -108,9 +113,15 @@ def real_postgres_handler():
     from madsci.common.db_handlers.postgres_handler import (  # noqa: PLC0415
         SQLAlchemyHandler,
     )
+    from testcontainers.core.wait_strategies import PortWaitStrategy  # noqa: PLC0415
 
     try:
         with PostgresContainer("postgres:16") as pg:
+            # PostgresContainer._connect() uses ExecWaitStrategy (psql inside
+            # container) which doesn't verify host-side port forwarding. Wait
+            # for the mapped port to be reachable from the host (can lag ~1-2s
+            # on macOS/Rancher Desktop VM networking).
+            PortWaitStrategy(5432).wait_until_ready(pg)
             url = pg.get_connection_url()
             handler = SQLAlchemyHandler.from_url(url)
             if not handler.ping():
