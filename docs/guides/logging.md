@@ -409,7 +409,7 @@ EVENT_OTEL_ENDPOINT="http://localhost:4317"
 
 ### Automatic Trace Context
 
-With OTEL enabled, events automatically include:
+With OTEL enabled, MADSci uses `LoggingInstrumentor` from the `opentelemetry-instrumentation-logging` package to automatically bridge Python's stdlib `logging` to the OTEL log pipeline. This injects trace context into every log record, so events automatically include:
 - `trace_id`: W3C trace identifier
 - `span_id`: Current span identifier
 - `parent_span_id`: Parent span identifier (if available)

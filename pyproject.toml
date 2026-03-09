@@ -1,6 +1,6 @@
 [project]
 name = "madsci"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = ["pre-commit>=4.3.0", "structlog>=25.5.0", "colorama>=0.4.6"]
 readme="README.md"
 requires-python = ">=3.10.0"
@@ -14,7 +14,7 @@ docs = [
 dev = [
     "pytest>=8.3.4",
     "pytest-cov>=6.0.0",
-    "pytest-mock-resources[docker,mongo]>=2.12.2",
+    "testcontainers[mongodb,redis,postgres,minio]>=4.8.0",
     "ipykernel>=6.29.5",
     "pre-commit>=4.3.0",
     "pydantic-settings-export>=1.0.2",
@@ -25,11 +25,16 @@ dev = [
     "opentelemetry-instrumentation-fastapi>=0.60b1",
     "opentelemetry-instrumentation-asgi>=0.60b1",
     "opentelemetry-instrumentation-requests>=0.60b1",
+    "opentelemetry-instrumentation-logging>=0.60b1",
     "pytest-asyncio>=1.3.0",
+    "papermill>=2.7.0",
 ]
 
 [tool.pytest.ini_options]
 timeout = 10
+markers = [
+    "integration: tests that require Docker containers (deselect with '-m \"not integration\"')",
+]
 
 [tool.pydantic_settings_export]
 project_dir = "."
@@ -54,6 +59,8 @@ default_settings = [
     "madsci.common.types.client_types:LocationClientConfig",
     "madsci.common.types.client_types:WorkcellClientConfig",
     "madsci.common.types.client_types:LabClientConfig",
+    "madsci.common.types.node_types:NodeConfig",
+    "madsci.common.types.node_types:RestNodeConfig",
     "madsci.common.types.backup_types:PostgreSQLBackupSettings",
     "madsci.common.types.backup_types:MongoDBBackupSettings",
     "madsci.common.types.mongodb_migration_types:MongoDBMigrationSettings",

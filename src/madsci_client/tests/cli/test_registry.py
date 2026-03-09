@@ -1,6 +1,7 @@
 """Tests for the madsci registry command."""
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -45,10 +46,7 @@ class TestRegistryListCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "list"])
 
         assert result.exit_code == 0
@@ -59,10 +57,7 @@ class TestRegistryListCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "list", "--json"])
 
         assert result.exit_code == 0
@@ -74,10 +69,7 @@ class TestRegistryListCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 # First, register an entry by resolving a name
                 from madsci.common.registry import LocalRegistryManager
 
@@ -96,10 +88,7 @@ class TestRegistryListCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 from madsci.common.registry import LocalRegistryManager
 
                 mgr = LocalRegistryManager()
@@ -136,10 +125,7 @@ class TestRegistryResolveCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "resolve", "nonexistent"])
 
         # ctx.exit(1) doesn't set exit_code in Click's CliRunner
@@ -150,10 +136,7 @@ class TestRegistryResolveCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(
                     madsci, ["registry", "resolve", "nonexistent", "--json"]
                 )
@@ -166,10 +149,7 @@ class TestRegistryResolveCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 from madsci.common.registry import LocalRegistryManager
 
                 mgr = LocalRegistryManager()
@@ -205,10 +185,7 @@ class TestRegistryRenameCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(
                     madsci, ["registry", "rename", "old_name", "new_name"]
                 )
@@ -220,10 +197,7 @@ class TestRegistryRenameCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 from madsci.common.registry import LocalRegistryManager
 
                 mgr = LocalRegistryManager()
@@ -256,10 +230,7 @@ class TestRegistryCleanCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "clean", "--force"])
 
         assert result.exit_code == 0
@@ -270,10 +241,7 @@ class TestRegistryCleanCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "clean", "--dry-run"])
 
         assert result.exit_code == 0
@@ -295,10 +263,7 @@ class TestRegistryExportCommand:
         runner = CliRunner()
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(madsci, ["registry", "export"])
 
         assert result.exit_code == 0
@@ -312,10 +277,7 @@ class TestRegistryExportCommand:
         with tempfile.TemporaryDirectory() as tmpdir:
             registry_path = Path(tmpdir) / "registry.json"
             output_path = Path(tmpdir) / "export.json"
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(
                     madsci, ["registry", "export", "--output", str(output_path)]
                 )
@@ -351,10 +313,7 @@ class TestRegistryImportCommand:
             import_data = {"entries": {}, "version": 1}
             import_path.write_text(json.dumps(import_data))
 
-            with patch(
-                "madsci.common.registry.local_registry.LocalRegistryManager._default_path",
-                return_value=registry_path,
-            ):
+            with patch.dict(os.environ, {"MADSCI_REGISTRY_PATH": str(registry_path)}):
                 result = runner.invoke(
                     madsci,
                     ["registry", "import", str(import_path), "--force"],

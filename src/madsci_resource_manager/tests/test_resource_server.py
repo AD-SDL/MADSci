@@ -1,6 +1,7 @@
 """Automated pytest unit tests for the madsci resource manager's REST server."""
 
 import pytest
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.resource_types import (
     Consumable,
@@ -29,30 +30,28 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
 from starlette.testclient import TestClient
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
-
-
-# Create a Postgres fixture
-postgres_engine = create_postgres_fixture(ResourceTable)
+@pytest.fixture
+def sqlite_handler():
+    """Create a fresh SQLiteHandler for each test."""
+    handler = SQLiteHandler()
+    handler.create_all_tables(ResourceTable.metadata)
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def interface(postgres_engine: Engine) -> ResourceInterface:
+def interface(sqlite_handler: SQLiteHandler) -> ResourceInterface:
     """Resource Table Interface Fixture"""
+    engine = sqlite_handler.get_engine()
 
     def sessionmaker() -> SQLModelSession:
-        return create_session(postgres_engine)
+        return create_session(engine)
 
-    return ResourceInterface(engine=postgres_engine, sessionmaker=sessionmaker)
+    return ResourceInterface(postgres_handler=sqlite_handler, sessionmaker=sessionmaker)
 
 
 @pytest.fixture
@@ -60,6 +59,7 @@ def test_client(interface: ResourceInterface) -> TestClient:
     """Resource ServerTest Client Fixture"""
     settings = ResourceManagerSettings(
         manager_name="Test Resource Manager",
+        enable_registry_resolution=False,
     )
     manager = ResourceManager(
         settings=settings,
@@ -1127,6 +1127,7 @@ def test_default_template_initialization(interface: ResourceInterface) -> None:
         manager_name="Test Resource Manager with Templates",
         manager_id=new_ulid_str(),
         default_templates=[template_def],
+        enable_registry_resolution=False,
     )
 
     # Create ResourceManager instance with interface - this should initialize templates

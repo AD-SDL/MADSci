@@ -12,8 +12,8 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 
 ## Server Architecture
 - **DataManager class**: Inherits from `AbstractManagerBase[DataManagerSettings]`
-- **MongoDB Integration**: Uses `pymongo` for datapoint metadata storage in the `madsci_data` database
-- **MinIO/S3 Integration**: Optional object storage using `minio` client with fallback to local filesystem
+- **MongoDB Integration**: Uses `MongoHandler` abstraction for datapoint metadata storage in the `madsci_data` database (`mongo_handler` parameter)
+- **MinIO/S3 Integration**: Uses `MinioHandler` abstraction for object storage (`minio_handler` parameter), with fallback to local filesystem when no object storage is configured
 - **FastAPI Server**: Provides REST endpoints with automatic OpenAPI documentation
 - **Discriminated Union Types**: Uses `DataPoint.discriminate()` for type-safe datapoint handling
 
@@ -32,7 +32,7 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 
 ### Storage Behavior
 - **Local Files**: Organized by date hierarchy (`year/month/day/ulid_filename`)
-- **Object Storage**: Uses `ObjectNamingStrategy.TIMESTAMPED_PATH` for server uploads
+- **Object Storage**: All MinIO operations routed through `self._minio_handler` (no direct `Minio` client usage). Uses label-based object naming for uploads.
 - **Automatic Fallback**: MinIO upload failure falls back to local storage with warning
 
 ## API Endpoints

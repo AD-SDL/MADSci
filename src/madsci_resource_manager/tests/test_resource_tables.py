@@ -1,31 +1,30 @@
 """Pytest unit tests for the Resource SQL Tables"""
 
 import pytest
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.resource_manager.resource_tables import (
     ResourceHistoryTable,
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
 from sqlmodel import select
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
-
-
-# Create a Postgres fixture
-postgres_engine = create_postgres_fixture(ResourceTable)
+@pytest.fixture
+def sqlite_handler():
+    """Create a fresh SQLiteHandler for each test."""
+    handler = SQLiteHandler()
+    handler.create_all_tables(ResourceTable.metadata)
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def session(postgres_engine: Engine) -> SQLModelSession:
+def session(sqlite_handler: SQLiteHandler) -> SQLModelSession:
     """Session fixture"""
-    return create_session(postgres_engine)
+    engine = sqlite_handler.get_engine()
+    return create_session(engine)
 
 
 def test_insert(session: SQLModelSession) -> None:

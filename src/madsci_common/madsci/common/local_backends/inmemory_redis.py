@@ -14,7 +14,7 @@ Usage::
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Iterator, MutableMapping
 from typing import Any, ClassVar, Optional
 
 # ---------------------------------------------------------------------------
@@ -76,12 +76,11 @@ class InMemoryRedisClient:
         return True
 
 
-class InMemoryRedisDict:
+class InMemoryRedisDict(MutableMapping):
     """Drop-in replacement for ``pottery.RedisDict``.
 
-    Supports: ``[]``, ``del``, ``in``, ``update()``, ``clear()``,
-    ``to_dict()``, ``items()``, ``get()``, ``iter()``, ``len()``,
-    ``model_validate`` passthrough via ``to_dict()``.
+    Inherits from ``MutableMapping`` so Pydantic's ``model_validate``
+    treats it as a dict-like, matching the behavior of ``pottery.RedisDict``.
 
     Multiple instances created with the same *key* and *redis* client share
     the same underlying storage, mirroring Redis semantics.

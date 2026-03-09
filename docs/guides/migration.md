@@ -15,7 +15,7 @@ Definition files have several limitations:
 
 The new system provides:
 - **Environment variable configuration**: All structural config can be set via env vars or `.env` files.
-- **Stable ID registry**: Component IDs are tracked in `~/.madsci/registry.json`, surviving file changes.
+- **Stable ID registry**: Component IDs are tracked in `.madsci/registry.json` (found via walk-up discovery from the current directory, falling back to `~/.madsci/`), surviving file changes.
 
 ## Quick Start
 
@@ -132,7 +132,7 @@ WORKCELL_MANAGER_DESCRIPTION="An example workcell"
 WORKCELL_ENABLE_REGISTRY_RESOLUTION=true
 WORKCELL_NODES='{"liquidhandler_1": "http://localhost:2000/", "robotarm_1": "http://localhost:2002/"}'
 
-# Manager ID is now in ~/.madsci/registry.json
+# Manager ID is now in .madsci/registry.json (project-local via walk-up discovery)
 ```
 
 ### Structural Config Settings

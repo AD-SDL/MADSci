@@ -1,0 +1,7 @@
+node_name: example_robot_1
+node_id: 01K8C0W2FMSG42DCJK8D56XJKH
+node_description: An example node for controlling our fake robot arm.
+node_type: device
+module_name: example_robot_module
+module_version: 0.0.1
+capabilities: null

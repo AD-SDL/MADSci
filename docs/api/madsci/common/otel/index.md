@@ -268,7 +268,7 @@ Classes
     `test_mode: bool`
     :
 
-`OtelRuntime(enabled: bool, tracer_provider: Optional[TracerProvider] = None, meter_provider: Optional[MeterProvider] = None, logger_provider: Optional[LoggerProvider] = None, otel_log_handler: Optional[logging.Handler] = None, in_memory_span_exporter: Optional[InMemorySpanExporter] = None, in_memory_metric_reader: Optional[InMemoryMetricReader] = None)`
+`OtelRuntime(enabled: bool, tracer_provider: Optional[TracerProvider] = None, meter_provider: Optional[MeterProvider] = None, logger_provider: Optional[LoggerProvider] = None, in_memory_span_exporter: Optional[InMemorySpanExporter] = None, in_memory_metric_reader: Optional[InMemoryMetricReader] = None)`
 :   Runtime handles returned by `configure_otel`.
 
     ### Instance variables
@@ -289,9 +289,6 @@ Classes
     :   Return a meter bound to this module.
 
     `meter_provider: opentelemetry.sdk.metrics._internal.MeterProvider | None`
-    :
-
-    `otel_log_handler: logging.Handler | None`
     :
 
     `tracer: trace.Tracer`

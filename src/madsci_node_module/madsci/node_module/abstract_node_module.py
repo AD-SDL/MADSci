@@ -1,8 +1,11 @@
 """Base Node Module helper classes."""
 
+import atexit
 import contextlib
 import inspect
+import logging
 import threading
+import weakref
 from pathlib import Path
 from typing import (
     Annotated,
@@ -115,6 +118,12 @@ class AbstractNode(MadsciClientMixin):
             module_name=module_name,
         )
 
+        # Resolve stable identity from registry if enabled
+        self._resolver = None
+        self._atexit_registered = False
+        if self.config.enable_registry_resolution:
+            self._resolve_identity_from_registry()
+
         global_ownership_info.node_id = self.node_info.node_id
         self._configure_clients()
 
@@ -135,6 +144,23 @@ class AbstractNode(MadsciClientMixin):
     """------------------------------------------------------------------------------------------------"""
     """Node Lifecycle and Public Methods"""
     """------------------------------------------------------------------------------------------------"""
+
+    def close(self) -> None:
+        """Release registry identity and clean up client resources.
+
+        This method is idempotent and safe to call multiple times.
+        Call this before reassigning a node variable to a new node
+        with the same name (e.g. in notebook cells) to avoid
+        ``RegistryLockError`` from lingering heartbeat threads.
+        """
+        self._release_registry_identity()
+        self._resolver = None
+        self.teardown_clients()
+
+    def __del__(self) -> None:
+        """Best-effort cleanup when the node is garbage-collected."""
+        with contextlib.suppress(Exception):
+            self.close()
 
     def start_node(self) -> None:
         """
@@ -169,6 +195,74 @@ class AbstractNode(MadsciClientMixin):
 
     def shutdown_handler(self) -> None:
         """Called to shut down the node. Should be used to clean up any resources."""
+
+    def _resolve_identity_from_registry(self) -> None:
+        """Resolve node identity from the ID Registry.
+
+        Uses IdentityResolver to look up or create a stable ID for this
+        node.  The resolved ID is written back to ``self.node_info.node_id``.
+
+        A ``RegistryLockError`` (after retry exhaustion) is fatal — the
+        node cannot start without a stable identity.  Other errors
+        (e.g. missing registry file) are non-fatal: a warning is logged
+        and the generated ID is kept.
+        """
+        from madsci.common.registry.identity_resolver import (  # noqa: PLC0415
+            IdentityResolver,
+        )
+        from madsci.common.registry.lock_manager import (  # noqa: PLC0415
+            RegistryLockError,
+        )
+
+        try:
+            self._resolver = IdentityResolver(lab_url=self.config.lab_url)
+
+            node_name = self.node_info.node_name
+
+            result = self._resolver.resolve_with_info(
+                name=node_name,
+                component_type="node",
+                metadata={"module_name": self.node_info.module_name},
+                retry_timeout=self.config.registry_lock_timeout,
+            )
+
+            self.node_info.node_id = result.id
+
+            if not self._atexit_registered:
+                ref = weakref.ref(self)
+
+                def _release_on_exit(weak_ref: weakref.ref = ref) -> None:
+                    obj = weak_ref()
+                    if obj is not None:
+                        obj._release_registry_identity()
+
+                atexit.register(_release_on_exit)
+                self._atexit_registered = True
+
+        except RegistryLockError:
+            raise
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Registry identity resolution failed; using generated ID",
+                exc_info=True,
+            )
+
+    def _release_registry_identity(self) -> None:
+        """Release the registry lock for this node's identity.
+
+        Called via ``atexit`` to allow other instances to acquire the
+        same name.
+        """
+        if self._resolver is None:
+            return
+
+        try:
+            self._resolver.release(self.node_info.node_name)
+        except Exception:
+            logging.getLogger(__name__).warning(
+                "Failed to release registry identity",
+                exc_info=True,
+            )
 
     """------------------------------------------------------------------------------------------------"""
     """Interface Methods"""

@@ -33,6 +33,7 @@ def test_manager_reuses_process_global_otel_runtime_when_disabled() -> None:
     mgr = _TestManager(
         settings=ManagerSettings(
             otel_enabled=False,
+            enable_registry_resolution=False,
         )
     )
     assert mgr._otel_runtime is runtime
@@ -53,6 +54,7 @@ def test_manager_uses_existing_runtime_when_enabled() -> None:
             otel_enabled=True,
             otel_exporter="none",
             otel_service_name="madsci.test",
+            enable_registry_resolution=False,
         )
     )
     assert mgr._otel_runtime is runtime

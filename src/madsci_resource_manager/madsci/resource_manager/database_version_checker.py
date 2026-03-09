@@ -284,7 +284,7 @@ class DatabaseVersionChecker:
     def create_version_table_if_not_exists(self) -> None:
         """Create the schema version table if it doesn't exist."""
         try:
-            SchemaVersionTable.metadata.create_all(self.engine)
+            SchemaVersionTable.__table__.create(self.engine, checkfirst=True)
             self.logger.info(
                 "Schema version table created",
                 event_type=EventType.MANAGER_START,

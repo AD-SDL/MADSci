@@ -5,9 +5,8 @@ State management for the LocationManager
 import warnings
 from typing import Any, Optional, Union
 
-import redis
+from madsci.common.db_handlers import PyRedisHandler, RedisHandler
 from madsci.common.types.location_types import Location, LocationManagerSettings
-from pottery import InefficientAccessWarning, RedisDict, Redlock
 from pydantic import ValidationError
 
 
@@ -18,7 +17,6 @@ class LocationStateHandler:
     """
 
     state_change_marker = "0"
-    _redis_connection: Any = None
     shutdown: bool = False
 
     def __init__(
@@ -26,68 +24,75 @@ class LocationStateHandler:
         settings: LocationManagerSettings,
         manager_id: str,
         redis_connection: Optional[Any] = None,
+        redis_handler: Optional[RedisHandler] = None,
     ) -> None:
         """
         Initialize a LocationStateHandler.
         """
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.settings = settings
         self._manager_id = manager_id
-        self._redis_host = settings.redis_host
-        self._redis_port = settings.redis_port
-        self._redis_password = settings.redis_password
-        self._redis_connection = redis_connection
-        warnings.filterwarnings("ignore", category=InefficientAccessWarning)
+
+        # Initialize Redis handler
+        if redis_handler is not None:
+            self._redis_handler = redis_handler
+        elif redis_connection is not None:
+            self._redis_handler = PyRedisHandler(redis_connection)
+        else:
+            self._redis_handler = PyRedisHandler.from_settings(
+                host=str(settings.redis_host),
+                port=int(settings.redis_port),
+                password=settings.redis_password or None,
+            )
+
+        # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
+        try:
+            from pottery import InefficientAccessWarning  # noqa: PLC0415
+
+            warnings.filterwarnings("ignore", category=InefficientAccessWarning)
+        except ImportError:
+            pass
 
     @property
     def _location_prefix(self) -> str:
         return f"madsci:location_manager:{self._manager_id}"
 
     @property
-    def _redis_client(self) -> Any:
-        """
-        Returns a redis.Redis client, but only creates one connection.
-        MyPy can't handle Redis object return types for some reason, so no type-hinting.
-        """
-        if self._redis_connection is None:
-            self._redis_connection = redis.Redis(
-                host=str(self._redis_host),
-                port=int(self._redis_port),
-                db=0,
-                decode_responses=True,
-                password=self._redis_password or None,
-            )
-        return self._redis_connection
+    def _locations(self) -> Any:
+        return self._redis_handler.create_dict(f"{self._location_prefix}:locations")
 
-    @property
-    def _locations(self) -> RedisDict:
-        return RedisDict(
-            key=f"{self._location_prefix}:locations", redis=self._redis_client
-        )
-
-    def location_state_lock(self) -> Redlock:
+    def location_state_lock(self) -> Any:
         """
         Gets a lock on the location state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us.
         """
-        return Redlock(
-            key=f"{self._location_prefix}:state_lock",
-            masters={self._redis_client},
+        return self._redis_handler.create_lock(
+            f"{self._location_prefix}:state_lock",
             auto_release_time=60,
         )
 
     def mark_state_changed(self) -> int:
         """Marks the state as changed and returns the current state change counter"""
-        return int(self._redis_client.incr(f"{self._location_prefix}:state_changed"))
+        return int(self._redis_handler.incr(f"{self._location_prefix}:state_changed"))
 
     def has_state_changed(self) -> bool:
         """Returns True if the state has changed since the last time this method was called"""
-        state_change_marker = self._redis_client.get(
+        state_change_marker = self._redis_handler.get(
             f"{self._location_prefix}:state_changed"
         )
         if state_change_marker != self.state_change_marker:
             self.state_change_marker = state_change_marker
             return True
         return False
+
+    def close(self) -> None:
+        """Release Redis connections and resources."""
+        self._redis_handler.close()
 
     # Location Management Methods
     def get_location(self, location_name: str) -> Optional[Location]:
@@ -115,7 +120,9 @@ class LocationStateHandler:
                 continue
         return valid_locations
 
-    def add_location(self, location: Union[Location, dict[str, Any]]) -> Optional[Location]:
+    def add_location(
+        self, location: Union[Location, dict[str, Any]]
+    ) -> Optional[Location]:
         """
         Sets a location by ID and returns the stored location
         """

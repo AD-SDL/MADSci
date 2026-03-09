@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     CapacityCostConfig,
     Location,
@@ -18,32 +19,24 @@ from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition, WorkflowParameters
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
-from pytest_mock_resources import RedisConfig, create_redis_fixture
-from redis import Redis
-
-
-# Create a Redis server fixture for testing
-@pytest.fixture(scope="session")
-def pmr_redis_config() -> RedisConfig:
-    """Configure the Redis server."""
-    return RedisConfig(image="redis:7.4")
-
-
-redis_server = create_redis_fixture()
 
 
 @pytest.fixture
-def app(redis_server: Redis):
-    """Create a test app with test settings and Redis server."""
+def redis_handler():
+    """Create an InMemoryRedisHandler for testing."""
+    handler = InMemoryRedisHandler()
+    yield handler
+    handler.close()
+
+
+@pytest.fixture
+def app(redis_handler):
+    """Create a test app with test settings and in-memory Redis handler."""
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
+        enable_registry_resolution=False,
     )
 
-    # Create the app with the Redis connection passed to the LocationManager
-    manager = LocationManager(settings=settings)
-    # Override the state handler's Redis connection to use the test Redis instance
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     return manager.create_server(
         version="0.1.0",
     )
@@ -283,7 +276,7 @@ def test_location_state_persistence(client, sample_location):
 
 
 def test_automatic_location_initialization_from_definition(
-    redis_server: Redis,
+    redis_handler,
 ):
     """Test that locations are automatically initialized from definition."""
 
@@ -303,13 +296,11 @@ def test_automatic_location_initialization_from_definition(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def1, location_def2],
     )
 
     # Create manager with definition (this should trigger automatic initialization)
-    manager = LocationManager(settings=settings)
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Verify locations were automatically created
@@ -337,7 +328,7 @@ def test_automatic_location_initialization_from_definition(
             assert location.representations == {"robot1": [4, 5, 6]}
 
 
-def test_resource_initialization_prevents_duplicates(redis_server: Redis):
+def test_resource_initialization_prevents_duplicates(redis_handler):
     """Test that resource initialization creates unique resources using templates."""
 
     # Create a location definition with resource_template_name
@@ -350,8 +341,6 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def],
     )
 
@@ -364,10 +353,9 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis):
     mock_resource_client.create_resource_from_template.return_value = mock_resource
 
     # Create manager instance
-    manager = LocationManager(settings=settings)
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     manager.resource_client = mock_resource_client
-    manager.state_handler._redis_connection = redis_server
-    print(manager.definition)
+
     # Run initialization to simulate startup behavior
     manager._initialize_locations()
 
@@ -395,7 +383,7 @@ def test_resource_initialization_prevents_duplicates(redis_server: Redis):
 
 
 def test_resource_initialization_with_matching_existing_resource(
-    redis_server: Redis,
+    redis_handler,
 ):
     """Test that the system creates resources from templates with proper error handling."""
 
@@ -408,8 +396,6 @@ def test_resource_initialization_with_matching_existing_resource(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def],
     )
 
@@ -421,9 +407,8 @@ def test_resource_initialization_with_matching_existing_resource(
     # Mock template creation to succeed
     mock_resource_client.create_resource_from_template.return_value = created_resource
 
-    manager = LocationManager(settings=settings)
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     manager.resource_client = mock_resource_client
-    manager.state_handler._redis_connection = redis_server
 
     # Run initialization
     manager._initialize_locations()
@@ -445,7 +430,7 @@ def test_resource_initialization_with_matching_existing_resource(
 
 
 @pytest.fixture
-def transfer_setup(redis_server: Redis):
+def transfer_setup(redis_handler):
     """Create a location manager with transfer capabilities for testing."""
     # Create sample transfer templates with simplified format
     transfer_template1 = TransferStepTemplate(
@@ -501,14 +486,11 @@ def transfer_setup(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location1, location2, location3, location4],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     return {
@@ -1024,12 +1006,10 @@ def test_get_location_resources_endpoint_invalid_location(transfer_setup):
     assert "not found" in error_data["detail"]
 
 
-def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
+def test_transfer_graph_without_transfer_capabilities(redis_handler):
     """Test transfer graph behavior when no transfer capabilities are defined."""
     # Create a location manager without transfer capabilities
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[
             LocationDefinition(
                 location_name="location1",
@@ -1039,8 +1019,7 @@ def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
         ],
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Transfer graph should be empty
@@ -1053,7 +1032,7 @@ def test_transfer_graph_without_transfer_capabilities(redis_server: Redis):
     assert response.json() == {}
 
 
-def test_get_location_by_name_endpoint(redis_server: Redis):
+def test_get_location_by_name_endpoint(redis_handler):
     """Test the get location by name API endpoint."""
     location_def = LocationDefinition(
         location_name="test_location_by_name",
@@ -1062,13 +1041,10 @@ def test_get_location_by_name_endpoint(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def],
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test successful lookup by name using query parameter
@@ -1081,15 +1057,11 @@ def test_get_location_by_name_endpoint(redis_server: Redis):
     assert location_data["description"] == "A test location for name-based lookup"
 
 
-def test_get_location_by_name_endpoint_not_found(redis_server: Redis):
+def test_get_location_by_name_endpoint_not_found(redis_handler):
     """Test the get location by name API endpoint when location doesn't exist."""
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test lookup of non-existent location using query parameter
@@ -1102,7 +1074,7 @@ def test_get_location_by_name_endpoint_not_found(redis_server: Redis):
 
 
 def test_get_location_by_name_endpoint_multiple_locations(
-    redis_server: Redis,
+    redis_handler,
 ):
     """Test the get location by name API endpoint with multiple locations."""
     location_def1 = LocationDefinition(
@@ -1124,13 +1096,10 @@ def test_get_location_by_name_endpoint_multiple_locations(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def1, location_def2, location_def3],
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test lookup of first location using query parameter
@@ -1156,15 +1125,11 @@ def test_get_location_by_name_endpoint_multiple_locations(
     assert response.status_code == 404
 
 
-def test_get_location_query_parameter_validation(redis_server: Redis):
+def test_get_location_query_parameter_validation(redis_handler):
     """Test query parameter validation for the new location endpoint."""
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test missing both parameters
@@ -1180,7 +1145,7 @@ def test_get_location_query_parameter_validation(redis_server: Redis):
     assert "exactly one" in error_data["detail"].lower()
 
 
-def test_get_location_by_id_query_parameter(redis_server: Redis):
+def test_get_location_by_id_query_parameter(redis_handler):
     """Test lookup by location_id using query parameter."""
     location_def = LocationDefinition(
         location_name="test_location_by_id",
@@ -1189,13 +1154,10 @@ def test_get_location_by_id_query_parameter(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_def],
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test successful lookup by ID using query parameter
@@ -1219,7 +1181,7 @@ def test_get_location_by_id_query_parameter(redis_server: Redis):
 
 
 # Non-transfer location tests
-def test_non_transfer_location_creation(redis_server: Redis):
+def test_non_transfer_location_creation(redis_handler):
     """Test creating locations with allow_transfers=False."""
     non_transfer_location = LocationDefinition(
         location_name="non_transfer_station",
@@ -1236,13 +1198,10 @@ def test_non_transfer_location_creation(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[non_transfer_location, transfer_location],
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Check that locations are created with correct allow_transfers values
@@ -1257,7 +1216,7 @@ def test_non_transfer_location_creation(redis_server: Redis):
     assert location_data["allow_transfers"] is True
 
 
-def test_non_transfer_location_excluded_from_graph(redis_server: Redis):
+def test_non_transfer_location_excluded_from_graph(redis_handler):
     """Test that non-transfer locations are excluded from transfer graph construction."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1295,14 +1254,11 @@ def test_non_transfer_location_excluded_from_graph(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[transfer_loc1, transfer_loc2, non_transfer_loc],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Check the transfer graph
     transfer_graph = manager.transfer_planner._transfer_graph
@@ -1317,7 +1273,7 @@ def test_non_transfer_location_excluded_from_graph(redis_server: Redis):
         assert dst != non_transfer_loc.location_id
 
 
-def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
+def test_non_transfer_location_plan_transfer_error(redis_handler):
     """Test that planning transfers to/from non-transfer locations raises appropriate errors."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1347,14 +1303,11 @@ def test_non_transfer_location_plan_transfer_error(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[transfer_loc, non_transfer_loc],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test transfer FROM non-transfer location
@@ -1446,7 +1399,7 @@ def test_location_allow_transfers_default():
 
 
 @pytest.fixture
-def override_transfer_setup(redis_server: Redis):
+def override_transfer_setup(redis_handler):
     """Create a location manager with override transfer templates for testing."""
     # Create standard transfer templates
     default_robot_template = TransferStepTemplate(
@@ -1552,14 +1505,11 @@ def override_transfer_setup(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_a, station_b, station_c, station_d],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     return {
@@ -1672,7 +1622,7 @@ def test_default_templates_when_no_overrides(override_transfer_setup):
     assert edge.transfer_template.node_name != "conveyor_fast"
 
 
-def test_override_templates_with_location_ids(redis_server: Redis):
+def test_override_templates_with_location_ids(redis_handler):
     """Test that override templates work with location IDs instead of names."""
     # Create locations
     station_x = LocationDefinition(
@@ -1714,14 +1664,11 @@ def test_override_templates_with_location_ids(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_x, station_y],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Check that override is applied based on location ID
     graph = manager.transfer_planner._transfer_graph
@@ -1733,7 +1680,7 @@ def test_override_templates_with_location_ids(redis_server: Redis):
     assert edge.cost == 0.1
 
 
-def test_override_templates_with_mixed_keys(redis_server: Redis):
+def test_override_templates_with_mixed_keys(redis_handler):
     """Test that override templates work with mixed location names and IDs."""
     # Create locations
     station_1 = LocationDefinition(
@@ -1778,14 +1725,11 @@ def test_override_templates_with_mixed_keys(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     graph = manager.transfer_planner._transfer_graph
 
@@ -1828,7 +1772,7 @@ def test_plan_transfer_with_overrides(override_transfer_setup):
     assert step.action in ["special_transfer", "fast_move"]
 
 
-def test_no_override_templates_defined(redis_server: Redis):
+def test_no_override_templates_defined(redis_handler):
     """Test that system works correctly when no override templates are defined."""
     # Create basic transfer capabilities without overrides
     default_template = TransferStepTemplate(
@@ -1855,14 +1799,11 @@ def test_no_override_templates_defined(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Should work normally with default templates
     graph = manager.transfer_planner._transfer_graph
@@ -1874,7 +1815,7 @@ def test_no_override_templates_defined(redis_server: Redis):
         assert edge.transfer_template.action == "basic_transfer"
 
 
-def test_empty_override_templates(redis_server: Redis):
+def test_empty_override_templates(redis_handler):
     """Test that system works correctly when override templates are defined but empty."""
     # Create transfer capabilities with empty overrides
     default_template = TransferStepTemplate(
@@ -1903,14 +1844,11 @@ def test_empty_override_templates(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Should work normally with default templates
     graph = manager.transfer_planner._transfer_graph
@@ -1938,7 +1876,7 @@ def mock_resource():
     return MockResource
 
 
-def test_capacity_cost_adjustment_disabled(redis_server: Redis):
+def test_capacity_cost_adjustment_disabled(redis_handler):
     """Test that capacity cost adjustments are not applied when disabled."""
     # Create basic setup without capacity config
     template = TransferStepTemplate(
@@ -1965,15 +1903,12 @@ def test_capacity_cost_adjustment_disabled(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
     # Create manager without resource client to test disabled path
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Transfer planner should not have resource client
     assert (
@@ -1988,7 +1923,7 @@ def test_capacity_cost_adjustment_disabled(redis_server: Redis):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_enabled_no_resource(redis_server: Redis):
+def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
     """Test capacity cost adjustment when enabled but destination has no resource."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -2024,14 +1959,11 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Check that costs are not adjusted when no resource attached
     graph = manager.transfer_planner._transfer_graph
@@ -2041,9 +1973,7 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_server: Redis):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_with_mock_resource(
-    redis_server: Redis, mock_resource
-):
+def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resource):
     """Test capacity cost adjustments with various capacity levels."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -2078,14 +2008,11 @@ def test_capacity_cost_adjustment_with_mock_resource(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Test different capacity scenarios by mocking the resource client
     original_get_resource = manager.transfer_planner.resource_client.get_resource
@@ -2163,9 +2090,7 @@ def test_capacity_cost_adjustment_with_mock_resource(
     manager.transfer_planner.resource_client.get_resource = original_get_resource
 
 
-def test_capacity_cost_adjustment_with_no_capacity_set(
-    redis_server: Redis, mock_resource
-):
+def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resource):
     """Test that no adjustment is applied when resource has no capacity set."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2199,14 +2124,11 @@ def test_capacity_cost_adjustment_with_no_capacity_set(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Mock resource with no capacity set
     def mock_get_resource_no_capacity(resource_id):  # noqa: ARG001
@@ -2233,7 +2155,7 @@ def test_capacity_cost_adjustment_with_no_capacity_set(
     assert edge.cost == 1.0  # No multiplier when capacity is None
 
 
-def test_capacity_cost_adjustment_resource_client_error(redis_server: Redis):
+def test_capacity_cost_adjustment_resource_client_error(redis_handler):
     """Test that base cost is returned when resource client throws error."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2267,14 +2189,11 @@ def test_capacity_cost_adjustment_resource_client_error(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Mock resource client to throw error
     def mock_get_resource_error(resource_id):  # noqa: ARG001
@@ -2299,9 +2218,7 @@ def test_capacity_cost_adjustment_resource_client_error(redis_server: Redis):
     assert edge.cost == 1.0  # Should fallback to base cost on error
 
 
-def test_transfer_planning_with_capacity_constraints(
-    redis_server: Redis, mock_resource
-):
+def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resource):
     """Test that transfer planning chooses paths with lower capacity utilization."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2343,14 +2260,11 @@ def test_transfer_planning_with_capacity_constraints(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b, location_c],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
 
     # Mock different capacity levels for each location
     def mock_get_resource_by_id(resource_id):
@@ -2392,7 +2306,7 @@ def test_transfer_planning_with_capacity_constraints(
 # Additional Arguments in Transfer Templates Tests
 
 
-def test_transfer_template_with_additional_standard_args(redis_server: Redis):
+def test_transfer_template_with_additional_standard_args(redis_handler):
     """Test that transfer templates with additional standard arguments are handled correctly."""
     # Create transfer template with additional standard arguments
     template_with_args = TransferStepTemplate(
@@ -2427,14 +2341,11 @@ def test_transfer_template_with_additional_standard_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify additional arguments are included
@@ -2468,7 +2379,7 @@ def test_transfer_template_with_additional_standard_args(redis_server: Redis):
     assert step.action == "parameterized_transfer"
 
 
-def test_transfer_template_with_additional_location_args(redis_server: Redis):
+def test_transfer_template_with_additional_location_args(redis_handler):
     """Test that transfer templates with additional location arguments are handled correctly."""
     # Create transfer template with additional location arguments
     template_with_locations = TransferStepTemplate(
@@ -2501,14 +2412,11 @@ def test_transfer_template_with_additional_location_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify additional location arguments are included
@@ -2542,7 +2450,7 @@ def test_transfer_template_with_additional_location_args(redis_server: Redis):
 
 
 def test_transfer_template_with_both_additional_args_types(
-    redis_server: Redis,
+    redis_handler,
 ):
     """Test that transfer templates with both additional standard and location arguments work correctly."""
     # Create transfer template with both types of additional arguments
@@ -2581,14 +2489,11 @@ def test_transfer_template_with_both_additional_args_types(
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_x, location_y],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify both types of additional arguments are included
@@ -2623,7 +2528,7 @@ def test_transfer_template_with_both_additional_args_types(
     assert step.action == "comprehensive_transfer"
 
 
-def test_override_templates_with_additional_args(redis_server: Redis):
+def test_override_templates_with_additional_args(redis_handler):
     """Test that override templates with additional arguments work correctly."""
     # Create default template with minimal arguments
     default_template = TransferStepTemplate(
@@ -2687,14 +2592,11 @@ def test_override_templates_with_additional_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[enhanced_source, normal_destination, regular_source],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Test transfer FROM enhanced source (should use override with additional args)
@@ -2743,7 +2645,7 @@ def test_override_templates_with_additional_args(redis_server: Redis):
     assert "checkpoint_location" not in step.locations  # No additional location args
 
 
-def test_multi_step_transfer_with_additional_args(redis_server: Redis):
+def test_multi_step_transfer_with_additional_args(redis_handler):
     """Test that multi-step transfers preserve additional arguments for each step."""
     # Create templates with different additional arguments
     robot_template = TransferStepTemplate(
@@ -2802,14 +2704,11 @@ def test_multi_step_transfer_with_additional_args(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[station_a, station_b, station_c],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Plan a multi-step transfer (A -> B -> C)
@@ -2847,7 +2746,7 @@ def test_multi_step_transfer_with_additional_args(redis_server: Redis):
     assert step2.locations["sensor_location"] == "belt_sensor_point"
 
 
-def test_empty_additional_args_default_behavior(redis_server: Redis):
+def test_empty_additional_args_default_behavior(redis_handler):
     """Test that templates without additional arguments work exactly as before."""
     # Create template without any additional arguments (should behave exactly as before)
     traditional_template = TransferStepTemplate(
@@ -2877,14 +2776,11 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         locations=[location_1, location_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Plan a transfer
@@ -2915,7 +2811,7 @@ def test_empty_additional_args_default_behavior(redis_server: Redis):
 # Remove Representation and Detach Resource Tests
 
 
-def test_remove_representation_success(redis_server: Redis):
+def test_remove_representation_success(redis_handler):
     """Test successful removal of a representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2927,13 +2823,9 @@ def test_remove_representation_success(redis_server: Redis):
         },
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2951,15 +2843,11 @@ def test_remove_representation_success(redis_server: Redis):
     assert updated_location.representations["robot_2"] == {"position": [1, 1, 1]}
 
 
-def test_remove_representation_location_not_found(redis_server: Redis):
+def test_remove_representation_location_not_found(redis_handler):
     """Test removing representation from non-existent location."""
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -2970,7 +2858,7 @@ def test_remove_representation_location_not_found(redis_server: Redis):
     assert "not found" in response.json()["detail"]
 
 
-def test_remove_representation_node_not_found(redis_server: Redis):
+def test_remove_representation_node_not_found(redis_handler):
     """Test removing non-existent representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2979,13 +2867,9 @@ def test_remove_representation_node_not_found(redis_server: Redis):
         representations={"robot_1": {"position": [0, 0, 0]}},
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2998,7 +2882,7 @@ def test_remove_representation_node_not_found(redis_server: Redis):
     assert "Representation for node 'robot_2' not found" in response.json()["detail"]
 
 
-def test_remove_representation_no_representations(redis_server: Redis):
+def test_remove_representation_no_representations(redis_handler):
     """Test removing representation from location with no representations."""
     location_id = new_ulid_str()
     location = Location(
@@ -3007,13 +2891,9 @@ def test_remove_representation_no_representations(redis_server: Redis):
         representations=None,
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -3026,7 +2906,7 @@ def test_remove_representation_no_representations(redis_server: Redis):
     assert "Representation for node 'robot_1' not found" in response.json()["detail"]
 
 
-def test_remove_last_representation(redis_server: Redis):
+def test_remove_last_representation(redis_handler):
     """Test removing the last representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -3035,13 +2915,9 @@ def test_remove_last_representation(redis_server: Redis):
         representations={"robot_1": {"position": [0, 0, 0]}},
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -3057,7 +2933,7 @@ def test_remove_last_representation(redis_server: Redis):
     assert updated_location.representations == {}
 
 
-def test_detach_resource_success(redis_server: Redis):
+def test_detach_resource_success(redis_handler):
     """Test successful detachment of a resource from a location."""
     location_id = new_ulid_str()
     resource_id = new_ulid_str()
@@ -3067,13 +2943,9 @@ def test_detach_resource_success(redis_server: Redis):
         resource_id=resource_id,
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -3088,15 +2960,11 @@ def test_detach_resource_success(redis_server: Redis):
     assert updated_location.resource_id is None
 
 
-def test_detach_resource_location_not_found(redis_server: Redis):
+def test_detach_resource_location_not_found(redis_handler):
     """Test detaching resource from non-existent location."""
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -3105,7 +2973,7 @@ def test_detach_resource_location_not_found(redis_server: Redis):
     assert "not found" in response.json()["detail"]
 
 
-def test_detach_resource_no_resource_attached(redis_server: Redis):
+def test_detach_resource_no_resource_attached(redis_handler):
     """Test detaching resource from location with no resource attached."""
     location_id = new_ulid_str()
     location = Location(
@@ -3114,13 +2982,9 @@ def test_detach_resource_no_resource_attached(redis_server: Redis):
         resource_id=None,
     )
 
-    settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -3133,7 +2997,7 @@ def test_detach_resource_no_resource_attached(redis_server: Redis):
     assert "No resource attached" in response.json()["detail"]
 
 
-def test_remove_representation_rebuilds_transfer_graph(redis_server: Redis):
+def test_remove_representation_rebuilds_transfer_graph(redis_handler):
     """Test that removing representation rebuilds the transfer graph."""
     # Create template with transfer capabilities
     template = TransferStepTemplate(
@@ -3152,13 +3016,10 @@ def test_remove_representation_rebuilds_transfer_graph(redis_server: Redis):
     )
 
     settings = LocationManagerSettings(
-        redis_host=redis_server.connection_pool.connection_kwargs["host"],
-        redis_port=redis_server.connection_pool.connection_kwargs["port"],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings)
-    manager.state_handler._redis_connection = redis_server
+    manager = LocationManager(settings=settings, redis_handler=redis_handler)
     client = TestClient(manager.create_server())
 
     # Add the location first

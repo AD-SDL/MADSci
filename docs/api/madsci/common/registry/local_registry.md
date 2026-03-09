@@ -5,6 +5,12 @@ Local registry manager for MADSci ID Registry.
 This module provides the local file-based registry that stores component
 name-to-ID mappings on each machine.
 
+Variables
+---------
+
+`RETRY_INTERVAL_SECONDS: float`
+:   Interval in seconds between resolve() retry attempts on lock contention.
+
 Classes
 -------
 
@@ -134,7 +140,7 @@ Classes
             RegistryError: If old_name doesn't exist or new_name already exists.
             RegistryLockError: If old_name is locked and force=False.
 
-    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True) ‑> str`
+    `resolve(self, name: str, component_type: Literal['node', 'module', 'manager', 'experiment', 'workcell'], metadata: dict[str, typing.Any] | None = None, acquire_lock: bool = True, retry_timeout: float | None = None) ‑> str`
     :   Resolve a name to an ID, creating if necessary.
         
         This is the primary method for getting a component's ID. If the name
@@ -146,12 +152,17 @@ Classes
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
+            retry_timeout: When set and a ``RegistryLockError`` occurs,
+                retry every ``RETRY_INTERVAL_SECONDS`` until this many
+                seconds have elapsed.  When ``None`` (default), fail
+                immediately on lock contention.
         
         Returns:
             The component's ID (ULID).
         
         Raises:
-            RegistryLockError: If the lock cannot be acquired.
+            RegistryLockError: If the lock cannot be acquired (after retries,
+                if retry_timeout is set).
             Timeout: If the file lock times out.
 
 `RegistryError(*args, **kwargs)`
