@@ -67,16 +67,19 @@ class NodeConfig(
         default=None,
         title="Node Name",
         description="Name for this node. If not set, defaults to the class name.",
+        alias="node_name",  # * Don't double prefix (NODE_ + node_name → NODE_NODE_NAME)
     )
     node_id: Optional[str] = Field(
         default=None,
         title="Node ID",
         description="Unique ID for this node. If not set, a new ULID is generated.",
+        alias="node_id",  # * Don't double prefix
     )
     node_type: Optional[NodeType] = Field(
         default=None,
         title="Node Type",
         description="The type of thing this node provides an interface for.",
+        alias="node_type",  # * Don't double prefix
     )
     module_name: Optional[str] = Field(
         default=None,
