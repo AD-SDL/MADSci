@@ -145,6 +145,11 @@ class ManagerSettings(MadsciBaseSettings):
         title="Lab URL",
         description="Lab Manager URL for distributed registry coordination.",
     )
+    registry_lock_timeout: float = Field(
+        default=60.0,
+        title="Registry Lock Timeout",
+        description="Seconds to retry registry lock acquisition on contention at startup. Should be at least 2x the lock TTL (30s) to survive ungraceful container restarts.",
+    )
 
     # OpenTelemetry configuration
     otel_enabled: bool = Field(

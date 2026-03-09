@@ -264,7 +264,7 @@ class TestEventClientLogging:
     def test_event_server_error_handling(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
-        """Test handling of event server errors."""
+        """Test that event server errors are handled gracefully (fire-and-forget)."""
         config_with_server.log_dir = temp_log_dir
 
         # Mock failed POST to event server
@@ -274,16 +274,14 @@ class TestEventClientLogging:
 
         client = EventClient(config=config_with_server)
 
-        # Should not raise an exception, should buffer the event
-        client.info("Test message gets queued 1")
-        client.info(
-            "Test message gets queued 2"
-        )  # * Need a second event so there's at least one in the queue while the other is being retried
+        # Should not raise an exception; events are logged locally only
+        client.info("Test message 1")
+        client.info("Test message 2")
 
         time.sleep(0.1)
 
-        # Event should be added to buffer when send fails
-        assert not client._event_buffer.empty()
+        # Events should still be in the local log file
+        assert client.logfile.exists()
 
 
 class TestEventClientEventRetrieval:
@@ -1471,8 +1469,8 @@ class TestEventClientBoundChildBehavior:
         parent.info("Parent still works")
         parent.close()
 
-    def test_bound_children_share_buffer_and_lock(self, temp_log_dir):
-        """Test that bound children share the same buffer and lock as parent."""
+    def test_bound_children_share_session(self, temp_log_dir):
+        """Test that bound children share the same HTTP session as parent."""
         config = EventClientConfig(
             name="parent_client",
             log_dir=temp_log_dir,
@@ -1482,8 +1480,7 @@ class TestEventClientBoundChildBehavior:
         parent = EventClient(config=config)
         child = parent.bind(workflow_id="wf-123")
 
-        # They should share the same buffer and lock (shallow copy behavior)
-        assert child._event_buffer is parent._event_buffer
-        assert child._buffer_lock is parent._buffer_lock
+        # They should share the same session (shallow copy behavior)
+        assert child.session is parent.session
 
         parent.close()

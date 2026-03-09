@@ -1,6 +1,7 @@
 """Pytest unit tests for the Resource Manager's internal db interfacing logic."""
 
 import pytest
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.common.types.resource_types import (
     Consumable,
     Container,
@@ -18,29 +19,27 @@ from madsci.resource_manager.resource_tables import (
     ResourceTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
-
-
-# Create a Postgres fixture
-postgres_engine = create_postgres_fixture(ResourceTable)
+@pytest.fixture
+def sqlite_handler():
+    """Create a fresh SQLiteHandler for each test."""
+    handler = SQLiteHandler()
+    handler.create_all_tables(ResourceTable.metadata)
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def interface(postgres_engine: Engine) -> ResourceInterface:
+def interface(sqlite_handler: SQLiteHandler) -> ResourceInterface:
     """Resource Table Interface Fixture"""
+    engine = sqlite_handler.get_engine()
 
     def sessionmaker() -> SQLModelSession:
-        return create_session(postgres_engine)
+        return create_session(engine)
 
-    return ResourceInterface(engine=postgres_engine, sessionmaker=sessionmaker)
+    return ResourceInterface(postgres_handler=sqlite_handler, sessionmaker=sessionmaker)
 
 
 def test_create_interface(interface: ResourceInterface) -> None:

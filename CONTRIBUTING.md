@@ -87,7 +87,7 @@ Each manager service follows this structure:
 - Database models (SQLModel/Pydantic)
 
 **Testing:**
-- Integration tests use Docker containers via pytest-mock-resources
+- Tests use in-memory database handlers (no Docker required for most tests); only end-to-end tests against the full stack need Docker
 - Component tests are in each package's `tests/` directory
 - Use `pytest -k EXPRESSION` to filter tests
 

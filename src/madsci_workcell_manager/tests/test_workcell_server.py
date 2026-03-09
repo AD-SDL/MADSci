@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
 from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
@@ -24,41 +25,32 @@ from madsci.common.types.workflow_types import (
 from madsci.workcell_manager.workcell_server import WorkcellManager
 from madsci.workcell_manager.workflow_utils import check_parameters
 from pydantic import AnyUrl
-from pymongo.synchronous.database import Database
-from pytest_mock_resources import (
-    MongoConfig,
-    RedisConfig,
-    create_mongo_fixture,
-    create_redis_fixture,
-)
-from redis import Redis
-
-
-# Create a Redis server fixture for testing
-@pytest.fixture(scope="session")
-def pmr_redis_config() -> RedisConfig:
-    """Configure the Redis server."""
-    return RedisConfig(image="redis:7.4")
-
-
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Congifure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8.0")
-
-
-redis_server = create_redis_fixture()
-mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
-def test_client(redis_server: Redis, mongo_server: Database) -> TestClient:
+def redis_handler() -> InMemoryRedisHandler:
+    """Create an in-memory Redis handler for testing."""
+    return InMemoryRedisHandler()
+
+
+@pytest.fixture
+def mongo_handler() -> InMemoryMongoHandler:
+    """Create an in-memory MongoDB handler for testing."""
+    return InMemoryMongoHandler()
+
+
+@pytest.fixture
+def test_client(
+    redis_handler: InMemoryRedisHandler, mongo_handler: InMemoryMongoHandler
+) -> TestClient:
     """Workcell Server Test Client Fixture"""
-    settings = WorkcellManagerSettings(manager_name="Test Workcell")
+    settings = WorkcellManagerSettings(
+        manager_name="Test Workcell", enable_registry_resolution=False
+    )
     manager = WorkcellManager(
         settings=settings,
-        redis_connection=redis_server,
-        mongo_connection=mongo_server,
+        redis_handler=redis_handler,
+        mongo_handler=mongo_handler,
         start_engine=False,
     )
     app = manager.create_server()

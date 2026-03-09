@@ -7,18 +7,15 @@ import inspect
 import json
 import logging
 import platform
-import queue
 import shutil
 import sys
 import time
 import traceback
 import warnings
 from collections import OrderedDict
-from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError, version
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from threading import Lock, Thread
 from typing import Any, Optional, Union
 
 import requests
@@ -41,7 +38,6 @@ from madsci.common.types.event_types import (
     EventType,
 )
 from madsci.common.utils import create_http_session, threaded_task
-from opentelemetry.metrics import CallbackOptions, Observation
 from pydantic import BaseModel, ValidationError
 
 
@@ -117,13 +113,6 @@ class EventClient:
         # Initialize bound context
         self._bound_context = {}
 
-        # Initialize thread-safety primitives (per-instance to avoid shared state)
-        self._event_buffer: queue.Queue = queue.Queue()
-        self._buffer_lock: Lock = Lock()
-        self._retry_thread: Optional[Thread] = None
-        self._retrying: bool = False
-        self._shutdown: bool = False
-
         # Track whether this client is a bound child (created via bind()/unbind())
         # Child clients share resources with the parent and should not close them
         self._is_bound_child: bool = False
@@ -158,8 +147,7 @@ class EventClient:
         self._otel_runtime = None
         self._otel_event_counter = None
         self._otel_send_latency_histogram = None
-        self._otel_buffer_size_gauge = None
-        self._otel_retry_counter = None
+        self._otel_send_failure_counter = None
         if self.config.otel_enabled:
             self._setup_otel()
 
@@ -181,10 +169,6 @@ class EventClient:
             )
 
             self._setup_otel_metrics()
-
-            # Attach OTEL log handler to bridge stdlib logs to OTEL
-            if self._otel_runtime.otel_log_handler is not None:
-                self.logger.addHandler(self._otel_runtime.otel_log_handler)
         except Exception:
             self._otel_runtime = None
             self.logger.warning(
@@ -208,19 +192,9 @@ class EventClient:
             description="Latency of sending events to EventManager",
             unit="ms",
         )
-        self._otel_retry_counter = meter.create_counter(
-            name="madsci.eventclient.send_retries",
-            description="Number of retries attempted when sending events",
-            unit="1",
-        )
-
-        def _observe_buffer_size(_options: CallbackOptions) -> Iterable[Observation]:
-            yield Observation(self._event_buffer.qsize())
-
-        self._otel_buffer_size_gauge = meter.create_observable_gauge(
-            name="madsci.eventclient.buffer_size",
-            callbacks=[_observe_buffer_size],
-            description="Current size of the buffered event queue",
+        self._otel_send_failure_counter = meter.create_counter(
+            name="madsci.eventclient.send_failures",
+            description="Number of failed event deliveries to EventManager",
             unit="1",
         )
 
@@ -253,12 +227,17 @@ class EventClient:
             },
         )
 
-    def _record_otel_retry(self) -> None:
+    def _record_otel_send_failure(self, *, event_type: EventType) -> None:
         if not (self._otel_runtime and self._otel_runtime.enabled):
             return
-        if self._otel_retry_counter is None:
+        if self._otel_send_failure_counter is None:
             return
-        self._otel_retry_counter.add(1)
+        self._otel_send_failure_counter.add(
+            1,
+            {
+                "event.type": event_type.value,
+            },
+        )
 
     def _log_startup_info(self) -> None:
         """Log startup information on first initialization.
@@ -365,7 +344,7 @@ class EventClient:
         self.close()
 
     def close(self) -> None:
-        """Clean up resources including file handlers and retry thread.
+        """Clean up resources including file handlers.
 
         This method should be called when the EventClient is no longer needed,
         especially in test scenarios where many clients may be created.
@@ -376,15 +355,6 @@ class EventClient:
         # Bound child clients share resources with parent - don't close them
         if getattr(self, "_is_bound_child", False):
             return
-
-        # Signal shutdown
-        with self._buffer_lock:
-            self._shutdown = True
-
-        # Wait for retry thread to finish if it exists
-        if self._retry_thread is not None and self._retry_thread.is_alive():
-            # Give the thread a reasonable time to finish (5 seconds)
-            self._retry_thread.join(timeout=5.0)
 
         # Close and remove all handlers to free file descriptors
         if hasattr(self, "logger") and self.logger:
@@ -1090,50 +1060,18 @@ class EventClient:
 
     # ==================== Internal Methods ====================
 
-    def _start_retry_thread(self) -> None:
-        with self._buffer_lock:
-            if not self._retrying:
-                self._retrying = True
-                self._retry_thread = Thread(
-                    target=self._retry_buffered_events, daemon=True
-                )
-                self._retry_thread.start()
-
-    def _retry_buffered_events(self) -> None:
-        backoff = 2
-        max_backoff = 60
-        while not self._event_buffer.empty() and not self._shutdown:
-            event: Optional[Event] = None
-            try:
-                event = self._event_buffer.get()
-                if isinstance(event, Event):
-                    self._send_event_to_event_server(event, retrying=True)
-                backoff = 2  # Reset backoff on success
-            except Exception:
-                self._record_otel_retry()
-                time.sleep(backoff)
-                backoff = min(backoff * 2, max_backoff)
-                if event is not None:
-                    self._event_buffer.put(event)  # Re-add the event to the buffer
-        with self._buffer_lock:
-            self._retrying = False
-
     @threaded_task
-    def _send_event_to_event_server_task(
-        self, event: Event, retrying: bool = False
-    ) -> None:
-        """Send an event to the event manager. Buffer on failure."""
-        try:
-            self._send_event_to_event_server(event, retrying=retrying)
-        except Exception:
-            self.logger.error(
-                "Error in _send_event_to_event_server_task",
-                exc_info=True,
-            )
+    def _send_event_to_event_server_task(self, event: Event) -> None:
+        """Send an event to the event manager (fire-and-forget)."""
+        self._send_event_to_event_server(event)
 
-    def _send_event_to_event_server(self, event: Event, retrying: bool = False) -> None:
-        """Send an event to the event manager. Buffer on failure."""
+    def _send_event_to_event_server(self, event: Event) -> None:
+        """Send an event to the event manager.
 
+        This is fire-and-forget: on failure, a warning is logged and
+        the event is dropped. Events are already persisted to local
+        log files before this method is called.
+        """
         try:
             start = time.perf_counter()
             headers: dict[str, str] = {}
@@ -1157,12 +1095,15 @@ class EventClient:
             )
 
         except Exception:
-            if not retrying:
-                self._event_buffer.put(event)
-                self._start_retry_thread()
-            else:
-                # If already retrying, just re-raise to trigger backoff
-                raise
+            self._record_otel_send_failure(
+                event_type=event.event_type or EventType.UNKNOWN,
+            )
+            self.logger.error(
+                "Failed to send event to event server; event persisted locally only",
+                event_type=str(event.event_type),
+                event_id=event.event_id,
+                exc_info=True,
+            )
 
     def _new_event_for_log(self, event_data: Any, level: int) -> Event:
         """Create a new log event from arbitrary data"""

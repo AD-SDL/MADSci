@@ -1,6 +1,6 @@
 [project]
 name = "madsci.common"
-version = "0.7.0"
+version = "0.7.1"
 description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -48,6 +48,7 @@ otel-instrumentation = [
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-instrumentation-asgi>=0.41b0",
     "opentelemetry-instrumentation-requests>=0.41b0",
+    "opentelemetry-instrumentation-logging>=0.41b0",
 ]
 
 [project.scripts]

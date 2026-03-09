@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
+from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
@@ -25,32 +26,7 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.workcell_server import WorkcellManager
-from pymongo.synchronous.database import Database
-from pytest_mock_resources import (
-    MongoConfig,
-    RedisConfig,
-    create_mongo_fixture,
-    create_redis_fixture,
-)
-from redis import Redis
 from requests import Response
-
-
-# Create a Redis server fixture for testing
-@pytest.fixture(scope="session")
-def pmr_redis_config() -> RedisConfig:
-    """Configure the Redis server."""
-    return RedisConfig(image="redis:7.4")
-
-
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Congifure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8.0")
-
-
-redis_server = create_redis_fixture()
-mongo_server = create_mongo_fixture()
 
 
 @pytest.fixture
@@ -112,9 +88,7 @@ def sample_workflow_instance() -> Workflow:
 
 
 @pytest.fixture
-def test_client(
-    redis_server: Redis, mongo_server: Database
-) -> Generator[TestClient, None, None]:
+def test_client() -> Generator[TestClient, None, None]:
     """Workcell Server Test Client Fixture."""
     # Create a mock context with all required URLs
     mock_context = MadsciContext(
@@ -127,17 +101,9 @@ def test_client(
         location_server_url="http://localhost:8006/",
     )
 
-    # Create custom settings that use the test database
-    client = mongo_server.client
-    host = client.address[0] if client.address else "localhost"
-    port = client.address[1] if client.address else 27017
-    mongo_url = f"mongodb://{host}:{port}"
-    database_name = mongo_server.name
-
     custom_settings = WorkcellManagerSettings(
         manager_name="Test Workcell",
-        mongo_db_url=mongo_url,
-        database_name=database_name,
+        enable_registry_resolution=False,
     )
 
     with (
@@ -174,8 +140,8 @@ def test_client(
 
         manager = WorkcellManager(
             settings=custom_settings,
-            redis_connection=redis_server,
-            mongo_connection=mongo_server,
+            redis_handler=InMemoryRedisHandler(),
+            mongo_handler=InMemoryMongoHandler(),
             start_engine=False,
         )
         app = manager.create_server()

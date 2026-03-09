@@ -117,10 +117,13 @@ def test_node_factory() -> Generator[Callable[..., TestNode], None, None]:
             Configured TestNode instance
         """
         # Create base config with identity fields
+        # Disable registry resolution by default in tests to prevent
+        # lock contention and side effects from shared registry files.
         config_params = {
             "test_required_param": 1,
             "node_name": node_name,
             "module_name": module_name,
+            "enable_registry_resolution": False,
             **config_kwargs,
         }
         if config_overrides:

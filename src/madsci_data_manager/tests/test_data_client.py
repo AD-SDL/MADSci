@@ -23,29 +23,28 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.data_manager.data_server import DataManager
-from pymongo import MongoClient
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
 from starlette.testclient import TestClient
 
 
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Configure the Mongo fixture"""
-    return MongoConfig(image="mongo:8.0")
-
-
-# Create a Mongo fixture
-mongo_client = create_mongo_fixture()
+@pytest.fixture
+def mongo_handler():
+    """Create an InMemoryMongoHandler for testing."""
+    handler = InMemoryMongoHandler(database_name="test_data")
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def test_client(mongo_client: MongoClient) -> TestClient:
+def test_client(mongo_handler) -> TestClient:
     """Data Server Test Client Fixture"""
-    settings = DataManagerSettings(manager_name="Test Data Manager")
+    settings = DataManagerSettings(
+        manager_name="Test Data Manager", enable_registry_resolution=False
+    )
     manager = DataManager(
         settings=settings,
-        db_client=mongo_client,
+        mongo_handler=mongo_handler,
     )
     app = manager.create_server()
     return TestClient(app)

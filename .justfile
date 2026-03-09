@@ -207,23 +207,24 @@ show-version:
     echo "  - package.json: $ui_version"
   fi
 
-# Run the node notebook
-node_e2e_tests:
-  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/node_notebook.ipynb
+# Validate the node example notebook
+validate_nb_node:
+  docker compose --profile testing run --rm --no-deps notebook_validator papermill /home/madsci/notebooks/node_notebook.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
 
-# Run the experiment notebook
-experiment_e2e_tests:
-  docker compose --profile testing run --rm e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/experiment_notebook.ipynb
+# Validate the experiment example notebook
+validate_nb_experiment:
+  docker compose --profile testing run --rm notebook_validator papermill /home/madsci/notebooks/experiment_notebook.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
 
-backup_e2e_tests:
-  docker compose --profile testing run --rm --no-deps e2e_test_runner python -m nbconvert --to notebook --inplace --stdout --execute /home/madsci/notebooks/backup_and_migration.ipynb
+# Validate the backup & migration example notebook
+validate_nb_backup:
+  docker compose --profile testing run --rm --no-deps notebook_validator papermill /home/madsci/notebooks/backup_and_migration.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
 
-# Run the integration tests
-e2e_tests: node_e2e_tests experiment_e2e_tests backup_e2e_tests
+# Validate all example notebooks
+validate_notebooks: validate_nb_node validate_nb_experiment validate_nb_backup
 
 # Start with observability stack
 otel *args: env
   @docker compose --profile otel up {{args}}
 
-# Run the full pipeline including e2e tests
-all: down pipeupd e2e_tests down docs checks
+# Run the full pipeline including notebook validation
+all: down pipeupd validate_notebooks down docs checks

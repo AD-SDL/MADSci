@@ -5,7 +5,7 @@ Resource Manager server implementation, extending th AbstractBaseManager class.
 Classes
 -------
 
-`ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, **kwargs: Any)`
+`ResourceManager(settings: madsci.common.types.resource_types.definitions.ResourceManagerSettings | None = None, resource_interface: madsci.resource_manager.resource_interface.ResourceInterface | None = None, postgres_handler: madsci.common.db_handlers.postgres_handler.PostgresHandler | None = None, **kwargs: Any)`
 :   Resource Manager REST Server.
     
     This class is decorated with @ownership_class() which automatically
@@ -13,6 +13,15 @@ Classes
     need for manual middleware or `with ownership_context():` blocks.
     
     Initialize the Resource Manager.
+    
+    Args:
+        settings: Resource manager settings.
+        resource_interface: Pre-built ResourceInterface instance. If provided,
+            the manager will use it directly and skip database version validation.
+        postgres_handler: PostgresHandler instance for database access. If provided
+            (and resource_interface is not), a ResourceInterface will be created
+            using this handler.
+        **kwargs: Additional keyword arguments passed to AbstractManagerBase.
 
     ### Ancestors (in MRO)
 

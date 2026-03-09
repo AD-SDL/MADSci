@@ -5,7 +5,7 @@ Data Manager implementation using the new AbstractManagerBase class.
 Classes
 -------
 
-`DataManager(settings: madsci.common.types.datapoint_types.DataManagerSettings | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, **kwargs: Any)`
+`DataManager(settings: madsci.common.types.datapoint_types.DataManagerSettings | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, db_client: pymongo.synchronous.mongo_client.MongoClient | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, minio_handler: madsci.common.db_handlers.minio_handler.MinioHandler | None = None, **kwargs: Any)`
 :   Data Manager REST Server.
     
     Initialize the Data Manager.
