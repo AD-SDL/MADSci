@@ -100,7 +100,7 @@ def test_settings_locations_loaded_into_redis(client_with_locations, location_de
 def test_settings_location_names_match(client_with_locations, location_defs):
     """Location names from settings should match what's stored in Redis."""
     for loc_def in location_defs:
-        response = client_with_locations.get(f"/location/{loc_def.location_id}")
+        response = client_with_locations.get(f"/location/{loc_def.location_name}")
         assert response.status_code == 200
         location = Location.model_validate(response.json())
         assert location.location_name == loc_def.location_name
@@ -129,7 +129,7 @@ def test_added_location_persists_in_redis(empty_client):
     assert response.status_code == 200
 
     # Fetch it back
-    response = empty_client.get(f"/location/{location.location_id}")
+    response = empty_client.get(f"/location/{location.location_name}")
     assert response.status_code == 200
     fetched = Location.model_validate(response.json())
     assert fetched.location_id == location.location_id
@@ -145,11 +145,11 @@ def test_deleted_location_removed_from_redis(empty_client):
     empty_client.post("/location", json=location.model_dump())
 
     # Delete it
-    response = empty_client.delete(f"/location/{location.location_id}")
+    response = empty_client.delete(f"/location/{location.location_name}")
     assert response.status_code == 200
 
     # Should be gone
-    response = empty_client.get(f"/location/{location.location_id}")
+    response = empty_client.get(f"/location/{location.location_name}")
     assert response.status_code == 404
 
 

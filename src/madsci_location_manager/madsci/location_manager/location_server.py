@@ -330,7 +330,10 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
     @get("/location/{location_name}", tags=["Locations"])
     def get_location(self, location_name: str) -> Location:
         """Get a specific location by ID."""
-        with ():
+        with self.span(
+            "location.get",
+            attributes={"location.name": location_name},
+        ):
             location = self.state_handler.get_location(location_name)
 
             if location is None:
