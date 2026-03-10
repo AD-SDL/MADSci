@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_client/madsci/client/resource_client.py: 69%</title>
+    <title>Coverage for src/madsci_client/madsci/client/resource_client.py: 68%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src&#8201;/&#8201;madsci_client&#8201;/&#8201;madsci&#8201;/&#8201;client&#8201;/&#8201;resource_client.py</b>:
-            <span class="pc_cov">69%</span>
+            <span class="pc_cov">68%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">643 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">441<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">202<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">439<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">204<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">3<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_56ae2df781c748f1_structlog_config_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-10 13:01 +0000
+            created at 2026-03-10 14:21 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -150,7 +150,7 @@
     <p class="pln"><span class="n"><a id="t68" href="#t68">68</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t69" href="#t69">69</a></span><span class="t">        <span class="com"># Skip private attributes - always go to resource</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t70" href="#t70">70</a></span><span class="t">        <span class="key">if</span> <span class="nam">name</span><span class="op">.</span><span class="nam">startswith</span><span class="op">(</span><span class="str">"_"</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">            <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resource</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">            <span class="key">return</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">_resource</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t">        <span class="com"># Check if it's a client method (using the actual method name)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">        <span class="key">if</span> <span class="nam">hasattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">_client</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span> <span class="key">and</span> <span class="nam">callable</span><span class="op">(</span><span class="nam">getattr</span><span class="op">(</span><span class="nam">self</span><span class="op">.</span><span class="nam">_client</span><span class="op">,</span> <span class="nam">name</span><span class="op">)</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -2053,7 +2053,7 @@
     <p class="run"><span class="n"><a id="t1971" href="#t1971">1971</a></span><span class="t">            <span class="key">if</span> <span class="nam">hasattr</span><span class="op">(</span><span class="nam">locked_resource</span><span class="op">,</span> <span class="str">"_resource"</span><span class="op">)</span><span class="op">:</span>  <span class="com"># It's wrapped</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t1972" href="#t1972">1972</a></span><span class="t">                <span class="nam">refreshed</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">update_resource</span><span class="op">(</span><span class="nam">locked_resource</span><span class="op">.</span><span class="nam">_resource</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1973" href="#t1973">1973</a></span><span class="t">                <span class="com"># Update the wrapped resource with fresh data</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t1974" href="#t1974">1974</a></span><span class="t">                <span class="nam">locked_resource</span><span class="op">.</span><span class="nam">_update_wrapped_resource</span><span class="op">(</span><span class="nam">refreshed</span><span class="op">.</span><span class="nam">_resource</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t1974" href="#t1974">1974</a></span><span class="t">                <span class="nam">locked_resource</span><span class="op">.</span><span class="nam">_update_wrapped_resource</span><span class="op">(</span><span class="nam">refreshed</span><span class="op">.</span><span class="nam">_resource</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1975" href="#t1975">1975</a></span><span class="t">            <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t1976" href="#t1976">1976</a></span><span class="t">                <span class="com"># It's not wrapped, refresh it</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t1977" href="#t1977">1977</a></span><span class="t">                <span class="nam">self</span><span class="op">.</span><span class="nam">update_resource</span><span class="op">(</span><span class="nam">locked_resource</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -2147,7 +2147,7 @@
             <a class="nav" href="z_56ae2df781c748f1_structlog_config_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.1">coverage.py v7.13.1</a>,
-            created at 2026-03-10 13:01 +0000
+            created at 2026-03-10 14:21 +0000
         </p>
     </div>
 </footer>
