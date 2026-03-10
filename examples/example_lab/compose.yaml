@@ -144,9 +144,9 @@ services:
       - NODE_URL=http://localhost:2004
     command: python example_modules/advanced_example_module.py
 
-  # *E2E Test Runner
+  # *Notebook Validator
 
-  e2e_test_runner:
+  notebook_validator:
     <<: *madsci-service
     profiles:
       - testing

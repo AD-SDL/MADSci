@@ -10,7 +10,9 @@ from starlette.testclient import TestClient
 @pytest.fixture
 def lab_manager_settings():
     """Fixture providing LabManagerSettings for testing."""
-    return LabManagerSettings(manager_name="Test Lab Manager")
+    return LabManagerSettings(
+        manager_name="Test Lab Manager", enable_registry_resolution=False
+    )
 
 
 @pytest.fixture
@@ -24,6 +26,7 @@ def test_lab_manager_with_custom_settings():
     settings = LabManagerSettings(
         server_url="http://localhost:9000",
         manager_name="Custom Lab Manager",
+        enable_registry_resolution=False,
     )
 
     manager = LabManager(settings=settings)
@@ -36,7 +39,9 @@ def test_lab_manager_server_creation():
     """Test that the server can be created and has the expected endpoints."""
     # Disable dashboard files for this test to avoid static file conflicts
     settings = LabManagerSettings(
-        dashboard_files_path=None, manager_name="Test Lab Manager"
+        dashboard_files_path=None,
+        manager_name="Test Lab Manager",
+        enable_registry_resolution=False,
     )
     manager = LabManager(settings=settings)
     app = manager.create_server()
@@ -61,7 +66,9 @@ def test_lab_manager_root_endpoint_disabled():
     """Test that LabManager disables the root definition endpoint."""
     # Disable dashboard files for this test to avoid static file conflicts
     settings = LabManagerSettings(
-        dashboard_files_path=None, manager_name="Test Lab Manager"
+        dashboard_files_path=None,
+        manager_name="Test Lab Manager",
+        enable_registry_resolution=False,
     )
     manager = LabManager(settings=settings)
     app = manager.create_server()
@@ -88,7 +95,9 @@ def test_lab_manager_root_endpoint_disabled():
 def test_lab_manager_dashboard_files_none():
     """Test lab manager with dashboard files disabled."""
     settings = LabManagerSettings(
-        dashboard_files_path=None, manager_name="Test Lab Manager"
+        dashboard_files_path=None,
+        manager_name="Test Lab Manager",
+        enable_registry_resolution=False,
     )
     manager = LabManager(settings=settings)
     app = manager.create_server()

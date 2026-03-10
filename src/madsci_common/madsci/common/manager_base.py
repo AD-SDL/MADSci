@@ -5,8 +5,10 @@ This module provides a base class for all MADSci manager services,
 standardizing common patterns and reducing code duplication.
 """
 
+import atexit
 import contextlib
 import sys
+import weakref
 from abc import ABCMeta
 from importlib.metadata import version as pkg_version
 from typing import Any, ContextManager, Generic, Optional, TypeVar
@@ -122,6 +124,7 @@ class AbstractManagerBase(
 
         # Resolve identity from registry if enabled
         self._resolver = None
+        self._atexit_registered = False
         if (
             isinstance(self._settings, ManagerSettings)
             and self._settings.enable_registry_resolution
@@ -269,15 +272,20 @@ class AbstractManagerBase(
 
         Uses IdentityResolver to look up or create a stable ID for this
         manager. The resolved ID is written back to settings.manager_id.
-        Resolution failures are non-fatal: a warning is logged and the
-        settings' existing ID is kept.
-        """
-        try:
-            # Lazy import to avoid circular dependencies
-            from madsci.common.registry.identity_resolver import (  # noqa: PLC0415
-                IdentityResolver,
-            )
 
+        A ``RegistryLockError`` (after retry exhaustion) is fatal — the
+        manager cannot start without a stable identity.  Other errors
+        (e.g. missing registry file) are non-fatal: a warning is logged
+        and the settings' existing ID is kept.
+        """
+        from madsci.common.registry.identity_resolver import (  # noqa: PLC0415
+            IdentityResolver,
+        )
+        from madsci.common.registry.lock_manager import (  # noqa: PLC0415
+            RegistryLockError,
+        )
+
+        try:
             lab_url = (
                 self._settings.lab_url
                 if isinstance(self._settings, ManagerSettings)
@@ -287,16 +295,39 @@ class AbstractManagerBase(
 
             name = self._resolve_name()
 
+            retry_timeout = (
+                self._settings.registry_lock_timeout
+                if isinstance(self._settings, ManagerSettings)
+                else None
+            )
+
             result = self._resolver.resolve_with_info(
                 name=name,
                 component_type="manager",
                 metadata={"manager_class": self.__class__.__name__},
+                retry_timeout=retry_timeout,
             )
 
             # Update the settings' ID field
             if isinstance(self._settings, ManagerSettings):
                 self._settings.manager_id = result.id
 
+            # Release the lock on process exit (graceful shutdown)
+            if not self._atexit_registered:
+                ref = weakref.ref(self)
+
+                def _release_on_exit(weak_ref: weakref.ref = ref) -> None:
+                    obj = weak_ref()
+                    if obj is not None:
+                        obj.release_identity()
+
+                atexit.register(_release_on_exit)
+                self._atexit_registered = True
+
+        except RegistryLockError:
+            # Lock contention after retry exhaustion is fatal — the
+            # manager cannot safely start without its stable identity.
+            raise
         except Exception:
             import logging  # noqa: PLC0415
 
@@ -304,6 +335,11 @@ class AbstractManagerBase(
                 "Registry identity resolution failed; using settings ID",
                 exc_info=True,
             )
+
+    def __del__(self) -> None:
+        """Best-effort cleanup when the manager is garbage-collected."""
+        with contextlib.suppress(Exception):
+            self.release_identity()
 
     def release_identity(self) -> None:
         """Release the registry lock for this manager's identity.

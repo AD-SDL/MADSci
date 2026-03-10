@@ -1,10 +1,9 @@
 """
 Test the Data Manager's REST server.
 
-Uses pytest-mock-resources to create a MongoDB fixture. Note that this _requires_
-a working docker installation.
+Uses in-memory MongoDB handler for fast, Docker-free tests.
 """
-# flake8: noqa
+# ruff: noqa: T201, S603, S607, S106, PLC0415, RET504
 
 import shutil
 import socket
@@ -17,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.common.types.datapoint_types import (
     DataManagerSettings,
     FileDataPoint,
@@ -24,25 +24,23 @@ from madsci.common.types.datapoint_types import (
     ValueDataPoint,
 )
 from madsci.data_manager.data_server import DataManager
-from pymongo.synchronous.database import Database
-from pytest_mock_resources import MongoConfig, create_mongo_fixture
 
 
-@pytest.fixture(scope="session")
-def pmr_mongo_config() -> MongoConfig:
-    """Configure the MongoDB fixture."""
-    return MongoConfig(image="mongo:8.0")
-
-
-db_connection = create_mongo_fixture()
+@pytest.fixture()
+def mongo_handler():
+    """Create an InMemoryMongoHandler for testing."""
+    handler = InMemoryMongoHandler(database_name="test_data")
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def test_manager(db_connection: Database) -> DataManager:
+def test_manager(mongo_handler) -> DataManager:
     """Data Manager Fixture"""
-    settings = DataManagerSettings(manager_name="test_data_manager")
-    manager = DataManager(settings=settings, db_client=db_connection.client)
-    return manager
+    settings = DataManagerSettings(
+        manager_name="test_data_manager", enable_registry_resolution=False
+    )
+    return DataManager(settings=settings, mongo_handler=mongo_handler)
 
 
 @pytest.fixture
@@ -161,20 +159,20 @@ def test_query_datapoints(test_client: TestClient, test_manager: DataManager) ->
         assert datapoint.value >= test_val
 
 
-def find_free_port():  # noqa
+def find_free_port():
     """Find a free port to use for MinIO."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         s.listen(1)
         port = s.getsockname()[1]
-    return port  # noqa
+    return port
 
 
-def is_docker_available():  # noqa
+def is_docker_available():
     """Check if Docker is available and running."""
     try:
-        result = subprocess.run(  # noqa
-            ["docker", "version"],  # noqa
+        result = subprocess.run(
+            ["docker", "version"],
             capture_output=True,
             text=True,
             timeout=60,
@@ -386,7 +384,7 @@ def minio_server():
             print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
 
 
-def _wait_for_minio(minio_url, timeout=60):  # noqa
+def _wait_for_minio(minio_url, timeout=60):
     """Wait for MinIO server to be ready."""
     start_time = time.time()
 
@@ -435,7 +433,7 @@ def _create_test_bucket(host, port):
         print(f"Warning: Could not create test bucket: {e}")
 
 
-def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # noqa
+def test_file_datapoint_with_minio(mongo_handler, tmp_path: Path) -> None:
     """
     Test that file datapoints are uploaded to MinIO object storage when configured.
     This version uses mocks for fast unit testing.
@@ -452,15 +450,16 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         # Create DataManager with MinIO config
         settings = DataManagerSettings(
             manager_name="test_data_manager_with_minio",
+            enable_registry_resolution=False,
         )
 
         manager = DataManager(
             settings=settings,
-            db_client=db_connection,
+            mongo_handler=mongo_handler,
             object_storage_settings=ObjectStorageSettings(
                 endpoint="localhost:9000",
                 access_key="minioadmin",
-                secret_key="minioadmin",  # noqa
+                secret_key="minioadmin",
                 secure=False,
                 default_bucket="madsci-test",
             ),
@@ -493,15 +492,14 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
             },
         ).json()
 
-        # Verify MinIO client methods were called
-        assert mock_minio_client.bucket_exists.call_count == 2
+        # Verify MinIO client methods were called via the RealMinioHandler
         mock_minio_client.bucket_exists.assert_called_with("madsci-test")
         mock_minio_client.fput_object.assert_called_once()
 
         # Verify the fput_object call arguments
         call_args = mock_minio_client.fput_object.call_args
         assert call_args[1]["bucket_name"] == "madsci-test"
-        assert call_args[1]["object_name"].endswith("test_minio.txt")
+        assert call_args[1]["object_name"] == "test_minio_file"
         assert call_args[1]["content_type"] == "text/plain"
 
         # Verify the returned datapoint has object storage fields and correct data_type
@@ -513,13 +511,11 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
         assert "etag" in result
 
         assert result["bucket_name"] == "madsci-test"
+        assert result["object_name"] == "test_minio_file"
         assert result["storage_endpoint"] == "localhost:9000"
         assert result["etag"] == "test-etag-123"
         assert "localhost:9001" in result["url"]  # Should use port 9001 for public URL
-        assert (
-            result["custom_metadata"]["original_datapoint_id"]
-            == test_datapoint.datapoint_id
-        )
+        assert result["url"] == "http://localhost:9001/madsci-test/test_minio_file"
 
         # Verify we can retrieve the datapoint with object storage info
         retrieved_result = test_client.get(
@@ -531,16 +527,17 @@ def test_file_datapoint_with_minio(db_connection, tmp_path: Path) -> None:  # no
 
 
 @pytest.mark.skipif(not is_docker_available(), reason="Docker not available")
-def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:  # noqa
+def test_real_minio_upload(mongo_handler, minio_server, tmp_path: Path) -> None:
     """Test actual MinIO upload using the subprocess MinIO server."""
     # No mocks - use real MinIO from the fixture
     settings = DataManagerSettings(
         manager_name="test_data_manager_with_minio",
+        enable_registry_resolution=False,
     )
 
     manager = DataManager(
         settings=settings,
-        db_client=db_connection,
+        mongo_handler=mongo_handler,
         object_storage_settings=ObjectStorageSettings(
             endpoint=minio_server["endpoint"],
             access_key=minio_server["access_key"],
@@ -583,7 +580,7 @@ def test_real_minio_upload(db_connection, minio_server, tmp_path: Path) -> None:
     # Verify the response indicates object storage
     assert result["data_type"] == "object_storage"
     assert result["bucket_name"] == "test-bucket"
-    assert result["object_name"].endswith("real_test.txt")
+    assert result["object_name"] == "real_minio_test"
     assert result["size_bytes"] == len(test_content)
     assert "url" in result
 

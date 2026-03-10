@@ -54,7 +54,7 @@ def mock_all_clients():
 class TestExperimentApplication(ExperimentApplication):
     """Test subclass of ExperimentApplication."""
 
-    config = ExperimentApplicationConfig()
+    config = ExperimentApplicationConfig(enable_registry_resolution=False)
 
     experiment_design = ExperimentDesign(
         experiment_name="Test_Experiment",
@@ -135,6 +135,7 @@ def app_config() -> ExperimentApplicationConfig:
         node_name="test_experiment_app",
         module_name="test_experiment_application",
         description="Test experiment application node",
+        enable_registry_resolution=False,
     )
 
 
@@ -145,6 +146,7 @@ def node_config_fixture() -> ExperimentApplicationConfig:
         node_name="test_experiment_app",
         module_name="test_experiment_application",
         description="Test experiment application node",
+        enable_registry_resolution=False,
     )
 
 

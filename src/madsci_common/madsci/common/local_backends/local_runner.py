@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 import uvicorn
-from madsci.common.local_backends.inmemory_collection import (
-    InMemoryMongoClient,
-)
-from madsci.common.local_backends.inmemory_redis import InMemoryRedisClient
+from madsci.common.db_handlers.minio_handler import InMemoryMinioHandler
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
+from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 # Default ports for each manager — matches the standard MADSci port assignments.
 MANAGER_PORTS = {
@@ -58,9 +58,20 @@ class LocalRunner:
         self.scratch_dir = scratch_dir
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
 
-        # Shared in-memory backends
-        self._redis_client = InMemoryRedisClient()
-        self._mongo_client = InMemoryMongoClient()
+        # Shared in-memory handler abstractions
+        self._redis_handler = InMemoryRedisHandler()
+        self._event_mongo_handler = InMemoryMongoHandler(database_name="events")
+        self._experiment_mongo_handler = InMemoryMongoHandler(
+            database_name="experiments"
+        )
+        self._data_mongo_handler = InMemoryMongoHandler(database_name="data")
+        self._workcell_mongo_handler = InMemoryMongoHandler(database_name="workcell")
+        self._minio_handler = InMemoryMinioHandler()
+
+        # SQLite handler for the Resource Manager
+        sqlite_path = self.scratch_dir / "resources.db"
+        sqlite_url = f"sqlite:///{sqlite_path}"
+        self._postgres_handler = SQLiteHandler(url=sqlite_url)
 
     def _set_environment(self) -> None:
         """Set environment variables so managers and clients discover each other."""
@@ -94,7 +105,7 @@ class LocalRunner:
         )
 
     def _create_managers(self) -> dict[str, Any]:
-        """Instantiate each manager with in-memory backends injected."""
+        """Instantiate each manager with in-memory handler abstractions injected."""
         # Lazy imports to avoid circular deps and heavy import overhead at module level
         from madsci.data_manager.data_server import DataManager  # noqa: PLC0415
         from madsci.event_manager.event_server import EventManager  # noqa: PLC0415
@@ -104,9 +115,6 @@ class LocalRunner:
         from madsci.location_manager.location_server import (  # noqa: PLC0415
             LocationManager,
         )
-        from madsci.resource_manager.resource_interface import (  # noqa: PLC0415
-            ResourceInterface,
-        )
         from madsci.resource_manager.resource_server import (  # noqa: PLC0415
             ResourceManager,
         )
@@ -115,46 +123,42 @@ class LocalRunner:
             WorkcellManager,
         )
 
-        # SQLite database path for the Resource Manager
-        sqlite_path = self.scratch_dir / "resources.db"
-        sqlite_url = f"sqlite:///{sqlite_path}"
-
         managers: dict[str, Any] = {}
 
         # Lab Manager (8000) — no database needed
         managers["lab"] = LabManager()
 
-        # Event Manager (8001) — in-memory MongoDB
+        # Event Manager (8001) — in-memory MongoDB handler
         managers["event"] = EventManager(
-            db_connection=self._mongo_client["events"],
+            mongo_handler=self._event_mongo_handler,
         )
 
-        # Experiment Manager (8002) — in-memory MongoDB
+        # Experiment Manager (8002) — in-memory MongoDB handler
         managers["experiment"] = ExperimentManager(
-            db_connection=self._mongo_client["experiments"],
+            mongo_handler=self._experiment_mongo_handler,
         )
 
-        # Resource Manager (8003) — SQLite via SQLAlchemy
-        resource_interface = ResourceInterface(url=sqlite_url)
+        # Resource Manager (8003) — SQLite via PostgresHandler abstraction
         managers["resource"] = ResourceManager(
-            resource_interface=resource_interface,
+            postgres_handler=self._postgres_handler,
         )
 
-        # Data Manager (8004) — in-memory MongoDB (MinIO falls back to filesystem automatically)
+        # Data Manager (8004) — in-memory MongoDB + MinIO handlers
         managers["data"] = DataManager(
-            db_client=self._mongo_client,
+            mongo_handler=self._data_mongo_handler,
+            minio_handler=self._minio_handler,
         )
 
-        # Workcell Manager (8005) — in-memory Redis + MongoDB
+        # Workcell Manager (8005) — in-memory Redis + MongoDB handlers
         managers["workcell"] = WorkcellManager(
-            redis_connection=self._redis_client,
-            mongo_connection=self._mongo_client["workcell"],
+            redis_handler=self._redis_handler,
+            mongo_handler=self._workcell_mongo_handler,
             start_engine=False,
         )
 
-        # Location Manager (8006) — in-memory Redis
+        # Location Manager (8006) — in-memory Redis handler
         managers["location"] = LocationManager(
-            redis_connection=self._redis_client,
+            redis_handler=self._redis_handler,
         )
 
         return managers

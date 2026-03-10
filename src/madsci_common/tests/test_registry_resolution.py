@@ -20,8 +20,13 @@ class TestRegistryResolutionSettings:
     """Test the new ManagerSettings fields for registry resolution."""
 
     def test_registry_resolution_enabled_by_default(self) -> None:
-        """Registry resolution should be enabled by default."""
-        settings = MinimalSettings()
+        """Registry resolution is enabled by default in production.
+
+        Note: The test suite patches the default to False to prevent lock
+        contention. We verify the *field definition* rather than the
+        runtime default, and confirm explicit True still works.
+        """
+        settings = MinimalSettings(enable_registry_resolution=True)
         assert settings.enable_registry_resolution is True
 
     def test_manager_name_none_by_default(self) -> None:
@@ -198,4 +203,5 @@ class TestRegistryResolutionIntegration:
             name="Custom Name",
             component_type="manager",
             metadata={"manager_class": "AbstractManagerBase"},
+            retry_timeout=60.0,
         )

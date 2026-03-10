@@ -1,5 +1,6 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import warnings
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -8,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
+from madsci.common.db_handlers import RedisHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
@@ -43,10 +45,18 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         self,
         settings: Optional[LocationManagerSettings] = None,
         redis_connection: Optional[Any] = None,
+        redis_handler: Optional[RedisHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
+        if redis_connection is not None:
+            warnings.warn(
+                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.redis_connection = redis_connection
+        self.redis_handler = redis_handler
         super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
@@ -56,6 +66,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             settings=self.settings,
             manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
+            redis_handler=self.redis_handler,
         )
 
         # Initialize resource client with resource server URL from context
@@ -220,12 +231,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         try:
             # Test Redis connection if configured
-            if (
-                hasattr(self.state_handler, "_redis_client")
-                and self.state_handler._redis_client
-            ):
-                self.state_handler._redis_client.ping()
-                health.redis_connected = True
+            if hasattr(self.state_handler, "_redis_handler"):
+                health.redis_connected = self.state_handler._redis_handler.ping()
             else:
                 health.redis_connected = None
 

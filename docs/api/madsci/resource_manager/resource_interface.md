@@ -5,7 +5,7 @@ Resources Interface
 Classes
 -------
 
-`ResourceInterface(url: str | None = None, engine: str | None = None, sessionmaker: <built-in function callable> | None = None, session: sqlmodel.orm.session.Session | None = None, init_timeout: float = 10.0, logger: madsci.client.event_client.EventClient | None = None)`
+`ResourceInterface(url: str | None = None, engine: str | None = None, sessionmaker: <built-in function callable> | None = None, session: sqlmodel.orm.session.Session | None = None, init_timeout: float = 10.0, logger: madsci.client.event_client.EventClient | None = None, postgres_handler: madsci.common.db_handlers.postgres_handler.PostgresHandler | None = None)`
 :   Interface for managing various types of resources.
     
     Attributes:
@@ -15,7 +15,16 @@ Classes
     Initialize the ResourceInterface with a database URL.
     
     Args:
-        database_url (str): Database connection URL.
+        url: Database connection URL.
+        engine: SQLAlchemy engine instance.
+        sessionmaker: Callable that returns a Session.
+        session: Existing SQLAlchemy session.
+        init_timeout: Timeout in seconds for database connection.
+        logger: EventClient for logging.
+        postgres_handler: PostgresHandler instance for database access.
+            If provided, the engine is obtained from the handler and tables
+            are created via the handler. This is an alternative to passing
+            url/engine directly.
 
     ### Methods
 

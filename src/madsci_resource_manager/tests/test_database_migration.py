@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from madsci.common.db_handlers.postgres_handler import SQLiteHandler
 from madsci.resource_manager.database_version_checker import DatabaseVersionChecker
 from madsci.resource_manager.migration_tool import (
     DatabaseMigrationSettings,
@@ -13,29 +14,32 @@ from madsci.resource_manager.migration_tool import (
     main,
 )
 from madsci.resource_manager.resource_tables import (
-    ResourceTable,
     SchemaVersionTable,
     create_session,
 )
-from pytest_mock_resources import PostgresConfig, create_postgres_fixture
-from sqlalchemy import Engine
 from sqlmodel import Session as SQLModelSession
 
 
-@pytest.fixture(scope="session")
-def pmr_postgres_config() -> PostgresConfig:
-    """Configure the Postgres fixture"""
-    return PostgresConfig(image="postgres:17")
+@pytest.fixture
+def sqlite_handler():
+    """Create a fresh SQLiteHandler for each test.
 
-
-# Create a Postgres fixture
-postgres_engine = create_postgres_fixture(ResourceTable)
+    Only creates the SchemaVersionTable (not ResourceTable/ResourceHistoryTable)
+    because ResourceHistoryTable uses autoincrement composite primary keys
+    which SQLite does not support.
+    """
+    handler = SQLiteHandler()
+    engine = handler.get_engine()
+    SchemaVersionTable.__table__.create(engine, checkfirst=True)
+    yield handler
+    handler.close()
 
 
 @pytest.fixture
-def session(postgres_engine: Engine) -> SQLModelSession:
+def session(sqlite_handler: SQLiteHandler) -> SQLModelSession:
     """Session fixture"""
-    return create_session(postgres_engine)
+    engine = sqlite_handler.get_engine()
+    return create_session(engine)
 
 
 @pytest.fixture
@@ -64,10 +68,15 @@ def temp_alembic_dir():
             os.chdir(original_cwd)
 
 
-def test_version_mismatch_detection(postgres_engine: Engine, session: SQLModelSession):
+def test_version_mismatch_detection(
+    sqlite_handler: SQLiteHandler,
+):
     """Test that version mismatch can be detected"""
-    # Create version table with different version using the test engine
-    SchemaVersionTable.metadata.create_all(postgres_engine)
+    # Create only the schema version table (not all tables, since
+    # ResourceHistoryTable has autoincrement composite PKs that SQLite can't handle)
+    engine = sqlite_handler.get_engine()
+    SchemaVersionTable.__table__.create(engine, checkfirst=True)
+    session = create_session(engine)
     version_entry = SchemaVersionTable(version="1.0.0", migration_notes="Old version")
     session.add(version_entry)
     session.commit()
@@ -76,7 +85,7 @@ def test_version_mismatch_detection(postgres_engine: Engine, session: SQLModelSe
     version_checker = DatabaseVersionChecker(
         "postgresql://test:test@localhost:5432/test"
     )
-    version_checker.engine = postgres_engine
+    version_checker.engine = engine
 
     with patch("importlib.metadata.version", return_value="2.0.0"):
         needs_migration, madsci_version, db_version = (

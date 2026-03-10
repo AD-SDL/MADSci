@@ -205,6 +205,9 @@ Classes
     `rate_limit_window: int`
     :
 
+    `registry_lock_timeout: float`
+    :
+
     `server_url: pydantic.networks.AnyUrl`
     :
 

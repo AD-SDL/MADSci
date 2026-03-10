@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
+from madsci.common.db_handlers.postgres_handler import PostgresHandler
 from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.event_types import EventType
 from madsci.common.types.resource_types import (
@@ -56,12 +57,22 @@ class ResourceInterface:
         session: Optional[Session] = None,
         init_timeout: float = 10.0,
         logger: Optional[EventClient] = None,
+        postgres_handler: Optional[PostgresHandler] = None,
     ) -> None:
         """
         Initialize the ResourceInterface with a database URL.
 
         Args:
-            database_url (str): Database connection URL.
+            url: Database connection URL.
+            engine: SQLAlchemy engine instance.
+            sessionmaker: Callable that returns a Session.
+            session: Existing SQLAlchemy session.
+            init_timeout: Timeout in seconds for database connection.
+            logger: EventClient for logging.
+            postgres_handler: PostgresHandler instance for database access.
+                If provided, the engine is obtained from the handler and tables
+                are created via the handler. This is an alternative to passing
+                url/engine directly.
         """
         start_time = time.time()
         while time.time() - start_time < init_timeout:
@@ -71,18 +82,25 @@ class ResourceInterface:
                 self.sessionmaker = sessionmaker
                 self.session = session
                 self.logger = logger or EventClient()
+                self._postgres_handler = postgres_handler
 
-                if not (self.url or self.engine or self.sessionmaker or self.session):
+                if postgres_handler is not None:
+                    self.engine = postgres_handler.get_engine()
+                    postgres_handler.create_all_tables(SQLModel.metadata)
+                elif not (self.url or self.engine or self.sessionmaker or self.session):
                     raise ValueError(
-                        "At least one of url, engine, sessionmaker, or session must be provided."
+                        "At least one of url, engine, sessionmaker, session, "
+                        "or postgres_handler must be provided."
                     )
-                if self.url and not self.engine:
-                    self.engine = create_engine(self.url)
-                if not self.engine and self.session:
-                    self.engine = self.session.bind
+                else:
+                    if self.url and not self.engine:
+                        self.engine = create_engine(self.url)
+                    if not self.engine and self.session:
+                        self.engine = self.session.bind
+                    if self.engine:
+                        SQLModel.metadata.create_all(self.engine)
+
                 self.sessionmaker = self.sessionmaker or create_session
-                if self.engine:
-                    SQLModel.metadata.create_all(self.engine)
                 self.logger.info(
                     "Initialized Resource Interface",
                     event_type=EventType.MANAGER_START,
@@ -1552,9 +1570,12 @@ class ResourceInterface:
                 ).one()
 
                 # Check if already locked by someone else
+                locked_until = resource_row.locked_until
+                if locked_until and locked_until.tzinfo is None:
+                    locked_until = locked_until.replace(tzinfo=timezone.utc)
                 if (
-                    resource_row.locked_until
-                    and resource_row.locked_until > datetime.now(timezone.utc)
+                    locked_until
+                    and locked_until > datetime.now(timezone.utc)
                     and resource_row.locked_by != client_id
                 ):
                     return None
@@ -1679,10 +1700,10 @@ class ResourceInterface:
 
                 session.refresh(resource_row)
 
-                if (
-                    resource_row.locked_until
-                    and resource_row.locked_until > datetime.now(timezone.utc)
-                ):
+                locked_until = resource_row.locked_until
+                if locked_until and locked_until.tzinfo is None:
+                    locked_until = locked_until.replace(tzinfo=timezone.utc)
+                if locked_until and locked_until > datetime.now(timezone.utc):
                     return True, resource_row.locked_by
                 return False, None
 

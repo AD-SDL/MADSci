@@ -76,7 +76,7 @@ Classes
             client.info("Executing step")  # Includes workflow_id and step
 
     `close(self) ‑> None`
-    :   Clean up resources including file handlers and retry thread.
+    :   Clean up resources including file handlers.
         
         This method should be called when the EventClient is no longer needed,
         especially in test scenarios where many clients may be created.

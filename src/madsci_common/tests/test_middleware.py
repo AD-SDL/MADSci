@@ -38,6 +38,7 @@ def test_manager_with_rate_limiting() -> TestManager:
         rate_limit_requests=5,
         rate_limit_window=2,  # Reduced from 10s to 2s for faster tests
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
+        enable_registry_resolution=False,
     )
     return TestManager(settings=settings)
 
@@ -49,6 +50,7 @@ def test_manager_without_rate_limiting() -> TestManager:
         manager_name="Unlimited Manager",
         manager_type=ManagerType.EVENT_MANAGER,
         rate_limit_enabled=False,
+        enable_registry_resolution=False,
     )
     return TestManager(settings=settings)
 
@@ -65,6 +67,7 @@ def test_manager_with_dual_rate_limiting() -> TestManager:
         rate_limit_short_requests=5,  # Short window: 5 requests per 1 second (burst)
         rate_limit_short_window=1,  # Keep at 1s (minimum int value)
         rate_limit_exempt_ips=[],  # Disable localhost exemption for testing
+        enable_registry_resolution=False,
     )
     return TestManager(settings=settings)
 

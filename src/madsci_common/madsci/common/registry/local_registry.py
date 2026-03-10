@@ -8,6 +8,7 @@ name-to-ID mappings on each machine.
 import json
 import logging
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -22,6 +23,9 @@ from madsci.common.types.registry_types import (
 from madsci.common.utils import new_ulid_str
 
 logger = logging.getLogger(__name__)
+
+RETRY_INTERVAL_SECONDS: float = 2.0
+"""Interval in seconds between resolve() retry attempts on lock contention."""
 
 
 class RegistryError(Exception):
@@ -130,6 +134,7 @@ class LocalRegistryManager:
         component_type: ComponentType,
         metadata: Optional[dict[str, Any]] = None,
         acquire_lock: bool = True,
+        retry_timeout: Optional[float] = None,
     ) -> str:
         """Resolve a name to an ID, creating if necessary.
 
@@ -142,13 +147,47 @@ class LocalRegistryManager:
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
             acquire_lock: Whether to acquire a lock on the entry.
+            retry_timeout: When set and a ``RegistryLockError`` occurs,
+                retry every ``RETRY_INTERVAL_SECONDS`` until this many
+                seconds have elapsed.  When ``None`` (default), fail
+                immediately on lock contention.
 
         Returns:
             The component's ID (ULID).
 
         Raises:
-            RegistryLockError: If the lock cannot be acquired.
+            RegistryLockError: If the lock cannot be acquired (after retries,
+                if retry_timeout is set).
             Timeout: If the file lock times out.
+        """
+        if retry_timeout is None:
+            return self._resolve_once(name, component_type, metadata, acquire_lock)
+
+        deadline = time.monotonic() + retry_timeout
+        while True:
+            try:
+                return self._resolve_once(name, component_type, metadata, acquire_lock)
+            except RegistryLockError:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise
+                logger.info(
+                    "Registry lock contention for '%s', retrying (%.1fs remaining)",
+                    name,
+                    remaining,
+                )
+                time.sleep(min(RETRY_INTERVAL_SECONDS, remaining))
+
+    def _resolve_once(
+        self,
+        name: str,
+        component_type: ComponentType,
+        metadata: Optional[dict[str, Any]],
+        acquire_lock: bool,
+    ) -> str:
+        """Single attempt to resolve a name to an ID.
+
+        See :meth:`resolve` for full documentation.
         """
         try:
             with self._file_lock.acquire(timeout=self.FILE_LOCK_TIMEOUT):

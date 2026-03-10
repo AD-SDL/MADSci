@@ -14,7 +14,7 @@ Functions
 Classes
 -------
 
-`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, **kwargs: Any)`
+`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, **kwargs: Any)`
 :   MADSci Location Manager using the new AbstractManagerBase pattern.
     
     This class is decorated with @ownership_class() which automatically

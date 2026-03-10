@@ -84,6 +84,7 @@ class IdentityResolver:
         name: str,
         component_type: ComponentType,
         metadata: Optional[dict[str, Any]] = None,
+        retry_timeout: Optional[float] = None,
     ) -> str:
         """Resolve a name to an ID.
 
@@ -95,6 +96,9 @@ class IdentityResolver:
             name: Component name (e.g., "liquidhandler_1").
             component_type: Type of component (node, manager, etc.).
             metadata: Optional metadata to store with the entry.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to
+                :meth:`LocalRegistryManager.resolve`.
 
         Returns:
             The component's ID (ULID).
@@ -109,6 +113,7 @@ class IdentityResolver:
                 component_type=component_type,
                 metadata=metadata,
                 acquire_lock=True,
+                retry_timeout=retry_timeout,
             )
 
             # Sync to lab if available
@@ -135,6 +140,7 @@ class IdentityResolver:
         name: str,
         component_type: ComponentType,
         metadata: Optional[dict[str, Any]] = None,
+        retry_timeout: Optional[float] = None,
     ) -> RegistryResolveResult:
         """Resolve a name and return detailed information.
 
@@ -145,6 +151,8 @@ class IdentityResolver:
             name: Component name.
             component_type: Type of component.
             metadata: Optional metadata.
+            retry_timeout: When set, retry lock acquisition for this many
+                seconds before raising. Passed through to :meth:`resolve`.
 
         Returns:
             RegistryResolveResult with ID and source information.
@@ -153,7 +161,9 @@ class IdentityResolver:
         existing_id = self.local_registry.lookup(name)
         is_new = existing_id is None
 
-        resolved_id = self.resolve(name, component_type, metadata)
+        resolved_id = self.resolve(
+            name, component_type, metadata, retry_timeout=retry_timeout
+        )
 
         return RegistryResolveResult(
             name=name,

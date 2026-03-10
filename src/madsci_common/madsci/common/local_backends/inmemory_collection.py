@@ -57,9 +57,14 @@ class InMemoryDeleteResult:
 class InMemoryCursor:
     """Mimics ``pymongo.cursor.Cursor`` with sort/skip/limit/to_list chaining."""
 
-    def __init__(self, documents: list[dict[str, Any]]) -> None:
+    def __init__(
+        self,
+        documents: list[dict[str, Any]],
+        projection: Optional[dict[str, Any]] = None,
+    ) -> None:
         """Initialize with a list of documents to iterate over."""
         self._documents = documents
+        self._projection = projection
         self._sort_key: Optional[str] = None
         self._sort_direction: int = 1
         self._skip_count: int = 0
@@ -95,6 +100,8 @@ class InMemoryCursor:
             docs = docs[self._skip_count :]
         if self._limit_count:
             docs = docs[: self._limit_count]
+        if self._projection:
+            docs = [_apply_projection(d, self._projection) for d in docs]
         return docs
 
     def to_list(self, length: Optional[int] = None) -> list[dict[str, Any]]:
@@ -122,8 +129,8 @@ class InMemoryCollection:
     """Drop-in replacement for ``pymongo.collection.Collection``.
 
     Supports: ``insert_one``, ``find_one``, ``find``, ``update_one``,
-    ``update_many``, ``delete_one``, ``delete_many``, ``count_documents``,
-    ``create_index``, ``drop_index``, ``index_information``.
+    ``update_many``, ``replace_one``, ``delete_one``, ``delete_many``,
+    ``count_documents``, ``create_index``, ``drop_index``, ``index_information``.
     """
 
     def __init__(self, name: str) -> None:
@@ -165,6 +172,24 @@ class InMemoryCollection:
                     matched += 1
         return InMemoryUpdateResult(matched_count=matched, modified_count=matched)
 
+    def replace_one(
+        self, filter_query: dict[str, Any], replacement: dict[str, Any]
+    ) -> InMemoryUpdateResult:
+        """Replace the first document matching the filter with a new document.
+
+        The ``_id`` field of the original document is preserved.
+        """
+        replacement = copy.deepcopy(replacement)
+        with self._lock:
+            for i, doc in enumerate(self._documents):
+                if _matches(doc, filter_query):
+                    doc_id = doc.get("_id")
+                    self._documents[i] = replacement
+                    if doc_id is not None and "_id" not in replacement:
+                        self._documents[i]["_id"] = doc_id
+                    return InMemoryUpdateResult(matched_count=1, modified_count=1)
+        return InMemoryUpdateResult()
+
     def delete_one(self, filter_query: dict[str, Any]) -> InMemoryDeleteResult:
         """Delete the first document matching the filter."""
         with self._lock:
@@ -186,24 +211,44 @@ class InMemoryCollection:
     # --- Read operations ---
 
     def find_one(
-        self, filter_query: Optional[dict[str, Any]] = None
+        self,
+        filter_query: Optional[dict[str, Any]] = None,
+        projection: Optional[dict[str, Any]] = None,
     ) -> Optional[dict[str, Any]]:
-        """Return the first document matching the filter, or ``None``."""
+        """Return the first document matching the filter, or ``None``.
+
+        Args:
+            filter_query: MongoDB-style query filter.
+            projection: Optional field projection (e.g. ``{"_id": 1}``
+                for inclusion or ``{"field": 0}`` for exclusion).
+        """
         filter_query = filter_query or {}
         with self._lock:
             for doc in self._documents:
                 if _matches(doc, filter_query):
-                    return copy.deepcopy(doc)
+                    result = copy.deepcopy(doc)
+                    if projection:
+                        return _apply_projection(result, projection)
+                    return result
         return None
 
-    def find(self, filter_query: Optional[dict[str, Any]] = None) -> InMemoryCursor:
-        """Return a cursor over documents matching the filter."""
+    def find(
+        self,
+        filter_query: Optional[dict[str, Any]] = None,
+        projection: Optional[dict[str, Any]] = None,
+    ) -> InMemoryCursor:
+        """Return a cursor over documents matching the filter.
+
+        Args:
+            filter_query: MongoDB-style query filter.
+            projection: Optional field projection passed to the cursor.
+        """
         filter_query = filter_query or {}
         with self._lock:
             matched = [
                 copy.deepcopy(d) for d in self._documents if _matches(d, filter_query)
             ]
-        return InMemoryCursor(matched)
+        return InMemoryCursor(matched, projection=projection)
 
     def count_documents(self, filter_query: Optional[dict[str, Any]] = None) -> int:
         """Count documents matching the filter."""
@@ -239,11 +284,28 @@ class InMemoryDatabase:
     Access collections via ``db["collection_name"]``.
     """
 
-    def __init__(self, name: str = "test") -> None:
+    def __init__(
+        self,
+        name: str = "test",
+        client: Optional[InMemoryMongoClient] = None,
+    ) -> None:
         """Initialize a named in-memory database."""
         self.name = name
+        self._client = client
         self._collections: dict[str, InMemoryCollection] = {}
         self._lock = threading.Lock()
+
+    @property
+    def client(self) -> InMemoryMongoClient:
+        """Return the parent ``InMemoryMongoClient``.
+
+        Mirrors ``pymongo.database.Database.client``, used by health checks
+        like ``db.client.admin.command("ping")``.
+        """
+        if self._client is None:
+            # Create a standalone client if none was provided.
+            self._client = InMemoryMongoClient()
+        return self._client
 
     def __getitem__(self, collection_name: str) -> InMemoryCollection:
         """Get or create a collection by name."""
@@ -251,6 +313,23 @@ class InMemoryDatabase:
             if collection_name not in self._collections:
                 self._collections[collection_name] = InMemoryCollection(collection_name)
             return self._collections[collection_name]
+
+    def list_collection_names(self) -> list[str]:
+        """Return the names of all collections that have been created."""
+        with self._lock:
+            return list(self._collections.keys())
+
+    def create_collection(self, name: str) -> InMemoryCollection:
+        """Explicitly create a collection.
+
+        If the collection already exists, returns the existing one.
+        """
+        return self[name]
+
+    def drop_collection(self, name: str) -> None:
+        """Drop a collection by name, removing all its data."""
+        with self._lock:
+            self._collections.pop(name, None)
 
     def command(self, cmd: str, **_kwargs: Any) -> dict[str, Any]:
         """Execute a database command (only ``ping`` is supported)."""
@@ -270,13 +349,13 @@ class InMemoryMongoClient:
         """Initialize the in-memory Mongo client."""
         self._databases: dict[str, InMemoryDatabase] = {}
         self._lock = threading.Lock()
-        self.admin = InMemoryDatabase("admin")
+        self.admin = InMemoryDatabase("admin", client=self)
 
     def __getitem__(self, db_name: str) -> InMemoryDatabase:
         """Get or create a database by name."""
         with self._lock:
             if db_name not in self._databases:
-                self._databases[db_name] = InMemoryDatabase(db_name)
+                self._databases[db_name] = InMemoryDatabase(db_name, client=self)
             return self._databases[db_name]
 
     def __enter__(self) -> InMemoryMongoClient:
@@ -391,6 +470,48 @@ def _apply_unset(doc: dict[str, Any], fields: Any) -> None:
         else:
             if isinstance(current, dict):
                 current.pop(parts[-1], None)
+
+
+def _apply_projection(
+    doc: dict[str, Any], projection: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply a MongoDB-style field projection to a document.
+
+    Supports inclusion (``{"field": 1}``) and exclusion (``{"field": 0}``)
+    projections.  ``_id`` is included by default in inclusion projections
+    unless explicitly excluded.
+    """
+    if not projection:
+        return doc
+
+    # Determine if this is an inclusion or exclusion projection.
+    # MongoDB does not allow mixing (except _id exclusion in inclusion mode).
+    include_fields = {k for k, v in projection.items() if v and k != "_id"}
+    exclude_fields = {k for k, v in projection.items() if not v and k != "_id"}
+
+    # Check if any non-_id field has a truthy value (inclusion mode)
+    is_inclusion = bool(include_fields) or (
+        "_id" in projection and projection["_id"] and not exclude_fields
+    )
+
+    if is_inclusion:
+        # Inclusion projection: only keep specified fields (+ _id by default)
+        result: dict[str, Any] = {}
+        if projection.get("_id", 1) and "_id" in doc:
+            result["_id"] = doc["_id"]
+        for field in include_fields:
+            val = _nested_get(doc, field)
+            if val is not None:
+                result[field] = val
+        return result
+
+    # Exclusion projection: keep everything except specified fields
+    result = dict(doc)
+    for field in exclude_fields:
+        result.pop(field, None)
+    if "_id" in projection and not projection["_id"]:
+        result.pop("_id", None)
+    return result
 
 
 def _index_name(keys: Any) -> str:
