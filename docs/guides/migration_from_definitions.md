@@ -111,13 +111,13 @@ manager uses a prefix:
 
 For example, if your `event.manager.yaml` had:
 ```yaml
-mongo_db_url: mongodb://myhost:27017
+document_db_url: mongodb://myhost:27017
 database_name: my_events
 ```
 
 Set environment variables:
 ```bash
-EVENT_MONGO_DB_URL=mongodb://myhost:27017
+EVENT_DOCUMENT_DB_URL=mongodb://myhost:27017
 EVENT_DATABASE_NAME=my_events
 ```
 

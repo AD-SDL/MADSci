@@ -1,49 +1,48 @@
 # Infrastructure services for the MADSci Example Lab.
-# Provides MongoDB, Redis, PostgreSQL, and MinIO.
+# Provides FerretDB (MongoDB-compatible), Valkey (Redis-compatible), PostgreSQL, and SeaweedFS (S3-compatible).
 
 services:
-  madsci_mongodb:
-    container_name: madsci_mongodb
-    image: mongo:8.0
+  madsci_ferretdb:
+    container_name: madsci_ferretdb
+    image: ghcr.io/ferretdb/ferretdb:2
     restart: unless-stopped
     ports:
-      - ${MONGODB_PORT:-27017}:27017
-    volumes:
-      - ${REPO_PATH:-../..}/.madsci/mongodb:/data/db
+      - ${DOCUMENT_DB_PORT:-27017}:27017
+    environment:
+      - FERRETDB_POSTGRESQL_URL=postgres://madsci:madsci@madsci_postgres:5432/postgres
+    depends_on:
+      - madsci_postgres
 
-  madsci_redis:
-    container_name: madsci_redis
-    image: redis:7.4
+  madsci_valkey:
+    container_name: madsci_valkey
+    image: valkey/valkey:8
     restart: unless-stopped
     ports:
       - ${REDIS_PORT:-6379}:6379
     volumes:
-      - ${REPO_PATH:-../..}/.madsci/redis:/data
-    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
+      - ${REPO_PATH:-../..}/.madsci/valkey:/data
+    command: valkey-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
 
   madsci_postgres:
     container_name: madsci_postgres
-    image: postgres:17
+    image: ghcr.io/ferretdb/postgres-documentdb-dev:17-ferretdb
     restart: unless-stopped
     environment:
       - POSTGRES_USER=madsci
       - POSTGRES_PASSWORD=madsci
-      - POSTGRES_DB=resources
+      - POSTGRES_DB=postgres
     ports:
       - ${POSTGRES_PORT:-5432}:5432
     volumes:
       - ${REPO_PATH:-../..}/.madsci/postgresql/data:/var/lib/postgresql/data
 
-  madsci_minio:
-    container_name: madsci_minio
-    image: minio/minio
+  madsci_seaweedfs:
+    container_name: madsci_seaweedfs
+    image: chrislusf/seaweedfs:latest
     restart: unless-stopped
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - ${MINIO_PORT:-9000}:9000
-      - ${MINIO_CONSOLE_PORT:-9001}:9001
+      - ${OBJECT_STORAGE_PORT:-9000}:8333
+      - ${OBJECT_STORAGE_CONSOLE_PORT:-9001}:9333
     volumes:
-      - ${REPO_PATH:-../..}/.madsci/minio:/home/madsci/.madsci/minio
-    command: server /home/madsci/.madsci/minio --console-address ":9001"
+      - ${REPO_PATH:-../..}/.madsci/seaweedfs:/data
+    command: "server -s3 -dir=/data -s3.port=8333"

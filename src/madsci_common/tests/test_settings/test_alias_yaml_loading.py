@@ -146,9 +146,9 @@ class TestEventManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         """Fields with explicit validation_alias should not be broken by alias_generator."""
-        # mongo_db_url has validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url")
+        # document_db_url has validation_alias=AliasChoices("document_db_url", "mongo_db_url", "EVENT_DB_URL", "db_url")
         settings = EventManagerSettings(EVENT_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
     def test_env_var_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EVENT_SERVER_URL", "http://envtest:8001")
@@ -158,14 +158,14 @@ class TestEventManagerAliases:
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
         settings = EventManagerSettings()
         data = settings.model_dump_safe(by_alias=True)
-        assert data["event_mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert data["event_document_db_url"] == REDACTED_PLACEHOLDER
         # Non-secret fields should not be redacted
         assert data["event_server_url"] != REDACTED_PLACEHOLDER
 
     def test_model_dump_safe_without_alias_redacts_secrets(self) -> None:
         settings = EventManagerSettings()
         data = settings.model_dump_safe()
-        assert data["mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert data["document_db_url"] == REDACTED_PLACEHOLDER
 
 
 class TestWorkcellManagerAliases:
@@ -193,7 +193,7 @@ class TestWorkcellManagerAliases:
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
         settings = WorkcellManagerSettings()
         data = settings.model_dump_safe(by_alias=True)
-        assert data["workcell_mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert data["workcell_document_db_url"] == REDACTED_PLACEHOLDER
         assert data["workcell_redis_password"] == REDACTED_PLACEHOLDER
 
 
@@ -223,7 +223,7 @@ class TestDataManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         settings = DataManagerSettings(DATA_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
 
 class TestExperimentManagerAliases:
@@ -236,7 +236,7 @@ class TestExperimentManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         settings = ExperimentManagerSettings(EXPERIMENT_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
 
 class TestLocationManagerAliases:

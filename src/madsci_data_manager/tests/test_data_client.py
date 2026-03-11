@@ -23,28 +23,30 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.data_manager.data_server import DataManager
 from starlette.testclient import TestClient
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_data")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_data")
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def test_client(mongo_handler) -> TestClient:
+def test_client(document_handler) -> TestClient:
     """Data Server Test Client Fixture"""
     settings = DataManagerSettings(
         manager_name="Test Data Manager", enable_registry_resolution=False
     )
     manager = DataManager(
         settings=settings,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     app = manager.create_server()
     return TestClient(app)

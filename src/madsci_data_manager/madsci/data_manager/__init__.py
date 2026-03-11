@@ -81,5 +81,5 @@ See Also
 --------
 - :mod:`madsci.client.data_client`: Client library for DataPoint operations
 - :mod:`madsci.common.types.datapoint_types`: DataPoint type definitions
-- :mod:`madsci.common.mongodb_migration_tool`: Database migration utilities
+- :mod:`madsci.common.document_db_migration_tool`: Database migration utilities
 """

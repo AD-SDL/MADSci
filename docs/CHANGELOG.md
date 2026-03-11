@@ -10,10 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Database Handler Abstractions
-- New `madsci.common.db_handlers` package with abstract base classes (`MongoHandler`, `RedisHandler`, `PostgresHandler`, `MinioHandler`) and both real and in-memory implementations
-- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealMinioHandler`
-- In-memory implementations: `InMemoryMongoHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryMinioHandler`
-- All 6 database-backed managers now accept optional handler constructor parameters (`mongo_handler`, `minio_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
+- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `RedisHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
+- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
+- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
+- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
 - `LocalRunner` updated to use handler abstractions instead of raw in-memory clients
 - `InMemoryCollection` gained projection support, `replace_one()`, `client` property, and `list_collection_names()`
 
@@ -35,9 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Event delivery is now synchronous and fire-once; callers should handle failures explicitly
 - Added `madsci.eventclient.send_failures` OTEL counter and upgraded failure logging from `warning` to `error` with structured kwargs (`event_type`, `event_id`)
 
-#### DataManager MinIO Handler Consolidation
-- All MinIO operations now routed through `MinioHandler` abstraction; removed direct `self.minio_client` usage
-- `_setup_object_storage()` wraps legacy `Minio` clients in `RealMinioHandler` (same pattern as other managers wrapping raw connections)
+#### DataManager Object Storage Handler Consolidation
+- All object storage operations now routed through `ObjectStorageHandler` abstraction; removed direct `self.minio_client` usage
+- `_setup_object_storage()` wraps legacy `Minio` clients in `RealObjectStorageHandler` (same pattern as other managers wrapping raw connections)
 
 #### Legacy Constructor Parameter Deprecation
 - Legacy database connection parameters (`db_connection`, `db_client`, `redis_connection`, `mongo_connection`) now emit `DeprecationWarning` across all 6 managers and 2 state handlers
@@ -66,11 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### EventManager Lazy pymongo Imports
 - Moved top-level `import pymongo` and `from pymongo import errors` behind `TYPE_CHECKING` guard and into methods, allowing the module to be imported without pymongo installed (in-memory-only usage)
 
-#### InMemoryMongoHandler `_client` Safety
-- `InMemoryMongoHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
+#### InMemoryDocumentStorageHandler `_client` Safety
+- `InMemoryDocumentStorageHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
 
 #### Handler ABC Return Type Annotations
-- Improved return type annotations on handler ABC methods: `MongoHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
+- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
 
 #### Manager Registry Lock Retry + Shutdown Release
 - `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet
@@ -117,7 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `madsci run` - Workflow and experiment execution
 - `madsci validate` - Configuration and definition file validation
 - `madsci config` - Configuration management (export, create)
-- `madsci backup` - Database backup creation (PostgreSQL and MongoDB)
+- `madsci backup` - Database backup creation (PostgreSQL and document database)
 - `madsci registry` - Service registry management
 - `madsci migrate` - Database migration tooling
 - `madsci tui` - Interactive terminal user interface
@@ -150,7 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Local Mode
 - `madsci start --mode=local` runs all managers in-process without Docker
-- In-memory drop-in backends for MongoDB and Redis operations; SQLite drop-in for PostgreSQL (Resource Manager)
+- In-memory drop-in backends for document database and Valkey operations; SQLite drop-in for PostgreSQL (Resource Manager)
 - Local data storage for development and testing without external database dependencies
 
 #### Configuration Management
@@ -188,7 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Event Manager Analytics and Retention
 - Event archiving via `/events/archive` endpoint (by event IDs or date cutoff)
-- MongoDB TTL index for automatic hard-deletion of archived events
+- Document database TTL index for automatic hard-deletion of archived events
 - Background retention task for periodic event archiving
 - `UtilizationAnalyzer` for session-based system and node utilization analysis
 - `TimeSeriesAnalyzer` for timezone-aware time-series utilization reports (daily, hourly, weekly)
@@ -237,7 +237,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `module_types.py`: Module and node settings hierarchy for module development
 - `registry_types.py`: Registry entries, locks, and component type definitions
 - `migration_types.py`: Migration status and output format types
-- `backup_types.py`: PostgreSQL and MongoDB backup settings
+- `backup_types.py`: PostgreSQL and document database backup settings
 - `client_types.py`: `MadsciClientConfig` with standardized retry, timeout, and pooling configuration
 - `context_types.py`: `MadsciContext` unified server URL settings
 

@@ -202,17 +202,17 @@ Create a `docker-compose.yaml`:
 version: "3.8"
 
 services:
-  # MongoDB for Event and Workcell managers
-  mongodb:
-    image: mongo:7
+  # FerretDB (document database) for Event and Workcell managers
+  madsci_ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:latest
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - ferretdb_data:/state
 
-  # Redis for Workcell manager queues
-  redis:
-    image: redis:7-alpine
+  # Valkey for Workcell manager queues
+  madsci_valkey:
+    image: valkey/valkey:8-alpine
     ports:
       - "6379:6379"
 
@@ -222,9 +222,9 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - EVENT_MONGO_DB_URL=mongodb://mongodb:27017
+      - EVENT_DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
     depends_on:
-      - mongodb
+      - madsci_ferretdb
 
   # Workcell Manager - workflow orchestration
   workcell_manager:
@@ -232,14 +232,14 @@ services:
     ports:
       - "8005:8005"
     environment:
-      - WORKCELL_MONGO_DB_URL=mongodb://mongodb:27017
-      - WORKCELL_REDIS_URL=redis://redis:6379
+      - WORKCELL_DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
+      - WORKCELL_REDIS_URL=redis://madsci_valkey:6379
     depends_on:
-      - mongodb
-      - redis
+      - madsci_ferretdb
+      - madsci_valkey
 
 volumes:
-  mongo_data:
+  ferretdb_data:
 ```
 
 Start the services:

@@ -1,4 +1,4 @@
-""" "MongoDB migration configuration types."""
+"""MongoDB-compatible document database migration configuration types."""
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -8,7 +8,7 @@ from pydantic import AliasChoices, AnyUrl, BaseModel, Field, field_validator
 from pydantic_extra_types.semantic_version import SemanticVersion
 
 
-class MongoDBMigrationSettings(
+class DocumentDBMigrationSettings(
     MadsciBaseSettings,
     env_file=(".env", "mongodb.env", "migration.env"),
     toml_file=("settings.toml", "mongodb.settings.toml", "migration.settings.toml"),
@@ -16,15 +16,20 @@ class MongoDBMigrationSettings(
     json_file=("settings.json", "mongodb.settings.json", "migration.settings.json"),
     env_prefix="MONGODB_MIGRATION_",
 ):
-    """Configuration settings for MongoDB migration operations."""
+    """Configuration settings for MongoDB-compatible document database migration operations."""
 
-    mongo_db_url: AnyUrl = Field(
+    document_db_url: AnyUrl = Field(
         default=AnyUrl("mongodb://localhost:27017"),
-        title="MongoDB URL",
-        description="MongoDB connection URL (e.g., mongodb://localhost:27017). "
-        "Defaults to localhost MongoDB instance.",
+        title="Document Database URL",
+        description="MongoDB-compatible document database connection URL (e.g., mongodb://localhost:27017). "
+        "Defaults to localhost instance.",
         validation_alias=AliasChoices(
-            "mongo_db_url", "MONGODB_URL", "MONGO_URL", "DATABASE_URL", "db_url"
+            "document_db_url",
+            "mongo_db_url",
+            "MONGODB_URL",
+            "MONGO_URL",
+            "DATABASE_URL",
+            "db_url",
         ),
         json_schema_extra={"secret": True},
     )

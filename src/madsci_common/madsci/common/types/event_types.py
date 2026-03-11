@@ -89,11 +89,13 @@ class EventManagerSettings(
         description="The type of manager.",
         default=ManagerType.EVENT_MANAGER,
     )
-    mongo_db_url: AnyUrl = Field(
+    document_db_url: AnyUrl = Field(
         default=AnyUrl("mongodb://localhost:27017"),
-        title="MongoDB URL",
-        description="The URL of the MongoDB database used by the Event Manager.",
-        validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url"),
+        title="Document Database URL",
+        description="The URL of the MongoDB-compatible document database used by the Event Manager.",
+        validation_alias=AliasChoices(
+            "document_db_url", "mongo_db_url", "EVENT_DB_URL", "db_url"
+        ),
         json_schema_extra={"secret": True},
     )
     database_name: str = Field(

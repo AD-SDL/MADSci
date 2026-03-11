@@ -45,10 +45,10 @@ madsci-postgres-backup create \
   --backup-dir ./backups/pre-upgrade
 
 for db in events experiments data workcell locations; do
-  madsci-mongodb-backup create \
+  madsci-document-db-backup create \
     --mongo-url mongodb://localhost:27017 \
     --database $db \
-    --backup-dir ./backups/pre-upgrade/mongodb
+    --backup-dir ./backups/pre-upgrade/document_db
 done
 ```
 
@@ -90,7 +90,7 @@ docker compose build workcell_manager event_manager
 python -m madsci.resource_manager.migration_tool \
   --db-url postgresql://postgres:postgres@localhost:5432/resources
 
-# MongoDB migrations (per manager, if needed)
+# Document database migrations (per manager, if needed)
 # Check release notes for specific migration commands
 ```
 
@@ -138,9 +138,9 @@ The migration tool automatically:
 - Restores the backup if migration fails
 - Reports success/failure
 
-### MongoDB Migrations
+### Document Database Migrations
 
-MongoDB managers handle index creation and schema validation on startup. Specific migrations are documented in release notes.
+Document database managers (using the MongoDB wire protocol via FerretDB) handle index creation and schema validation on startup. Specific migrations are documented in release notes.
 
 ### Definition File Migration
 
@@ -178,18 +178,18 @@ EVENT_ARCHIVE_DIR=/data/event_archives
 
 ### Database Maintenance
 
-#### MongoDB
+#### FerretDB (Document Database)
 
 ```bash
-# Check database sizes
-docker compose exec mongodb mongosh --eval "
+# Check database sizes (using the MongoDB wire protocol)
+docker compose exec madsci_ferretdb mongosh --eval "
   db.adminCommand('listDatabases').databases.forEach(function(d) {
     print(d.name + ': ' + (d.sizeOnDisk / 1024 / 1024).toFixed(2) + ' MB');
   });
 "
 
 # Compact a collection (reclaim disk space)
-docker compose exec mongodb mongosh events --eval "
+docker compose exec madsci_ferretdb mongosh events --eval "
   db.runCommand({compact: 'events'})
 "
 ```
@@ -270,12 +270,12 @@ madsci-postgres-backup restore \
   --db-url postgresql://postgres:postgres@localhost:5432/resources \
   --backup-path ./backups/pre-upgrade/resources_backup.sql
 
-# Restore MongoDB
+# Restore document databases
 for db in events experiments data workcell locations; do
-  madsci-mongodb-backup restore \
+  madsci-document-db-backup restore \
     --mongo-url mongodb://localhost:27017 \
     --database $db \
-    --backup-path ./backups/pre-upgrade/mongodb/${db}_backup.bson
+    --backup-path ./backups/pre-upgrade/document_db/${db}_backup.bson
 done
 ```
 

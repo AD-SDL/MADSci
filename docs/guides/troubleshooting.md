@@ -84,17 +84,17 @@ ls -la .env compose.yaml
 **Diagnostic Steps:**
 ```bash
 # Check database container status
-docker compose ps postgres mongodb redis
+docker compose ps postgres madsci_ferretdb madsci_valkey
 
 # View database logs
 docker compose logs postgres
-docker compose logs mongodb
-docker compose logs redis
+docker compose logs madsci_ferretdb
+docker compose logs madsci_valkey
 
 # Test database connections directly
 docker compose exec postgres psql -U madsci -d resources -c "\dt"
-docker compose exec mongodb mongosh --eval "db.adminCommand('listDatabases')"
-docker compose exec redis redis-cli ping
+docker compose exec madsci_ferretdb mongosh --eval "db.adminCommand('listDatabases')"
+docker compose exec madsci_valkey valkey-cli ping
 ```
 
 **Solutions:**
@@ -111,26 +111,26 @@ docker compose up postgres
 docker compose logs postgres | grep -i error
 ```
 
-2. **MongoDB Issues:**
+2. **FerretDB Issues:**
 ```bash
-# Reset MongoDB data
+# Reset FerretDB data
 docker compose down
-sudo rm -rf .madsci/mongodb/*
-docker compose up mongodb
+sudo rm -rf .madsci/ferretdb/*
+docker compose up madsci_ferretdb
 
-# Verify MongoDB is accepting connections
-docker compose exec mongodb mongosh --eval "db.runCommand({ping: 1})"
+# Verify FerretDB is accepting connections (uses MongoDB wire protocol)
+docker compose exec madsci_ferretdb mongosh --eval "db.runCommand({ping: 1})"
 ```
 
-3. **Redis Issues:**
+3. **Valkey Issues:**
 ```bash
-# Reset Redis data
+# Reset Valkey data
 docker compose down
-sudo rm -rf .madsci/redis/*
-docker compose up redis
+sudo rm -rf .madsci/valkey/*
+docker compose up madsci_valkey
 
-# Test Redis connectivity
-docker compose exec redis redis-cli ping
+# Test Valkey connectivity
+docker compose exec madsci_valkey valkey-cli ping
 ```
 
 ## Node Communication Issues
@@ -419,7 +419,7 @@ docker compose restart lab_manager
 2. **Database Seeding:**
 ```bash
 # Check if initial data exists
-docker compose exec mongodb mongosh madsci --eval "db.events.countDocuments()"
+docker compose exec madsci_ferretdb mongosh madsci --eval "db.events.countDocuments()"
 docker compose exec postgres psql -U madsci -d resources -c "SELECT COUNT(*) FROM resources;"
 
 # If needed, reinitialize the lab
@@ -446,7 +446,7 @@ time curl http://localhost:8000/api/nodes
 time curl http://localhost:8003/resources
 
 # Check database performance
-docker compose exec mongodb mongosh --eval "db.runCommand({serverStatus: 1}).connections"
+docker compose exec madsci_ferretdb mongosh --eval "db.runCommand({serverStatus: 1}).connections"
 docker compose exec postgres psql -U madsci -d resources -c "SELECT * FROM pg_stat_activity;"
 ```
 
@@ -464,7 +464,7 @@ free -h
 2. **Database Optimization:**
 ```bash
 # Create database indexes (if needed)
-docker compose exec mongodb mongosh madsci --eval "db.events.createIndex({timestamp: -1})"
+docker compose exec madsci_ferretdb mongosh madsci --eval "db.events.createIndex({timestamp: -1})"
 
 # PostgreSQL maintenance
 docker compose exec postgres psql -U madsci -d resources -c "VACUUM ANALYZE;"
@@ -533,14 +533,14 @@ docker compose up
 ### Database Direct Access
 
 ```bash
-# MongoDB debugging
-docker compose exec mongodb mongosh madsci
+# FerretDB debugging (MongoDB wire protocol)
+docker compose exec madsci_ferretdb mongosh madsci
 
 # PostgreSQL debugging
 docker compose exec postgres psql -U madsci -d resources
 
-# Redis debugging
-docker compose exec redis redis-cli
+# Valkey debugging
+docker compose exec madsci_valkey valkey-cli
 ```
 
 ### Network Analysis

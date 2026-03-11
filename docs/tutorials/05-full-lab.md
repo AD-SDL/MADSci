@@ -29,7 +29,7 @@ A full MADSci lab includes:
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                         Infrastructure                               │   │
 │   │   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐        │   │
-│   │   │ MongoDB  │   │PostgreSQL│   │  Redis   │   │  MinIO   │        │   │
+│   │   │ FerretDB │   │PostgreSQL│   │  Valkey  │   │SeaweedFS │        │   │
 │   │   │  :27017  │   │  :5432   │   │  :6379   │   │  :9000   │        │   │
 │   │   └──────────┘   └──────────┘   └──────────┘   └──────────┘        │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
@@ -80,14 +80,14 @@ Or create the files manually:
 LAB_NAME=my_lab
 
 # Database URLs
-MONGO_DB_URL=mongodb://mongodb:27017
+DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
 POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/madsci
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://madsci_valkey:6379
 
-# MinIO (S3-compatible storage)
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=madsci
-MINIO_SECRET_KEY=madsci123
+# SeaweedFS (S3-compatible object storage)
+SEAWEEDFS_ENDPOINT=madsci_seaweedfs:9000
+SEAWEEDFS_ACCESS_KEY=madsci
+SEAWEEDFS_SECRET_KEY=madsci123
 
 # Manager URLs (internal Docker network)
 LAB_SERVER_URL=http://lab_manager:8000
@@ -118,13 +118,13 @@ services:
   # Infrastructure
   # ==========================================================================
 
-  mongodb:
-    image: mongo:7
+  madsci_ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:latest
     <<: *madsci-service
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - ferretdb_data:/state
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -148,31 +148,28 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
+  madsci_valkey:
+    image: valkey/valkey:8-alpine
     <<: *madsci-service
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
+  madsci_seaweedfs:
+    image: chrislusf/seaweedfs:latest
     <<: *madsci-service
     ports:
-      - "9000:9000"
+      - "9000:8333"
       - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: madsci
-      MINIO_ROOT_PASSWORD: madsci123
-    command: server /data --console-address ":9001"
+    command: server -s3
     volumes:
-      - minio_data:/data
+      - seaweedfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/status"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -187,7 +184,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   event_manager:
@@ -196,7 +193,7 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   experiment_manager:
@@ -205,7 +202,7 @@ services:
     ports:
       - "8002:8002"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   resource_manager:
@@ -223,13 +220,13 @@ services:
     ports:
       - "8004:8004"
     environment:
-      DATA_MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      DATA_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      DATA_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      DATA_OBJECT_STORAGE_ENDPOINT: ${SEAWEEDFS_ENDPOINT}
+      DATA_OBJECT_STORAGE_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY}
+      DATA_OBJECT_STORAGE_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY}
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
-      minio:
+      madsci_seaweedfs:
         condition: service_healthy
 
   workcell_manager:
@@ -238,9 +235,9 @@ services:
     ports:
       - "8005:8005"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
-      redis:
+      madsci_valkey:
         condition: service_healthy
 
   location_manager:
@@ -249,7 +246,7 @@ services:
     ports:
       - "8006:8006"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   # ==========================================================================
@@ -279,9 +276,9 @@ networks:
     driver: bridge
 
 volumes:
-  mongo_data:
+  ferretdb_data:
   postgres_data:
-  minio_data:
+  seaweedfs_data:
 ```
 
 ## Step 2: Start the Lab
@@ -629,7 +626,7 @@ Access the UIs:
 ### Database Backups
 
 ```bash
-# Backup MongoDB
+# Backup document database
 madsci-backup create --db-url mongodb://localhost:27017 --output ./backups
 
 # Backup PostgreSQL

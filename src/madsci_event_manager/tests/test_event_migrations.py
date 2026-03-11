@@ -1,4 +1,4 @@
-"""Pytest unit tests for the MADSci Event Manager MongoDB migration tools."""
+"""Pytest unit tests for the MADSci Event Manager document database migration tools."""
 
 import json
 import os
@@ -7,12 +7,12 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from madsci.common.mongodb_migration_tool import (
-    MongoDBMigrationSettings,
-    MongoDBMigrator,
+from madsci.common.document_db_migration_tool import (
+    DocumentDBMigrationSettings,
+    DocumentDBMigrator,
     main,
 )
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from pydantic_extra_types.semantic_version import SemanticVersion
 
 
@@ -58,7 +58,7 @@ def temp_event_schema():
 @pytest.fixture
 def mock_mongo_client_events():
     """Mock MongoDB client for events database"""
-    with patch("madsci.common.mongodb_migration_tool.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_migration_tool.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -76,7 +76,7 @@ def mock_mongo_client_events():
 
 def test_event_version_checker_detects_missing_version_tracking():
     """Test that version checker detects events database without version tracking"""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_db.list_collection_names.return_value = ["events"]  # No schema_versions
 
@@ -88,7 +88,7 @@ def test_event_version_checker_detects_missing_version_tracking():
         schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
@@ -103,7 +103,7 @@ def test_event_version_checker_detects_missing_version_tracking():
 
 def test_event_version_checker_auto_initializes_fresh_database():
     """Test that version checker auto-initializes completely fresh databases"""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -124,7 +124,7 @@ def test_event_version_checker_auto_initializes_fresh_database():
         schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
@@ -140,7 +140,7 @@ def test_event_version_checker_auto_initializes_fresh_database():
 
 def test_event_version_checker_still_requires_migration_for_existing_db():
     """Test that version checker still requires manual migration for existing databases without version tracking"""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_db.list_collection_names.return_value = [
             "events"
@@ -154,7 +154,7 @@ def test_event_version_checker_still_requires_migration_for_existing_db():
         schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
@@ -167,7 +167,7 @@ def test_event_version_checker_still_requires_migration_for_existing_db():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
+@patch("madsci.common.document_db_migration_tool.DocumentDBMigrator")
 @patch(
     "sys.argv",
     ["migration_tool.py", "--database", "madsci_events", "--backup_only", "true"],
@@ -241,12 +241,12 @@ def test_event_backup_creation(mock_subprocess):
     schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
     try:
-        settings = MongoDBMigrationSettings(
-            mongo_db_url="mongodb://localhost:27017",
+        settings = DocumentDBMigrationSettings(
+            document_db_url="mongodb://localhost:27017",
             database="madsci_events",
             schema_file=str(schema_file),
         )
-        migrator = MongoDBMigrator(settings)
+        migrator = DocumentDBMigrator(settings)
 
         # Mock the post-backup processing to bypass filesystem checks
         with patch.object(migrator.backup_tool, "_post_backup_processing"):
@@ -276,12 +276,12 @@ def test_event_collection_creation(mock_mongo_client_events):  # noqa
     schema_file.write_text(json.dumps(schema_content))
 
     try:
-        settings = MongoDBMigrationSettings(
-            mongo_db_url="mongodb://localhost:27017",
+        settings = DocumentDBMigrationSettings(
+            document_db_url="mongodb://localhost:27017",
             database="madsci_events",
             schema_file=str(schema_file),
         )
-        migrator = MongoDBMigrator(settings)
+        migrator = DocumentDBMigrator(settings)
 
         # Access the database from the migrator instance, not the mock client
         migrator.database.list_collection_names.return_value = []
@@ -294,7 +294,7 @@ def test_event_collection_creation(mock_mongo_client_events):  # noqa
         schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
+@patch("madsci.common.document_db_migration_tool.DocumentDBMigrator")
 @patch(
     "sys.argv",
     ["migration_tool.py", "--database", "madsci_events", "--check_version", "true"],
@@ -333,7 +333,7 @@ def test_event_check_version_command(mock_migrator_class):
 
 def test_event_schema_version_mismatch_detection():
     """Test detection of schema version mismatches in events database (major/minor versions)"""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -351,7 +351,7 @@ def test_event_schema_version_mismatch_detection():
         schema_file.write_text(json.dumps({"schema_version": "1.0.0"}))
 
         try:
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
@@ -365,7 +365,7 @@ def test_event_schema_version_mismatch_detection():
 
 def test_event_patch_version_differences():
     """Test that patch version differences trigger migration in events database (schema versions must match exactly)"""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -383,7 +383,7 @@ def test_event_patch_version_differences():
         schema_file.write_text(json.dumps({"schema_version": "1.0.1"}))
 
         try:
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "madsci_events", str(schema_file)
             )
 
@@ -395,7 +395,7 @@ def test_event_patch_version_differences():
             schema_file.unlink()
 
 
-@patch("madsci.common.mongodb_migration_tool.MongoDBMigrator")
+@patch("madsci.common.document_db_migration_tool.DocumentDBMigrator")
 @patch(
     "sys.argv",
     [
@@ -451,7 +451,7 @@ def test_event_schema_file_detection():
         os.chdir(temp_path)
 
         try:
-            settings = MongoDBMigrationSettings(database="madsci_events")
+            settings = DocumentDBMigrationSettings(database="madsci_events")
             detected_path = settings.get_effective_schema_file_path()
             assert detected_path.name == "schema.json"
             assert "event_manager" in str(detected_path)

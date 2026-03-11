@@ -220,11 +220,11 @@ class TestRealSettingsSecretAnnotations:
         safe = s.model_dump_safe()
         assert safe["db_url"] == REDACTED_PLACEHOLDER
 
-    def test_event_manager_mongo_url_redacted(self) -> None:
-        """EventManagerSettings.mongo_db_url is classified as secret."""
+    def test_event_manager_document_db_url_redacted(self) -> None:
+        """EventManagerSettings.document_db_url is classified as secret."""
         s = EventManagerSettings()
         safe = s.model_dump_safe()
-        assert safe["mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert safe["document_db_url"] == REDACTED_PLACEHOLDER
 
     def test_workcell_manager_redis_password_redacted(self) -> None:
         """WorkcellManagerSettings.redis_password is classified as secret."""
@@ -238,17 +238,17 @@ class TestRealSettingsSecretAnnotations:
         safe = s.model_dump_safe()
         assert safe["redis_password"] == REDACTED_PLACEHOLDER
 
-    def test_data_manager_mongo_url_redacted(self) -> None:
-        """DataManagerSettings.mongo_db_url is classified as secret."""
+    def test_data_manager_document_db_url_redacted(self) -> None:
+        """DataManagerSettings.document_db_url is classified as secret."""
         s = DataManagerSettings()
         safe = s.model_dump_safe()
-        assert safe["mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert safe["document_db_url"] == REDACTED_PLACEHOLDER
 
-    def test_experiment_manager_mongo_url_redacted(self) -> None:
-        """ExperimentManagerSettings.mongo_db_url is classified as secret."""
+    def test_experiment_manager_document_db_url_redacted(self) -> None:
+        """ExperimentManagerSettings.document_db_url is classified as secret."""
         s = ExperimentManagerSettings()
         safe = s.model_dump_safe()
-        assert safe["mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert safe["document_db_url"] == REDACTED_PLACEHOLDER
 
     def test_object_storage_keys_redacted(self) -> None:
         """ObjectStorageSettings access/secret keys are classified as secret."""

@@ -14,10 +14,10 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Label, Static
 
 INFRASTRUCTURE_SERVICES = {
-    "mongodb": ("localhost", 27017),
+    "ferretdb": ("localhost", 27017),
     "postgresql": ("localhost", 5432),
-    "redis": ("localhost", 6379),
-    "minio": ("localhost", 9000),
+    "valkey": ("localhost", 6379),
+    "seaweedfs": ("localhost", 8333),
 }
 
 

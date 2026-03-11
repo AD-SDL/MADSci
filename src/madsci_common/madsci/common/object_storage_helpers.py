@@ -1,4 +1,4 @@
-"""Module to create and manage an object storage client using MinIO."""
+"""Module to create and manage an S3-compatible storage client."""
 
 import mimetypes
 import warnings
@@ -20,15 +20,15 @@ class ObjectNamingStrategy(Enum):
     TIMESTAMPED_PATH = "timestamped_path"  # year/month/day/filename structure
 
 
-def create_minio_client(
+def create_object_storage_client(
     object_storage_settings: Optional[ObjectStorageSettings] = None,
 ) -> Union[Minio, None]:
-    """Initialize the object storage client using the provided configuration."""
+    """Initialize the S3-compatible storage client using the provided configuration."""
     object_storage_settings = object_storage_settings or ObjectStorageSettings()
     if not object_storage_settings.endpoint:
         return None
     try:
-        minio_client = Minio(
+        storage_client = Minio(
             endpoint=object_storage_settings.endpoint,
             access_key=object_storage_settings.access_key,
             secret_key=object_storage_settings.secret_key,
@@ -38,14 +38,13 @@ def create_minio_client(
 
         try:
             if not ensure_bucket_exists(
-                minio_client, object_storage_settings.default_bucket
+                storage_client, object_storage_settings.default_bucket
             ):
-                minio_client.make_bucket(object_storage_settings.default_bucket)
+                storage_client.make_bucket(object_storage_settings.default_bucket)
 
         except Exception as bucket_error:
             # Bucket creation failed - this is OK for many scenarios:
-            # - AWS S3: User might not have CreateBucket permissions (bucket created via console)
-            # - GCS: Bucket created via GCP console
+            # - S3-compatible storage: User might not have CreateBucket permissions
             # - Bucket already exists but bucket_exists() failed due to permissions
             warnings.warn(
                 f"Could not create bucket '{object_storage_settings.default_bucket}': {bucket_error!s}. "
@@ -55,7 +54,7 @@ def create_minio_client(
                 stacklevel=2,
             )
 
-        return minio_client
+        return storage_client
 
     except Exception as e:
         warnings.warn(
@@ -66,19 +65,19 @@ def create_minio_client(
         return None
 
 
-def ensure_bucket_exists(minio_client: Minio, bucket_name: str) -> bool:
+def ensure_bucket_exists(storage_client: Minio, bucket_name: str) -> bool:
     """Ensure a bucket exists, creating it if necessary.
 
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket to check/create
 
     Returns:
         True if bucket exists or was created successfully, False otherwise
     """
     try:
-        if not minio_client.bucket_exists(bucket_name):
-            minio_client.make_bucket(bucket_name)
+        if not storage_client.bucket_exists(bucket_name):
+            storage_client.make_bucket(bucket_name)
         return True
 
     except Exception as e:
@@ -148,16 +147,7 @@ def construct_object_url(
     """
     object_storage_settings = object_storage_settings or ObjectStorageSettings()
     # Determine the appropriate endpoint for the URL
-    if public_endpoint:
-        endpoint_for_url = public_endpoint
-    else:
-        endpoint_for_url = object_storage_settings.endpoint
-        # If this is a MinIO deployment, use port 9001 for web access instead of 9000
-        if ":9000" in endpoint_for_url and (
-            "localhost" in endpoint_for_url or "127.0.0.1" in endpoint_for_url
-        ):
-            # Only adjust for localhost/127.0.0.1 or if explicitly requested
-            endpoint_for_url = endpoint_for_url.replace(":9000", ":9001")
+    endpoint_for_url = public_endpoint or object_storage_settings.endpoint
 
     # Construct the object URL
     protocol = "https" if object_storage_settings.secure else "http"
@@ -165,7 +155,7 @@ def construct_object_url(
 
 
 def upload_file_to_object_storage(
-    minio_client: Minio,
+    storage_client: Minio,
     file_path: Union[str, Path],
     bucket_name: Optional[str] = None,
     object_name: Optional[str] = None,
@@ -176,10 +166,10 @@ def upload_file_to_object_storage(
     label: Optional[str] = None,
     object_storage_settings: Optional[ObjectStorageSettings] = None,
 ) -> Optional[dict[str, Any]]:
-    """Upload a file to object storage and return storage information.
+    """Upload a file to S3-compatible storage and return storage information.
 
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         object_storage_settings: Object storage configuration
         file_path: Path to the file to upload
         bucket_name: Name of the bucket (defaults to config default_bucket)
@@ -193,9 +183,9 @@ def upload_file_to_object_storage(
     Returns:
         Dictionary with object storage information, or None if upload failed
     """
-    if minio_client is None:
+    if storage_client is None:
         warnings.warn(
-            "MinIO client is not configured",
+            "Object storage client is not configured",
             UserWarning,
             stacklevel=2,
         )
@@ -220,12 +210,12 @@ def upload_file_to_object_storage(
     label = label or file_path.name
 
     # Ensure the bucket exists
-    if not ensure_bucket_exists(minio_client, bucket_name):
+    if not ensure_bucket_exists(storage_client, bucket_name):
         return None
 
     # Upload the file
     try:
-        result = minio_client.fput_object(
+        result = storage_client.fput_object(
             bucket_name=bucket_name,
             object_name=object_name,
             file_path=str(file_path),
@@ -252,10 +242,6 @@ def upload_file_to_object_storage(
     final_public_endpoint = public_endpoint
     if not final_public_endpoint:
         final_public_endpoint = object_storage_settings.endpoint
-        if ":9000" in final_public_endpoint and (
-            "localhost" in final_public_endpoint or "127.0.0.1" in final_public_endpoint
-        ):
-            final_public_endpoint = final_public_endpoint.replace(":9000", ":9001")
 
     return {
         "bucket_name": bucket_name,
@@ -272,15 +258,15 @@ def upload_file_to_object_storage(
 
 
 def download_file_from_object_storage(
-    minio_client: Minio,
+    storage_client: Minio,
     bucket_name: str,
     object_name: str,
     output_path: Union[str, Path],
 ) -> bool:
-    """Download a file from object storage.
+    """Download a file from S3-compatible storage.
 
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket
         object_name: Name of the object
         output_path: Path where the file should be saved
@@ -288,9 +274,9 @@ def download_file_from_object_storage(
     Returns:
         True if download was successful, False otherwise
     """
-    if minio_client is None:
+    if storage_client is None:
         warnings.warn(
-            "MinIO client is not configured",
+            "Object storage client is not configured",
             UserWarning,
             stacklevel=2,
         )
@@ -300,7 +286,7 @@ def download_file_from_object_storage(
         output_path = Path(output_path).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
-        minio_client.fget_object(
+        storage_client.fget_object(
             bucket_name,
             object_name,
             str(output_path),
@@ -317,28 +303,28 @@ def download_file_from_object_storage(
 
 
 def get_object_data_from_storage(
-    minio_client: Minio, bucket_name: str, object_name: str
+    storage_client: Minio, bucket_name: str, object_name: str
 ) -> Optional[bytes]:
-    """Get object data directly from storage.
+    """Get object data directly from S3-compatible storage.
 
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket
         object_name: Name of the object
 
     Returns:
         Object data as bytes, or None if retrieval failed
     """
-    if minio_client is None:
+    if storage_client is None:
         warnings.warn(
-            "MinIO client is not configured",
+            "Object storage client is not configured",
             UserWarning,
             stacklevel=2,
         )
         return None
 
     try:
-        response = minio_client.get_object(bucket_name, object_name)
+        response = storage_client.get_object(bucket_name, object_name)
         data = response.read()
         response.close()
         response.release_conn()

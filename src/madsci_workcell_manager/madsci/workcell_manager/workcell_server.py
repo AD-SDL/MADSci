@@ -16,14 +16,14 @@ from madsci.client.location_client import (
 from madsci.common.context import (
     get_current_madsci_context,
 )
-from madsci.common.db_handlers import MongoHandler, RedisHandler
+from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellInfo,
@@ -70,7 +70,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
         redis_handler: Optional[RedisHandler] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
         start_engine: bool = True,
         **kwargs: Any,
     ) -> None:
@@ -83,14 +83,14 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             )
         if mongo_connection is not None:
             warnings.warn(
-                "The 'mongo_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                "The 'mongo_connection' parameter is deprecated. Use 'document_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
         self.redis_handler = redis_handler
-        self.mongo_handler = mongo_handler
+        self.document_handler = document_handler
         self.start_engine = start_engine
 
         super().__init__(settings=settings, **kwargs)
@@ -109,7 +109,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
 
         # Skip version validation if external connections or handlers were provided (e.g., in tests)
         # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self.mongo_connection is not None or self.mongo_handler is not None:
+        if self.mongo_connection is not None or self.document_handler is not None:
             # External connection/handler provided, likely in test context - skip version validation
             self.logger.info(
                 "External mongo connection/handler provided, skipping MongoDB version validation",
@@ -131,7 +131,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
                 redis_handler=self.redis_handler,
-                mongo_handler=self.mongo_handler,
+                document_handler=self.document_handler,
             )
 
             # Initialize clients
@@ -146,14 +146,14 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             manager_name=manager_name,
             manager_id=manager_id,
             manager_type="workcell",
-            mongo_db=str(self.settings.mongo_db_url),
+            mongo_db=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
         )
 
         schema_file_path = Path(__file__).parent / "schema.json"
-        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
-        version_checker = MongoDBVersionChecker(
-            db_url=str(self.settings.mongo_db_url),
+        mig_cfg = DocumentDBMigrationSettings(database=self.settings.database_name)
+        version_checker = DocumentDBVersionChecker(
+            db_url=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
             backup_dir=str(mig_cfg.backup_dir),
@@ -194,7 +194,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
             redis_handler=self.redis_handler,
-            mongo_handler=self.mongo_handler,
+            document_handler=self.document_handler,
         )
 
         # Initialize clients using MadsciClientMixin
