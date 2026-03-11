@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncGenerator, Optional
 
 from classy_fastapi import delete, get, post
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
@@ -23,6 +23,7 @@ from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 from madsci.location_manager.transfer_planner import TransferPlanner
+import yaml
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 REPRESENTATION_VAL_BODY = Body(...)
@@ -74,26 +75,15 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         resource_server_url = context.resource_server_url
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
-        self._initialize_locations()
+       
         self.transfer_planner = TransferPlanner(
             state_handler=self.state_handler,
             transfer_capabilities=self.settings.transfer_capabilities,
             resource_client=self.resource_client,
         )
-
-    def _initialize_locations(self) -> None:
+    @post("/locations", tags=["Locations"])
+    def initialize_locations(self, locations: list[LocationDefinition]) -> None:
         """Initialize locations from settings, creating or updating them in the state handler."""
-        locations = self.settings.locations or []
-
-        if not locations:
-            self.logger.warning(
-                "No locations configured in settings. "
-                "Ensure 'location_locations' is defined in settings.yaml "
-                "or location.settings.yaml, and that these files are "
-                "accessible from the current working directory or via "
-                "MADSCI_SETTINGS_DIR.",
-                event_type=EventType.LOCATION_UPDATE,
-            )
 
         for location_def in locations:
             # Check if location already exists
@@ -109,9 +99,11 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                     resource_id = self._validate_or_recreate_location_resource(
                         location_def, existing_location.resource_id
                     )
+                    
                 else:
                     # Location doesn't exist or has no resource, create new one
                     resource_id = self._initialize_location_resource(location_def)
+                    print(resource_id)
 
             # Convert LocationDefinition to Location
             location = Location(
@@ -123,7 +115,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 allow_transfers=location_def.allow_transfers,
             )
 
-            self.state_handler.add_location(location)
+            print(self.state_handler.add_location(location))
 
         if locations:
             self.logger.info(
@@ -277,7 +269,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             "location.create",
             attributes={"location.name": location.location_name},
         ):
+            if location.resource_id is not None:
+                resource_id = self._validate_or_recreate_location_resource(location, location.resource_id)
+            else: 
+                resource_id = self._initialize_location_resource(location)
+            location.resource_id = resource_id
             result = self.state_handler.add_location(location)
+            
+                   
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
 
@@ -357,7 +356,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
     @post(
         "/location/{location_name}/set_representation/{node_name}", tags=["Locations"]
     )
-    def set_representations(
+    def set_representation(
         self,
         location_name: str,
         node_name: str,
@@ -374,7 +373,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         # Update the location with new representations
         if location.representations is None:
             location.representations = {}
-            location.representations[node_name] = representation_val
+        location.representations[node_name] = representation_val
 
         result = self.state_handler.update_location(location)
         # Rebuild transfer graph since representations affect transfer capabilities

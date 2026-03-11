@@ -158,6 +158,7 @@ def test_set_representations(client, sample_location):
         json=string_representation,
     )
     assert response.status_code == 200
+    print(response.json())
     returned_location = Location.model_validate(response.json())
     assert returned_location.representations is not None
     assert "test_node_2" in returned_location.representations
@@ -353,6 +354,7 @@ def test_resource_initialization_prevents_duplicates(redis_handler):
     mock_resource_client.create_resource_from_template.return_value = mock_resource
 
     # Create manager instance
+    LocationManager.resource_client = mock_resource_client  # Inject mock resource client
     manager = LocationManager(settings=settings, redis_handler=redis_handler)
     manager.resource_client = mock_resource_client
 
@@ -375,8 +377,6 @@ def test_resource_initialization_prevents_duplicates(redis_handler):
     client = TestClient(manager.create_server())
     response = client.get("/locations")
     assert response.status_code == 200
-    print(response)
-    print(response.json())
     locations = [Location.model_validate(loc) for loc in response.json()]
     assert len(locations) == 1
     assert locations[0].resource_id == "test_resource_123"

@@ -1,5 +1,6 @@
 """Client for performing location management actions."""
 
+from pathlib import Path
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
@@ -13,6 +14,7 @@ from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import create_http_session
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
+import yaml
 
 
 class LocationClient:
@@ -207,6 +209,30 @@ class LocationClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
+
+    def import_locations(
+        self, location_file_path: Path, timeout: Optional[float] = None
+    ) -> list(Location):
+        """
+        Add multiple locations from a file.
+
+        Parameters
+        ----------
+        location_file_path : Path
+            The path to the file containing location definitions.
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+      
+        Returns
+        -------
+        locations   :
+            The created locations.
+        """
+        locations = yaml.load(location_file_path.open())
+        for location in locations.values():
+            self.add_location(Location.model_validate(location), timeout=timeout)
+        return self.get_locations(timeout=timeout)
+
     def delete_location(
         self, location_id: str, timeout: Optional[float] = None
     ) -> dict[str, str]:
@@ -235,9 +261,9 @@ class LocationClient:
         response.raise_for_status()
         return response.json()
 
-    def set_representations(
+    def set_representation(
         self,
-        location_id: str,
+        location_name: str,
         node_name: str,
         representation: Any,
         timeout: Optional[float] = None,
@@ -264,7 +290,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.post(
-            f"{self.location_server_url}location/{location_id}/set_representation/{node_name}",
+            f"{self.location_server_url}location/{location_name}/set_representation/{node_name}",
             json=representation,
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -274,7 +300,7 @@ class LocationClient:
 
     def remove_representation(
         self,
-        location_id: str,
+        location_name: str,
         node_name: str,
         timeout: Optional[float] = None,
     ) -> Location:
@@ -298,7 +324,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.delete(
-            f"{self.location_server_url}location/{location_id}/remove_representation/{node_name}",
+            f"{self.location_server_url}location/{location_name}/remove_representation/{node_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
