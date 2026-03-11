@@ -105,13 +105,13 @@ Classes
     `database_name: str`
     :
 
+    `document_db_url: pydantic.networks.AnyUrl`
+    :
+
     `file_storage_path: str | pathlib.Path`
     :
 
     `manager_type: madsci.common.types.manager_types.ManagerType | None`
-    :
-
-    `mongo_db_url: pydantic.networks.AnyUrl`
     :
 
     `server_url: pydantic.networks.AnyUrl`

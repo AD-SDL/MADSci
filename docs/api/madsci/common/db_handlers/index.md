@@ -7,29 +7,106 @@ allowing managers to use fast in-memory mocks in tests while using real
 database connections in production.
 
 Handler types:
-- MongoHandler: MongoDB database access (PyMongoHandler, InMemoryMongoHandler)
-- RedisHandler: Redis key-value + data structure access (PyRedisHandler, InMemoryRedisHandler)
+- DocumentStorageHandler: MongoDB-compatible document database access (PyDocumentStorageHandler, InMemoryDocumentStorageHandler)
+- RedisHandler: Redis/Valkey key-value + data structure access (PyRedisHandler, InMemoryRedisHandler)
 - PostgresHandler: PostgreSQL/SQLite via SQLAlchemy (SQLAlchemyHandler, SQLiteHandler)
-- MinioHandler: Object storage access (RealMinioHandler, InMemoryMinioHandler)
+- ObjectStorageHandler: S3-compatible object storage access (RealObjectStorageHandler, InMemoryObjectStorageHandler)
 
 Sub-modules
 -----------
-* madsci.common.db_handlers.minio_handler
-* madsci.common.db_handlers.mongo_handler
+* madsci.common.db_handlers.document_storage_handler
+* madsci.common.db_handlers.object_storage_handler
 * madsci.common.db_handlers.postgres_handler
 * madsci.common.db_handlers.redis_handler
 
 Classes
 -------
 
-`InMemoryMinioHandler()`
+`DocumentStorageHandler()`
+:   Abstract interface for MongoDB-compatible document database access.
+    
+    Managers use this interface instead of directly depending on
+    ``pymongo.Database``, enabling in-memory substitution for tests.
+
+    ### Ancestors (in MRO)
+
+    * abc.ABC
+
+    ### Descendants
+
+    * madsci.common.db_handlers.document_storage_handler.InMemoryDocumentStorageHandler
+    * madsci.common.db_handlers.document_storage_handler.PyDocumentStorageHandler
+
+    ### Methods
+
+    `close(self) ‑> None`
+    :   Release database connections and resources.
+
+    `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Execute a database command (e.g. ``ping``).
+
+    `get_collection(self, name: str) ‑> Union[Collection, Any]`
+    :   Return a collection-like object for the given name.
+        
+        The returned object supports the pymongo Collection interface:
+        insert_one, find_one, find, update_one, update_many, delete_one,
+        delete_many, count_documents, create_index, drop_index, index_information.
+
+    `list_collection_names(self) ‑> list[str]`
+    :   Return the names of all collections in the database.
+
+    `ping(self) ‑> bool`
+    :   Check connectivity to the database.
+        
+        Returns:
+            True if the database is reachable, False otherwise.
+
+`InMemoryDocumentStorageHandler(database: Optional[Any] = None, database_name: str = 'test')`
+:   Document storage handler backed by in-memory collections for testing.
+    
+    Usage::
+    
+        handler = InMemoryDocumentStorageHandler()
+        collection = handler.get_collection("events")
+        collection.insert_one({"key": "value"})
+    
+    Initialize with an optional InMemoryDatabase.
+    
+    Args:
+        database: An existing ``InMemoryDatabase`` instance.
+            If not provided, a new ``InMemoryMongoClient`` is created.
+        database_name: Name for the database (used when creating a new client).
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler
+    * abc.ABC
+
+    ### Methods
+
+    `close(self) ‑> None`
+    :   No-op for in-memory databases.
+
+    `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
+    :   Execute a database command (only ``ping`` is supported).
+
+    `get_collection(self, name: str) ‑> Any`
+    :   Return an InMemoryCollection.
+
+    `list_collection_names(self) ‑> list[str]`
+    :   Return collection names from the in-memory database.
+
+    `ping(self) ‑> bool`
+    :   Always returns True for in-memory databases.
+
+`InMemoryObjectStorageHandler()`
 :   Object storage handler backed by in-memory storage for testing.
     
     Stores files as bytes in a dictionary keyed by ``(bucket, object_name)``.
     
     Usage::
     
-        handler = InMemoryMinioHandler()
+        handler = InMemoryObjectStorageHandler()
         handler.make_bucket("test-bucket")
         handler.upload_file("test-bucket", "data.csv", "/path/to/data.csv")
         data = handler.get_object_data("test-bucket", "data.csv")
@@ -38,7 +115,7 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.minio_handler.MinioHandler
+    * madsci.common.db_handlers.object_storage_handler.ObjectStorageHandler
     * abc.ABC
 
     ### Methods
@@ -63,44 +140,6 @@ Classes
 
     `upload_file(self, bucket: str, object_name: str, file_path: Union[str, Path], content_type: Optional[str] = None, metadata: Optional[dict[str, str]] = None) ‑> dict[str, typing.Any]`
     :   Upload a file to in-memory storage.
-
-`InMemoryMongoHandler(database: Optional[Any] = None, database_name: str = 'test')`
-:   MongoDB handler backed by in-memory collections for testing.
-    
-    Usage::
-    
-        handler = InMemoryMongoHandler()
-        collection = handler.get_collection("events")
-        collection.insert_one({"key": "value"})
-    
-    Initialize with an optional InMemoryDatabase.
-    
-    Args:
-        database: An existing ``InMemoryDatabase`` instance.
-            If not provided, a new ``InMemoryMongoClient`` is created.
-        database_name: Name for the database (used when creating a new client).
-
-    ### Ancestors (in MRO)
-
-    * madsci.common.db_handlers.mongo_handler.MongoHandler
-    * abc.ABC
-
-    ### Methods
-
-    `close(self) ‑> None`
-    :   No-op for in-memory databases.
-
-    `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
-    :   Execute a database command (only ``ping`` is supported).
-
-    `get_collection(self, name: str) ‑> Any`
-    :   Return an InMemoryCollection.
-
-    `list_collection_names(self) ‑> list[str]`
-    :   Return collection names from the in-memory database.
-
-    `ping(self) ‑> bool`
-    :   Always returns True for in-memory databases.
 
 `InMemoryRedisHandler(client: Optional[Any] = None)`
 :   Redis handler backed by in-memory data structures for testing.
@@ -150,8 +189,8 @@ Classes
     `set(self, key: str, value: Any) ‑> None`
     :   Set a value in the in-memory store.
 
-`MinioHandler()`
-:   Abstract interface for object storage access.
+`ObjectStorageHandler()`
+:   Abstract interface for S3-compatible object storage access.
     
     Managers use this interface instead of directly depending on
     ``minio.Minio``, enabling in-memory substitution for tests.
@@ -162,8 +201,8 @@ Classes
 
     ### Descendants
 
-    * madsci.common.db_handlers.minio_handler.InMemoryMinioHandler
-    * madsci.common.db_handlers.minio_handler.RealMinioHandler
+    * madsci.common.db_handlers.object_storage_handler.InMemoryObjectStorageHandler
+    * madsci.common.db_handlers.object_storage_handler.RealObjectStorageHandler
 
     ### Methods
 
@@ -229,45 +268,6 @@ Classes
             Dictionary with storage information including bucket_name,
             object_name, etag, size_bytes, and content_type.
 
-`MongoHandler()`
-:   Abstract interface for MongoDB database access.
-    
-    Managers use this interface instead of directly depending on
-    ``pymongo.Database``, enabling in-memory substitution for tests.
-
-    ### Ancestors (in MRO)
-
-    * abc.ABC
-
-    ### Descendants
-
-    * madsci.common.db_handlers.mongo_handler.InMemoryMongoHandler
-    * madsci.common.db_handlers.mongo_handler.PyMongoHandler
-
-    ### Methods
-
-    `close(self) ‑> None`
-    :   Release database connections and resources.
-
-    `command(self, cmd: str, **kwargs: Any) ‑> dict[str, typing.Any]`
-    :   Execute a database command (e.g. ``ping``).
-
-    `get_collection(self, name: str) ‑> Union[Collection, Any]`
-    :   Return a collection-like object for the given name.
-        
-        The returned object supports the pymongo Collection interface:
-        insert_one, find_one, find, update_one, update_many, delete_one,
-        delete_many, count_documents, create_index, drop_index, index_information.
-
-    `list_collection_names(self) ‑> list[str]`
-    :   Return the names of all collections in the database.
-
-    `ping(self) ‑> bool`
-    :   Check connectivity to the database.
-        
-        Returns:
-            True if the database is reachable, False otherwise.
-
 `PostgresHandler()`
 :   Abstract interface for relational database access via SQLAlchemy.
     
@@ -303,12 +303,12 @@ Classes
         Returns:
             True if the database is reachable, False otherwise.
 
-`PyMongoHandler(database: Any)`
-:   MongoDB handler backed by a real pymongo connection.
+`PyDocumentStorageHandler(database: Any)`
+:   Document storage handler backed by a real pymongo connection (MongoDB, FerretDB, etc.).
     
     Usage::
     
-        handler = PyMongoHandler.from_url("mongodb://localhost:27017", "my_db")
+        handler = PyDocumentStorageHandler.from_url("mongodb://localhost:27017", "my_db")
         collection = handler.get_collection("events")
         collection.insert_one({"key": "value"})
     
@@ -319,20 +319,20 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.mongo_handler.MongoHandler
+    * madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler
     * abc.ABC
 
     ### Static methods
 
-    `from_url(url: str, database_name: str) ‑> madsci.common.db_handlers.mongo_handler.PyMongoHandler`
-    :   Create a handler by connecting to a MongoDB server.
+    `from_url(url: str, database_name: str) ‑> madsci.common.db_handlers.document_storage_handler.PyDocumentStorageHandler`
+    :   Create a handler by connecting to a MongoDB-compatible server.
         
         Args:
-            url: MongoDB connection URL.
+            url: MongoDB-compatible connection URL.
             database_name: Name of the database to use.
         
         Returns:
-            A new PyMongoHandler instance.
+            A new PyDocumentStorageHandler instance.
 
     ### Methods
 
@@ -349,7 +349,7 @@ Classes
     :   Return collection names from the database.
 
     `ping(self) ‑> bool`
-    :   Ping the MongoDB server.
+    :   Ping the document database server.
 
 `PyRedisHandler(client: Any)`
 :   Redis handler backed by a real Redis server.
@@ -412,12 +412,12 @@ Classes
     `set(self, key: str, value: Any) ‑> None`
     :   Set a value in Redis.
 
-`RealMinioHandler(client: Any)`
-:   Object storage handler backed by a real MinIO/S3 server.
+`RealObjectStorageHandler(client: Any)`
+:   Object storage handler backed by a real S3-compatible server (MinIO, SeaweedFS, etc.).
     
     Usage::
     
-        handler = RealMinioHandler.from_settings(object_storage_settings)
+        handler = RealObjectStorageHandler.from_settings(object_storage_settings)
         handler.upload_file("my-bucket", "data.csv", "/path/to/data.csv")
     
     Initialize with an existing Minio client.
@@ -427,12 +427,12 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.minio_handler.MinioHandler
+    * madsci.common.db_handlers.object_storage_handler.ObjectStorageHandler
     * abc.ABC
 
     ### Static methods
 
-    `from_settings(settings: Any) ‑> madsci.common.db_handlers.minio_handler.RealMinioHandler`
+    `from_settings(settings: Any) ‑> madsci.common.db_handlers.object_storage_handler.RealObjectStorageHandler`
     :   Create a handler from ObjectStorageSettings.
         
         Args:
@@ -440,30 +440,30 @@ Classes
                 access_key, secret_key, secure, and region fields.
         
         Returns:
-            A new RealMinioHandler instance.
+            A new RealObjectStorageHandler instance.
 
     ### Methods
 
     `bucket_exists(self, bucket: str) ‑> bool`
-    :   Check if a bucket exists in MinIO.
+    :   Check if a bucket exists in object storage.
 
     `close(self) ‑> None`
-    :   No-op for MinIO client (uses HTTP, no persistent connection).
+    :   No-op for S3 client (uses HTTP, no persistent connection).
 
     `download_file(self, bucket: str, object_name: str, output_path: Union[str, Path]) ‑> None`
-    :   Download an object from MinIO.
+    :   Download an object from S3-compatible object storage.
 
     `get_object_data(self, bucket: str, object_name: str) ‑> bytes`
-    :   Get object contents from MinIO.
+    :   Get object contents from S3-compatible object storage.
 
     `make_bucket(self, bucket: str) ‑> None`
-    :   Create a bucket in MinIO.
+    :   Create a bucket in object storage.
 
     `ping(self) ‑> bool`
     :   Check connectivity by listing buckets.
 
     `upload_file(self, bucket: str, object_name: str, file_path: Union[str, Path], content_type: Optional[str] = None, metadata: Optional[dict[str, str]] = None) ‑> dict[str, typing.Any]`
-    :   Upload a file to MinIO.
+    :   Upload a file to S3-compatible object storage.
 
 `RedisHandler()`
 :   Abstract interface for Redis access.

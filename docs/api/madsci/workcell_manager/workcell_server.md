@@ -5,7 +5,7 @@ MADSci Workcell Manager using AbstractManagerBase.
 Classes
 -------
 
-`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, start_engine: bool = True, **kwargs: Any)`
+`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None, start_engine: bool = True, **kwargs: Any)`
 :   MADSci Workcell Manager using the new AbstractManagerBase pattern.
     
     This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.

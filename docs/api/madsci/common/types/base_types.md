@@ -281,10 +281,10 @@ Classes
     * madsci.common.types.context_types.MadsciContext
     * madsci.common.types.datapoint_types.ObjectStorageSettings
     * madsci.common.types.docker_types.DockerComposeSettings
+    * madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings
     * madsci.common.types.interface_types.InterfaceSettings
     * madsci.common.types.manager_types.ManagerSettings
     * madsci.common.types.module_types.ModuleSettings
-    * madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings
     * madsci.common.types.node_types.NodeConfig
     * madsci.experiment_application.experiment_base.ExperimentBaseConfig
     * madsci.resource_manager.migration_tool.DatabaseMigrationSettings
