@@ -270,7 +270,7 @@ def test_remove_representation_method_signature(location_client):
     """Test that remove_representation method has correct signature."""
     sig = inspect.signature(location_client.remove_representation)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "node_name" in params
     assert "timeout" in params
 
