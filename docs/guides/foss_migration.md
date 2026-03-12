@@ -1,0 +1,323 @@
+# FOSS Stack Migration Guide
+
+Migrate your MADSci lab from the proprietary infrastructure stack (MongoDB, Redis, MinIO) to the fully open-source alternatives (FerretDB, Valkey, SeaweedFS).
+
+## Overview
+
+Starting with MADSci v0.7.1, the default infrastructure uses FOSS (Free and Open-Source Software) alternatives:
+
+| Old (Proprietary) | New (FOSS) | Protocol Compatibility |
+|---|---|---|
+| MongoDB | FerretDB (backed by PostgreSQL) | MongoDB wire protocol |
+| Redis | Valkey | Redis API-compatible |
+| MinIO | SeaweedFS | S3-compatible |
+| PostgreSQL | PostgreSQL (unchanged) | N/A |
+
+The Python clients (`pymongo`, `redis`, `minio`) remain the same — only the server-side software changes.
+
+## Prerequisites
+
+### Required Tools
+
+- **Docker** and Docker Compose
+- **MongoDB Database Tools** (`mongodump`, `mongorestore`) — [Install guide](https://www.mongodb.com/docs/database-tools/installation/)
+- **PostgreSQL client tools** (`pg_dump`, `pg_restore`, `psql`) — usually included with `postgresql-client`
+- **MADSci CLI** (`madsci`) — installed from the MADSci package
+
+Verify prerequisites:
+```bash
+madsci migrate foss --dry-run
+```
+
+### Existing Data
+
+The migration tool looks for data in these directories (relative to your project root):
+
+| Component | Expected Path |
+|---|---|
+| MongoDB | `.madsci/mongodb/` |
+| PostgreSQL | `.madsci/postgresql/data/` |
+| Redis | `.madsci/redis/` |
+| MinIO | `.madsci/minio/` |
+
+## Quick Start
+
+```bash
+# 1. Preview the migration plan
+madsci migrate foss --dry-run
+
+# 2. Run the full migration
+madsci migrate foss --apply
+
+# 3. Verify the results
+madsci migrate foss --apply --step document-db  # Re-run individual steps if needed
+```
+
+## Automated Migration
+
+### Full Migration
+
+```bash
+madsci migrate foss --apply
+```
+
+This will:
+1. Check prerequisites (CLI tools on PATH)
+2. Create a pre-migration backup of old data directories
+3. Start old MongoDB and PostgreSQL containers on alternate ports
+4. Migrate document databases (`mongodump` / `mongorestore`)
+5. Migrate PostgreSQL data (`pg_dump` / `pg_restore`)
+6. Copy Redis data files to Valkey directory
+7. Copy MinIO objects to SeaweedFS (if any)
+8. Verify data in the new FOSS stack
+9. Stop old containers
+
+### Options
+
+```bash
+# Run a single migration step
+madsci migrate foss --apply --step document-db
+madsci migrate foss --apply --step postgresql
+madsci migrate foss --apply --step redis
+madsci migrate foss --apply --step object-storage
+
+# Skip pre-migration backup (not recommended)
+madsci migrate foss --apply --skip-backup
+
+# Skip Docker container lifecycle (if old containers are already running)
+madsci migrate foss --apply --skip-docker
+
+# Override connection URLs
+madsci migrate foss --apply \
+  --old-mongo-url mongodb://localhost:27018/ \
+  --new-mongo-url mongodb://madsci:madsci@localhost:27017/ \
+  --old-postgres-url postgresql://madsci:madsci@localhost:5433/resources \
+  --new-postgres-url postgresql://madsci:madsci@localhost:5432/postgres
+
+# Specify compose file directory
+madsci migrate foss --apply --compose-dir /path/to/lab
+```
+
+### Environment Variables
+
+All settings can be overridden via environment variables with the `FOSS_MIGRATION_` prefix:
+
+```bash
+export FOSS_MIGRATION_OLD_DOCUMENT_DB_URL=mongodb://localhost:27018/
+export FOSS_MIGRATION_NEW_DOCUMENT_DB_URL=mongodb://madsci:madsci@localhost:27017/
+export FOSS_MIGRATION_OLD_POSTGRES_URL=postgresql://madsci:madsci@localhost:5433/resources
+export FOSS_MIGRATION_NEW_POSTGRES_URL=postgresql://madsci:madsci@localhost:5432/postgres
+```
+
+## Manual Migration
+
+If you prefer to run each step manually, follow the sections below.
+
+### 1. Start the FOSS Stack
+
+```bash
+cd examples/example_lab
+docker compose -f compose.infra.yaml up -d
+```
+
+### 2. Start Old Containers
+
+Use the migration overlay to start old MongoDB and PostgreSQL on alternate ports:
+
+```bash
+docker compose -f compose.infra.yaml -f compose.migration.yaml up -d \
+  madsci_old_mongodb madsci_old_postgres
+```
+
+This starts:
+- Old MongoDB on port **27018** (avoids conflict with FerretDB on 27017)
+- Old PostgreSQL on port **5433** (avoids conflict with new PostgreSQL on 5432)
+
+### 3. Migrate Document Databases
+
+For each database (`madsci_events`, `madsci_experiments`, `madsci_data`, `madsci_workcells`):
+
+```bash
+# Dump from old MongoDB
+mongodump --host localhost:27018 --db madsci_events --out /tmp/foss_dump
+
+# Restore to FerretDB (with authentication)
+mongorestore --host localhost:27017 \
+  --username madsci --password madsci \
+  --drop --db madsci_events \
+  /tmp/foss_dump/madsci_events
+```
+
+### 4. Migrate PostgreSQL
+
+```bash
+# Dump from old PostgreSQL (port 5433)
+PGPASSWORD=madsci pg_dump -h localhost -p 5433 -U madsci -d resources \
+  --format=custom --file /tmp/pg_dump.dump
+
+# Restore to new PostgreSQL (port 5432)
+PGPASSWORD=madsci pg_restore -h localhost -p 5432 -U madsci -d postgres \
+  --clean --if-exists /tmp/pg_dump.dump
+```
+
+### 5. Migrate Redis to Valkey
+
+Copy the data files:
+
+```bash
+# Copy RDB snapshot
+cp .madsci/redis/dump.rdb .madsci/valkey/dump.rdb
+
+# Copy AOF directory (if used)
+cp -r .madsci/redis/appendonlydir/ .madsci/valkey/appendonlydir/
+```
+
+> **Note**: Direct file copy only works if your Redis RDB format is compatible with Valkey. If your Redis was version 7.4+ (RDB format v12), Valkey 8 may not be able to load it. In that case, you can skip this step — Valkey will start fresh with an empty dataset. See [Valkey RDB Incompatibility](#valkey-rdb-format-incompatibility) in Troubleshooting.
+
+### 6. Migrate MinIO to SeaweedFS
+
+If you have objects in MinIO, use the `mc` (MinIO Client) tool or the Python SDK to copy them bucket-by-bucket. The automated migration tool handles this with the `minio` Python package.
+
+### 7. Stop Old Containers
+
+```bash
+docker compose -f compose.infra.yaml -f compose.migration.yaml down --remove-orphans
+```
+
+## Configuration Changes
+
+After migration, update your `.env` file to use the new field names:
+
+```bash
+# Old settings (still work via backward-compatible aliases)
+MONGO_DB_URL=mongodb://madsci:madsci@localhost:27017/
+
+# New settings (recommended)
+DOCUMENT_DB_URL=mongodb://madsci:madsci@localhost:27017/
+```
+
+Key renames:
+- `MONGO_DB_URL` → `DOCUMENT_DB_URL`
+- `MONGODB_PORT` → `DOCUMENT_DB_PORT`
+- `MINIO_PORT` → `OBJECT_STORAGE_PORT`
+
+The old names are still accepted via `validation_alias` for backward compatibility.
+
+## Verification
+
+After migration, verify that data is accessible:
+
+```bash
+# Check document databases
+python -c "
+from pymongo import MongoClient
+client = MongoClient('mongodb://madsci:madsci@localhost:27017/')
+for db_name in ['madsci_events', 'madsci_experiments', 'madsci_data', 'madsci_workcells']:
+    db = client[db_name]
+    collections = db.list_collection_names()
+    print(f'{db_name}: {len(collections)} collections')
+    for c in collections:
+        count = db[c].count_documents({})
+        print(f'  {c}: {count} documents')
+client.close()
+"
+
+# Check PostgreSQL
+PGPASSWORD=madsci psql -h localhost -p 5432 -U madsci -d postgres \
+  -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
+
+# Check Valkey
+redis-cli ping
+```
+
+## Rollback
+
+If something goes wrong, restore from the pre-migration backup:
+
+```bash
+# Backups are stored in .madsci/backups/foss_migration/
+ls -la .madsci/backups/foss_migration/
+
+# Restore MongoDB data
+docker compose -f compose.infra.yaml down
+cp -r .madsci/backups/foss_migration/pre_migration_YYYYMMDD_HHMMSS/mongodb/ .madsci/mongodb/
+# Restart your original stack (you'll need to switch compose files back)
+```
+
+## Troubleshooting
+
+### FerretDB Authentication Errors
+
+FerretDB requires authentication (unlike standalone MongoDB). Ensure your connection URLs include credentials:
+
+```
+mongodb://madsci:madsci@localhost:27017/
+```
+
+### PostgreSQL "database does not exist" Error
+
+The new FOSS stack uses a single `postgres` database (not `resources`). FerretDB stores document data in the same PostgreSQL instance. Make sure your `new_postgres_url` targets the correct database.
+
+### Permission Errors on Data Directories
+
+PostgreSQL requires read-write access to its data directory for WAL recovery. If running Docker with volume mounts, ensure the directory permissions allow the `postgres` user (UID 999) to write.
+
+### mongodump/mongorestore Not Found
+
+Install MongoDB Database Tools:
+
+```bash
+# macOS
+brew tap mongodb/brew
+brew install mongodb-database-tools
+
+# Ubuntu/Debian
+wget https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2204-x86_64-100.9.4.deb
+sudo dpkg -i mongodb-database-tools-*.deb
+
+# Or download from: https://www.mongodb.com/try/download/database-tools
+```
+
+### MongoDB Version Mismatch
+
+If old MongoDB data was created with a newer version (e.g., MongoDB 8.0 with Feature Compatibility Version 8.0), the old container must use a matching image version. Set the `OLD_MONGODB_VERSION` environment variable:
+
+```bash
+export OLD_MONGODB_VERSION=8
+madsci migrate foss --apply
+```
+
+Or in your `.env` file:
+```bash
+OLD_MONGODB_VERSION=8
+```
+
+### PostgreSQL Data Directory Conflict
+
+The migration tool automatically handles the conflict between old and new PostgreSQL data directories. The old data is moved from `.madsci/postgresql/data/` to `.madsci/postgresql_old/data/` so the new FOSS PostgreSQL can initialize fresh with the DocumentDB extension required by FerretDB.
+
+If you see `schema "documentdb_api" does not exist` errors, ensure the new PostgreSQL started with a clean data directory.
+
+### Valkey RDB Format Incompatibility
+
+Redis RDB format version 12 (from Redis 7.4+) is not compatible with Valkey 8. If you see errors like `Can't handle RDB format version 12`, the direct file copy won't work. In this case:
+
+1. Clear the Valkey data directory:
+   ```bash
+   rm -rf .madsci/valkey/*
+   ```
+2. Restart Valkey — it will start fresh with an empty dataset.
+
+Since Valkey is used for transient state (caching, pub/sub) in MADSci, losing this data is generally safe. Persistent state is stored in the document and relational databases.
+
+### Migration Hangs on "Start Old Containers"
+
+Check that Docker is running and the old data directories exist at the expected paths. The migration overlay expects `.madsci/mongodb/` and `.madsci/postgresql_old/data/` to contain valid database files. The migration tool moves old PostgreSQL data from `.madsci/postgresql/data/` to `.madsci/postgresql_old/data/` automatically.
+
+### MinIO Data Directory Contains Only Metadata
+
+If `.madsci/minio/` exists but only contains the `.minio.sys/` internal metadata directory, the migration tool will skip the object storage step automatically. This is common for labs that haven't stored any objects in MinIO.
+
+### SeaweedFS S3 Compatibility Issues
+
+SeaweedFS supports the core S3 API but may not support all MinIO-specific extensions. If you encounter issues with specific bucket policies or lifecycle rules, those may need to be reconfigured manually in SeaweedFS.

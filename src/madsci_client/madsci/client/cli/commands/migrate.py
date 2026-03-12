@@ -1,7 +1,9 @@
 """Migration CLI commands for MADSci.
 
 This module provides commands for migrating from the old configuration
-system (Definition files) to the new system (Settings + ID Registry).
+system (Definition files) to the new system (Settings + ID Registry),
+and for migrating data from the proprietary stack (MongoDB, Redis, MinIO)
+to the FOSS stack (FerretDB, Valkey, SeaweedFS).
 """
 
 import json
@@ -436,3 +438,188 @@ def rollback(
                 console.print(f"[red]Error: {err}[/red]")
         else:
             console.print("[green]\u2713 Rolled back successfully[/green]")
+
+
+# ---------------------------------------------------------------------------
+# FOSS stack migration
+# ---------------------------------------------------------------------------
+
+_FOSS_STEP_CHOICES = ["document-db", "postgresql", "redis", "object-storage", "all"]
+
+
+@migrate.command("foss")
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would happen without making changes.",
+)
+@click.option(
+    "--apply",
+    is_flag=True,
+    help="Apply the FOSS migration.",
+)
+@click.option(
+    "--step",
+    type=click.Choice(_FOSS_STEP_CHOICES),
+    default="all",
+    help="Run a single migration step instead of all steps.",
+)
+@click.option(
+    "--skip-backup",
+    is_flag=True,
+    help="Skip creating a pre-migration backup.",
+)
+@click.option(
+    "--skip-docker",
+    is_flag=True,
+    help="Skip starting/stopping old containers (assume already running).",
+)
+@click.option(
+    "--compose-dir",
+    type=click.Path(exists=True),
+    default=None,
+    help="Directory containing Docker Compose files.",
+)
+@click.option(
+    "--old-mongo-url",
+    default=None,
+    help="Override old MongoDB URL.",
+)
+@click.option(
+    "--new-mongo-url",
+    default=None,
+    help="Override new FerretDB URL.",
+)
+@click.option(
+    "--old-postgres-url",
+    default=None,
+    help="Override old PostgreSQL URL.",
+)
+@click.option(
+    "--new-postgres-url",
+    default=None,
+    help="Override new PostgreSQL URL.",
+)
+@click.pass_context
+def foss(  # noqa: C901, PLR0912, PLR0915
+    ctx: click.Context,
+    dry_run: bool,
+    apply: bool,
+    step: str,
+    skip_backup: bool,
+    skip_docker: bool,
+    compose_dir: Optional[str],
+    old_mongo_url: Optional[str],
+    new_mongo_url: Optional[str],
+    old_postgres_url: Optional[str],
+    new_postgres_url: Optional[str],
+) -> None:
+    """Migrate data from MongoDB/Redis/MinIO to FerretDB/Valkey/SeaweedFS.
+
+    \b
+    Workflow:
+        1. madsci migrate foss --dry-run          Preview migration plan
+        2. madsci migrate foss --apply             Run full migration
+        3. madsci migrate foss --apply --step X    Run a single step
+    """
+    from madsci.common.foss_migration import FossMigrationSettings, FossMigrationTool
+    from rich.table import Table as RichTable
+
+    console = _get_console(ctx)
+
+    if not dry_run and not apply:
+        console.print("[red]Error: Specify --dry-run or --apply[/red]")
+        ctx.exit(1)
+        return
+
+    # Build settings overrides
+    overrides: dict = {}
+    if compose_dir:
+        overrides["compose_dir"] = compose_dir
+    if old_mongo_url:
+        overrides["old_document_db_url"] = old_mongo_url
+    if new_mongo_url:
+        overrides["new_document_db_url"] = new_mongo_url
+    if old_postgres_url:
+        overrides["old_postgres_url"] = old_postgres_url
+    if new_postgres_url:
+        overrides["new_postgres_url"] = new_postgres_url
+
+    settings = FossMigrationSettings(**overrides)
+    tool = FossMigrationTool(settings=settings)
+
+    # --- Dry run ---
+    if dry_run:
+        console.print("\n[bold]FOSS Stack Migration Plan[/bold]")
+        console.print("=" * 50)
+
+        # Detection
+        detected = tool.detect_old_data()
+        det_table = RichTable(title="Detected Old Data")
+        det_table.add_column("Component")
+        det_table.add_column("Found")
+        for component, found in detected.items():
+            style = "green" if found else "dim"
+            det_table.add_row(component, str(found), style=style)
+        console.print(det_table)
+
+        # Prerequisites
+        prereq = tool.check_prerequisites()
+        if prereq.success:
+            console.print("\n[green]\u2713[/green] All prerequisite tools found")
+        else:
+            console.print(f"\n[red]\u2717[/red] {prereq.error}")
+
+        # Steps
+        steps_to_run = list(tool.STEP_METHODS.keys()) if step == "all" else [step]
+        console.print("\n[bold]Steps to execute:[/bold]")
+        for s in steps_to_run:
+            console.print(f"  \u2022 {s}")
+        if not skip_backup:
+            console.print(f"\n  Backup dir: {settings.backup_dir}")
+        if not skip_docker:
+            console.print(f"  Compose dir: {settings.compose_dir}")
+
+        console.print("\n[yellow]Dry run \u2014 no changes made.[/yellow]")
+        console.print("Run with [bold]--apply[/bold] to execute.")
+        return
+
+    # --- Apply ---
+    steps_filter = None if step == "all" else [step]
+
+    report = tool.run_full_migration(
+        skip_backup=skip_backup,
+        skip_docker=skip_docker,
+        steps=steps_filter,
+    )
+
+    # Display results
+    console.print("\n[bold]FOSS Migration Results[/bold]")
+    console.print("=" * 50)
+
+    results_table = RichTable()
+    results_table.add_column("Step")
+    results_table.add_column("Status")
+    results_table.add_column("Duration")
+    results_table.add_column("Message")
+
+    for s in report.steps:
+        status = "[green]\u2713[/green]" if s.success else "[red]\u2717[/red]"
+        duration = f"{s.duration_seconds:.1f}s"
+        msg = s.message
+        if s.error:
+            msg += f"\n[dim]{s.error}[/dim]"
+        results_table.add_row(s.step, status, duration, msg)
+
+    console.print(results_table)
+
+    total = report.total_duration_seconds
+    if report.all_succeeded:
+        console.print(
+            f"\n[green]\u2713 Migration completed successfully in {total:.1f}s[/green]"
+        )
+    else:
+        console.print(
+            f"\n[red]\u2717 Migration completed with errors in {total:.1f}s[/red]"
+        )
+        ctx.exit(1)
