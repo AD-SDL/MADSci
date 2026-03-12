@@ -2,10 +2,12 @@
 
 import warnings
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional
 
+import yaml
 from classy_fastapi import delete, get, post
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
@@ -15,7 +17,6 @@ from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
-    LocationDefinition,
     LocationManagerHealth,
     LocationManagerSettings,
 )
@@ -23,7 +24,6 @@ from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 from madsci.location_manager.transfer_planner import TransferPlanner
-import yaml
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 REPRESENTATION_VAL_BODY = Body(...)
@@ -69,82 +69,25 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
         )
+        with Path.open(self.settings.locations_file_path, "w") as f:
+            yaml.dump(self.state_handler.get_locations(), f)
 
         # Initialize resource client with resource server URL from context
         context = get_current_madsci_context()
         resource_server_url = context.resource_server_url
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
-       
         self.transfer_planner = TransferPlanner(
             state_handler=self.state_handler,
             transfer_capabilities=self.settings.transfer_capabilities,
             resource_client=self.resource_client,
         )
-    @post("/locations", tags=["Locations"])
-    def initialize_locations(self, locations: list[LocationDefinition]) -> None:
-        """Initialize locations from settings, creating or updating them in the state handler."""
 
-        for location_def in locations:
-            # Check if location already exists
-            existing_location = self.state_handler.get_location(
-                location_def.location_name
-            )
-
-            # Handle resource creation/initialization if resource_template_name is provided
-            resource_id = existing_location.resource_id if existing_location else None
-            if location_def.resource_template_name:
-                if existing_location and existing_location.resource_id:
-                    # Location exists and has a resource, validate it still exists and matches template
-                    resource_id = self._validate_or_recreate_location_resource(
-                        location_def, existing_location.resource_id
-                    )
-                    
-                else:
-                    # Location doesn't exist or has no resource, create new one
-                    resource_id = self._initialize_location_resource(location_def)
-                    print(resource_id)
-
-            # Convert LocationDefinition to Location
-            location = Location(
-                location_id=location_def.location_id,
-                location_name=location_def.location_name,
-                description=location_def.description,
-                representations=location_def.representations or None,
-                resource_id=resource_id,  # Associate the resource with the location
-                allow_transfers=location_def.allow_transfers,
-            )
-
-            print(self.state_handler.add_location(location))
-
-        if locations:
-            self.logger.info(
-                "Initialized locations from settings",
-                event_type=EventType.LOCATION_UPDATE,
-                num_locations=len(locations),
-            )
-
-        if locations:
-            self.logger.info(
-                "Initialized locations from settings",
-                event_type=EventType.LOCATION_UPDATE,
-                num_locations=len(locations),
-            )
-
-        if locations:
-            self.logger.info(
-                "Initialized locations from settings",
-                event_type=EventType.LOCATION_UPDATE,
-                num_locations=len(locations),
-            )
-
-    def _initialize_location_resource(
-        self, location_def: LocationDefinition
-    ) -> Optional[str]:
+    def _initialize_location_resource(self, location_def: Location) -> Optional[str]:
         """Initialize a resource for a location based on its resource_template_name.
 
         Args:
-            location_def: LocationDefinition containing the resource_template_name and optional overrides
+            location_def: Location containing the resource_template_name and optional overrides
 
         Returns:
             Optional[str]: The resource_id of the created resource, or None if no resource created
@@ -182,12 +125,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         return None
 
     def _validate_or_recreate_location_resource(
-        self, location_def: LocationDefinition, existing_resource_id: str
+        self, location_def: Location, existing_resource_id: str
     ) -> Optional[str]:
         """Check if existing resource still exists. If so, reuse it. If not, create a new one.
 
         Args:
-            location_def: LocationDefinition containing the resource_template_name and overrides
+            location_def: Location containing the resource_template_name and overrides
             existing_resource_id: The existing resource ID to validate
 
         Returns:
@@ -270,13 +213,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             attributes={"location.name": location.location_name},
         ):
             if location.resource_id is not None:
-                resource_id = self._validate_or_recreate_location_resource(location, location.resource_id)
-            else: 
+                resource_id = self._validate_or_recreate_location_resource(
+                    location, location.resource_id
+                )
+            else:
                 resource_id = self._initialize_location_resource(location)
             location.resource_id = resource_id
             result = self.state_handler.add_location(location)
-            
-                   
+
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
 
@@ -296,7 +240,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         if location_id is not None:
             # Search by ID
-            location = self.state_handler.get_location(location_id)
+            location = self.state_handler.get_location_by_id(location_id)
             if location is None:
                 raise HTTPException(
                     status_code=404,
@@ -304,10 +248,9 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 )
             return location
         # Search by name
-        locations = self.state_handler.get_locations()
-        for location in locations:
-            if location.name == name:
-                return location
+        location = self.state_handler.get_location(name)
+        if location is not None:
+            return location
         raise HTTPException(
             status_code=404, detail=f"Location with name '{name}' not found"
         )
@@ -315,16 +258,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
     @get("/location/id/{location_id}", tags=["Locations"])
     def get_location_by_id(self, location_id: str) -> Location:
         """Get a specific location by ID."""
-        locations = self.state_handler.get_locations()
-        final_location = None
-        for location in locations:
-            if location.location_id == location_id:
-                final_location = location
+        location = self.state_handler.get_location_by_id(location_id)
         if location is None:
             raise HTTPException(
                 status_code=404, detail=f"Location {location_id} not found"
             )
-            return
+        return location
 
     @get("/location/{location_name}", tags=["Locations"])
     def get_location(self, location_name: str) -> Location:
@@ -456,15 +395,15 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 status_code=404, detail=f"Location {location_name} not found"
             )
 
-            # Check if location has a resource attached
-            if location.resource_id is None:
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"No resource attached to location {location_name}",
-                )
+        # Check if location has a resource attached
+        if location.resource_id is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"No resource attached to location {location_name}",
+            )
 
-            # Detach the resource
-            location.resource_id = None
+        # Detach the resource
+        location.resource_id = None
 
         # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
         # The definition uses resource_template_name for resource initialization
@@ -473,8 +412,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
     @post("/transfer/plan", tags=["Transfer"])
     def plan_transfer(
         self,
-        source_location: str,
-        target_location: str,
+        source_location_id: str,
+        target_location_id: str,
     ) -> WorkflowDefinition:
         """
         Plan a transfer workflow from source to target.
@@ -492,13 +431,13 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         with self.span(
             "transfer.plan",
             attributes={
-                "transfer.source_location": source_location,
-                "transfer.target_location": target_location,
+                "transfer.source_location": source_location_id,
+                "transfer.target_location": target_location_id,
             },
         ):
             try:
                 return self.transfer_planner.plan_transfer(
-                    source_location, target_location
+                    source_location_id, target_location_id
                 )
             except ValueError as e:
                 error_message = str(e)
@@ -534,7 +473,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         return self.transfer_planner.get_transfer_graph_adjacency_list()
 
     @get("/location/{location_name}/resources", tags=["Resources"])
-    def get_location_resources(self, location_name: str) -> ResourceHierarchy:
+    def get_location_resources(self, location_name: str) -> Optional[ResourceHierarchy]:
         """
         Get the resource hierarchy for resources currently at a specific location.
 
@@ -562,17 +501,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 return self.resource_client.query_resource_hierarchy(
                     location.resource_id
                 )
-            except Exception as e:
-                self.logger.warning(
-                    f"Failed to query resource hierarchy for location {location_name} "
-                    f"with resource_id {location.resource_id}: {e}"
-                )
+            except Exception:
                 # Return empty hierarchy if query fails
                 return ResourceHierarchy(
                     ancestor_ids=[],
                     resource_id=location.resource_id or "",
                     descendant_ids={},
                 )
+        return None
 
 
 @asynccontextmanager

@@ -107,6 +107,21 @@ class LocationStateHandler:
         except (ValidationError, KeyError):
             return None
 
+    def get_location_by_id(self, location_id: str) -> Optional[Location]:
+        """
+        Returns a location by ID
+        """
+        try:
+            location_data = None
+            for location_name in self._locations:
+                if self._locations.get(location_name)["location_id"] == location_id:
+                    location_data = self._locations[location_name]
+            if location_data is None:
+                return None
+            return Location.model_validate(location_data)
+        except (ValidationError, KeyError):
+            return None
+
     def get_locations(self) -> list[Location]:
         """
         Returns all locations as a list

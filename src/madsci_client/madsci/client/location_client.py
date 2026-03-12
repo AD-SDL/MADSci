@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any, Optional, Union
 
+import yaml
 from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
@@ -14,7 +15,6 @@ from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import create_http_session
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
-import yaml
 
 
 class LocationClient:
@@ -209,10 +209,9 @@ class LocationClient:
         response.raise_for_status()
         return Location.model_validate(response.json())
 
-
     def import_locations(
         self, location_file_path: Path, timeout: Optional[float] = None
-    ) -> list(Location):
+    ) -> list[Location]:
         """
         Add multiple locations from a file.
 
@@ -222,13 +221,13 @@ class LocationClient:
             The path to the file containing location definitions.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
-      
+
         Returns
         -------
         locations   :
             The created locations.
         """
-        locations = yaml.load(location_file_path.open())
+        locations = yaml.safe_load(location_file_path.open())
         for location in locations.values():
             self.add_location(Location.model_validate(location), timeout=timeout)
         return self.get_locations(timeout=timeout)

@@ -56,7 +56,7 @@ class LocationArgument(MadsciBaseModel):
         return self.location_name
 
 
-class LocationDefinition(MadsciBaseModel):
+class Location(MadsciBaseModel):
     """The Definition of a Location in a setup."""
 
     location_name: str = Field(
@@ -69,6 +69,11 @@ class LocationDefinition(MadsciBaseModel):
         description="The ID of the location.",
         default_factory=new_ulid_str,
     )
+    resource_id: Optional[str] = Field(
+        title="Resource ID",
+        description="The ID of the resource associated with the Location.",
+        default=None,
+    )
     description: Optional[str] = Field(
         title="Location Description",
         description="A description of the location.",
@@ -77,7 +82,7 @@ class LocationDefinition(MadsciBaseModel):
     representations: dict[str, Any] = Field(
         title="Location Representation Map",
         description="A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc).",
-        default={},
+        default_factory=dict,
     )
     resource_template_name: Optional[str] = Field(
         title="Resource Template Name",
@@ -87,53 +92,6 @@ class LocationDefinition(MadsciBaseModel):
     resource_template_overrides: Optional[dict[str, Any]] = Field(
         title="Resource Template Overrides",
         description="Optional overrides to apply when creating a resource from the template for this specific location.",
-        default=None,
-    )
-    allow_transfers: bool = Field(
-        title="Allow Transfers",
-        description="Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
-        default=True,
-    )
-
-    is_ulid = field_validator("location_id")(ulid_validator)
-
-    @property
-    def name(self) -> str:
-        """Get the name of the location."""
-        return self.location_name
-
-
-class Location(MadsciBaseModel):
-    """A location in the lab."""
-
-    location_id: str = Field(
-        title="Location ID",
-        description="The ID of the location.",
-        default_factory=new_ulid_str,
-    )
-    location_name: str = Field(
-        title="Location Name",
-        description="The name of the location.",
-        alias=AliasChoices("location_name", "name"),
-    )
-    description: Optional[str] = Field(
-        title="Location Description",
-        description="A description of the location.",
-        default=None,
-    )
-    representations: Optional[dict[str, Any]] = Field(
-        title="Location Representations",
-        description="A dictionary of node-specific representations for the location.",
-        default=None,
-    )
-    reservation: Optional["LocationReservation"] = Field(
-        title="Location Reservation",
-        description="The reservation for the location.",
-        default=None,
-    )
-    resource_id: Optional[str] = Field(
-        title="Resource ID",
-        description="The ID of an existing Resource associated with the location, if any (deprecated, use resource_ids).",
         default=None,
     )
     allow_transfers: bool = Field(
@@ -324,10 +282,10 @@ class LocationManagerSettings(
     _accept_prefixed_keys = prefixed_model_validator("location")
 
     # Structural config (inline in settings.yaml)
-    locations: Optional[list["LocationDefinition"]] = Field(
-        default=None,
-        title="Locations",
-        description="Location definitions managed by this LocationManager.",
+    locations_file_path: Optional[str] = Field(
+        default="locations.yaml",
+        title="Locations File Path",
+        description="Path to the file containing location definitions.",
     )
     transfer_capabilities: Optional["LocationTransferCapabilities"] = Field(
         default=None,
@@ -371,7 +329,7 @@ class LocationManagerDefinition(ManagerDefinition):
         description="The type of manager",
         default=ManagerType.LOCATION_MANAGER,
     )
-    locations: list[LocationDefinition] = Field(
+    locations: list[Location] = Field(
         title="Locations",
         description="The locations managed by this LocationManager.",
         default_factory=list,
@@ -384,9 +342,7 @@ class LocationManagerDefinition(ManagerDefinition):
 
     @field_validator("locations", mode="after")
     @classmethod
-    def sort_locations(
-        cls, locations: list[LocationDefinition]
-    ) -> list[LocationDefinition]:
+    def sort_locations(cls, locations: list[Location]) -> list[Location]:
         """Sort locations by name after validation."""
         return sorted(locations, key=lambda loc: loc.location_name)
 
