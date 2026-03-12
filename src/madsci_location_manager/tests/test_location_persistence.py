@@ -12,7 +12,6 @@ from fastapi.testclient import TestClient
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
-    LocationDefinition,
     LocationManagerSettings,
 )
 from madsci.common.utils import new_ulid_str
@@ -31,12 +30,12 @@ def redis_handler():
 def location_defs():
     """Create test location definitions for settings."""
     return [
-        LocationDefinition(
+        Location(
             location_name="Station Alpha",
             location_id=new_ulid_str(),
             description="First station",
         ),
-        LocationDefinition(
+        Location(
             location_name="Station Beta",
             location_id=new_ulid_str(),
             description="Second station",
@@ -48,11 +47,12 @@ def location_defs():
 def app_with_locations(redis_handler, location_defs):
     """Create a test app with pre-configured locations and in-memory Redis handler."""
     settings = LocationManagerSettings(
-        locations=location_defs,
         enable_registry_resolution=False,
     )
 
     manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    for location in location_defs:
+        manager.add_location(location)
     return manager.create_server(version="0.1.0")
 
 
@@ -81,37 +81,6 @@ def empty_client(empty_app):
     client = TestClient(empty_app)
     yield client
     client.close()
-
-
-# --- Settings-to-Redis initialization tests ---
-
-
-def test_settings_locations_loaded_into_redis(client_with_locations, location_defs):
-    """Locations from settings should be present in Redis after startup."""
-    response = client_with_locations.get("/locations")
-    assert response.status_code == 200
-
-    locations = [Location.model_validate(loc) for loc in response.json()]
-    location_ids = {loc.location_id for loc in locations}
-    expected_ids = {loc_def.location_id for loc_def in location_defs}
-    assert expected_ids.issubset(location_ids)
-
-
-def test_settings_location_names_match(client_with_locations, location_defs):
-    """Location names from settings should match what's stored in Redis."""
-    for loc_def in location_defs:
-        response = client_with_locations.get(f"/location/{loc_def.location_name}")
-        assert response.status_code == 200
-        location = Location.model_validate(response.json())
-        assert location.location_name == loc_def.location_name
-        assert location.description == loc_def.description
-
-
-def test_empty_settings_yields_no_locations(empty_client):
-    """When no locations are configured in settings, Redis should be empty."""
-    response = empty_client.get("/locations")
-    assert response.status_code == 200
-    assert response.json() == []
 
 
 # --- Runtime persistence tests ---
@@ -195,25 +164,3 @@ def test_initial_locations_preserved_after_runtime_add(
 
     for loc_def in location_defs:
         assert loc_def.location_id in location_ids
-
-
-# --- Settings export tests ---
-
-
-def test_settings_export_includes_initial_locations(
-    client_with_locations, location_defs
-):
-    """The settings export endpoint should reflect the configured locations."""
-    response = client_with_locations.get("/settings")
-    assert response.status_code == 200
-
-    data = response.json()
-    # Settings export nests fields under "settings"
-    settings_data = data.get("settings", data)
-    assert "locations" in settings_data
-    exported_locations = settings_data["locations"]
-    assert len(exported_locations) == len(location_defs)
-
-    exported_ids = {loc["location_id"] for loc in exported_locations}
-    expected_ids = {loc_def.location_id for loc_def in location_defs}
-    assert exported_ids == expected_ids
