@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import ClassVar, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
+from madsci.common.sentry import find_madsci_dir
 from madsci.common.types.base_types import MadsciBaseModel, MadsciBaseSettings
 from pydantic import AnyUrl, Field
 
@@ -179,7 +180,7 @@ class FossMigrationSettings(
     )
 
     compose_dir: Path = Field(
-        default=Path("examples/example_lab"),
+        default=Path(),
         title="Compose Directory",
         description="Directory containing Docker Compose files",
     )
@@ -201,10 +202,16 @@ class FossMigrationTool:
         """Initialize the FOSS migration tool."""
         self.settings = settings or FossMigrationSettings()
         self.logger = logger or EventClient()
+        # Resolve the .madsci/ directory via the canonical sentry walk-up
+        self._madsci_dir = find_madsci_dir()
 
     # ------------------------------------------------------------------
     # Detection
     # ------------------------------------------------------------------
+
+    def _resolve_data_path(self, *parts: str) -> Path:
+        """Resolve a path relative to the .madsci/ directory."""
+        return self._madsci_dir / Path(*parts)
 
     def detect_old_data(self) -> dict[str, bool]:
         """Check which old data directories exist.
@@ -212,10 +219,10 @@ class FossMigrationTool:
         Returns a dict mapping component name to whether data was found.
         """
         return {
-            "mongodb": Path(".madsci/mongodb").exists(),
-            "postgresql": Path(".madsci/postgresql/data").exists(),
-            "redis": self.settings.old_redis_dir.exists(),
-            "minio": Path(".madsci/minio").exists(),
+            "mongodb": self._resolve_data_path("mongodb").exists(),
+            "postgresql": self._resolve_data_path("postgresql", "data").exists(),
+            "redis": self._resolve_data_path("redis").exists(),
+            "minio": self._resolve_data_path("minio").exists(),
         }
 
     # ------------------------------------------------------------------
@@ -285,8 +292,8 @@ class FossMigrationTool:
         clean for the FOSS PostgreSQL to initialise fresh with DocumentDB
         support.  The pre-migration backup has already preserved a copy.
         """
-        src = Path(".madsci/postgresql/data")
-        dest_parent = Path(".madsci/postgresql_old")
+        src = self._resolve_data_path("postgresql", "data")
+        dest_parent = self._madsci_dir / "postgresql_old"
         dest = dest_parent / "data"
         if not src.exists():
             return
@@ -420,7 +427,7 @@ class FossMigrationTool:
     def create_pre_migration_backup(self) -> FossMigrationStepResult:
         """Create filesystem-level copies of old data directories."""
         t0 = time.monotonic()
-        backup_root = self.settings.backup_dir
+        backup_root = self._madsci_dir / "backups" / "foss_migration"
         backup_root.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -431,9 +438,9 @@ class FossMigrationTool:
         errors: list[str] = []
 
         dirs_to_backup = {
-            "mongodb": Path(".madsci/mongodb"),
-            "redis": self.settings.old_redis_dir,
-            "minio": Path(".madsci/minio"),
+            "mongodb": self._resolve_data_path("mongodb"),
+            "redis": self._resolve_data_path("redis"),
+            "minio": self._resolve_data_path("minio"),
         }
 
         for name, src in dirs_to_backup.items():
@@ -687,8 +694,8 @@ class FossMigrationTool:
     def migrate_redis_to_valkey(self) -> FossMigrationStepResult:
         """Copy Redis data files to the Valkey data directory."""
         t0 = time.monotonic()
-        src = self.settings.old_redis_dir
-        dest = self.settings.new_valkey_dir
+        src = self._resolve_data_path("redis")
+        dest = self._madsci_dir / "valkey"
 
         if not src.exists():
             return FossMigrationStepResult(
@@ -757,7 +764,7 @@ class FossMigrationTool:
         t0 = time.monotonic()
 
         # Quick check: if there's no local MinIO data (or only .minio.sys), skip
-        minio_path = Path(".madsci/minio")
+        minio_path = self._resolve_data_path("minio")
         if not self._has_user_data_in_minio(minio_path):
             reason = (
                 "No MinIO data directory found"
@@ -919,8 +926,9 @@ class FossMigrationTool:
             errors.append(f"PostgreSQL verification failed: {exc}")
 
         # Valkey
-        if self.settings.new_valkey_dir.exists():
-            files = list(self.settings.new_valkey_dir.iterdir())
+        valkey_dir = self._madsci_dir / "valkey"
+        if valkey_dir.exists():
+            files = list(valkey_dir.iterdir())
             checks["valkey"] = f"{len(files)} files in data dir"
         else:
             checks["valkey"] = "data dir not found"

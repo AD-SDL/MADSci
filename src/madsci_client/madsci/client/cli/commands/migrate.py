@@ -536,6 +536,11 @@ def foss(  # noqa: C901, PLR0912, PLR0915
     overrides: dict = {}
     if compose_dir:
         overrides["compose_dir"] = compose_dir
+    elif not Path("compose.infra.yaml").exists():
+        # Auto-detect: look for compose files in examples/example_lab
+        candidate = Path("examples/example_lab")
+        if (candidate / "compose.infra.yaml").exists():
+            overrides["compose_dir"] = str(candidate)
     if old_mongo_url:
         overrides["old_document_db_url"] = old_mongo_url
     if new_mongo_url:

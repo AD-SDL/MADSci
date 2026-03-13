@@ -144,11 +144,9 @@ class TestDetectOldData:
 
     def test_no_data(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.chdir(tmp_path)
+        (tmp_path / ".madsci").mkdir()
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=tmp_path / "redis",
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         detected = tool.detect_old_data()
         assert detected["mongodb"] is False
@@ -160,10 +158,7 @@ class TestDetectOldData:
         monkeypatch.chdir(tmp_path)
         (tmp_path / ".madsci" / "mongodb").mkdir(parents=True)
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=tmp_path / "redis",
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         detected = tool.detect_old_data()
         assert detected["mongodb"] is True
@@ -173,13 +168,9 @@ class TestDetectOldData:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
-        redis_dir = tmp_path / "redis"
-        redis_dir.mkdir()
+        (tmp_path / ".madsci" / "redis").mkdir(parents=True)
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=redis_dir,
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         detected = tool.detect_old_data()
         assert detected["redis"] is True
@@ -295,54 +286,47 @@ class TestCommandBuilding:
 class TestRedisToValkey:
     """Tests for Redis-to-Valkey file copy."""
 
-    def test_no_redis_dir(self, tmp_path: Path) -> None:
+    def test_no_redis_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".madsci").mkdir()
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=tmp_path / "nonexistent",
-                new_valkey_dir=tmp_path / "valkey",
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.migrate_redis_to_valkey()
         assert result.success is True
         assert "skipping" in result.message.lower()
 
-    def test_copy_rdb(self, tmp_path: Path) -> None:
-        redis_dir = tmp_path / "redis"
-        redis_dir.mkdir()
+    def test_copy_rdb(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        madsci_dir = tmp_path / ".madsci"
+        redis_dir = madsci_dir / "redis"
+        redis_dir.mkdir(parents=True)
         (redis_dir / "dump.rdb").write_bytes(b"REDIS0011")
 
-        valkey_dir = tmp_path / "valkey"
-
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=redis_dir,
-                new_valkey_dir=valkey_dir,
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.migrate_redis_to_valkey()
         assert result.success is True
-        assert (valkey_dir / "dump.rdb").exists()
+        assert (madsci_dir / "valkey" / "dump.rdb").exists()
 
-    def test_copy_appendonlydir(self, tmp_path: Path) -> None:
-        redis_dir = tmp_path / "redis"
-        aof_dir = redis_dir / "appendonlydir"
+    def test_copy_appendonlydir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        madsci_dir = tmp_path / ".madsci"
+        aof_dir = madsci_dir / "redis" / "appendonlydir"
         aof_dir.mkdir(parents=True)
         (aof_dir / "aof.aof").write_bytes(b"aofdata")
 
-        valkey_dir = tmp_path / "valkey"
-
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=redis_dir,
-                new_valkey_dir=valkey_dir,
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.migrate_redis_to_valkey()
         assert result.success is True
-        assert (valkey_dir / "appendonlydir" / "aof.aof").exists()
+        assert (madsci_dir / "valkey" / "appendonlydir" / "aof.aof").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -357,6 +341,7 @@ class TestMinioSkip:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
+        (tmp_path / ".madsci").mkdir()
         tool = FossMigrationTool(
             settings=FossMigrationSettings(enable_registry_resolution=False)
         )
@@ -409,37 +394,27 @@ class TestPreMigrationBackup:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
+        madsci_dir = tmp_path / ".madsci"
         # Create some mock data
-        (tmp_path / ".madsci" / "mongodb").mkdir(parents=True)
-        (tmp_path / ".madsci" / "mongodb" / "data.wt").write_bytes(b"data")
+        (madsci_dir / "mongodb").mkdir(parents=True)
+        (madsci_dir / "mongodb" / "data.wt").write_bytes(b"data")
+        (madsci_dir / "redis").mkdir(parents=True)
+        (madsci_dir / "redis" / "dump.rdb").write_bytes(b"rdb")
 
-        redis_dir = tmp_path / "redis_data"
-        redis_dir.mkdir()
-        (redis_dir / "dump.rdb").write_bytes(b"rdb")
-
-        backup_dir = tmp_path / "backups"
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=redis_dir,
-                backup_dir=backup_dir,
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.create_pre_migration_backup()
         assert result.success is True
-        assert "2" in result.message  # 2 dirs copied
+        assert "2" in result.message  # 2 dirs copied (mongodb + redis)
 
     def test_backup_no_data(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.chdir(tmp_path)
-        backup_dir = tmp_path / "backups"
+        (tmp_path / ".madsci").mkdir()
         tool = FossMigrationTool(
-            settings=FossMigrationSettings(
-                old_redis_dir=tmp_path / "nonexistent",
-                backup_dir=backup_dir,
-                enable_registry_resolution=False,
-            )
+            settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.create_pre_migration_backup()
         assert result.success is True
