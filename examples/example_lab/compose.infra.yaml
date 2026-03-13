@@ -40,6 +40,9 @@ services:
     container_name: madsci_seaweedfs
     image: chrislusf/seaweedfs:latest
     restart: unless-stopped
+    environment:
+      - AWS_ACCESS_KEY_ID=${OBJECT_STORAGE_ACCESS_KEY:-madsci}
+      - AWS_SECRET_ACCESS_KEY=${OBJECT_STORAGE_SECRET_KEY:-madsci}
     ports:
       - ${OBJECT_STORAGE_PORT:-9000}:8333
       - ${OBJECT_STORAGE_CONSOLE_PORT:-9001}:9333

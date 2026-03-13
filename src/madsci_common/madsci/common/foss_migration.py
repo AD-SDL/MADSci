@@ -142,7 +142,7 @@ class FossMigrationSettings(
     )
 
     old_minio_url: AnyUrl = Field(
-        default="http://localhost:9000/",
+        default="http://localhost:9002/",
         title="Old MinIO URL",
         description="MinIO endpoint URL for the old (source) object storage",
     )
@@ -162,12 +162,12 @@ class FossMigrationSettings(
         json_schema_extra={"secret": True},
     )
     seaweedfs_access_key: str = Field(
-        default="",
+        default="madsci",
         title="SeaweedFS Access Key",
         json_schema_extra={"secret": True},
     )
     seaweedfs_secret_key: str = Field(
-        default="",
+        default="madsci",
         title="SeaweedFS Secret Key",
         json_schema_extra={"secret": True},
     )
@@ -281,20 +281,29 @@ class FossMigrationTool:
         new stack (which needs a clean init to install the DocumentDB
         extension used by FerretDB).
 
-        This *moves* (renames) the old data so the live path is clean for
-        the FOSS PostgreSQL to initialise fresh with DocumentDB support.
-        The pre-migration backup has already preserved a copy.
+        This *renames* (moves) the old data directory so the live path is
+        clean for the FOSS PostgreSQL to initialise fresh with DocumentDB
+        support.  The pre-migration backup has already preserved a copy.
         """
         src = Path(".madsci/postgresql/data")
-        dest = Path(".madsci/postgresql_old/data")
-        if src.exists() and not dest.exists():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(src), str(dest))
+        dest_parent = Path(".madsci/postgresql_old")
+        dest = dest_parent / "data"
+        if not src.exists():
+            return
+        if dest.exists():
             self.logger.info(
-                "Moved old PostgreSQL data for migration",
-                source=str(src),
+                "Old PostgreSQL data already prepared",
                 destination=str(dest),
             )
+            return
+        # Rename .madsci/postgresql/data -> .madsci/postgresql_old/data
+        dest_parent.mkdir(parents=True, exist_ok=True)
+        src.rename(dest)
+        self.logger.info(
+            "Moved old PostgreSQL data for migration",
+            source=str(src),
+            destination=str(dest),
+        )
 
     def start_old_containers(self) -> FossMigrationStepResult:
         """Start old MongoDB and PostgreSQL containers via Docker Compose."""
@@ -313,7 +322,9 @@ class FossMigrationTool:
                 error=str(exc),
             )
 
-        cmd = self._compose_cmd("up", "-d", "madsci_old_mongodb", "madsci_old_postgres")
+        cmd = self._compose_cmd(
+            "up", "-d", "madsci_old_mongodb", "madsci_old_postgres", "madsci_old_minio"
+        )
         try:
             subprocess.run(  # noqa: S603
                 cmd, capture_output=True, text=True, check=True, timeout=120
@@ -359,7 +370,15 @@ class FossMigrationTool:
                 message="FOSS infrastructure stack started",
                 duration_seconds=time.monotonic() - t0,
             )
-        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        except subprocess.CalledProcessError as exc:
+            return FossMigrationStepResult(
+                step="start_foss_stack",
+                success=False,
+                message="Failed to start FOSS stack",
+                duration_seconds=time.monotonic() - t0,
+                error=f"{exc}\nstderr: {exc.stderr}",
+            )
+        except FileNotFoundError as exc:
             return FossMigrationStepResult(
                 step="start_foss_stack",
                 success=False,
@@ -766,10 +785,8 @@ class FossMigrationTool:
             )
             new_client = Minio(
                 f"{new_url.host}:{new_url.port or 9000}",
-                access_key=self.settings.seaweedfs_access_key
-                or self.settings.minio_access_key,
-                secret_key=self.settings.seaweedfs_secret_key
-                or self.settings.minio_secret_key,
+                access_key=self.settings.seaweedfs_access_key,
+                secret_key=self.settings.seaweedfs_secret_key,
                 secure=new_url.scheme == "https",
             )
 

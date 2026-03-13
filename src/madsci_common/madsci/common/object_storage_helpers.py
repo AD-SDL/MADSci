@@ -20,6 +20,23 @@ class ObjectNamingStrategy(Enum):
     TIMESTAMPED_PATH = "timestamped_path"  # year/month/day/filename structure
 
 
+def _normalise_endpoint(endpoint: str, secure: bool) -> tuple[str, bool]:
+    """Strip scheme from an endpoint URL and infer ``secure`` if needed.
+
+    The MinIO Python SDK expects a bare ``host:port`` string, but users
+    commonly provide full URLs like ``http://localhost:9000``.  This helper
+    strips the scheme and, when the scheme is ``https``, sets *secure* to
+    ``True`` (unless already explicitly ``True``).
+
+    Returns ``(bare_endpoint, secure)``
+    """
+    if endpoint.startswith("https://"):
+        return endpoint.removeprefix("https://").rstrip("/"), True
+    if endpoint.startswith("http://"):
+        return endpoint.removeprefix("http://").rstrip("/"), secure
+    return endpoint, secure
+
+
 def create_object_storage_client(
     object_storage_settings: Optional[ObjectStorageSettings] = None,
 ) -> Union[Minio, None]:
@@ -28,11 +45,14 @@ def create_object_storage_client(
     if not object_storage_settings.endpoint:
         return None
     try:
+        endpoint, secure = _normalise_endpoint(
+            object_storage_settings.endpoint, object_storage_settings.secure
+        )
         storage_client = Minio(
-            endpoint=object_storage_settings.endpoint,
+            endpoint=endpoint,
             access_key=object_storage_settings.access_key,
             secret_key=object_storage_settings.secret_key,
-            secure=object_storage_settings.secure,
+            secure=secure,
             region=object_storage_settings.region or None,
         )
 
