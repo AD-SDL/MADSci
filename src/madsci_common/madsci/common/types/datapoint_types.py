@@ -147,7 +147,7 @@ class ObjectStorageDataPoint(DataPoint):
 
     Attributes:
         url: The accessible URL for the object (can be used in frontend).
-        storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
+        storage_endpoint: The endpoint of the storage service (e.g., 'storage.example.com:8333').
         bucket_name: The name of the bucket containing the object.
         object_name: The path/key of the object within the bucket.
         content_type: The MIME type of the stored object.
@@ -164,11 +164,11 @@ class ObjectStorageDataPoint(DataPoint):
     )
     """The type of the data point, in this case an object storage"""
     storage_endpoint: str = Field(
-        ..., description="S3 API endpoint (e.g., 'localhost:9000')"
+        ..., description="S3 API endpoint (e.g., 'localhost:8333')"
     )
     public_endpoint: Optional[str] = Field(
         default=None,
-        description="Public endpoint for accessing objects (e.g., 'localhost:9001')",
+        description="Public endpoint for accessing objects (e.g., 'localhost:9333')",
     )
     path: PathLike
     """Path to the file"""
@@ -219,7 +219,7 @@ class ObjectStorageSettings(
     endpoint: Optional[str] = Field(
         default=None,
         title="Endpoint",
-        description="Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000')",
+        description="Endpoint for S3-compatible storage (e.g., 'storage.example.com:8333')",
     )
     access_key: str = Field(
         title="Access Key",

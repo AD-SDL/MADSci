@@ -121,7 +121,7 @@ madsci logs --level error --since 1h
 | FerretDB | 27017 | mongodb://localhost:27017 |
 | PostgreSQL | 5432 | postgresql://localhost:5432 |
 | Valkey | 6379 | redis://localhost:6379 |
-| SeaweedFS | 9000/9001 | http://localhost:9000 |
+| SeaweedFS | 8333/9333 | http://localhost:8333 |
 
 ### Health Check Endpoints
 

@@ -231,7 +231,7 @@ SeaweedFS stores file datapoints (CSVs, images, raw instrument data). SeaweedFS 
 
 ```bash
 # Using the MinIO client (mc) for S3-compatible access
-mc alias set myseaweedfs http://localhost:9000 admin admin123
+mc alias set myseaweedfs http://localhost:8333 madsci madsci
 
 # Mirror to backup location
 mc mirror myseaweedfs/madsci-data /data/backups/seaweedfs/

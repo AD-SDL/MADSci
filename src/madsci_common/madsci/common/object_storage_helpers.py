@@ -24,7 +24,7 @@ def _normalise_endpoint(endpoint: str, secure: bool) -> tuple[str, bool]:
     """Strip scheme from an endpoint URL and infer ``secure`` if needed.
 
     The MinIO Python SDK expects a bare ``host:port`` string, but users
-    commonly provide full URLs like ``http://localhost:9000``.  This helper
+    commonly provide full URLs like ``http://localhost:8333``.  This helper
     strips the scheme and, when the scheme is ``https``, sets *secure* to
     ``True`` (unless already explicitly ``True``).
 

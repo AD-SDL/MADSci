@@ -279,54 +279,21 @@ class TestCommandBuilding:
 
 
 # ---------------------------------------------------------------------------
-# Redis file copy
+# Redis -> Valkey  (skipped — ephemeral data)
 # ---------------------------------------------------------------------------
 
 
 class TestRedisToValkey:
-    """Tests for Redis-to-Valkey file copy."""
+    """Tests for Redis-to-Valkey skip behaviour."""
 
-    def test_no_redis_dir(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / ".madsci").mkdir()
+    def test_always_skips(self) -> None:
         tool = FossMigrationTool(
             settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.migrate_redis_to_valkey()
         assert result.success is True
-        assert "skipping" in result.message.lower()
-
-    def test_copy_rdb(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.chdir(tmp_path)
-        madsci_dir = tmp_path / ".madsci"
-        redis_dir = madsci_dir / "redis"
-        redis_dir.mkdir(parents=True)
-        (redis_dir / "dump.rdb").write_bytes(b"REDIS0011")
-
-        tool = FossMigrationTool(
-            settings=FossMigrationSettings(enable_registry_resolution=False)
-        )
-        result = tool.migrate_redis_to_valkey()
-        assert result.success is True
-        assert (madsci_dir / "valkey" / "dump.rdb").exists()
-
-    def test_copy_appendonlydir(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.chdir(tmp_path)
-        madsci_dir = tmp_path / ".madsci"
-        aof_dir = madsci_dir / "redis" / "appendonlydir"
-        aof_dir.mkdir(parents=True)
-        (aof_dir / "aof.aof").write_bytes(b"aofdata")
-
-        tool = FossMigrationTool(
-            settings=FossMigrationSettings(enable_registry_resolution=False)
-        )
-        result = tool.migrate_redis_to_valkey()
-        assert result.success is True
-        assert (madsci_dir / "valkey" / "appendonlydir" / "aof.aof").exists()
+        assert "skipped" in result.message.lower()
+        assert "ephemeral" in result.message.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -444,6 +411,31 @@ class TestDockerLifecycle:
         assert str(Path("/my/lab") / "compose.migration.yaml") in cmd
         assert "up" in cmd
         assert "-d" in cmd
+
+    def test_compose_cmd_without_migration(self) -> None:
+        tool = FossMigrationTool(
+            settings=FossMigrationSettings(
+                compose_dir=Path("/my/lab"),
+                enable_registry_resolution=False,
+            )
+        )
+        cmd = tool._compose_cmd("up", "-d", include_migration=False)
+        assert str(Path("/my/lab") / "compose.infra.yaml") in cmd
+        assert str(Path("/my/lab") / "compose.migration.yaml") not in cmd
+
+    def test_compose_cmd_custom_files(self) -> None:
+        tool = FossMigrationTool(
+            settings=FossMigrationSettings(
+                compose_dir=Path("/my/lab"),
+                compose_files=["docker-compose.yml"],
+                migration_compose_files=["docker-compose.migration.yml"],
+                enable_registry_resolution=False,
+            )
+        )
+        cmd = tool._compose_cmd("up", "-d")
+        assert str(Path("/my/lab") / "docker-compose.yml") in cmd
+        assert str(Path("/my/lab") / "docker-compose.migration.yml") in cmd
+        assert "compose.infra.yaml" not in str(cmd)
 
     def test_start_failure(self) -> None:
         tool = FossMigrationTool(

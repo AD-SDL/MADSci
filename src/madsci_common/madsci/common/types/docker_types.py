@@ -32,10 +32,10 @@ class DockerComposeSettings(MadsciBaseSettings):
         description="The port on the host machine to bind the PostgreSQL service to. This allows other services to connect to PostgreSQL running inside the Docker container.",
     )
     OBJECT_STORAGE_PORT: int = Field(
-        default=9000,
+        default=8333,
         description="The port on the host machine to bind the S3-compatible object storage service (SeaweedFS) to. This allows other services to connect to object storage running inside the Docker container.",
     )
     OBJECT_STORAGE_CONSOLE_PORT: int = Field(
-        default=9001,
-        description="The port on the host machine to bind the object storage console to. This allows other services to connect to the object storage console running inside the Docker container.",
+        default=9333,
+        description="The port on the host machine to bind the object storage console (SeaweedFS master) to. This allows monitoring of the object storage cluster.",
     )

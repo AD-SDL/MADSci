@@ -241,7 +241,7 @@ Classes
     
     Attributes:
         url: The accessible URL for the object (can be used in frontend).
-        storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
+        storage_endpoint: The endpoint of the storage service (e.g., 'storage.example.com:8333').
         bucket_name: The name of the bucket containing the object.
         object_name: The path/key of the object within the bucket.
         content_type: The MIME type of the stored object.

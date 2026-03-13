@@ -831,7 +831,7 @@ def test_feed_data_forward_object_storage_by_label(engine: Engine) -> None:
     """Test feed forward with object storage datapoint matched by label."""
     object_storage_datapoint = ObjectStorageDataPoint(
         label="s3_output",
-        storage_endpoint="localhost:9000",
+        storage_endpoint="localhost:8333",
         path="/local/path/file.dat",
         bucket_name="test-bucket",
         object_name="data/file.dat",

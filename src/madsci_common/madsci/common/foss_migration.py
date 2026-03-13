@@ -131,24 +131,13 @@ class FossMigrationSettings(
         description="List of document databases to migrate",
     )
 
-    old_redis_dir: Path = Field(
-        default=Path(".madsci/redis"),
-        title="Old Redis Directory",
-        description="Path to the old Redis data directory",
-    )
-    new_valkey_dir: Path = Field(
-        default=Path(".madsci/valkey"),
-        title="New Valkey Directory",
-        description="Path to the new Valkey data directory",
-    )
-
     old_minio_url: AnyUrl = Field(
         default="http://localhost:9002/",
         title="Old MinIO URL",
         description="MinIO endpoint URL for the old (source) object storage",
     )
     new_seaweedfs_url: AnyUrl = Field(
-        default="http://localhost:9000/",
+        default="http://localhost:8333/",
         title="New SeaweedFS URL",
         description="SeaweedFS S3 endpoint URL for the new (target) object storage",
     )
@@ -185,6 +174,26 @@ class FossMigrationSettings(
         description="Directory containing Docker Compose files",
     )
 
+    compose_files: List[str] = Field(
+        default_factory=lambda: ["compose.infra.yaml"],
+        title="Compose Files",
+        description="Docker Compose files for the new FOSS infrastructure stack",
+    )
+    migration_compose_files: List[str] = Field(
+        default_factory=lambda: ["compose.migration.yaml"],
+        title="Migration Compose Files",
+        description="Docker Compose overlay files for old infrastructure containers",
+    )
+    old_container_services: List[str] = Field(
+        default_factory=lambda: [
+            "madsci_old_mongodb",
+            "madsci_old_postgres",
+            "madsci_old_minio",
+        ],
+        title="Old Container Services",
+        description="Docker Compose service names for old infrastructure containers to start during migration",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Migration tool
@@ -218,6 +227,8 @@ class FossMigrationTool:
 
         Returns a dict mapping component name to whether data was found.
         """
+        # Note: Redis is detected for informational purposes but not
+        # migrated — its data is ephemeral and repopulated by managers.
         return {
             "mongodb": self._resolve_data_path("mongodb").exists(),
             "postgresql": self._resolve_data_path("postgresql", "data").exists(),
@@ -266,18 +277,22 @@ class FossMigrationTool:
     # Docker lifecycle
     # ------------------------------------------------------------------
 
-    def _compose_cmd(self, *args: str) -> list[str]:
-        """Build a docker compose command targeting the migration overlay."""
+    def _compose_cmd(self, *args: str, include_migration: bool = True) -> list[str]:
+        """Build a docker compose command targeting the infrastructure and migration overlays.
+
+        Args:
+            *args: Additional arguments to pass to ``docker compose``.
+            include_migration: Whether to include migration overlay files.
+        """
         compose_dir = self.settings.compose_dir
-        return [
-            "docker",
-            "compose",
-            "-f",
-            str(compose_dir / "compose.infra.yaml"),
-            "-f",
-            str(compose_dir / "compose.migration.yaml"),
-            *args,
-        ]
+        cmd = ["docker", "compose"]
+        for f in self.settings.compose_files:
+            cmd.extend(["-f", str(compose_dir / f)])
+        if include_migration:
+            for f in self.settings.migration_compose_files:
+                cmd.extend(["-f", str(compose_dir / f)])
+        cmd.extend(args)
+        return cmd
 
     def _prepare_old_postgres_data(self) -> None:
         """Move old PostgreSQL data to a separate directory for the old container.
@@ -330,7 +345,9 @@ class FossMigrationTool:
             )
 
         cmd = self._compose_cmd(
-            "up", "-d", "madsci_old_mongodb", "madsci_old_postgres", "madsci_old_minio"
+            "up",
+            "-d",
+            *self.settings.old_container_services,
         )
         try:
             subprocess.run(  # noqa: S603
@@ -356,15 +373,7 @@ class FossMigrationTool:
     def start_foss_stack(self) -> FossMigrationStepResult:
         """Start the new FOSS infrastructure stack (FerretDB, Valkey, etc.)."""
         t0 = time.monotonic()
-        compose_dir = self.settings.compose_dir
-        cmd = [
-            "docker",
-            "compose",
-            "-f",
-            str(compose_dir / "compose.infra.yaml"),
-            "up",
-            "-d",
-        ]
+        cmd = self._compose_cmd("up", "-d", include_migration=False)
         try:
             subprocess.run(  # noqa: S603
                 cmd, capture_output=True, text=True, check=True, timeout=120
@@ -688,58 +697,23 @@ class FossMigrationTool:
             )
 
     # ------------------------------------------------------------------
-    # Redis -> Valkey  (file copy)
+    # Redis -> Valkey  (skipped — data is ephemeral)
     # ------------------------------------------------------------------
 
     def migrate_redis_to_valkey(self) -> FossMigrationStepResult:
-        """Copy Redis data files to the Valkey data directory."""
-        t0 = time.monotonic()
-        src = self._resolve_data_path("redis")
-        dest = self._madsci_dir / "valkey"
+        """Report that Redis data migration is not needed.
 
-        if not src.exists():
-            return FossMigrationStepResult(
-                step="migrate_redis_to_valkey",
-                success=True,
-                message="No Redis data directory found; skipping",
-                duration_seconds=time.monotonic() - t0,
-            )
-
-        try:
-            dest.mkdir(parents=True, exist_ok=True)
-            copied_files: list[str] = []
-
-            # Copy dump.rdb if present
-            rdb = src / "dump.rdb"
-            if rdb.exists():
-                shutil.copy2(rdb, dest / "dump.rdb")
-                copied_files.append("dump.rdb")
-
-            # Copy appendonlydir if present
-            aof_dir = src / "appendonlydir"
-            if aof_dir.exists() and aof_dir.is_dir():
-                dest_aof = dest / "appendonlydir"
-                if dest_aof.exists():
-                    shutil.rmtree(dest_aof)
-                shutil.copytree(aof_dir, dest_aof)
-                copied_files.append("appendonlydir/")
-
-            return FossMigrationStepResult(
-                step="migrate_redis_to_valkey",
-                success=True,
-                message=f"Copied {len(copied_files)} Redis artifacts to Valkey",
-                duration_seconds=time.monotonic() - t0,
-                details={"copied_files": copied_files},
-            )
-
-        except Exception as exc:
-            return FossMigrationStepResult(
-                step="migrate_redis_to_valkey",
-                success=False,
-                message="Redis to Valkey copy failed",
-                duration_seconds=time.monotonic() - t0,
-                error=str(exc),
-            )
+        Redis/Valkey data in MADSci is ephemeral (workcell state, location
+        caches) and is repopulated automatically by the managers on startup.
+        Additionally, Redis 7.4 uses RDB format v12 which is incompatible
+        with Valkey 8 (forked from Redis 7.2, RDB v11), so file-level or
+        DUMP/RESTORE migration is not possible.
+        """
+        return FossMigrationStepResult(
+            step="migrate_redis_to_valkey",
+            success=True,
+            message="Skipped — Redis/Valkey data is ephemeral and will be repopulated by managers",
+        )
 
     # ------------------------------------------------------------------
     # MinIO -> SeaweedFS  (S3 SDK copy)
@@ -785,13 +759,13 @@ class FossMigrationTool:
             new_url = self.settings.new_seaweedfs_url
 
             old_client = Minio(
-                f"{old_url.host}:{old_url.port or 9000}",
+                f"{old_url.host}:{old_url.port or 9002}",
                 access_key=self.settings.minio_access_key,
                 secret_key=self.settings.minio_secret_key,
                 secure=old_url.scheme == "https",
             )
             new_client = Minio(
-                f"{new_url.host}:{new_url.port or 9000}",
+                f"{new_url.host}:{new_url.port or 8333}",
                 access_key=self.settings.seaweedfs_access_key,
                 secret_key=self.settings.seaweedfs_secret_key,
                 secure=new_url.scheme == "https",

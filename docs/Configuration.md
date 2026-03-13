@@ -14,8 +14,8 @@ These environment variables are used to configure the default Docker Compose in 
 | `REDIS_PORT`                  | `integer` | `6379`  | The port on the host machine to bind the Redis service to. This allows other services to connect to Redis running inside the Docker container.                                                           | `6379`  |
 | `DOCUMENT_DB_PORT`            | `integer` | `27017` | The port on the host machine to bind the document database service (FerretDB) to. This allows other services to connect to the document database running inside the Docker container.                    | `27017` |
 | `POSTGRES_PORT`               | `integer` | `5432`  | The port on the host machine to bind the PostgreSQL service to. This allows other services to connect to PostgreSQL running inside the Docker container.                                                 | `5432`  |
-| `OBJECT_STORAGE_PORT`         | `integer` | `9000`  | The port on the host machine to bind the S3-compatible object storage service (SeaweedFS) to. This allows other services to connect to object storage running inside the Docker container.               | `9000`  |
-| `OBJECT_STORAGE_CONSOLE_PORT` | `integer` | `9001`  | The port on the host machine to bind the object storage console to. This allows other services to connect to the object storage console running inside the Docker container.                             | `9001`  |
+| `OBJECT_STORAGE_PORT`         | `integer` | `8333`  | The port on the host machine to bind the S3-compatible object storage service (SeaweedFS) to. This allows other services to connect to object storage running inside the Docker container.               | `8333`  |
+| `OBJECT_STORAGE_CONSOLE_PORT` | `integer` | `9333`  | The port on the host machine to bind the object storage console (SeaweedFS master) to. This allows monitoring of the object storage cluster.                                                             | `9333`  |
 
 ## MadsciDeveloperSettings
 
@@ -98,14 +98,14 @@ Settings for S3-compatible object storage.
 
 **Environment Prefix**: `OBJECT_STORAGE_`
 
-| Name                            | Type                   | Default         | Description                                                         | Example         |
-|---------------------------------|------------------------|-----------------|---------------------------------------------------------------------|-----------------|
-| `OBJECT_STORAGE_ENDPOINT`       | `string` \| `NoneType` | `null`          | Endpoint for S3-compatible storage (e.g., 'minio.example.com:9000') | `null`          |
-| `OBJECT_STORAGE_ACCESS_KEY`     | `string`               | `""`            | Access key for authentication                                       | `""`            |
-| `OBJECT_STORAGE_SECRET_KEY`     | `string`               | `""`            | Secret key for authentication                                       | `""`            |
-| `OBJECT_STORAGE_SECURE`         | `boolean`              | `false`         | Whether to use HTTPS (True) or HTTP (False)                         | `false`         |
-| `OBJECT_STORAGE_DEFAULT_BUCKET` | `string`               | `"madsci-data"` | Default bucket to use for storing data                              | `"madsci-data"` |
-| `OBJECT_STORAGE_REGION`         | `string` \| `NoneType` | `null`          | Optional for AWS S3/other providers                                 | `null`          |
+| Name                            | Type                   | Default         | Description                                                           | Example         |
+|---------------------------------|------------------------|-----------------|-----------------------------------------------------------------------|-----------------|
+| `OBJECT_STORAGE_ENDPOINT`       | `string` \| `NoneType` | `null`          | Endpoint for S3-compatible storage (e.g., 'storage.example.com:8333') | `null`          |
+| `OBJECT_STORAGE_ACCESS_KEY`     | `string`               | `""`            | Access key for authentication                                         | `""`            |
+| `OBJECT_STORAGE_SECRET_KEY`     | `string`               | `""`            | Secret key for authentication                                         | `""`            |
+| `OBJECT_STORAGE_SECURE`         | `boolean`              | `false`         | Whether to use HTTPS (True) or HTTP (False)                           | `false`         |
+| `OBJECT_STORAGE_DEFAULT_BUCKET` | `string`               | `"madsci-data"` | Default bucket to use for storing data                                | `"madsci-data"` |
+| `OBJECT_STORAGE_REGION`         | `string` \| `NoneType` | `null`          | Optional for AWS S3/other providers                                   | `null`          |
 
 ## EventManagerSettings
 

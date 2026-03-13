@@ -30,7 +30,7 @@ A full MADSci lab includes:
 │   │                         Infrastructure                               │   │
 │   │   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐        │   │
 │   │   │ FerretDB │   │PostgreSQL│   │  Valkey  │   │SeaweedFS │        │   │
-│   │   │  :27017  │   │  :5432   │   │  :6379   │   │  :9000   │        │   │
+│   │   │  :27017  │   │  :5432   │   │  :6379   │   │  :8333   │        │   │
 │   │   └──────────┘   └──────────┘   └──────────┘   └──────────┘        │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
@@ -85,7 +85,7 @@ POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/madsci
 REDIS_URL=redis://madsci_valkey:6379
 
 # SeaweedFS (S3-compatible object storage)
-SEAWEEDFS_ENDPOINT=madsci_seaweedfs:9000
+SEAWEEDFS_ENDPOINT=madsci_seaweedfs:8333
 SEAWEEDFS_ACCESS_KEY=madsci
 SEAWEEDFS_SECRET_KEY=madsci123
 
@@ -163,8 +163,8 @@ services:
     image: chrislusf/seaweedfs:latest
     <<: *madsci-service
     ports:
-      - "9000:8333"
-      - "9001:9001"
+      - "8333:8333"
+      - "9333:9333"
     command: server -s3
     volumes:
       - seaweedfs_data:/data

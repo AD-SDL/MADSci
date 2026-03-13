@@ -191,12 +191,12 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         # Add application-level fields expected by ObjectStorageDataPoint
         endpoint = oss.endpoint or ""
-        # Derive a public endpoint (MinIO console port convention)
+        # Derive a public endpoint (SeaweedFS master/console port convention)
         public_endpoint = endpoint
-        if ":9000" in public_endpoint and (
+        if ":8333" in public_endpoint and (
             "localhost" in public_endpoint or "127.0.0.1" in public_endpoint
         ):
-            public_endpoint = public_endpoint.replace(":9000", ":9001")
+            public_endpoint = public_endpoint.replace(":8333", ":9333")
         protocol = "https" if oss.secure else "http"
         result["storage_endpoint"] = endpoint
         result["public_endpoint"] = public_endpoint

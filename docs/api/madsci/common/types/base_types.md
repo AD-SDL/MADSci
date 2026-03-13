@@ -113,6 +113,8 @@ Classes
     ### Descendants
 
     * madsci.common.backup_tools.base_backup.BackupInfo
+    * madsci.common.foss_migration.FossMigrationReport
+    * madsci.common.foss_migration.FossMigrationStepResult
     * madsci.common.testing.types.E2ETestCleanup
     * madsci.common.testing.types.E2ETestDefinition
     * madsci.common.testing.types.E2ETestRequirements
@@ -276,6 +278,7 @@ Classes
 
     ### Descendants
 
+    * madsci.common.foss_migration.FossMigrationSettings
     * madsci.common.types.backup_types.BaseBackupSettings
     * madsci.common.types.client_types.MadsciClientConfig
     * madsci.common.types.context_types.MadsciContext

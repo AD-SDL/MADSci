@@ -459,7 +459,7 @@ def test_file_datapoint_with_minio(document_handler, tmp_path: Path) -> None:
             settings=settings,
             document_handler=document_handler,
             object_storage_settings=ObjectStorageSettings(
-                endpoint="localhost:9000",
+                endpoint="localhost:8333",
                 access_key="minioadmin",
                 secret_key="minioadmin",
                 secure=False,
@@ -514,10 +514,10 @@ def test_file_datapoint_with_minio(document_handler, tmp_path: Path) -> None:
 
         assert result["bucket_name"] == "madsci-test"
         assert result["object_name"] == "test_minio_file"
-        assert result["storage_endpoint"] == "localhost:9000"
+        assert result["storage_endpoint"] == "localhost:8333"
         assert result["etag"] == "test-etag-123"
-        assert "localhost:9001" in result["url"]  # Should use port 9001 for public URL
-        assert result["url"] == "http://localhost:9001/madsci-test/test_minio_file"
+        assert "localhost:9333" in result["url"]  # Should use port 9333 for public URL
+        assert result["url"] == "http://localhost:9333/madsci-test/test_minio_file"
 
         # Verify we can retrieve the datapoint with object storage info
         retrieved_result = test_client.get(
