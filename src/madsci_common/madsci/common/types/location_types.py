@@ -128,8 +128,8 @@ class LocationReservation(MadsciBaseModel):
         """Check if the reservation is 1.) active or not, and 2.) owned by the given ownership."""
         return not (
             not self.owned_by.check(ownership)
-            and self.start <= datetime.now()
-            and self.end >= datetime.now()
+            and self.created <= datetime.now()
+            and self.expires >= datetime.now()
         )
 
 

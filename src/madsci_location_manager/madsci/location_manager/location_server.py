@@ -69,8 +69,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
         )
-        with Path.open(self.settings.locations_file_path, "w") as f:
-            yaml.dump(self.state_handler.get_locations(), f)
+        with Path(self.settings.locations_file_path).open("w") as f:
+            yaml.dump(
+                [
+                    loc.model_dump(mode="json")
+                    for loc in self.state_handler.get_locations()
+                ],
+                f,
+            )
 
         # Initialize resource client with resource server URL from context
         context = get_current_madsci_context()
@@ -220,6 +226,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 resource_id = self._initialize_location_resource(location)
             location.resource_id = resource_id
             result = self.state_handler.add_location(location)
+
+            if result is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Location with name '{location.location_name}' already exists",
+                )
 
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
@@ -496,19 +508,22 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         if not location.resource_id:
             return ResourceHierarchy(ancestor_ids=[], resource_id="", descendant_ids={})
 
-            try:
-                # Query the resource hierarchy for the attached resource
-                return self.resource_client.query_resource_hierarchy(
-                    location.resource_id
-                )
-            except Exception:
-                # Return empty hierarchy if query fails
-                return ResourceHierarchy(
-                    ancestor_ids=[],
-                    resource_id=location.resource_id or "",
-                    descendant_ids={},
-                )
-        return None
+        try:
+            # Query the resource hierarchy for the attached resource
+            return self.resource_client.query_resource_hierarchy(location.resource_id)
+        except Exception:
+            self.logger.warning(
+                "Failed to query resource hierarchy for location",
+                location_name=location_name,
+                resource_id=location.resource_id,
+                exc_info=True,
+            )
+            # Return empty hierarchy if query fails
+            return ResourceHierarchy(
+                ancestor_ids=[],
+                resource_id=location.resource_id or "",
+                descendant_ids={},
+            )
 
 
 @asynccontextmanager

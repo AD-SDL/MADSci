@@ -177,7 +177,7 @@ class LocationStateHandler:
             location_dump = location_obj.model_dump(mode="json")
             location = location_obj
         if location_dump["location_name"] not in self._locations:
-            raise KeyError(f"Location {location['location_name']} does not exist")
+            raise KeyError(f"Location {location_dump['location_name']} does not exist")
         if (
             self.get_location(location_dump["location_name"]).location_id
             != location.location_id
