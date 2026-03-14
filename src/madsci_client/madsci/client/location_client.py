@@ -127,7 +127,7 @@ class LocationClient:
         self, location_id: str, timeout: Optional[float] = None
     ) -> Location:
         """
-        Get details of a specific location.
+        Get details of a specific location by ID.
 
         Parameters
         ----------
@@ -144,7 +144,8 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.get(
-            f"{self.location_server_url}location/{location_id}",
+            f"{self.location_server_url}location",
+            params={"location_id": location_id},
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
@@ -227,21 +228,32 @@ class LocationClient:
         locations   :
             The created locations.
         """
-        locations = yaml.safe_load(location_file_path.open())
-        for location in locations.values():
+        with location_file_path.open() as f:
+            locations = yaml.safe_load(f)
+        if locations is None:
+            return self.get_locations(timeout=timeout)
+        if isinstance(locations, list):
+            location_items = locations
+        elif isinstance(locations, dict):
+            location_items = locations.values()
+        else:
+            raise ValueError(
+                f"Expected a list or dict of locations, got {type(locations)}"
+            )
+        for location in location_items:
             self.add_location(Location.model_validate(location), timeout=timeout)
         return self.get_locations(timeout=timeout)
 
     def delete_location(
-        self, location_id: str, timeout: Optional[float] = None
+        self, location_name: str, timeout: Optional[float] = None
     ) -> dict[str, str]:
         """
-        Delete a specific location.
+        Delete a specific location by name.
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location to delete.
+        location_name : str
+            The name of the location to delete.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 
@@ -253,7 +265,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.delete(
-            f"{self.location_server_url}location/{location_id}",
+            f"{self.location_server_url}location/{location_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
@@ -272,8 +284,8 @@ class LocationClient:
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         node_name : str
             The name of the node.
         representation : Any
@@ -308,8 +320,8 @@ class LocationClient:
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         node_name : str
             The name of the node.
         timeout : Optional[float]
@@ -331,15 +343,15 @@ class LocationClient:
         return Location.model_validate(response.json())
 
     def attach_resource(
-        self, location_id: str, resource_id: str, timeout: Optional[float] = None
+        self, location_name: str, resource_id: str, timeout: Optional[float] = None
     ) -> Location:
         """
         Attach a resource to a location.
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         resource_id : str
             The ID of the resource to attach.
         timeout : Optional[float]
@@ -353,7 +365,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.post(
-            f"{self.location_server_url}location/{location_id}/attach_resource",
+            f"{self.location_server_url}location/{location_name}/attach_resource",
             params={"resource_id": resource_id},
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -362,15 +374,15 @@ class LocationClient:
         return Location.model_validate(response.json())
 
     def detach_resource(
-        self, location_id: str, timeout: Optional[float] = None
+        self, location_name: str, timeout: Optional[float] = None
     ) -> Location:
         """
         Detach the resource from a location.
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 
@@ -382,7 +394,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.delete(
-            f"{self.location_server_url}location/{location_id}/detach_resource",
+            f"{self.location_server_url}location/{location_name}/detach_resource",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
@@ -461,15 +473,15 @@ class LocationClient:
         return WorkflowDefinition.model_validate(response.json())
 
     def get_location_resources(
-        self, location_id: str, timeout: Optional[float] = None
+        self, location_name: str, timeout: Optional[float] = None
     ) -> ResourceHierarchy:
         """
         Get the resource hierarchy for resources currently at a specific location.
 
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 
@@ -481,7 +493,7 @@ class LocationClient:
         self._validate_server_url()
 
         response = self.session.get(
-            f"{self.location_server_url}location/{location_id}/resources",
+            f"{self.location_server_url}location/{location_name}/resources",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )

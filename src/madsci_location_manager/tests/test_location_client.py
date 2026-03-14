@@ -77,7 +77,7 @@ def test_transfer_method_signatures(location_client):
     # Check get_location_resources signature
     sig = inspect.signature(location_client.get_location_resources)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "timeout" in params
 
 
@@ -179,13 +179,13 @@ def test_get_location_resources_empty_hierarchy(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    test_location_id = new_ulid_str()
-    result = client.get_location_resources(test_location_id)
+    test_location_name = "test_location"
+    result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
     mock_session.get.assert_called_once()
     call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object
     assert isinstance(result, ResourceHierarchy)
@@ -217,13 +217,13 @@ def test_get_location_resources_with_resource(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    test_location_id = new_ulid_str()
-    result = client.get_location_resources(test_location_id)
+    test_location_name = "test_location"
+    result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
     mock_session.get.assert_called_once()
     call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object with correct data
     assert isinstance(result, ResourceHierarchy)
@@ -249,9 +249,8 @@ def test_get_location_resources_error_handling(mock_create_session):
     location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
-    test_location_id = new_ulid_str()
     with pytest.raises(requests.exceptions.HTTPError):
-        location_client.get_location_resources(test_location_id)
+        location_client.get_location_resources("nonexistent_location")
 
 
 def test_get_location_resources_return_type_annotation(location_client):
@@ -349,7 +348,7 @@ def test_detach_resource_method_signature(location_client):
     """Test that detach_resource method has correct signature."""
     sig = inspect.signature(location_client.detach_resource)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "timeout" in params
 
     # Check return type annotation
@@ -362,9 +361,10 @@ def test_detach_resource_method_request(mock_create_session):
     # Mock successful response
     mock_response = Mock()
     test_location_id = new_ulid_str()
+    test_location_name = "test_location"
     mock_location_data = {
         "location_id": test_location_id,
-        "location_name": "test_location",
+        "location_name": test_location_name,
         "description": "Test location",
         "resource_id": None,
     }
@@ -379,12 +379,12 @@ def test_detach_resource_method_request(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    result = client.detach_resource(test_location_id)
+    result = client.detach_resource(test_location_name)
 
     # Verify the request was made correctly
     mock_session.delete.assert_called_once()
     call_args = mock_session.delete.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/detach_resource")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/detach_resource")
 
     # Verify the result is a Location object
     assert isinstance(result, Location)
@@ -409,6 +409,5 @@ def test_detach_resource_error_handling(mock_create_session):
     location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
-    test_location_id = new_ulid_str()
     with pytest.raises(requests.exceptions.HTTPError):
-        location_client.detach_resource(test_location_id)
+        location_client.detach_resource("nonexistent_location")

@@ -151,3 +151,14 @@ services:
     profiles:
       - testing
     restart: "no"
+    depends_on:
+      - lab_manager
+      - event_manager
+      - experiment_manager
+      - resource_manager
+      - data_manager
+      - location_manager
+      - workcell_manager
+      - liquidhandler_1
+      - robotarm_1
+      - platereader_1

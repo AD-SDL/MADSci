@@ -69,14 +69,25 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
         )
-        with Path(self.settings.locations_file_path).open("w") as f:
-            yaml.dump(
-                [
-                    loc.model_dump(mode="json")
-                    for loc in self.state_handler.get_locations()
-                ],
-                f,
-            )
+
+        # Load locations from file on startup (file is the source of truth for
+        # location definitions, matching the old settings-based initialization)
+        if self.settings.locations_file_path:
+            locations_path = Path(self.settings.locations_file_path)
+            if locations_path.exists():
+                with locations_path.open() as f:
+                    locations_data = yaml.safe_load(f)
+                if locations_data and isinstance(locations_data, list):
+                    for loc_data in locations_data:
+                        try:
+                            location = Location.model_validate(loc_data)
+                            self.state_handler.add_location(location)
+                        except Exception as e:
+                            self.logger.warning(
+                                "Failed to load location from file",
+                                location_data=loc_data,
+                                error=str(e),
+                            )
 
         # Initialize resource client with resource server URL from context
         context = get_current_madsci_context()
@@ -267,19 +278,9 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             status_code=404, detail=f"Location with name '{name}' not found"
         )
 
-    @get("/location/id/{location_id}", tags=["Locations"])
-    def get_location_by_id(self, location_id: str) -> Location:
-        """Get a specific location by ID."""
-        location = self.state_handler.get_location_by_id(location_id)
-        if location is None:
-            raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
-            )
-        return location
-
     @get("/location/{location_name}", tags=["Locations"])
     def get_location(self, location_name: str) -> Location:
-        """Get a specific location by ID."""
+        """Get a specific location by name."""
         with self.span(
             "location.get",
             attributes={"location.name": location_name},
@@ -294,7 +295,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
     @delete("/location/{location_name}", tags=["Locations"])
     def delete_location(self, location_name: str) -> dict[str, str]:
-        """Delete a specific location by ID."""
+        """Delete a specific location by name."""
         success = self.state_handler.delete_location(location_name)
         if not success:
             raise HTTPException(
@@ -490,7 +491,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         Get the resource hierarchy for resources currently at a specific location.
 
         Args:
-            location_id: Location ID to query
+            location_name: Location name to query
 
         Returns:
             ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource

@@ -57,7 +57,7 @@ class LocationArgument(MadsciBaseModel):
 
 
 class Location(MadsciBaseModel):
-    """The Definition of a Location in a setup."""
+    """A location in the lab."""
 
     location_name: str = Field(
         title="Location Name",
@@ -98,6 +98,11 @@ class Location(MadsciBaseModel):
         title="Allow Transfers",
         description="Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
         default=True,
+    )
+    reservation: Optional["LocationReservation"] = Field(
+        title="Reservation",
+        description="The current reservation on this location, if any.",
+        default=None,
     )
 
     is_ulid = field_validator("location_id")(ulid_validator)

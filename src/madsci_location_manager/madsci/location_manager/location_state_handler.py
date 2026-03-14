@@ -97,7 +97,7 @@ class LocationStateHandler:
     # Location Management Methods
     def get_location(self, location_name: str) -> Optional[Location]:
         """
-        Returns a location by ID
+        Returns a location by name.
         """
         try:
             location_data = self._locations.get(location_name)
@@ -139,7 +139,7 @@ class LocationStateHandler:
         self, location: Union[Location, dict[str, Any]]
     ) -> Optional[Location]:
         """
-        Sets a location by ID and returns the stored location
+        Adds a location by name and returns the stored location. Returns None if the name already exists.
         """
         if isinstance(location, Location):
             location_dump = location.model_dump(mode="json")
@@ -155,7 +155,7 @@ class LocationStateHandler:
 
     def delete_location(self, location_name: str) -> bool:
         """
-        Deletes a location by ID. Returns True if the location was deleted, False if it didn't exist.
+        Deletes a location by name. Returns True if the location was deleted, False if it didn't exist.
         """
         try:
             if location_name in self._locations:

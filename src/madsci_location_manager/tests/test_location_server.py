@@ -916,12 +916,12 @@ def test_transfer_graph_without_transfer_capabilities(redis_handler):
     assert response.json() == {}
 
 
-def test_get_location_by_id_endpoint(redis_handler):
-    """Test the get location by name API endpoint."""
+def test_get_location_by_id_query_endpoint(redis_handler):
+    """Test the get location by ID via query parameter API endpoint."""
     location_def = Location(
-        location_name="test_location_by_name",
+        location_name="test_location_by_id_query",
         location_id=new_ulid_str(),
-        description="A test location for name-based lookup",
+        description="A test location for ID-based query lookup",
     )
 
     settings = LocationManagerSettings()
@@ -930,14 +930,14 @@ def test_get_location_by_id_endpoint(redis_handler):
     manager.add_location(location_def)
     client = TestClient(manager.create_server())
 
-    # Test successful lookup by name using query parameter
-    response = client.get("/location/id/" + location_def.location_id)
+    # Test successful lookup by ID using query parameter
+    response = client.get("/location", params={"location_id": location_def.location_id})
     assert response.status_code == 200
 
     location_data = response.json()
-    assert location_data["location_name"] == "test_location_by_name"
+    assert location_data["location_name"] == "test_location_by_id_query"
     assert location_data["location_id"] == location_def.location_id
-    assert location_data["description"] == "A test location for name-based lookup"
+    assert location_data["description"] == "A test location for ID-based query lookup"
 
 
 def test_get_location_by_name_endpoint_not_found(redis_handler):
