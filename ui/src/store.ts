@@ -35,6 +35,8 @@ const labHealth = ref<any>(null)
 const isRefreshing = ref<boolean>(false)
 const locations = ref<Record<string, any>>({})
 const locations_url = ref<string>("")
+const representation_templates = ref<any[]>([])
+const location_templates = ref<any[]>([])
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -61,10 +63,14 @@ watchEffect(async () => {
 
     updateResources()
     updateLocations()
+    updateRepresentationTemplates()
+    updateLocationTemplates()
     setInterval(updateWorkcellState, 5000)
     setInterval(updateWorkflows, 5000)
     setInterval(updateResources, 5000)
     setInterval(updateLocations, 5000)
+    setInterval(updateRepresentationTemplates, 5000)
+    setInterval(updateLocationTemplates, 5000)
     setInterval(updateExperiments, 5000);
     // setInterval(updateEvents, 10000);
 
@@ -86,6 +92,28 @@ watchEffect(async () => {
                 console.error("Failed to fetch locations from LocationManager:", error);
                 // Fallback to workcell state locations if LocationManager is not available
                 locations.value = workcell_state.value?.locations || {};
+            }
+        }
+    }
+
+    async function updateRepresentationTemplates() {
+        if (locations_url.value) {
+            try {
+                const baseUrl = locations_url.value.replace(/locations\/?$/, "")
+                representation_templates.value = await ((await fetch(baseUrl + "representation_templates")).json());
+            } catch (error) {
+                console.error("Failed to fetch representation templates:", error);
+            }
+        }
+    }
+
+    async function updateLocationTemplates() {
+        if (locations_url.value) {
+            try {
+                const baseUrl = locations_url.value.replace(/locations\/?$/, "")
+                location_templates.value = await ((await fetch(baseUrl + "location_templates")).json());
+            } catch (error) {
+                console.error("Failed to fetch location templates:", error);
             }
         }
     }
@@ -198,8 +226,10 @@ export {
   isRefreshing,
   labContext,
   labHealth,
+  location_templates,
   locations,
   locations_url,
+  representation_templates,
   main_url,
   refreshLabInfo,
   refreshLocations,

@@ -1,7 +1,8 @@
 """Client for performing location management actions."""
 
+import time
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 import yaml
 from madsci.client.event_client import EventClient
@@ -9,12 +10,20 @@ from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import LocationClientConfig
 from madsci.common.types.event_types import EventType
-from madsci.common.types.location_types import Location, LocationImportResult
+from madsci.common.types.location_types import (
+    CreateLocationFromTemplateRequest,
+    Location,
+    LocationImportResult,
+    LocationRepresentationTemplate,
+    LocationTemplate,
+)
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import create_http_session
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
+
+_T = TypeVar("_T")
 
 
 class LocationClient:
@@ -88,6 +97,39 @@ class LocationClient:
             raise ValueError(
                 "Location server URL not configured. Cannot perform location operations without a server URL."
             )
+
+    def _call_with_startup_retry(self, fn: Callable[[], _T], operation_name: str) -> _T:
+        """Call *fn* with exponential-backoff retries for connection errors.
+
+        Used by the idempotent ``init_*`` template methods that run during node
+        startup, when the location manager may not be ready yet.
+        """
+        import requests  # noqa: PLC0415
+
+        max_attempts = self.config.startup_retry_max_attempts
+        delay = self.config.startup_retry_initial_delay
+        max_delay = self.config.startup_retry_max_delay
+        backoff = self.config.startup_retry_backoff_factor
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                return fn()
+            except (requests.ConnectionError, ConnectionError) as exc:
+                if attempt == max_attempts:
+                    raise
+                self.logger.warning(
+                    "Connection failed, retrying",
+                    event_type=EventType.LOG_WARNING,
+                    operation=operation_name,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    retry_delay=round(delay, 1),
+                    error=str(exc),
+                )
+                time.sleep(delay)
+                delay = min(delay * backoff, max_delay)
+        # Should not reach here, but satisfy type checker
+        raise RuntimeError("Unreachable")  # pragma: no cover
 
     def _get_headers(self) -> dict[str, str]:
         """Get headers for requests including ownership information."""
@@ -292,6 +334,248 @@ class LocationClient:
         )
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json()]
+
+    # --- Representation Template Methods ---
+
+    def get_representation_templates(
+        self, timeout: Optional[float] = None
+    ) -> list[LocationRepresentationTemplate]:
+        """Get all representation templates."""
+        self._validate_server_url()
+        response = self.session.get(
+            f"{self.location_server_url}representation_templates",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [
+            LocationRepresentationTemplate.model_validate(t) for t in response.json()
+        ]
+
+    def get_representation_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> LocationRepresentationTemplate:
+        """Get a representation template by name."""
+        self._validate_server_url()
+        response = self.session.get(
+            f"{self.location_server_url}representation_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationRepresentationTemplate.model_validate(response.json())
+
+    def create_representation_template(
+        self,
+        template: LocationRepresentationTemplate,
+        timeout: Optional[float] = None,
+    ) -> LocationRepresentationTemplate:
+        """Create a new representation template."""
+        self._validate_server_url()
+        response = self.session.post(
+            f"{self.location_server_url}representation_template",
+            json=template.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationRepresentationTemplate.model_validate(response.json())
+
+    def init_representation_template(
+        self,
+        template_name: str,
+        default_values: Optional[dict[str, Any]] = None,
+        schema: Optional[dict[str, Any]] = None,
+        required_overrides: Optional[list[str]] = None,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+        description: Optional[str] = None,
+        timeout: Optional[float] = None,
+        schema_def: Optional[dict[str, Any]] = None,
+    ) -> LocationRepresentationTemplate:
+        """Idempotent init: get-or-create, version-update for a representation template.
+
+        Retries with exponential backoff on connection errors to tolerate
+        transient unavailability of the location manager during startup.
+
+        The ``schema`` parameter is deprecated; use ``schema_def`` instead.
+        If both are provided, ``schema_def`` takes precedence.
+        """
+        self._validate_server_url()
+        resolved_schema = schema_def if schema_def is not None else schema
+        template = LocationRepresentationTemplate(
+            template_name=template_name,
+            default_values=default_values or {},
+            schema_def=resolved_schema,
+            required_overrides=required_overrides or [],
+            tags=tags or [],
+            created_by=created_by,
+            version=version,
+            description=description,
+        )
+
+        def _do_init() -> LocationRepresentationTemplate:
+            response = self.session.post(
+                f"{self.location_server_url}representation_template/init",
+                json=template.model_dump(mode="json"),
+                headers=self._get_headers(),
+                timeout=timeout or self.config.timeout_default,
+            )
+            response.raise_for_status()
+            return LocationRepresentationTemplate.model_validate(response.json())
+
+        return self._call_with_startup_retry(
+            _do_init, f"init_representation_template({template_name!r})"
+        )
+
+    def delete_representation_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> dict[str, str]:
+        """Delete a representation template by name."""
+        self._validate_server_url()
+        response = self.session.delete(
+            f"{self.location_server_url}representation_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # --- Location Template Methods ---
+
+    def get_location_templates(
+        self, timeout: Optional[float] = None
+    ) -> list[LocationTemplate]:
+        """Get all location templates."""
+        self._validate_server_url()
+        response = self.session.get(
+            f"{self.location_server_url}location_templates",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [LocationTemplate.model_validate(t) for t in response.json()]
+
+    def get_location_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> LocationTemplate:
+        """Get a location template by name."""
+        self._validate_server_url()
+        response = self.session.get(
+            f"{self.location_server_url}location_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationTemplate.model_validate(response.json())
+
+    def create_location_template(
+        self,
+        template: LocationTemplate,
+        timeout: Optional[float] = None,
+    ) -> LocationTemplate:
+        """Create a new location template."""
+        self._validate_server_url()
+        response = self.session.post(
+            f"{self.location_server_url}location_template",
+            json=template.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationTemplate.model_validate(response.json())
+
+    def init_location_template(
+        self,
+        template_name: str,
+        representation_templates: Optional[dict[str, str]] = None,
+        resource_template_name: Optional[str] = None,
+        resource_template_overrides: Optional[dict[str, Any]] = None,
+        default_allow_transfers: bool = True,
+        tags: Optional[list[str]] = None,
+        created_by: Optional[str] = None,
+        version: str = "1.0.0",
+        description: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> LocationTemplate:
+        """Idempotent init: get-or-create, version-update for a location template.
+
+        Retries with exponential backoff on connection errors to tolerate
+        transient unavailability of the location manager during startup.
+        """
+        self._validate_server_url()
+        template = LocationTemplate(
+            template_name=template_name,
+            representation_templates=representation_templates or {},
+            resource_template_name=resource_template_name,
+            resource_template_overrides=resource_template_overrides,
+            default_allow_transfers=default_allow_transfers,
+            tags=tags or [],
+            created_by=created_by,
+            version=version,
+            description=description,
+        )
+
+        def _do_init() -> LocationTemplate:
+            response = self.session.post(
+                f"{self.location_server_url}location_template/init",
+                json=template.model_dump(mode="json"),
+                headers=self._get_headers(),
+                timeout=timeout or self.config.timeout_default,
+            )
+            response.raise_for_status()
+            return LocationTemplate.model_validate(response.json())
+
+        return self._call_with_startup_retry(
+            _do_init, f"init_location_template({template_name!r})"
+        )
+
+    def delete_location_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> dict[str, str]:
+        """Delete a location template by name."""
+        self._validate_server_url()
+        response = self.session.delete(
+            f"{self.location_server_url}location_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # --- Create Location from Template ---
+
+    def create_location_from_template(
+        self,
+        location_name: str,
+        template_name: str,
+        node_bindings: Optional[dict[str, str]] = None,
+        representation_overrides: Optional[dict[str, dict[str, Any]]] = None,
+        resource_template_overrides: Optional[dict[str, Any]] = None,
+        description: Optional[str] = None,
+        allow_transfers: Optional[bool] = None,
+        timeout: Optional[float] = None,
+    ) -> Location:
+        """Create a location from a LocationTemplate."""
+        self._validate_server_url()
+        request = CreateLocationFromTemplateRequest(
+            location_name=location_name,
+            template_name=template_name,
+            node_bindings=node_bindings or {},
+            representation_overrides=representation_overrides or {},
+            resource_template_overrides=resource_template_overrides,
+            description=description,
+            allow_transfers=allow_transfers,
+        )
+        response = self.session.post(
+            f"{self.location_server_url}location/from_template",
+            json=request.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
 
     def close(self) -> None:
         """Release the HTTP session."""

@@ -145,6 +145,76 @@ class LocationMigrator:
         return loc_data
 
 
+class SchemaUpgrader:
+    """Handles schema upgrades for the Location Manager MongoDB."""
+
+    def __init__(
+        self,
+        mongo_handler: MongoHandler,
+        event_logger: Optional[Any] = None,
+    ) -> None:
+        """Initialize the schema upgrader."""
+        self._mongo_handler = mongo_handler
+        self._event_logger = event_logger
+
+    def _log(self, msg: str, **kwargs: Any) -> None:
+        if self._event_logger:
+            self._event_logger.info(msg, **kwargs)
+
+    def upgrade_1_to_2(self) -> MigrationResult:
+        """Upgrade schema from 1.0.0 to 2.0.0.
+
+        Additive only: creates new collections (representation_templates,
+        location_templates) and their indexes. Existing locations data is
+        not modified. Idempotent — safe to run multiple times.
+        """
+        result = MigrationResult()
+
+        try:
+            # Create representation_templates collection (idempotent)
+            repr_coll = self._mongo_handler.get_collection("representation_templates")
+            # Accessing the collection creates it; insert a marker if desired
+            self._log(
+                "Ensured representation_templates collection exists",
+                collection="representation_templates",
+            )
+
+            # Create location_templates collection (idempotent)
+            loc_coll = self._mongo_handler.get_collection("location_templates")
+            self._log(
+                "Ensured location_templates collection exists",
+                collection="location_templates",
+            )
+
+            # Record migration version
+            versions_coll = self._mongo_handler.get_collection("schema_versions")
+            existing = versions_coll.find_one({"version": "2.0.0"})
+            if existing is None:
+                from datetime import datetime, timezone  # noqa: PLC0415
+
+                versions_coll.insert_one(
+                    {
+                        "version": "2.0.0",
+                        "applied_at": datetime.now(timezone.utc).isoformat(),
+                        "description": "Added representation_templates and location_templates collections",
+                    }
+                )
+                result.migrated = 1
+                self._log("Schema upgraded to 2.0.0")
+            else:
+                result.skipped = 1
+                self._log("Schema 2.0.0 already applied, skipping")
+
+            # Touch collections to verify they work (idempotent read)
+            _ = repr_coll.find().to_list()
+            _ = loc_coll.find().to_list()
+
+        except Exception as e:
+            result.errors.append(f"Schema upgrade 1.0.0 → 2.0.0 failed: {e}")
+
+        return result
+
+
 def main() -> None:
     """CLI entry point for manual migration."""
     logging.basicConfig(level=logging.INFO)

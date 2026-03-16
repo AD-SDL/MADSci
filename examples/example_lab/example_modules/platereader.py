@@ -3,11 +3,14 @@
 import random
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFiles
-from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.node_types import (
+    NodeResourceTemplateDefinition,
+    RestNodeConfig,
+)
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -50,31 +53,30 @@ class PlateReaderNode(RestNode):
     config: PlateReaderConfig = PlateReaderConfig()
     config_model = PlateReaderConfig
 
-    def startup_handler(self) -> None:
-        """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        self.plate_reader = PlateReaderInterface(logger=self.logger)
-
-        # Create plate deck slot template
-        plate_deck_slot = Slot(
-            resource_name="plate_reader_deck",
-            resource_class="PlateReaderDeck",
-            capacity=1,
-            attributes={
-                "slot_type": "plate_deck",
-                "can_read": True,
-                "description": "Plate reader deck slot where plates are placed for reading",
-            },
-        )
-
-        self.resource_client.init_template(
-            resource=plate_deck_slot,
+    # Declarative template definitions — registered automatically by template_handler()
+    resource_templates: ClassVar[list[NodeResourceTemplateDefinition]] = [
+        NodeResourceTemplateDefinition(
+            resource=Slot(
+                resource_name="plate_reader_deck",
+                resource_class="PlateReaderDeck",
+                capacity=1,
+                attributes={
+                    "slot_type": "plate_deck",
+                    "can_read": True,
+                    "description": "Plate reader deck slot where plates are placed for reading",
+                },
+            ),
             template_name="plate_reader_deck_slot",
             description="Template for plate reader deck slot. Represents the deck position where plates are placed for reading.",
             required_overrides=["resource_name"],
             tags=["plate_reader", "deck", "slot", "measurement"],
-            created_by=self.node_info.node_id,
             version="1.0.0",
-        )
+        ),
+    ]
+
+    def startup_handler(self) -> None:
+        """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
+        self.plate_reader = PlateReaderInterface(logger=self.logger)
 
         # Initialize plate deck resource
         deck_resource_name = "plate_reader_deck_" + str(self.node_info.node_name)

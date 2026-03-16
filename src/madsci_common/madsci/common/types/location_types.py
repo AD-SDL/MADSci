@@ -22,6 +22,193 @@ from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
 
 
+class LocationRepresentationTemplate(MadsciBaseModel):
+    """A named, versioned template for node-specific location representation data.
+
+    Registered by nodes during startup or by operators via API. Defines the
+    schema, defaults, and required overrides for a particular node type's
+    representation of locations.
+
+    Example: A robot arm registers ``"robotarm_deck_access"`` with defaults
+    ``{"gripper_config": "standard", "max_payload": 2.0}`` and
+    ``required_overrides=["position"]``.
+    """
+
+    template_id: str = Field(
+        title="Template ID",
+        description="Unique identifier for this template.",
+        default_factory=new_ulid_str,
+    )
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique name for this representation template (e.g. 'robotarm_deck_access').",
+    )
+    description: Optional[str] = Field(
+        title="Description",
+        description="Human-readable description of this representation template.",
+        default=None,
+    )
+    default_values: dict[str, Any] = Field(
+        title="Default Values",
+        description="Default field values for this representation. Merged with overrides at instantiation.",
+        default_factory=dict,
+    )
+    schema_def: Optional[dict[str, Any]] = Field(
+        title="JSON Schema",
+        description="Optional JSON Schema for validating representation data.",
+        default=None,
+        alias="schema_def",
+        validation_alias=AliasChoices("schema_def", "schema"),
+    )
+    required_overrides: list[str] = Field(
+        title="Required Overrides",
+        description="Fields that must be provided when instantiating a location from this template.",
+        default_factory=list,
+    )
+    tags: list[str] = Field(
+        title="Tags",
+        description="Tags for categorization and discovery.",
+        default_factory=list,
+    )
+    created_by: Optional[str] = Field(
+        title="Created By",
+        description="ID of the node or operator that created this template.",
+        default=None,
+    )
+    version: str = Field(
+        title="Version",
+        description="Semantic version of this template.",
+        default="1.0.0",
+    )
+    created_at: datetime = Field(
+        title="Created At",
+        description="When this template was created.",
+        default_factory=datetime.now,
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated At",
+        description="When this template was last updated.",
+        default=None,
+    )
+
+    is_ulid = field_validator("template_id")(ulid_validator)
+
+
+class LocationTemplate(MadsciBaseModel):
+    """A named, versioned blueprint for creating locations.
+
+    Maps abstract role names to representation template names. Resource-free
+    and node-free — no specific node instances or resource IDs. At instantiation
+    time, node bindings map roles to concrete node names.
+
+    Example: ``"ot2_deck_slot"`` with
+    ``representation_templates: {"deck_controller": "lh_deck_repr", "transfer_arm": "robotarm_deck_access"}``
+    """
+
+    template_id: str = Field(
+        title="Template ID",
+        description="Unique identifier for this template.",
+        default_factory=new_ulid_str,
+    )
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique name for this location template (e.g. 'ot2_deck_slot').",
+    )
+    description: Optional[str] = Field(
+        title="Description",
+        description="Human-readable description of this location template.",
+        default=None,
+    )
+    resource_template_name: Optional[str] = Field(
+        title="Resource Template Name",
+        description="Name of the ResourceTemplate to use for creating a resource on instantiation.",
+        default=None,
+    )
+    resource_template_overrides: Optional[dict[str, Any]] = Field(
+        title="Resource Template Overrides",
+        description="Default overrides to apply when creating a resource from the template.",
+        default=None,
+    )
+    representation_templates: dict[str, str] = Field(
+        title="Representation Templates",
+        description="Mapping of abstract role names to representation template names.",
+        default_factory=dict,
+    )
+    default_allow_transfers: bool = Field(
+        title="Default Allow Transfers",
+        description="Default value for allow_transfers when creating locations from this template.",
+        default=True,
+    )
+    tags: list[str] = Field(
+        title="Tags",
+        description="Tags for categorization and discovery.",
+        default_factory=list,
+    )
+    created_by: Optional[str] = Field(
+        title="Created By",
+        description="ID of the node or operator that created this template.",
+        default=None,
+    )
+    version: str = Field(
+        title="Version",
+        description="Semantic version of this template.",
+        default="1.0.0",
+    )
+    created_at: datetime = Field(
+        title="Created At",
+        description="When this template was created.",
+        default_factory=datetime.now,
+    )
+    updated_at: Optional[datetime] = Field(
+        title="Updated At",
+        description="When this template was last updated.",
+        default=None,
+    )
+
+    is_ulid = field_validator("template_id")(ulid_validator)
+
+
+class CreateLocationFromTemplateRequest(MadsciBaseModel):
+    """Request to create a location from a LocationTemplate.
+
+    Requires node bindings to map abstract roles to concrete node instance names.
+    """
+
+    location_name: str = Field(
+        title="Location Name",
+        description="Name for the new location.",
+    )
+    template_name: str = Field(
+        title="Template Name",
+        description="Name of the LocationTemplate to instantiate.",
+    )
+    node_bindings: dict[str, str] = Field(
+        title="Node Bindings",
+        description="Mapping of abstract role names to concrete node instance names.",
+        default_factory=dict,
+    )
+    representation_overrides: dict[str, dict[str, Any]] = Field(
+        title="Representation Overrides",
+        description="Per-role overrides to merge with representation template defaults. Key is role name.",
+        default_factory=dict,
+    )
+    resource_template_overrides: Optional[dict[str, Any]] = Field(
+        title="Resource Template Overrides",
+        description="Overrides for resource template fields (merged with template defaults).",
+        default=None,
+    )
+    description: Optional[str] = Field(
+        title="Description",
+        description="Optional description for the new location.",
+        default=None,
+    )
+    allow_transfers: Optional[bool] = Field(
+        title="Allow Transfers",
+        description="Override the template default for allow_transfers.",
+        default=None,
+    )
+
+
 class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
 
@@ -102,6 +289,16 @@ class Location(MadsciBaseModel):
     reservation: Optional["LocationReservation"] = Field(
         title="Reservation",
         description="The current reservation on this location, if any.",
+        default=None,
+    )
+    location_template_name: Optional[str] = Field(
+        title="Location Template Name",
+        description="Name of the LocationTemplate used to create this location (for traceability).",
+        default=None,
+    )
+    node_bindings: Optional[dict[str, str]] = Field(
+        title="Node Bindings",
+        description="Mapping of abstract role names to concrete node instance names (for traceability).",
         default=None,
     )
 
@@ -299,6 +496,17 @@ class LocationManagerSettings(
         description="Transfer capabilities configuration for this LocationManager.",
     )
 
+    reconciliation_interval_seconds: float = Field(
+        title="Reconciliation Interval",
+        description="Interval in seconds between background reconciliation cycles for lazy template resolution.",
+        default=30.0,
+    )
+    reconciliation_enabled: bool = Field(
+        title="Reconciliation Enabled",
+        description="Whether to enable background reconciliation of unresolved template references.",
+        default=True,
+    )
+
     server_url: AnyUrl = Field(
         title="Server URL",
         description="The URL where this manager's server runs.",
@@ -410,5 +618,20 @@ class LocationManagerHealth(ManagerHealth):
     num_locations: int = Field(
         title="Number of Locations",
         description="The number of locations managed by the Location Manager.",
+        default=0,
+    )
+    num_representation_templates: int = Field(
+        title="Number of Representation Templates",
+        description="The number of representation templates registered with the Location Manager.",
+        default=0,
+    )
+    num_location_templates: int = Field(
+        title="Number of Location Templates",
+        description="The number of location templates registered with the Location Manager.",
+        default=0,
+    )
+    num_unresolved_locations: int = Field(
+        title="Number of Unresolved Locations",
+        description="The number of locations with unresolved template references (resource_id is null but resource_template_name is set).",
         default=0,
     )

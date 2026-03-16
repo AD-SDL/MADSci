@@ -3,7 +3,12 @@
 import pytest
 from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
-from madsci.common.types.location_types import Location, LocationManagerSettings
+from madsci.common.types.location_types import (
+    Location,
+    LocationManagerSettings,
+    LocationRepresentationTemplate,
+    LocationTemplate,
+)
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_state_handler import LocationStateHandler
 
@@ -218,6 +223,211 @@ class TestRedisTransientState:
         """Lock is created via Redis handler."""
         lock = state_handler.location_state_lock()
         assert lock is not None
+
+
+class TestRepresentationTemplateCRUD:
+    """Tests for representation template CRUD operations."""
+
+    def test_add_and_get_repr_template(self, state_handler):
+        """Add a representation template and retrieve it."""
+        template = LocationRepresentationTemplate(
+            template_name="robotarm_deck",
+            default_values={"gripper_config": "standard", "max_payload": 2.0},
+            required_overrides=["position"],
+        )
+        result = state_handler.add_representation_template(template)
+        assert result is not None
+        assert result.template_name == "robotarm_deck"
+
+        retrieved = state_handler.get_representation_template("robotarm_deck")
+        assert retrieved is not None
+        assert retrieved.template_id == template.template_id
+        assert retrieved.default_values == {
+            "gripper_config": "standard",
+            "max_payload": 2.0,
+        }
+
+    def test_add_duplicate_returns_none(self, state_handler):
+        """Adding a template with duplicate name returns None."""
+        template = LocationRepresentationTemplate(template_name="test_repr")
+        state_handler.add_representation_template(template)
+        result = state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="test_repr")
+        )
+        assert result is None
+
+    def test_get_nonexistent_returns_none(self, state_handler):
+        """Getting a nonexistent template returns None."""
+        result = state_handler.get_representation_template("nonexistent")
+        assert result is None
+
+    def test_get_all_templates(self, state_handler):
+        """Get all representation templates."""
+        state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="repr_a")
+        )
+        state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="repr_b")
+        )
+        templates = state_handler.get_representation_templates()
+        assert len(templates) == 2
+        names = {t.template_name for t in templates}
+        assert names == {"repr_a", "repr_b"}
+
+    def test_update_repr_template(self, state_handler):
+        """Update a representation template."""
+        template = LocationRepresentationTemplate(
+            template_name="test_repr",
+            default_values={"key": "old"},
+        )
+        state_handler.add_representation_template(template)
+
+        template.default_values = {"key": "new"}
+        result = state_handler.update_representation_template(template)
+        assert result.default_values == {"key": "new"}
+
+        retrieved = state_handler.get_representation_template("test_repr")
+        assert retrieved.default_values == {"key": "new"}
+
+    def test_update_nonexistent_raises_key_error(self, state_handler):
+        """Updating a nonexistent template raises KeyError."""
+        template = LocationRepresentationTemplate(template_name="nonexistent")
+        with pytest.raises(KeyError):
+            state_handler.update_representation_template(template)
+
+    def test_update_wrong_id_raises_value_error(self, state_handler):
+        """Updating with wrong ID raises ValueError."""
+        template = LocationRepresentationTemplate(template_name="test_repr")
+        state_handler.add_representation_template(template)
+
+        wrong_id = LocationRepresentationTemplate(
+            template_name="test_repr",
+            template_id=new_ulid_str(),
+        )
+        with pytest.raises(ValueError):
+            state_handler.update_representation_template(wrong_id)
+
+    def test_delete_repr_template(self, state_handler):
+        """Delete a representation template."""
+        template = LocationRepresentationTemplate(template_name="to_delete")
+        state_handler.add_representation_template(template)
+
+        result = state_handler.delete_representation_template("to_delete")
+        assert result is True
+        assert state_handler.get_representation_template("to_delete") is None
+
+    def test_delete_nonexistent_returns_false(self, state_handler):
+        """Deleting a nonexistent template returns False."""
+        result = state_handler.delete_representation_template("nonexistent")
+        assert result is False
+
+
+class TestLocationTemplateCRUD:
+    """Tests for location template CRUD operations."""
+
+    def test_add_and_get_location_template(self, state_handler):
+        """Add a location template and retrieve it."""
+        template = LocationTemplate(
+            template_name="ot2_deck_slot",
+            resource_template_name="location_container",
+            representation_templates={
+                "deck_controller": "lh_deck_repr",
+                "transfer_arm": "robotarm_deck",
+            },
+        )
+        result = state_handler.add_location_template(template)
+        assert result is not None
+        assert result.template_name == "ot2_deck_slot"
+
+        retrieved = state_handler.get_location_template("ot2_deck_slot")
+        assert retrieved is not None
+        assert retrieved.representation_templates == {
+            "deck_controller": "lh_deck_repr",
+            "transfer_arm": "robotarm_deck",
+        }
+
+    def test_add_duplicate_returns_none(self, state_handler):
+        """Adding a template with duplicate name returns None."""
+        template = LocationTemplate(template_name="test_loc_tmpl")
+        state_handler.add_location_template(template)
+        result = state_handler.add_location_template(
+            LocationTemplate(template_name="test_loc_tmpl")
+        )
+        assert result is None
+
+    def test_get_nonexistent_returns_none(self, state_handler):
+        """Getting a nonexistent template returns None."""
+        result = state_handler.get_location_template("nonexistent")
+        assert result is None
+
+    def test_get_all_templates(self, state_handler):
+        """Get all location templates."""
+        state_handler.add_location_template(LocationTemplate(template_name="tmpl_a"))
+        state_handler.add_location_template(LocationTemplate(template_name="tmpl_b"))
+        templates = state_handler.get_location_templates()
+        assert len(templates) == 2
+        names = {t.template_name for t in templates}
+        assert names == {"tmpl_a", "tmpl_b"}
+
+    def test_update_location_template(self, state_handler):
+        """Update a location template."""
+        template = LocationTemplate(
+            template_name="test_tmpl",
+            description="old description",
+        )
+        state_handler.add_location_template(template)
+
+        template.description = "new description"
+        result = state_handler.update_location_template(template)
+        assert result.description == "new description"
+
+        retrieved = state_handler.get_location_template("test_tmpl")
+        assert retrieved.description == "new description"
+
+    def test_update_nonexistent_raises_key_error(self, state_handler):
+        """Updating a nonexistent template raises KeyError."""
+        template = LocationTemplate(template_name="nonexistent")
+        with pytest.raises(KeyError):
+            state_handler.update_location_template(template)
+
+    def test_update_wrong_id_raises_value_error(self, state_handler):
+        """Updating with wrong ID raises ValueError."""
+        template = LocationTemplate(template_name="test_tmpl")
+        state_handler.add_location_template(template)
+
+        wrong_id = LocationTemplate(
+            template_name="test_tmpl",
+            template_id=new_ulid_str(),
+        )
+        with pytest.raises(ValueError):
+            state_handler.update_location_template(wrong_id)
+
+    def test_delete_location_template(self, state_handler):
+        """Delete a location template."""
+        template = LocationTemplate(template_name="to_delete")
+        state_handler.add_location_template(template)
+
+        result = state_handler.delete_location_template("to_delete")
+        assert result is True
+        assert state_handler.get_location_template("to_delete") is None
+
+    def test_delete_nonexistent_returns_false(self, state_handler):
+        """Deleting a nonexistent template returns False."""
+        result = state_handler.delete_location_template("nonexistent")
+        assert result is False
+
+    def test_collections_are_independent(self, state_handler):
+        """Repr templates and location templates are stored independently."""
+        state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="same_name")
+        )
+        state_handler.add_location_template(LocationTemplate(template_name="same_name"))
+
+        repr_tmpl = state_handler.get_representation_template("same_name")
+        loc_tmpl = state_handler.get_location_template("same_name")
+        assert repr_tmpl is not None
+        assert loc_tmpl is not None
+        assert repr_tmpl.template_id != loc_tmpl.template_id
 
 
 class TestClose:

@@ -1,5 +1,6 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import contextlib
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -17,12 +18,16 @@ from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
+    CreateLocationFromTemplateRequest,
     Location,
     LocationImportResult,
     LocationManagerHealth,
     LocationManagerSettings,
+    LocationRepresentationTemplate,
+    LocationTemplate,
 )
 from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
+from madsci.common.types.resource_types import Slot
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
@@ -134,22 +139,57 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             mongo_handler=self.mongo_handler,
         )
 
+        # Initialize resource client with resource server URL from context
+        # (must happen before seed file loading, which may create resources)
+        context = get_current_madsci_context()
+        resource_server_url = context.resource_server_url
+        self.resource_client = ResourceClient(resource_server_url=resource_server_url)
+
+        # Register default location container template
+        self._register_default_resource_template()
+
         # Auto-migration: if MongoDB is empty but Redis has old-format data, migrate
         self._auto_migrate_from_redis()
 
         # Seed file loading: if MongoDB is still empty and seed file exists, load it once
         self._seed_from_file()
 
-        # Initialize resource client with resource server URL from context
-        context = get_current_madsci_context()
-        resource_server_url = context.resource_server_url
-        self.resource_client = ResourceClient(resource_server_url=resource_server_url)
-
         self.transfer_planner = TransferPlanner(
             state_handler=self.state_handler,
             transfer_capabilities=self.settings.transfer_capabilities,
             resource_client=self.resource_client,
         )
+
+    def _register_default_resource_template(self) -> None:
+        """Register a default location container template with the resource manager.
+
+        This provides a generic Slot template that locations can reference via
+        ``resource_template_name`` in seed files, ensuring container resources
+        are created even before node-specific templates are registered.
+        """
+        try:
+            location_slot = Slot(
+                resource_name="location_container",
+                resource_class="LocationContainer",
+                capacity=1,
+                attributes={
+                    "slot_type": "location_container",
+                    "description": "Default container resource for a lab location",
+                },
+            )
+            self.resource_client.init_template(
+                resource=location_slot,
+                template_name="location_container",
+                description="Default container resource for a lab location. Holds a single discrete item (e.g. a plate).",
+                required_overrides=["resource_name"],
+                tags=["location", "container", "slot"],
+                version="1.0.0",
+            )
+        except Exception as e:
+            self.logger.warning(
+                "Failed to register default location container template",
+                error=str(e),
+            )
 
     def _auto_migrate_from_redis(self) -> None:
         """Auto-migrate locations from old Redis format to MongoDB if MongoDB is empty."""
@@ -198,7 +238,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
     def _seed_from_file(self) -> None:
-        """Load seed locations from file if MongoDB is empty and seed file exists."""
+        """Load seed locations from file if MongoDB is empty and seed file exists.
+
+        Supports two formats:
+        - **Old format** (list): A flat list of Location objects. Loaded directly.
+        - **New format** (dict): Keys ``representation_templates``, ``location_templates``,
+          and ``locations``. Templates are registered first; locations may reference
+          templates or be inline (old-style).
+        """
         existing_locations = self.state_handler.get_locations()
         if existing_locations:
             return  # MongoDB already has data, skip seeding
@@ -212,35 +259,131 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         try:
             with seed_path.open() as f:
-                locations_data = yaml.safe_load(f)
+                data = yaml.safe_load(f)
 
-            if not locations_data or not isinstance(locations_data, list):
+            if not data:
                 return
 
-            seeded_count = 0
-            for loc_data in locations_data:
-                try:
-                    location = Location.model_validate(loc_data)
-                    result = self.state_handler.add_location(location)
-                    if result is not None:
-                        seeded_count += 1
-                except Exception as e:
-                    self.logger.warning(
-                        "Failed to load location from seed file",
-                        location_data=loc_data,
-                        error=str(e),
-                    )
+            if isinstance(data, list):
+                # Old format: flat list of locations
+                self._seed_locations_list(data)
+            elif isinstance(data, dict):
+                # New format: dict with optional template + location keys
+                self._seed_from_dict(data)
+            else:
+                self.logger.warning(
+                    "Unexpected seed file format",
+                    seed_file=str(seed_path),
+                    data_type=type(data).__name__,
+                )
+                return
 
             self.logger.info(
-                "Loaded locations from seed file",
+                "Loaded seed data from file",
                 event_type=EventType.MANAGER_START,
                 seed_file=str(seed_path),
-                seeded_count=seeded_count,
             )
         except Exception as e:
             self.logger.warning(
                 "Failed to read seed locations file",
                 seed_file=str(seed_path),
+                error=str(e),
+            )
+
+    def _seed_locations_list(self, locations_data: list) -> None:
+        """Seed locations from a flat list (old format)."""
+        seeded_count = 0
+        for loc_data in locations_data:
+            try:
+                location = Location.model_validate(loc_data)
+                # Clear stale resource_id from seed data
+                location.resource_id = None
+                # Initialize resource from template if configured (lazy on failure)
+                try:
+                    location.resource_id = self._initialize_location_resource(location)
+                except Exception:
+                    location.resource_id = None
+                    self.logger.info(
+                        "Resource template not available, will reconcile later",
+                        resource_template_name=location.resource_template_name,
+                        location_name=location.location_name,
+                    )
+                result = self.state_handler.add_location(location)
+                if result is not None:
+                    seeded_count += 1
+            except Exception as e:
+                self.logger.warning(
+                    "Failed to load location from seed file",
+                    location_data=loc_data,
+                    error=str(e),
+                )
+
+        self.logger.info(
+            "Seeded locations from list format",
+            seeded_count=seeded_count,
+        )
+
+    def _seed_from_dict(self, data: dict) -> None:
+        """Seed from new dict format with templates and locations."""
+        # 1. Load representation templates
+        for tmpl_data in data.get("representation_templates", []):
+            self._seed_repr_template(tmpl_data)
+
+        # 2. Load location templates
+        for tmpl_data in data.get("location_templates", []):
+            self._seed_location_template(tmpl_data)
+
+        # 3. Load locations (may be template-based or inline)
+        for loc_data in data.get("locations", []):
+            self._seed_location_entry(loc_data)
+
+    def _seed_repr_template(self, tmpl_data: dict) -> None:
+        """Seed a single representation template from dict data."""
+        try:
+            tmpl = LocationRepresentationTemplate.model_validate(tmpl_data)
+            if (
+                self.state_handler.get_representation_template(tmpl.template_name)
+                is None
+            ):
+                self.state_handler.add_representation_template(tmpl)
+        except Exception as e:
+            self.logger.warning(
+                "Failed to load representation template from seed",
+                template_data=tmpl_data,
+                error=str(e),
+            )
+
+    def _seed_location_template(self, tmpl_data: dict) -> None:
+        """Seed a single location template from dict data."""
+        try:
+            tmpl = LocationTemplate.model_validate(tmpl_data)
+            if self.state_handler.get_location_template(tmpl.template_name) is None:
+                self.state_handler.add_location_template(tmpl)
+        except Exception as e:
+            self.logger.warning(
+                "Failed to load location template from seed",
+                template_data=tmpl_data,
+                error=str(e),
+            )
+
+    def _seed_location_entry(self, loc_data: dict) -> None:
+        """Seed a single location entry (template-based or inline)."""
+        try:
+            if "template_name" in loc_data and "node_bindings" in loc_data:
+                request = CreateLocationFromTemplateRequest.model_validate(loc_data)
+                self._create_location_from_template(request)
+            else:
+                location = Location.model_validate(loc_data)
+                location.resource_id = None
+                try:
+                    location.resource_id = self._initialize_location_resource(location)
+                except Exception:
+                    location.resource_id = None
+                self.state_handler.add_location(location)
+        except Exception as e:
+            self.logger.warning(
+                "Failed to load location from seed file",
+                location_data=loc_data,
                 error=str(e),
             )
 
@@ -355,6 +498,21 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             # Count managed locations
             locations = self.state_handler.get_locations()
             health.num_locations = len(locations)
+
+            # Count templates
+            health.num_representation_templates = len(
+                self.state_handler.get_representation_templates()
+            )
+            health.num_location_templates = len(
+                self.state_handler.get_location_templates()
+            )
+
+            # Count unresolved locations (have resource_template_name but no resource_id)
+            health.num_unresolved_locations = sum(
+                1
+                for loc in locations
+                if loc.resource_template_name and loc.resource_id is None
+            )
 
             health.healthy = True
             health.description = "Location Manager is running normally"
@@ -637,6 +795,419 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         """
         return self.state_handler.get_locations()
 
+    # --- Representation Template Endpoints ---
+
+    @get("/representation_templates", tags=["Representation Templates"])
+    def get_representation_templates(self) -> list[LocationRepresentationTemplate]:
+        """Get all representation templates."""
+        return self.state_handler.get_representation_templates()
+
+    @get(
+        "/representation_template/{template_name}",
+        tags=["Representation Templates"],
+    )
+    def get_representation_template(
+        self, template_name: str
+    ) -> LocationRepresentationTemplate:
+        """Get a representation template by name."""
+        template = self.state_handler.get_representation_template(template_name)
+        if template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Representation template '{template_name}' not found",
+            )
+        return template
+
+    @post("/representation_template", tags=["Representation Templates"])
+    def create_representation_template(
+        self, template: LocationRepresentationTemplate
+    ) -> LocationRepresentationTemplate:
+        """Create a new representation template."""
+        result = self.state_handler.add_representation_template(template)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Representation template '{template.template_name}' already exists",
+            )
+        return result
+
+    @post("/representation_template/init", tags=["Representation Templates"])
+    def init_representation_template(
+        self, template: LocationRepresentationTemplate
+    ) -> LocationRepresentationTemplate:
+        """Idempotent init: get-or-create, version-update.
+
+        If template exists with same version, return it unchanged.
+        If template exists with different version, update and return.
+        If template doesn't exist, create and return.
+        """
+        existing = self.state_handler.get_representation_template(
+            template.template_name
+        )
+
+        if existing is None:
+            # Create new
+            result = self.state_handler.add_representation_template(template)
+            if result is None:
+                # Race condition: another request created it
+                return self.state_handler.get_representation_template(
+                    template.template_name
+                )
+            # Trigger reconciliation for locations referencing this template
+            self._reconcile_for_repr_template(template.template_name)
+            return result
+
+        if existing.version == template.version:
+            # Same version, return existing
+            return existing
+
+        # Version differs, update
+        from datetime import datetime  # noqa: PLC0415
+
+        template.template_id = existing.template_id
+        template.updated_at = datetime.now()
+        result = self.state_handler.update_representation_template(template)
+        # Trigger reconciliation for locations referencing this template
+        self._reconcile_for_repr_template(template.template_name)
+        return result
+
+    @delete(
+        "/representation_template/{template_name}",
+        tags=["Representation Templates"],
+    )
+    def delete_representation_template(self, template_name: str) -> dict[str, str]:
+        """Delete a representation template by name."""
+        success = self.state_handler.delete_representation_template(template_name)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Representation template '{template_name}' not found",
+            )
+        return {
+            "message": f"Representation template '{template_name}' deleted successfully"
+        }
+
+    # --- Location Template Endpoints ---
+
+    @get("/location_templates", tags=["Location Templates"])
+    def get_location_templates(self) -> list[LocationTemplate]:
+        """Get all location templates."""
+        return self.state_handler.get_location_templates()
+
+    @get("/location_template/{template_name}", tags=["Location Templates"])
+    def get_location_template(self, template_name: str) -> LocationTemplate:
+        """Get a location template by name."""
+        template = self.state_handler.get_location_template(template_name)
+        if template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{template_name}' not found",
+            )
+        return template
+
+    @post("/location_template", tags=["Location Templates"])
+    def create_location_template(self, template: LocationTemplate) -> LocationTemplate:
+        """Create a new location template."""
+        result = self.state_handler.add_location_template(template)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Location template '{template.template_name}' already exists",
+            )
+        return result
+
+    @post("/location_template/init", tags=["Location Templates"])
+    def init_location_template(self, template: LocationTemplate) -> LocationTemplate:
+        """Idempotent init: get-or-create, version-update.
+
+        If template exists with same version, return it unchanged.
+        If template exists with different version, update and return.
+        If template doesn't exist, create and return.
+        """
+        existing = self.state_handler.get_location_template(template.template_name)
+
+        if existing is None:
+            result = self.state_handler.add_location_template(template)
+            if result is None:
+                return self.state_handler.get_location_template(template.template_name)
+            return result
+
+        if existing.version == template.version:
+            return existing
+
+        from datetime import datetime  # noqa: PLC0415
+
+        template.template_id = existing.template_id
+        template.updated_at = datetime.now()
+        return self.state_handler.update_location_template(template)
+
+    @delete("/location_template/{template_name}", tags=["Location Templates"])
+    def delete_location_template(self, template_name: str) -> dict[str, str]:
+        """Delete a location template by name."""
+        success = self.state_handler.delete_location_template(template_name)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{template_name}' not found",
+            )
+        return {"message": f"Location template '{template_name}' deleted successfully"}
+
+    # --- Create Location from Template ---
+
+    @post("/location/from_template", tags=["Location Templates"])
+    def create_location_from_template(
+        self, request: CreateLocationFromTemplateRequest
+    ) -> Location:
+        """Create a new location by instantiating a LocationTemplate.
+
+        Requires node bindings to map abstract roles to concrete node instance names.
+        Representation data is merged from template defaults + overrides.
+        """
+        return self._create_location_from_template(request)
+
+    def _create_location_from_template(
+        self, request: CreateLocationFromTemplateRequest
+    ) -> Location:
+        """Internal implementation for creating a location from a template."""
+        # Look up the location template
+        loc_template = self.state_handler.get_location_template(request.template_name)
+        if loc_template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{request.template_name}' not found",
+            )
+
+        # Build representations by merging template defaults with overrides
+        representations: dict[str, Any] = {}
+        for role, repr_template_name in loc_template.representation_templates.items():
+            node_name = request.node_bindings.get(role)
+            if node_name is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Missing node binding for role '{role}'",
+                )
+
+            # Look up representation template
+            repr_template = self.state_handler.get_representation_template(
+                repr_template_name
+            )
+
+            overrides = request.representation_overrides.get(role, {})
+
+            if repr_template is not None:
+                # Validate required overrides are provided
+                missing = [
+                    field
+                    for field in repr_template.required_overrides
+                    if field not in overrides
+                ]
+                if missing:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Missing required overrides for role '{role}' "
+                        f"(repr template '{repr_template_name}'): {missing}",
+                    )
+
+                # Merge defaults + overrides (overrides win)
+                merged = {**repr_template.default_values, **overrides}
+            else:
+                # Template doesn't exist yet (lazy tolerance)
+                merged = overrides
+
+            representations[node_name] = merged
+
+        # Determine resource template
+        resource_template_name = loc_template.resource_template_name
+        resource_template_overrides = loc_template.resource_template_overrides or {}
+        if request.resource_template_overrides:
+            resource_template_overrides = {
+                **resource_template_overrides,
+                **request.resource_template_overrides,
+            }
+
+        # Determine allow_transfers
+        allow_transfers = (
+            request.allow_transfers
+            if request.allow_transfers is not None
+            else loc_template.default_allow_transfers
+        )
+
+        # Create the location
+        location = Location(
+            location_name=request.location_name,
+            description=request.description,
+            representations=representations,
+            resource_template_name=resource_template_name,
+            resource_template_overrides=resource_template_overrides or None,
+            allow_transfers=allow_transfers,
+            location_template_name=request.template_name,
+            node_bindings=request.node_bindings,
+        )
+
+        # Attempt resource creation (lazy: set to None if template doesn't exist yet)
+        try:
+            location.resource_id = self._initialize_location_resource(location)
+        except Exception:
+            location.resource_id = None
+            self.logger.info(
+                "Resource template not available yet, will reconcile later",
+                resource_template_name=resource_template_name,
+                location_name=request.location_name,
+            )
+
+        # Store the location
+        result = self.state_handler.add_location(location)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Location '{request.location_name}' already exists",
+            )
+
+        # Rebuild transfer graph
+        self.transfer_planner.rebuild_transfer_graph()
+
+        return result
+
+    @post("/reconcile", tags=["Reconciliation"])
+    def trigger_reconcile(self) -> dict[str, Any]:
+        """Manually trigger reconciliation of unresolved template references."""
+        return self._reconcile()
+
+    def _reconcile(self) -> dict[str, Any]:
+        """Reconcile unresolved locations.
+
+        - Resolves null resource_ids when resource templates become available.
+        - Fills in missing representation data when repr templates arrive.
+
+        Returns a summary of what was reconciled.
+        """
+        results: dict[str, Any] = {
+            "resources_resolved": 0,
+            "representations_updated": 0,
+        }
+
+        for location in self.state_handler.get_locations():
+            results["resources_resolved"] += self._reconcile_resource(location)
+            results["representations_updated"] += self._reconcile_representations(
+                location
+            )
+
+        if results["resources_resolved"] > 0 or results["representations_updated"] > 0:
+            self.logger.info("Reconciliation completed", **results)
+
+        return results
+
+    def _reconcile_resource(self, location: Location) -> int:
+        """Attempt to resolve a null resource_id for a location. Returns 1 if resolved, 0 otherwise."""
+        if not location.resource_template_name or location.resource_id is not None:
+            return 0
+        try:
+            resource_id = self._initialize_location_resource(location)
+            if resource_id is not None:
+                location.resource_id = resource_id
+                self.state_handler.update_location(location)
+                return 1
+        except Exception:
+            self.logger.debug(
+                "Resource template still not available",
+                resource_template_name=location.resource_template_name,
+                location_name=location.location_name,
+            )
+        return 0
+
+    def _reconcile_representations(self, location: Location) -> int:
+        """Fill in missing representation defaults from templates. Returns 1 if updated, 0 otherwise."""
+        if not location.location_template_name or not location.node_bindings:
+            return 0
+
+        loc_template = self.state_handler.get_location_template(
+            location.location_template_name
+        )
+        if loc_template is None:
+            return 0
+
+        updated = False
+        for role, repr_template_name in loc_template.representation_templates.items():
+            node_name = location.node_bindings.get(role)
+            if node_name is None:
+                continue
+
+            repr_template = self.state_handler.get_representation_template(
+                repr_template_name
+            )
+            if repr_template is None:
+                continue
+
+            current_repr = location.representations.get(node_name, {})
+            merged = {**repr_template.default_values, **current_repr}
+            if merged != current_repr:
+                location.representations[node_name] = merged
+                updated = True
+
+        if updated:
+            try:
+                self.state_handler.update_location(location)
+                return 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to reconcile location representations",
+                    location_name=location.location_name,
+                    exc_info=True,
+                )
+        return 0
+
+    def _reconcile_for_repr_template(self, template_name: str) -> None:
+        """Trigger reconciliation for locations that reference a specific repr template.
+
+        This is a lightweight event-driven reconciliation triggered when a repr template
+        is registered or updated.
+        """
+        # Find locations created from templates that reference this repr template
+        for loc_template in self.state_handler.get_location_templates():
+            if template_name in loc_template.representation_templates.values():
+                self._reconcile_locations_for_template(loc_template)
+
+    def _reconcile_locations_for_template(self, loc_template: LocationTemplate) -> None:
+        """Re-merge representations for locations created from a specific template."""
+        locations = self.state_handler.get_locations()
+        for location in locations:
+            if location.location_template_name != loc_template.template_name:
+                continue
+            if location.node_bindings is None:
+                continue
+
+            updated = False
+            for (
+                role,
+                repr_template_name,
+            ) in loc_template.representation_templates.items():
+                node_name = location.node_bindings.get(role)
+                if node_name is None:
+                    continue
+
+                repr_template = self.state_handler.get_representation_template(
+                    repr_template_name
+                )
+                if repr_template is None:
+                    continue
+
+                current_repr = location.representations.get(node_name, {})
+                # Only fill in defaults that are missing (don't overwrite user data)
+                merged = {**repr_template.default_values, **current_repr}
+                if merged != current_repr:
+                    location.representations[node_name] = merged
+                    updated = True
+
+            if updated:
+                try:
+                    self.state_handler.update_location(location)
+                except Exception:
+                    self.logger.warning(
+                        "Failed to reconcile location",
+                        location_name=location.location_name,
+                        exc_info=True,
+                    )
+
     @post("/transfer/plan", tags=["Transfer"])
     def plan_transfer(
         self,
@@ -744,10 +1315,34 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage the application lifespan."""
-    # Future: Add startup/shutdown logic here if needed
-    _ = app  # Explicitly acknowledge app parameter
+    """Manage the application lifespan with background reconciliation."""
+    import asyncio  # noqa: PLC0415
+
+    manager = getattr(app, "_manager", None)
+    task = None
+
+    if manager and getattr(manager.settings, "reconciliation_enabled", False):
+
+        async def reconciliation_loop() -> None:
+            interval = manager.settings.reconciliation_interval_seconds
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    manager._reconcile()
+                except Exception:
+                    manager.logger.warning(
+                        "Background reconciliation failed",
+                        exc_info=True,
+                    )
+
+        task = asyncio.create_task(reconciliation_loop())
+
     yield
+
+    if task is not None:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
 
 
 def create_app(
@@ -756,10 +1351,12 @@ def create_app(
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
     manager = LocationManager(settings=settings, mongo_handler=mongo_handler)
-    return manager.create_server(
+    app = manager.create_server(
         version="0.1.0",
         lifespan=lifespan,
     )
+    app._manager = manager  # type: ignore[attr-defined]
+    return app
 
 
 if __name__ == "__main__":

@@ -14,7 +14,12 @@ from madsci.common.db_handlers import (
     PyRedisHandler,
     RedisHandler,
 )
-from madsci.common.types.location_types import Location, LocationManagerSettings
+from madsci.common.types.location_types import (
+    Location,
+    LocationManagerSettings,
+    LocationRepresentationTemplate,
+    LocationTemplate,
+)
 from pydantic import ValidationError
 
 
@@ -83,8 +88,14 @@ class LocationStateHandler:
                 settings.database_name,
             )
 
-        # Set up the locations collection
+        # Set up collections
         self._locations_collection = self._mongo_handler.get_collection("locations")
+        self._repr_templates_collection = self._mongo_handler.get_collection(
+            "representation_templates"
+        )
+        self._location_templates_collection = self._mongo_handler.get_collection(
+            "location_templates"
+        )
 
         # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
         try:
@@ -221,3 +232,157 @@ class LocationStateHandler:
         )
         self.mark_state_changed()
         return location
+
+    # Representation Template CRUD (MongoDB-backed)
+
+    def get_representation_template(
+        self, template_name: str
+    ) -> Optional[LocationRepresentationTemplate]:
+        """Returns a representation template by name."""
+        try:
+            data = self._repr_templates_collection.find_one(
+                {"template_name": template_name}
+            )
+            if data is None:
+                return None
+            return LocationRepresentationTemplate.model_validate(data)
+        except (ValidationError, KeyError):
+            return None
+
+    def get_representation_templates(self) -> list[LocationRepresentationTemplate]:
+        """Returns all representation templates."""
+        templates = []
+        for data in self._repr_templates_collection.find().to_list():
+            try:
+                templates.append(LocationRepresentationTemplate.model_validate(data))
+            except ValidationError:
+                continue
+        return templates
+
+    def add_representation_template(
+        self,
+        template: Union[LocationRepresentationTemplate, dict[str, Any]],
+    ) -> Optional[LocationRepresentationTemplate]:
+        """Adds a representation template. Returns None if the name already exists."""
+        if not isinstance(template, LocationRepresentationTemplate):
+            template = LocationRepresentationTemplate.model_validate(template)
+
+        existing = self._repr_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is not None:
+            return None
+
+        self._repr_templates_collection.insert_one(template.model_dump(mode="json"))
+        return template
+
+    def update_representation_template(
+        self,
+        template: Union[LocationRepresentationTemplate, dict[str, Any]],
+    ) -> LocationRepresentationTemplate:
+        """Updates a representation template. Raises KeyError if not found, ValueError if ID mismatch."""
+        if not isinstance(template, LocationRepresentationTemplate):
+            template = LocationRepresentationTemplate.model_validate(template)
+
+        existing = self._repr_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is None:
+            raise KeyError(
+                f"Representation template '{template.template_name}' does not exist"
+            )
+
+        existing_template = LocationRepresentationTemplate.model_validate(existing)
+        if existing_template.template_id != template.template_id:
+            raise ValueError(
+                f"Template name '{template.template_name}' is already in use by a different template"
+            )
+
+        self._repr_templates_collection.replace_one(
+            {"template_name": template.template_name},
+            template.model_dump(mode="json"),
+        )
+        return template
+
+    def delete_representation_template(self, template_name: str) -> bool:
+        """Deletes a representation template by name. Returns True if deleted, False if not found."""
+        result = self._repr_templates_collection.delete_one(
+            {"template_name": template_name}
+        )
+        return result.deleted_count > 0
+
+    # Location Template CRUD (MongoDB-backed)
+
+    def get_location_template(self, template_name: str) -> Optional[LocationTemplate]:
+        """Returns a location template by name."""
+        try:
+            data = self._location_templates_collection.find_one(
+                {"template_name": template_name}
+            )
+            if data is None:
+                return None
+            return LocationTemplate.model_validate(data)
+        except (ValidationError, KeyError):
+            return None
+
+    def get_location_templates(self) -> list[LocationTemplate]:
+        """Returns all location templates."""
+        templates = []
+        for data in self._location_templates_collection.find().to_list():
+            try:
+                templates.append(LocationTemplate.model_validate(data))
+            except ValidationError:
+                continue
+        return templates
+
+    def add_location_template(
+        self,
+        template: Union[LocationTemplate, dict[str, Any]],
+    ) -> Optional[LocationTemplate]:
+        """Adds a location template. Returns None if the name already exists."""
+        if not isinstance(template, LocationTemplate):
+            template = LocationTemplate.model_validate(template)
+
+        existing = self._location_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is not None:
+            return None
+
+        self._location_templates_collection.insert_one(template.model_dump(mode="json"))
+        return template
+
+    def update_location_template(
+        self,
+        template: Union[LocationTemplate, dict[str, Any]],
+    ) -> LocationTemplate:
+        """Updates a location template. Raises KeyError if not found, ValueError if ID mismatch."""
+        if not isinstance(template, LocationTemplate):
+            template = LocationTemplate.model_validate(template)
+
+        existing = self._location_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is None:
+            raise KeyError(
+                f"Location template '{template.template_name}' does not exist"
+            )
+
+        existing_template = LocationTemplate.model_validate(existing)
+        if existing_template.template_id != template.template_id:
+            raise ValueError(
+                f"Template name '{template.template_name}' is already in use by a different template"
+            )
+
+        self._location_templates_collection.replace_one(
+            {"template_name": template.template_name},
+            template.model_dump(mode="json"),
+        )
+        return template
+
+    def delete_location_template(self, template_name: str) -> bool:
+        """Deletes a location template by name. Returns True if deleted, False if not found."""
+        result = self._location_templates_collection.delete_one(
+            {"template_name": template_name}
+        )
+        return result.deleted_count > 0

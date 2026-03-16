@@ -1,6 +1,6 @@
 {
     "database": "madsci_locations",
-    "schema_version": "1.0.0",
+    "schema_version": "2.0.0",
     "description": "Schema definition for MADSci Location Manager MongoDB",
     "collections": {
       "locations": {
@@ -17,6 +17,40 @@
             "name": "location_id_unique",
             "unique": true,
             "description": "Unique constraint on location IDs"
+          }
+        ]
+      },
+      "representation_templates": {
+        "description": "Named representation templates for node-specific location data",
+        "indexes": [
+          {
+            "keys": [["template_name", 1]],
+            "name": "repr_template_name_unique",
+            "unique": true,
+            "description": "Unique constraint on representation template names"
+          },
+          {
+            "keys": [["template_id", 1]],
+            "name": "repr_template_id_unique",
+            "unique": true,
+            "description": "Unique constraint on representation template IDs"
+          }
+        ]
+      },
+      "location_templates": {
+        "description": "Named location templates for creating locations from blueprints",
+        "indexes": [
+          {
+            "keys": [["template_name", 1]],
+            "name": "loc_template_name_unique",
+            "unique": true,
+            "description": "Unique constraint on location template names"
+          },
+          {
+            "keys": [["template_id", 1]],
+            "name": "loc_template_id_unique",
+            "unique": true,
+            "description": "Unique constraint on location template IDs"
           }
         ]
       },
