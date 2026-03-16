@@ -83,6 +83,14 @@ Classes
     `template_name: str`
     :
 
+    ### Methods
+
+    `is_url_safe_name(v: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a URL-safe name.
+        
+        Allows alphanumeric characters, underscores, dots, and hyphens.
+        Rejects empty strings.
+
 `Location(**data: Any)`
 :   A location in the lab.
     
@@ -145,6 +153,12 @@ Classes
 
     `is_ulid(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
     :   Validates that a string field is a valid ULID.
+
+    `is_url_safe_name(v: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a URL-safe name.
+        
+        Allows alphanumeric characters, underscores, dots, and hyphens.
+        Rejects empty strings.
 
 `LocationArgument(**data: Any)`
 :   Location Argument to be used by MADSCI nodes.

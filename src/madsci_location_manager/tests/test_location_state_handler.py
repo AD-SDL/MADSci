@@ -52,7 +52,7 @@ def state_handler(settings, mongo_handler, redis_handler):
 def sample_location():
     """Create a sample location."""
     return Location(
-        location_name="Test Location",
+        location_name="test_location",
         location_id=new_ulid_str(),
         description="A test location",
     )
@@ -97,12 +97,12 @@ class TestAddLocation:
     def test_add_location_from_dict(self, state_handler):
         """Add location from a dict."""
         loc_data = {
-            "location_name": "Dict Location",
+            "location_name": "dict_location",
             "location_id": new_ulid_str(),
         }
         result = state_handler.add_location(loc_data)
         assert result is not None
-        assert result.location_name == "Dict Location"
+        assert result.location_name == "dict_location"
 
 
 class TestGetLocation:
@@ -136,16 +136,16 @@ class TestGetLocation:
 
     def test_get_locations_returns_all(self, state_handler):
         """Add multiple, get all."""
-        loc1 = Location(location_name="Loc A", location_id=new_ulid_str())
-        loc2 = Location(location_name="Loc B", location_id=new_ulid_str())
-        loc3 = Location(location_name="Loc C", location_id=new_ulid_str())
+        loc1 = Location(location_name="loc_a", location_id=new_ulid_str())
+        loc2 = Location(location_name="loc_b", location_id=new_ulid_str())
+        loc3 = Location(location_name="loc_c", location_id=new_ulid_str())
         state_handler.add_location(loc1)
         state_handler.add_location(loc2)
         state_handler.add_location(loc3)
         locations = state_handler.get_locations()
         assert len(locations) == 3
         names = {loc.location_name for loc in locations}
-        assert names == {"Loc A", "Loc B", "Loc C"}
+        assert names == {"loc_a", "loc_b", "loc_c"}
 
 
 class TestUpdateLocation:

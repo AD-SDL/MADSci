@@ -21,6 +21,7 @@ from madsci.common.types.location_types import (
     LocationTemplate,
 )
 from pydantic import ValidationError
+from pymongo.errors import DuplicateKeyError
 
 
 class LocationStateHandler:
@@ -95,6 +96,17 @@ class LocationStateHandler:
         )
         self._location_templates_collection = self._mongo_handler.get_collection(
             "location_templates"
+        )
+
+        # Create unique indexes for name-based lookups
+        self._locations_collection.create_index(
+            "location_name", unique=True, name="location_name_unique"
+        )
+        self._repr_templates_collection.create_index(
+            "template_name", unique=True, name="template_name_unique"
+        )
+        self._location_templates_collection.create_index(
+            "template_name", unique=True, name="template_name_unique"
         )
 
         # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
@@ -184,14 +196,11 @@ class LocationStateHandler:
         if not isinstance(location, Location):
             location = Location.model_validate(location)
 
-        # Check for existing location with same name
-        existing = self._locations_collection.find_one(
-            {"location_name": location.location_name}
-        )
-        if existing is not None:
+        try:
+            self._locations_collection.insert_one(location.model_dump(mode="json"))
+        except DuplicateKeyError:
             return None
 
-        self._locations_collection.insert_one(location.model_dump(mode="json"))
         self.mark_state_changed()
         return location
 
@@ -223,7 +232,7 @@ class LocationStateHandler:
         existing_location = Location.model_validate(existing)
         if existing_location.location_id != location.location_id:
             raise ValueError(
-                f"Location name {location.location_name} is already in use by a different location. make sure to use the right id"
+                f"Location name {location.location_name} is already in use by a different location. Make sure to use the right ID."
             )
 
         self._locations_collection.replace_one(
@@ -267,13 +276,11 @@ class LocationStateHandler:
         if not isinstance(template, LocationRepresentationTemplate):
             template = LocationRepresentationTemplate.model_validate(template)
 
-        existing = self._repr_templates_collection.find_one(
-            {"template_name": template.template_name}
-        )
-        if existing is not None:
+        try:
+            self._repr_templates_collection.insert_one(template.model_dump(mode="json"))
+        except DuplicateKeyError:
             return None
 
-        self._repr_templates_collection.insert_one(template.model_dump(mode="json"))
         return template
 
     def update_representation_template(
@@ -343,13 +350,13 @@ class LocationStateHandler:
         if not isinstance(template, LocationTemplate):
             template = LocationTemplate.model_validate(template)
 
-        existing = self._location_templates_collection.find_one(
-            {"template_name": template.template_name}
-        )
-        if existing is not None:
+        try:
+            self._location_templates_collection.insert_one(
+                template.model_dump(mode="json")
+            )
+        except DuplicateKeyError:
             return None
 
-        self._location_templates_collection.insert_one(template.model_dump(mode="json"))
         return template
 
     def update_location_template(

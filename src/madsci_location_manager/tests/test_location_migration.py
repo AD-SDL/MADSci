@@ -61,13 +61,13 @@ class TestMigrateFromRedis:
         _seed_redis(
             redis_handler,
             {
-                "Station A": {
-                    "location_name": "Station A",
+                "station_a": {
+                    "location_name": "station_a",
                     "location_id": loc1_id,
                     "description": "First",
                 },
-                "Station B": {
-                    "location_name": "Station B",
+                "station_b": {
+                    "location_name": "station_b",
                     "location_id": loc2_id,
                     "description": "Second",
                 },
@@ -83,7 +83,7 @@ class TestMigrateFromRedis:
         docs = collection.find().to_list()
         assert len(docs) == 2
         names = {d["location_name"] for d in docs}
-        assert names == {"Station A", "Station B"}
+        assert names == {"station_a", "station_b"}
 
     def test_migrate_preserves_all_fields(self, migrator, redis_handler, mongo_handler):
         """Verify representations, resource_id, allow_transfers are preserved."""
@@ -91,8 +91,8 @@ class TestMigrateFromRedis:
         _seed_redis(
             redis_handler,
             {
-                "Full Location": {
-                    "location_name": "Full Location",
+                "full_location": {
+                    "location_name": "full_location",
                     "location_id": loc_id,
                     "description": "Has everything",
                     "representations": {"robot1": {"x": 1, "y": 2}},
@@ -106,7 +106,7 @@ class TestMigrateFromRedis:
         assert result.migrated == 1
 
         collection = mongo_handler.get_collection("locations")
-        doc = collection.find_one({"location_name": "Full Location"})
+        doc = collection.find_one({"location_name": "full_location"})
         loc = Location.model_validate(doc)
         assert loc.representations == {"robot1": {"x": 1, "y": 2}}
         assert loc.resource_id == "res_001"
@@ -123,8 +123,8 @@ class TestMigrateFromRedis:
         _seed_redis(
             redis_handler,
             {
-                "Reserved Loc": {
-                    "location_name": "Reserved Loc",
+                "reserved_loc": {
+                    "location_name": "reserved_loc",
                     "location_id": loc_id,
                     "reservation": {
                         "owned_by": {"user_id": user_id},
@@ -139,7 +139,7 @@ class TestMigrateFromRedis:
         assert result.migrated == 1
 
         collection = mongo_handler.get_collection("locations")
-        doc = collection.find_one({"location_name": "Reserved Loc"})
+        doc = collection.find_one({"location_name": "reserved_loc"})
         loc = Location.model_validate(doc)
         assert loc.reservation is not None
         assert loc.reservation.created is not None
@@ -177,8 +177,8 @@ class TestMigrateFromRedis:
         _seed_redis(
             redis_handler,
             {
-                "Idem Loc": {
-                    "location_name": "Idem Loc",
+                "idem_loc": {
+                    "location_name": "idem_loc",
                     "location_id": new_ulid_str(),
                 },
             },
@@ -221,12 +221,12 @@ class TestMigrateFromSettings:
         """Test migrating inline LocationDefinition list."""
         settings_locations = [
             {
-                "location_name": "Settings Loc A",
+                "location_name": "settings_loc_a",
                 "location_id": new_ulid_str(),
                 "description": "From settings",
             },
             {
-                "location_name": "Settings Loc B",
+                "location_name": "settings_loc_b",
                 "location_id": new_ulid_str(),
             },
         ]

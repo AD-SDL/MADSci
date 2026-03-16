@@ -35,6 +35,23 @@ def alphanumeric_with_underscores_validator(v: str, info: ValidationInfo) -> str
     return v
 
 
+def url_safe_name_validator(v: str, info: ValidationInfo) -> str:
+    """Validates that a string field is a URL-safe name.
+
+    Allows alphanumeric characters, underscores, dots, and hyphens.
+    Rejects empty strings.
+    """
+    if not v:
+        raise ValueError(
+            f"Field {info.field_name} must not be empty",
+        )
+    if not all(c.isalnum() or c in "_.-" for c in str(v)):
+        raise ValueError(
+            f"Field {info.field_name} must contain only alphanumeric characters, underscores, dots, and hyphens",
+        )
+    return v
+
+
 def create_dict_promoter(
     key_func: Callable[[Any], str],
 ) -> Callable[[Any], dict[str, Any]]:

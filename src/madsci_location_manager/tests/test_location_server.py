@@ -67,7 +67,7 @@ def sample_location():
     """Create a sample location for testing."""
     return Location(
         location_id=new_ulid_str(),
-        location_name="Test Location",
+        location_name="test_location",
         description="A test location",
     )
 
@@ -226,12 +226,12 @@ def test_multiple_locations(client):
     locations = [
         Location(
             location_id=new_ulid_str(),
-            name="Location 1",
+            name="location_1",
             description="First test location",
         ),
         Location(
             location_id=new_ulid_str(),
-            name="Location 2",
+            name="location_2",
             description="Second test location",
         ),
     ]
@@ -912,20 +912,19 @@ def test_get_location_resources_endpoint_invalid_location(transfer_setup):
 def test_transfer_graph_without_transfer_capabilities(redis_handler):
     """Test transfer graph behavior when no transfer capabilities are defined."""
     # Create a location manager without transfer capabilities
-    settings = LocationManagerSettings(
-        locations=[
-            Location(
-                location_name="location1",
-                location_id=new_ulid_str(),
-                representations={"device": "config"},
-            )
-        ],
-    )
+    settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
         mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
+    manager.add_location(
+        Location(
+            location_name="location1",
+            location_id=new_ulid_str(),
+            representations={"device": "config"},
+        )
     )
     client = TestClient(manager.create_server())
 
@@ -3118,7 +3117,7 @@ def test_import_locations_bulk(client):
     """POST list to /locations/import should create all locations."""
     locations = [
         Location(
-            location_name=f"Import Loc {i}", location_id=new_ulid_str()
+            location_name=f"import_loc_{i}", location_id=new_ulid_str()
         ).model_dump()
         for i in range(3)
     ]
@@ -3133,12 +3132,12 @@ def test_import_locations_bulk(client):
 
 def test_import_locations_skip_duplicates(client):
     """POST with existing names should skip duplicates."""
-    loc = Location(location_name="Dup Test", location_id=new_ulid_str())
+    loc = Location(location_name="dup_test", location_id=new_ulid_str())
     client.post("/location", json=loc.model_dump())
 
     locations = [
-        Location(location_name="Dup Test", location_id=new_ulid_str()).model_dump(),
-        Location(location_name="New Loc", location_id=new_ulid_str()).model_dump(),
+        Location(location_name="dup_test", location_id=new_ulid_str()).model_dump(),
+        Location(location_name="new_loc", location_id=new_ulid_str()).model_dump(),
     ]
     response = client.post("/locations/import", json=locations)
     assert response.status_code == 200
@@ -3150,14 +3149,14 @@ def test_import_locations_skip_duplicates(client):
 def test_import_locations_overwrite(client):
     """POST with overwrite=true should upsert existing locations."""
     loc = Location(
-        location_name="Overwrite Test",
+        location_name="overwrite_test",
         location_id=new_ulid_str(),
         description="original",
     )
     client.post("/location", json=loc.model_dump())
 
     updated_loc = Location(
-        location_name="Overwrite Test",
+        location_name="overwrite_test",
         location_id=new_ulid_str(),
         description="updated",
     )
@@ -3172,7 +3171,7 @@ def test_import_locations_overwrite(client):
     assert result.skipped == 0
 
     # Verify it was actually updated
-    response = client.get("/location/Overwrite Test")
+    response = client.get("/location/overwrite_test")
     assert response.status_code == 200
     fetched = Location.model_validate(response.json())
     assert fetched.description == "updated"
@@ -3181,7 +3180,7 @@ def test_import_locations_overwrite(client):
 def test_export_locations(client):
     """GET /locations/export should return all locations."""
     for i in range(3):
-        loc = Location(location_name=f"Export Loc {i}", location_id=new_ulid_str())
+        loc = Location(location_name=f"export_loc_{i}", location_id=new_ulid_str())
         client.post("/location", json=loc.model_dump())
 
     response = client.get("/locations/export")
@@ -3194,8 +3193,8 @@ def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
     """Seed file should be loaded when MongoDB is empty."""
     seed_file = tmp_path / "locations.yaml"
     seed_data = [
-        {"location_name": "Seeded A", "description": "From seed"},
-        {"location_name": "Seeded B", "description": "From seed"},
+        {"location_name": "seeded_a", "description": "From seed"},
+        {"location_name": "seeded_b", "description": "From seed"},
     ]
 
     with seed_file.open("w") as f:
@@ -3217,7 +3216,7 @@ def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
     locations = response.json()
     assert len(locations) == 2
     names = {loc["location_name"] for loc in locations}
-    assert names == {"Seeded A", "Seeded B"}
+    assert names == {"seeded_a", "seeded_b"}
     client.close()
 
 
@@ -3226,7 +3225,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     seed_file = tmp_path / "locations.yaml"
 
     with seed_file.open("w") as f:
-        yaml.dump([{"location_name": "Should Not Appear"}], f)
+        yaml.dump([{"location_name": "should_not_appear"}], f)
 
     mongo = InMemoryMongoHandler(database_name="test_seed_skip")
     settings = LocationManagerSettings(
@@ -3235,7 +3234,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     )
 
     # Pre-populate MongoDB with a location
-    loc = Location(location_name="Existing Loc", location_id=new_ulid_str())
+    loc = Location(location_name="existing_loc", location_id=new_ulid_str())
     mongo.get_collection("locations").insert_one(loc.model_dump(mode="json"))
 
     manager = LocationManager(
@@ -3249,7 +3248,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     assert response.status_code == 200
     locations = response.json()
     assert len(locations) == 1
-    assert locations[0]["location_name"] == "Existing Loc"
+    assert locations[0]["location_name"] == "existing_loc"
     client.close()
 
 

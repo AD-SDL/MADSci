@@ -1,8 +1,10 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import asyncio
 import contextlib
 import warnings
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -16,6 +18,7 @@ from madsci.common.db_handlers import MongoHandler, RedisHandler
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import ownership_class
+from madsci.common.settings_dir import walk_up_find
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     CreateLocationFromTemplateRequest,
@@ -254,6 +257,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             return
 
         seed_path = Path(self.settings.seed_locations_file)
+        if not seed_path.is_absolute():
+            # Use walk-up discovery for relative paths
+            resolved = walk_up_find(self.settings.seed_locations_file, Path.cwd())
+            if resolved is not None:
+                seed_path = resolved
+
         if not seed_path.exists():
             return  # Seed file doesn't exist, no error
 
@@ -850,9 +859,15 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             result = self.state_handler.add_representation_template(template)
             if result is None:
                 # Race condition: another request created it
-                return self.state_handler.get_representation_template(
+                result = self.state_handler.get_representation_template(
                     template.template_name
                 )
+                if result is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to create or retrieve representation template '{template.template_name}'",
+                    )
+                return result
             # Trigger reconciliation for locations referencing this template
             self._reconcile_for_repr_template(template.template_name)
             return result
@@ -862,8 +877,6 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             return existing
 
         # Version differs, update
-        from datetime import datetime  # noqa: PLC0415
-
         template.template_id = existing.template_id
         template.updated_at = datetime.now()
         result = self.state_handler.update_representation_template(template)
@@ -929,13 +942,19 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         if existing is None:
             result = self.state_handler.add_location_template(template)
             if result is None:
-                return self.state_handler.get_location_template(template.template_name)
+                result = self.state_handler.get_location_template(
+                    template.template_name
+                )
+                if result is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to create or retrieve location template '{template.template_name}'",
+                    )
+                return result
             return result
 
         if existing.version == template.version:
             return existing
-
-        from datetime import datetime  # noqa: PLC0415
 
         template.template_id = existing.template_id
         template.updated_at = datetime.now()
@@ -1115,16 +1134,19 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
         return 0
 
-    def _reconcile_representations(self, location: Location) -> int:
-        """Fill in missing representation defaults from templates. Returns 1 if updated, 0 otherwise."""
-        if not location.location_template_name or not location.node_bindings:
-            return 0
+    def _merge_template_representations(
+        self, location: Location, loc_template: LocationTemplate
+    ) -> bool:
+        """Merge representation template defaults into a location's representations.
 
-        loc_template = self.state_handler.get_location_template(
-            location.location_template_name
-        )
-        if loc_template is None:
-            return 0
+        For each role in the location template, looks up the representation template
+        and merges its default values with the location's existing representation data.
+        Existing user data is preserved (defaults only fill in missing keys).
+
+        Returns True if any representations were updated, False otherwise.
+        """
+        if location.node_bindings is None:
+            return False
 
         updated = False
         for role, repr_template_name in loc_template.representation_templates.items():
@@ -1144,7 +1166,20 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 location.representations[node_name] = merged
                 updated = True
 
-        if updated:
+        return updated
+
+    def _reconcile_representations(self, location: Location) -> int:
+        """Fill in missing representation defaults from templates. Returns 1 if updated, 0 otherwise."""
+        if not location.location_template_name or not location.node_bindings:
+            return 0
+
+        loc_template = self.state_handler.get_location_template(
+            location.location_template_name
+        )
+        if loc_template is None:
+            return 0
+
+        if self._merge_template_representations(location, loc_template):
             try:
                 self.state_handler.update_location(location)
                 return 1
@@ -1173,32 +1208,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         for location in locations:
             if location.location_template_name != loc_template.template_name:
                 continue
-            if location.node_bindings is None:
-                continue
 
-            updated = False
-            for (
-                role,
-                repr_template_name,
-            ) in loc_template.representation_templates.items():
-                node_name = location.node_bindings.get(role)
-                if node_name is None:
-                    continue
-
-                repr_template = self.state_handler.get_representation_template(
-                    repr_template_name
-                )
-                if repr_template is None:
-                    continue
-
-                current_repr = location.representations.get(node_name, {})
-                # Only fill in defaults that are missing (don't overwrite user data)
-                merged = {**repr_template.default_values, **current_repr}
-                if merged != current_repr:
-                    location.representations[node_name] = merged
-                    updated = True
-
-            if updated:
+            if self._merge_template_representations(location, loc_template):
                 try:
                     self.state_handler.update_location(location)
                 except Exception:
@@ -1316,9 +1327,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage the application lifespan with background reconciliation."""
-    import asyncio  # noqa: PLC0415
-
-    manager = getattr(app, "_manager", None)
+    manager = getattr(app.state, "manager", None)
     task = None
 
     if manager and getattr(manager.settings, "reconciliation_enabled", False):
@@ -1355,7 +1364,7 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
-    app._manager = manager  # type: ignore[attr-defined]
+    app.state.manager = manager
     return app
 
 

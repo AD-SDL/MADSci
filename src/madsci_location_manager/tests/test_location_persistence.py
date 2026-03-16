@@ -38,12 +38,12 @@ def location_defs():
     """Create test location definitions for settings."""
     return [
         Location(
-            location_name="Station Alpha",
+            location_name="station_alpha",
             location_id=new_ulid_str(),
             description="First station",
         ),
         Location(
-            location_name="Station Beta",
+            location_name="station_beta",
             location_id=new_ulid_str(),
             description="Second station",
         ),
@@ -105,7 +105,7 @@ def test_added_location_persists_in_redis(empty_client):
     """A location added via the API should be retrievable from Redis."""
     location = Location(
         location_id=new_ulid_str(),
-        location_name="Runtime Location",
+        location_name="runtime_location",
         description="Added at runtime",
     )
 
@@ -117,14 +117,14 @@ def test_added_location_persists_in_redis(empty_client):
     assert response.status_code == 200
     fetched = Location.model_validate(response.json())
     assert fetched.location_id == location.location_id
-    assert fetched.location_name == "Runtime Location"
+    assert fetched.location_name == "runtime_location"
 
 
 def test_deleted_location_removed_from_redis(empty_client):
     """A deleted location should no longer be retrievable."""
     location = Location(
         location_id=new_ulid_str(),
-        location_name="To Be Deleted",
+        location_name="to_be_deleted",
     )
     empty_client.post("/location", json=location.model_dump())
 
@@ -141,7 +141,7 @@ def test_updated_representation_persists_in_redis(empty_client):
     """Representations set via the API should persist in Redis."""
     location = Location(
         location_id=new_ulid_str(),
-        location_name="Rep Test Location",
+        location_name="rep_test_location",
     )
     empty_client.post("/location", json=location.model_dump())
 
@@ -166,7 +166,7 @@ def test_initial_locations_preserved_after_runtime_add(
     """Adding a new location at runtime should not affect settings-defined locations."""
     new_location = Location(
         location_id=new_ulid_str(),
-        location_name="New Runtime Location",
+        location_name="new_runtime_location",
     )
     response = client_with_locations.post("/location", json=new_location.model_dump())
     assert response.status_code == 200

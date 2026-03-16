@@ -62,6 +62,9 @@ Classes
 
     `insert_one(self, document: dict[str, Any]) ‑> madsci.common.local_backends.inmemory_collection.InMemoryInsertResult`
     :   Insert a single document and return the result.
+        
+        Raises ``pymongo.errors.DuplicateKeyError`` if the document violates
+        a unique index constraint.
 
     `replace_one(self, filter_query: dict[str, Any], replacement: dict[str, Any]) ‑> madsci.common.local_backends.inmemory_collection.InMemoryUpdateResult`
     :   Replace the first document matching the filter with a new document.

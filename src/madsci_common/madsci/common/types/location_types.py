@@ -16,7 +16,7 @@ from madsci.common.types.manager_types import (
     ManagerType,
 )
 from madsci.common.utils import new_ulid_str
-from madsci.common.validators import ulid_validator
+from madsci.common.validators import ulid_validator, url_safe_name_validator
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
@@ -208,6 +208,8 @@ class CreateLocationFromTemplateRequest(MadsciBaseModel):
         default=None,
     )
 
+    is_url_safe_name = field_validator("location_name")(url_safe_name_validator)
+
 
 class LocationArgument(MadsciBaseModel):
     """Location Argument to be used by MADSCI nodes."""
@@ -303,6 +305,7 @@ class Location(MadsciBaseModel):
     )
 
     is_ulid = field_validator("location_id")(ulid_validator)
+    is_url_safe_name = field_validator("location_name")(url_safe_name_validator)
 
     @property
     def name(self) -> str:

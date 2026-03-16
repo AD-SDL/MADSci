@@ -143,11 +143,45 @@ class InMemoryCollection:
     # --- Write operations ---
 
     def insert_one(self, document: dict[str, Any]) -> InMemoryInsertResult:
-        """Insert a single document and return the result."""
+        """Insert a single document and return the result.
+
+        Raises ``pymongo.errors.DuplicateKeyError`` if the document violates
+        a unique index constraint.
+        """
         doc = copy.deepcopy(document)
         with self._lock:
+            self._check_unique_constraints(doc)
             self._documents.append(doc)
         return InMemoryInsertResult(doc.get("_id"))
+
+    def _check_unique_constraints(self, doc: dict[str, Any]) -> None:
+        """Check unique index constraints for a document (must hold self._lock)."""
+        for index_name, index_info in self._indexes.items():
+            if not index_info.get("unique", False):
+                continue
+            key = index_info.get("key")
+            if key is None:
+                continue
+            # key can be a string field name or list of (field, direction) tuples
+            if isinstance(key, str):
+                fields = [key]
+            elif isinstance(key, list):
+                fields = [f for f, _ in key]
+            else:
+                continue
+            # Get the values for the indexed fields from the new document
+            new_values = tuple(doc.get(f) for f in fields)
+            # Check against existing documents
+            for existing in self._documents:
+                existing_values = tuple(existing.get(f) for f in fields)
+                if new_values == existing_values and all(
+                    v is not None for v in new_values
+                ):
+                    from pymongo.errors import DuplicateKeyError  # noqa: PLC0415
+
+                    raise DuplicateKeyError(
+                        f"E11000 duplicate key error collection: index: {index_name} dup key: {dict(zip(fields, new_values, strict=True))}"
+                    )
 
     def update_one(
         self, filter_query: dict[str, Any], update: dict[str, Any]
