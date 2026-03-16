@@ -37,6 +37,7 @@ const locations = ref<Record<string, any>>({})
 const locations_url = ref<string>("")
 const representation_templates = ref<any[]>([])
 const location_templates = ref<any[]>([])
+const resource_templates = ref<any[]>([])
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -62,12 +63,14 @@ watchEffect(async () => {
     locations_url.value = urls.value.location_server_url?.concat("locations") || ""
 
     updateResources()
+    updateResourceTemplates()
     updateLocations()
     updateRepresentationTemplates()
     updateLocationTemplates()
     setInterval(updateWorkcellState, 5000)
     setInterval(updateWorkflows, 5000)
     setInterval(updateResources, 5000)
+    setInterval(updateResourceTemplates, 5000)
     setInterval(updateLocations, 5000)
     setInterval(updateRepresentationTemplates, 5000)
     setInterval(updateLocationTemplates, 5000)
@@ -82,6 +85,16 @@ watchEffect(async () => {
                 'Content-Type': 'application/json'
             }
           })).json());
+    }
+
+    async function updateResourceTemplates() {
+        if (resources_url.value) {
+            try {
+                resource_templates.value = await ((await fetch(resources_url.value.concat('templates/query_all'))).json());
+            } catch (error) {
+                console.error("Failed to fetch resource templates:", error);
+            }
+        }
     }
 
     async function updateLocations() {
@@ -228,6 +241,7 @@ export {
   labHealth,
   location_templates,
   locations,
+  resource_templates,
   locations_url,
   representation_templates,
   main_url,
