@@ -1,11 +1,14 @@
 """Tests for the LocationManager server."""
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     CapacityCostConfig,
     Location,
+    LocationImportResult,
     LocationManagerHealth,
     LocationManagerSettings,
     LocationTransferCapabilities,
@@ -19,6 +22,14 @@ from madsci.location_manager.location_server import LocationManager
 
 
 @pytest.fixture
+def mongo_handler():
+    """Create an InMemoryMongoHandler for testing."""
+    handler = InMemoryMongoHandler(database_name="test_locations")
+    yield handler
+    handler.close()
+
+
+@pytest.fixture
 def redis_handler():
     """Create an InMemoryRedisHandler for testing."""
     handler = InMemoryRedisHandler()
@@ -27,13 +38,17 @@ def redis_handler():
 
 
 @pytest.fixture
-def app(redis_handler):
-    """Create a test app with test settings and in-memory Redis handler."""
+def app(redis_handler, mongo_handler):
+    """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=mongo_handler,
+    )
     return manager.create_server(
         version="0.1.0",
     )
@@ -335,7 +350,11 @@ def transfer_setup(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
     locations = [location1, location2, location3, location4]
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -903,7 +922,11 @@ def test_transfer_graph_without_transfer_capabilities(redis_handler):
         ],
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Transfer graph should be empty
@@ -926,7 +949,11 @@ def test_get_location_by_id_query_endpoint(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     manager.add_location(location_def)
     client = TestClient(manager.create_server())
 
@@ -944,7 +971,11 @@ def test_get_location_by_name_endpoint_not_found(redis_handler):
     """Test the get location by name API endpoint when location doesn't exist."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Test lookup of non-existent location using query parameter
@@ -980,7 +1011,11 @@ def test_get_location_by_name_endpoint_multiple_locations(
     locations = [location_def1, location_def2, location_def3]
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -1012,7 +1047,11 @@ def test_get_location_query_parameter_validation(redis_handler):
     """Test query parameter validation for the new location endpoint."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Test missing both parameters
@@ -1038,7 +1077,11 @@ def test_get_location_by_id_query_parameter(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     manager.add_location(location_def)
     client = TestClient(manager.create_server())
 
@@ -1081,7 +1124,11 @@ def test_non_transfer_location_creation(redis_handler):
     locations = [non_transfer_location, transfer_location]
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -1138,7 +1185,11 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
     settings = LocationManagerSettings(
         transfer_capabilities=transfer_capabilities,
     )
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Check the transfer graph
@@ -1188,7 +1239,11 @@ def test_non_transfer_location_plan_transfer_error(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -1392,7 +1447,11 @@ def override_transfer_setup(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -1552,7 +1611,11 @@ def test_override_templates_with_location_ids(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Check that override is applied based on location ID
@@ -1613,7 +1676,11 @@ def test_override_templates_with_mixed_keys(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     graph = manager.transfer_planner._transfer_graph
@@ -1689,7 +1756,11 @@ def test_no_override_templates_defined(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Should work normally with default templates
@@ -1735,7 +1806,11 @@ def test_empty_override_templates(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Should work normally with default templates
@@ -1795,7 +1870,11 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
     )
 
     # Create manager without resource client to test disabled path
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Transfer planner should not have resource client
@@ -1851,7 +1930,11 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Check that costs are not adjusted when no resource attached
@@ -1900,7 +1983,11 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     # Test different capacity scenarios by mocking the resource client
@@ -2017,7 +2104,11 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
 
@@ -2084,7 +2175,11 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
 
@@ -2156,7 +2251,11 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [location_a, location_b, location_c]:
         manager.add_location(location)
 
@@ -2239,7 +2338,11 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
     )
     locations = [location_a, location_b]
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in locations:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2311,7 +2414,11 @@ def test_transfer_template_with_additional_location_args(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [location_a, location_b]:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2389,7 +2496,11 @@ def test_transfer_template_with_both_additional_args_types(
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [location_x, location_y]:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2493,7 +2604,11 @@ def test_override_templates_with_additional_args(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [enhanced_source, normal_destination, regular_source]:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2606,7 +2721,11 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [station_a, station_b, station_c]:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2679,7 +2798,11 @@ def test_empty_additional_args_default_behavior(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     for location in [location_1, location_2]:
         manager.add_location(location)
     client = TestClient(manager.create_server())
@@ -2726,7 +2849,11 @@ def test_remove_representation_success(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2748,7 +2875,11 @@ def test_remove_representation_location_not_found(redis_handler):
     """Test removing representation from non-existent location."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -2770,7 +2901,11 @@ def test_remove_representation_node_not_found(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2790,7 +2925,11 @@ def test_remove_representation_no_representations(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2814,7 +2953,11 @@ def test_remove_last_representation(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2838,7 +2981,11 @@ def test_attach_and_detach_resource_success(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2861,7 +3008,11 @@ def test_detach_resource_location_not_found(redis_handler):
     """Test detaching resource from non-existent location."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -2881,7 +3032,11 @@ def test_detach_resource_no_resource_attached(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2916,7 +3071,11 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2934,3 +3093,180 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
     # Get transfer graph after removal (verifies graph rebuild was successful)
     response = client.get("/transfer/graph")
     assert response.status_code == 200
+
+
+# --- Phase 4: MongoDB migration tests ---
+
+
+def test_health_reports_document_db_connected(client):
+    """Health endpoint should report document_db_connected: True."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.document_db_connected is True
+
+
+def test_health_reports_redis_connected(client):
+    """Health endpoint should still report redis_connected: True."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.redis_connected is True
+
+
+def test_import_locations_bulk(client):
+    """POST list to /locations/import should create all locations."""
+    locations = [
+        Location(
+            location_name=f"Import Loc {i}", location_id=new_ulid_str()
+        ).model_dump()
+        for i in range(3)
+    ]
+    response = client.post("/locations/import", json=locations)
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 3
+    assert result.skipped == 0
+    assert len(result.errors) == 0
+    assert len(result.locations) == 3
+
+
+def test_import_locations_skip_duplicates(client):
+    """POST with existing names should skip duplicates."""
+    loc = Location(location_name="Dup Test", location_id=new_ulid_str())
+    client.post("/location", json=loc.model_dump())
+
+    locations = [
+        Location(location_name="Dup Test", location_id=new_ulid_str()).model_dump(),
+        Location(location_name="New Loc", location_id=new_ulid_str()).model_dump(),
+    ]
+    response = client.post("/locations/import", json=locations)
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 1
+    assert result.skipped == 1
+
+
+def test_import_locations_overwrite(client):
+    """POST with overwrite=true should upsert existing locations."""
+    loc = Location(
+        location_name="Overwrite Test",
+        location_id=new_ulid_str(),
+        description="original",
+    )
+    client.post("/location", json=loc.model_dump())
+
+    updated_loc = Location(
+        location_name="Overwrite Test",
+        location_id=new_ulid_str(),
+        description="updated",
+    )
+    response = client.post(
+        "/locations/import",
+        json=[updated_loc.model_dump()],
+        params={"overwrite": True},
+    )
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 1
+    assert result.skipped == 0
+
+    # Verify it was actually updated
+    response = client.get("/location/Overwrite Test")
+    assert response.status_code == 200
+    fetched = Location.model_validate(response.json())
+    assert fetched.description == "updated"
+
+
+def test_export_locations(client):
+    """GET /locations/export should return all locations."""
+    for i in range(3):
+        loc = Location(location_name=f"Export Loc {i}", location_id=new_ulid_str())
+        client.post("/location", json=loc.model_dump())
+
+    response = client.get("/locations/export")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 3
+
+
+def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
+    """Seed file should be loaded when MongoDB is empty."""
+    seed_file = tmp_path / "locations.yaml"
+    seed_data = [
+        {"location_name": "Seeded A", "description": "From seed"},
+        {"location_name": "Seeded B", "description": "From seed"},
+    ]
+
+    with seed_file.open("w") as f:
+        yaml.dump(seed_data, f)
+
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file=str(seed_file),
+    )
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_seed"),
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 2
+    names = {loc["location_name"] for loc in locations}
+    assert names == {"Seeded A", "Seeded B"}
+    client.close()
+
+
+def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
+    """Seed file should be ignored when MongoDB already has data."""
+    seed_file = tmp_path / "locations.yaml"
+
+    with seed_file.open("w") as f:
+        yaml.dump([{"location_name": "Should Not Appear"}], f)
+
+    mongo = InMemoryMongoHandler(database_name="test_seed_skip")
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file=str(seed_file),
+    )
+
+    # Pre-populate MongoDB with a location
+    loc = Location(location_name="Existing Loc", location_id=new_ulid_str())
+    mongo.get_collection("locations").insert_one(loc.model_dump(mode="json"))
+
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=mongo,
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 1
+    assert locations[0]["location_name"] == "Existing Loc"
+    client.close()
+
+
+def test_seed_file_missing_no_error(redis_handler):
+    """No error if seed file path doesn't exist."""
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file="/nonexistent/path/locations.yaml",
+    )
+    manager = LocationManager(
+        settings=settings,
+        redis_handler=redis_handler,
+        mongo_handler=InMemoryMongoHandler(database_name="test_no_seed"),
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    assert response.json() == []
+    client.close()

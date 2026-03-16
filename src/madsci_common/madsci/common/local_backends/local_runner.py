@@ -66,6 +66,7 @@ class LocalRunner:
         )
         self._data_mongo_handler = InMemoryMongoHandler(database_name="data")
         self._workcell_mongo_handler = InMemoryMongoHandler(database_name="workcell")
+        self._location_mongo_handler = InMemoryMongoHandler(database_name="locations")
         self._minio_handler = InMemoryMinioHandler()
 
         # SQLite handler for the Resource Manager
@@ -156,9 +157,10 @@ class LocalRunner:
             start_engine=False,
         )
 
-        # Location Manager (8006) — in-memory Redis handler
+        # Location Manager (8006) — in-memory Redis + MongoDB handlers
         managers["location"] = LocationManager(
             redis_handler=self._redis_handler,
+            mongo_handler=self._location_mongo_handler,
         )
 
         return managers

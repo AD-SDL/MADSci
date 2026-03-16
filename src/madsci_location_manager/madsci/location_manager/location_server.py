@@ -11,15 +11,18 @@ from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.db_handlers import RedisHandler
+from madsci.common.db_handlers import MongoHandler, RedisHandler
 from madsci.common.manager_base import AbstractManagerBase
+from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import ownership_class
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
+    LocationImportResult,
     LocationManagerHealth,
     LocationManagerSettings,
 )
+from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
@@ -47,6 +50,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         settings: Optional[LocationManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         redis_handler: Optional[RedisHandler] = None,
+        mongo_handler: Optional[MongoHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
@@ -58,36 +62,83 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
         self.redis_connection = redis_connection
         self.redis_handler = redis_handler
+        self.mongo_handler = mongo_handler
         super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
 
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
+
+        # Skip version validation if external handler was provided (e.g., in tests)
+        if self.mongo_handler is not None:
+            self.logger.info(
+                "External mongo handler provided, skipping MongoDB version validation",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="location",
+                mongo_external_connection=True,
+            )
+        else:
+            # Production path: validate MongoDB schema version
+            self.logger.info(
+                "Validating MongoDB schema version",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="location",
+                document_db=str(self.settings.document_db_url),
+                database_name=self.settings.database_name,
+            )
+
+            schema_file_path = Path(__file__).parent / "schema.json"
+            mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
+            version_checker = MongoDBVersionChecker(
+                db_url=str(self.settings.document_db_url),
+                database_name=self.settings.database_name,
+                schema_file_path=str(schema_file_path),
+                backup_dir=str(mig_cfg.backup_dir),
+                logger=self.logger,
+            )
+
+            try:
+                version_checker.validate_or_fail()
+                self.logger.info(
+                    "MongoDB version validation completed successfully",
+                    event_type=EventType.MANAGER_START,
+                    manager_name=manager_name,
+                    manager_id=manager_id,
+                    manager_type="location",
+                    database_name=self.settings.database_name,
+                )
+            except RuntimeError:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
+                    event_type=EventType.MANAGER_ERROR,
+                    manager_name=manager_name,
+                    manager_id=manager_id,
+                    manager_type="location",
+                    database_name=self.settings.database_name,
+                    exc_info=True,
+                )
+                raise
+
+        # Initialize state handler with dual handlers
         self.state_handler = LocationStateHandler(
             settings=self.settings,
             manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
+            mongo_handler=self.mongo_handler,
         )
 
-        # Load locations from file on startup (file is the source of truth for
-        # location definitions, matching the old settings-based initialization)
-        if self.settings.locations_file_path:
-            locations_path = Path(self.settings.locations_file_path)
-            if locations_path.exists():
-                with locations_path.open() as f:
-                    locations_data = yaml.safe_load(f)
-                if locations_data and isinstance(locations_data, list):
-                    for loc_data in locations_data:
-                        try:
-                            location = Location.model_validate(loc_data)
-                            self.state_handler.add_location(location)
-                        except Exception as e:
-                            self.logger.warning(
-                                "Failed to load location from file",
-                                location_data=loc_data,
-                                error=str(e),
-                            )
+        # Auto-migration: if MongoDB is empty but Redis has old-format data, migrate
+        self._auto_migrate_from_redis()
+
+        # Seed file loading: if MongoDB is still empty and seed file exists, load it once
+        self._seed_from_file()
 
         # Initialize resource client with resource server URL from context
         context = get_current_madsci_context()
@@ -99,6 +150,99 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             transfer_capabilities=self.settings.transfer_capabilities,
             resource_client=self.resource_client,
         )
+
+    def _auto_migrate_from_redis(self) -> None:
+        """Auto-migrate locations from old Redis format to MongoDB if MongoDB is empty."""
+        existing_locations = self.state_handler.get_locations()
+        if existing_locations:
+            return  # MongoDB already has data, skip migration
+
+        # Check if Redis has data at the old key prefix
+        old_prefix = f"madsci:location_manager:{self.settings.manager_id}"
+        old_dict_key = f"{old_prefix}:locations"
+        try:
+            old_locations = self.state_handler._redis_handler.create_dict(old_dict_key)
+            if not old_locations:
+                return  # No old Redis data either
+
+            self.logger.warning(
+                "Auto-migrating locations from Redis to MongoDB. "
+                "This is a one-time migration from the 0.7.1 format.",
+                event_type=EventType.MANAGER_START,
+                manager_id=self.settings.manager_id,
+            )
+
+            migrated_count = 0
+            for _name, loc_data in old_locations.to_dict().items():
+                try:
+                    location = Location.model_validate(loc_data)
+                    result = self.state_handler.add_location(location)
+                    if result is not None:
+                        migrated_count += 1
+                except Exception as e:
+                    self.logger.warning(
+                        "Failed to migrate location from Redis",
+                        location_data=str(loc_data),
+                        error=str(e),
+                    )
+
+            self.logger.info(
+                "Redis to MongoDB migration completed",
+                event_type=EventType.MANAGER_START,
+                migrated_count=migrated_count,
+            )
+        except Exception as e:
+            self.logger.debug(
+                "No legacy Redis data to migrate (expected on fresh installs)",
+                error=str(e),
+            )
+
+    def _seed_from_file(self) -> None:
+        """Load seed locations from file if MongoDB is empty and seed file exists."""
+        existing_locations = self.state_handler.get_locations()
+        if existing_locations:
+            return  # MongoDB already has data, skip seeding
+
+        if not self.settings.seed_locations_file:
+            return
+
+        seed_path = Path(self.settings.seed_locations_file)
+        if not seed_path.exists():
+            return  # Seed file doesn't exist, no error
+
+        try:
+            with seed_path.open() as f:
+                locations_data = yaml.safe_load(f)
+
+            if not locations_data or not isinstance(locations_data, list):
+                return
+
+            seeded_count = 0
+            for loc_data in locations_data:
+                try:
+                    location = Location.model_validate(loc_data)
+                    result = self.state_handler.add_location(location)
+                    if result is not None:
+                        seeded_count += 1
+                except Exception as e:
+                    self.logger.warning(
+                        "Failed to load location from seed file",
+                        location_data=loc_data,
+                        error=str(e),
+                    )
+
+            self.logger.info(
+                "Loaded locations from seed file",
+                event_type=EventType.MANAGER_START,
+                seed_file=str(seed_path),
+                seeded_count=seeded_count,
+            )
+        except Exception as e:
+            self.logger.warning(
+                "Failed to read seed locations file",
+                seed_file=str(seed_path),
+                error=str(e),
+            )
 
     def _initialize_location_resource(self, location_def: Location) -> Optional[str]:
         """Initialize a resource for a location based on its resource_template_name.
@@ -196,6 +340,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         health = LocationManagerHealth()
 
         try:
+            # Test MongoDB connection
+            if hasattr(self.state_handler, "_mongo_handler"):
+                health.document_db_connected = self.state_handler._mongo_handler.ping()
+            else:
+                health.document_db_connected = None
+
             # Test Redis connection if configured
             if hasattr(self.state_handler, "_redis_handler"):
                 health.redis_connected = self.state_handler._redis_handler.ping()
@@ -213,9 +363,17 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             health.healthy = False
             if "redis" in str(e).lower():
                 health.redis_connected = False
+            if "mongo" in str(e).lower() or "document" in str(e).lower():
+                health.document_db_connected = False
             health.description = f"Health check failed: {e!s}"
 
         return health
+
+    def close(self) -> None:
+        """Override to close state handler and release DB connections."""
+        if hasattr(self, "state_handler"):
+            self.state_handler.close()
+        super().close()
 
     @get("/locations", tags=["Locations"])
     def get_locations(self) -> list[Location]:
@@ -422,6 +580,63 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         # The definition uses resource_template_name for resource initialization
         return self.state_handler.update_location(location)
 
+    @post("/locations/import", tags=["Locations"])
+    def import_locations(
+        self, locations: list[Location], overwrite: bool = False
+    ) -> LocationImportResult:
+        """Import multiple locations in bulk.
+
+        Parameters
+        ----------
+        locations:
+            List of Location objects to import.
+        overwrite:
+            If True, overwrite existing locations with the same name.
+            If False (default), skip duplicates.
+
+        Returns
+        -------
+        LocationImportResult with counts and imported locations.
+        """
+        result = LocationImportResult()
+        for location in locations:
+            try:
+                existing = self.state_handler.get_location(location.location_name)
+                if existing is not None:
+                    if overwrite:
+                        # Update the existing location, preserving the existing ID
+                        location.location_id = existing.location_id
+                        self.state_handler.update_location(location)
+                        result.imported += 1
+                        result.locations.append(location)
+                    else:
+                        result.skipped += 1
+                else:
+                    added = self.state_handler.add_location(location)
+                    if added is not None:
+                        result.imported += 1
+                        result.locations.append(added)
+                    else:
+                        result.skipped += 1
+            except Exception as e:
+                result.errors.append(
+                    f"Error importing location '{location.location_name}': {e!s}"
+                )
+
+        # Rebuild transfer graph after bulk import
+        if result.imported > 0:
+            self.transfer_planner.rebuild_transfer_graph()
+
+        return result
+
+    @get("/locations/export", tags=["Locations"])
+    def export_locations(self) -> list[Location]:
+        """Export all locations as a JSON list.
+
+        Semantically distinct from GET /locations for import/export workflows.
+        """
+        return self.state_handler.get_locations()
+
     @post("/transfer/plan", tags=["Transfer"])
     def plan_transfer(
         self,
@@ -537,9 +752,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app(
     settings: Optional[LocationManagerSettings] = None,
+    mongo_handler: Optional[MongoHandler] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    manager = LocationManager(settings=settings)
+    manager = LocationManager(settings=settings, mongo_handler=mongo_handler)
     return manager.create_server(
         version="0.1.0",
         lifespan=lifespan,

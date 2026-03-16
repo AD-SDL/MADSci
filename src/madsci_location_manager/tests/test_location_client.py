@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 from madsci.client.location_client import LocationClient
-from madsci.common.types.location_types import Location
+from madsci.common.types.location_types import Location, LocationImportResult
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.utils import new_ulid_str
 
@@ -411,3 +411,73 @@ def test_detach_resource_error_handling(mock_create_session):
     # Call the method and expect an exception
     with pytest.raises(requests.exceptions.HTTPError):
         location_client.detach_resource("nonexistent_location")
+
+
+# --- Phase 5: Import/Export client method tests ---
+
+
+@patch("madsci.client.location_client.create_http_session")
+def test_import_locations_calls_import_endpoint(mock_create_session):
+    """Verify import_locations POSTs to /locations/import."""
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "imported": 2,
+        "skipped": 0,
+        "errors": [],
+        "locations": [],
+    }
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.post.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    locations = [
+        Location(location_name="Loc1", location_id=new_ulid_str()),
+        Location(location_name="Loc2", location_id=new_ulid_str()),
+    ]
+    result = client.import_locations(locations=locations)
+
+    mock_session.post.assert_called_once()
+    call_args = mock_session.post.call_args
+    assert call_args[0][0].endswith("/locations/import")
+    assert isinstance(result, LocationImportResult)
+    assert result.imported == 2
+
+
+def test_export_locations_method_exists(location_client):
+    """Verify export_locations method exists."""
+    assert hasattr(location_client, "export_locations")
+    assert callable(location_client.export_locations)
+
+
+@patch("madsci.client.location_client.create_http_session")
+def test_export_locations_calls_correct_endpoint(mock_create_session):
+    """Verify export_locations GETs /locations/export."""
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_response.json.return_value = [
+        {"location_name": "Loc1", "location_id": test_location_id},
+    ]
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    result = client.export_locations()
+
+    mock_session.get.assert_called_once()
+    call_args = mock_session.get.call_args
+    assert call_args[0][0].endswith("/locations/export")
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], Location)
+
+
+def test_close_method_exists(location_client):
+    """Verify close method exists and is callable."""
+    assert hasattr(location_client, "close")
+    assert callable(location_client.close)

@@ -287,10 +287,11 @@ class LocationManagerSettings(
     _accept_prefixed_keys = prefixed_model_validator("location")
 
     # Structural config (inline in settings.yaml)
-    locations_file_path: Optional[str] = Field(
+    seed_locations_file: Optional[str] = Field(
         default="locations.yaml",
-        title="Locations File Path",
-        description="Path to the file containing location definitions.",
+        title="Seed Locations File",
+        description="Path to a YAML file containing location definitions. Loaded once to seed an empty database on first startup; ignored if locations already exist.",
+        validation_alias=AliasChoices("seed_locations_file", "locations_file_path"),
     )
     transfer_capabilities: Optional["LocationTransferCapabilities"] = Field(
         default=None,
@@ -308,14 +309,30 @@ class LocationManagerSettings(
         description="The type of manager.",
         default=ManagerType.LOCATION_MANAGER,
     )
+
+    # MongoDB / document storage settings
+    document_db_url: AnyUrl = Field(
+        title="Document DB URL",
+        description="URL for the document database (MongoDB/FerretDB) used for persistent location storage.",
+        default="mongodb://localhost:27017/",
+        validation_alias=AliasChoices("document_db_url", "mongo_db_url"),
+        json_schema_extra={"secret": True},
+    )
+    database_name: str = Field(
+        title="Database Name",
+        description="Name of the database for persistent location storage.",
+        default="madsci_locations",
+    )
+
+    # Redis settings (transient state only: locks, change counters)
     redis_host: str = Field(
         title="Redis Host",
-        description="The host of the Redis server for state storage.",
+        description="The host of the Redis server for transient state (locks, change counters).",
         default="localhost",
     )
     redis_port: int = Field(
         title="Redis Port",
-        description="The port of the Redis server for state storage.",
+        description="The port of the Redis server for transient state.",
         default=6379,
     )
     redis_password: Optional[str] = Field(
@@ -352,9 +369,39 @@ class LocationManagerDefinition(ManagerDefinition):
         return sorted(locations, key=lambda loc: loc.location_name)
 
 
+class LocationImportResult(MadsciBaseModel):
+    """Result of a bulk location import operation."""
+
+    imported: int = Field(
+        title="Imported Count",
+        description="Number of locations successfully imported.",
+        default=0,
+    )
+    skipped: int = Field(
+        title="Skipped Count",
+        description="Number of locations skipped (e.g. duplicates).",
+        default=0,
+    )
+    errors: list[str] = Field(
+        title="Errors",
+        description="List of error messages for locations that failed to import.",
+        default_factory=list,
+    )
+    locations: list[Location] = Field(
+        title="Locations",
+        description="List of locations that were successfully imported.",
+        default_factory=list,
+    )
+
+
 class LocationManagerHealth(ManagerHealth):
     """Health status for the Location Manager."""
 
+    document_db_connected: Optional[bool] = Field(
+        title="Document DB Connection Status",
+        description="Whether the Location Manager is connected to the document database (MongoDB/FerretDB).",
+        default=None,
+    )
     redis_connected: Optional[bool] = Field(
         title="Redis Connection Status",
         description="Whether the Location Manager is connected to the Redis server.",

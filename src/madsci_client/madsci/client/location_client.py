@@ -9,7 +9,7 @@ from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import LocationClientConfig
 from madsci.common.types.event_types import EventType
-from madsci.common.types.location_types import Location
+from madsci.common.types.location_types import Location, LocationImportResult
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import create_http_session
@@ -211,38 +211,92 @@ class LocationClient:
         return Location.model_validate(response.json())
 
     def import_locations(
-        self, location_file_path: Path, timeout: Optional[float] = None
-    ) -> list[Location]:
+        self,
+        location_file_path: Optional[Path] = None,
+        locations: Optional[list[Location]] = None,
+        overwrite: bool = False,
+        timeout: Optional[float] = None,
+    ) -> LocationImportResult:
         """
-        Add multiple locations from a file.
+        Import multiple locations from a file or a list.
+
+        Posts the full list to the server's /locations/import endpoint.
 
         Parameters
         ----------
-        location_file_path : Path
-            The path to the file containing location definitions.
+        location_file_path : Optional[Path]
+            Path to a YAML file containing location definitions.
+        locations : Optional[list[Location]]
+            A list of Location objects to import directly.
+        overwrite : bool
+            If True, overwrite existing locations with the same name.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 
         Returns
         -------
-        locations   :
-            The created locations.
+        LocationImportResult
+            Result with imported/skipped/error counts and imported locations.
         """
-        with location_file_path.open() as f:
-            locations = yaml.safe_load(f)
+        self._validate_server_url()
+
         if locations is None:
-            return self.get_locations(timeout=timeout)
-        if isinstance(locations, list):
-            location_items = locations
-        elif isinstance(locations, dict):
-            location_items = locations.values()
-        else:
-            raise ValueError(
-                f"Expected a list or dict of locations, got {type(locations)}"
-            )
-        for location in location_items:
-            self.add_location(Location.model_validate(location), timeout=timeout)
-        return self.get_locations(timeout=timeout)
+            if location_file_path is None:
+                raise ValueError(
+                    "Either location_file_path or locations must be provided"
+                )
+            with location_file_path.open() as f:
+                raw = yaml.safe_load(f)
+            if raw is None:
+                return LocationImportResult()
+            if isinstance(raw, list):
+                location_items = raw
+            elif isinstance(raw, dict):
+                location_items = list(raw.values())
+            else:
+                raise ValueError(
+                    f"Expected a list or dict of locations, got {type(raw)}"
+                )
+            locations = [Location.model_validate(item) for item in location_items]
+
+        response = self.session.post(
+            f"{self.location_server_url}locations/import",
+            json=[loc.model_dump() for loc in locations],
+            params={"overwrite": overwrite},
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationImportResult.model_validate(response.json())
+
+    def export_locations(self, timeout: Optional[float] = None) -> list[Location]:
+        """
+        Export all locations from the server.
+
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+
+        Returns
+        -------
+        list[Location]
+            All locations managed by the location server.
+        """
+        self._validate_server_url()
+
+        response = self.session.get(
+            f"{self.location_server_url}locations/export",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [Location.model_validate(loc) for loc in response.json()]
+
+    def close(self) -> None:
+        """Release the HTTP session."""
+        if hasattr(self, "session") and self.session:
+            self.session.close()
 
     def delete_location(
         self, location_name: str, timeout: Optional[float] = None
