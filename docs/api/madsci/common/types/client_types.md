@@ -115,6 +115,20 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
+    ### Class variables
+
+    `startup_retry_backoff_factor: float`
+    :
+
+    `startup_retry_initial_delay: float`
+    :
+
+    `startup_retry_max_attempts: int`
+    :
+
+    `startup_retry_max_delay: float`
+    :
+
 `MadsciClientConfig(**kwargs: Any)`
 :   Base configuration for MADSci HTTP clients.
     

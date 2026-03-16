@@ -322,6 +322,91 @@ Classes
             for backwards compatibility with existing code that passes a
             ``NodeDefinition`` object.
 
+`NodeLocationTemplateDefinition(**data: Any)`
+:   Declarative location template definition for node startup registration.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `default_allow_transfers: bool`
+    :
+
+    `description: str | None`
+    :
+
+    `model_config`
+    :
+
+    `representation_templates: dict[str, str] | None`
+    :
+
+    `resource_template_name: str | None`
+    :
+
+    `resource_template_overrides: dict[str, typing.Any] | None`
+    :
+
+    `tags: list[str] | None`
+    :
+
+    `template_name: str`
+    :
+
+    `version: str`
+    :
+
+`NodeRepresentationTemplateDefinition(**data: Any)`
+:   Declarative location representation template definition for node startup registration.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `default_values: dict[str, typing.Any]`
+    :
+
+    `description: str | None`
+    :
+
+    `model_config`
+    :
+
+    `required_overrides: list[str] | None`
+    :
+
+    `schema_def: dict[str, typing.Any] | None`
+    :
+
+    `tags: list[str] | None`
+    :
+
+    `template_name: str`
+    :
+
+    `version: str`
+    :
+
 `NodeReservation(**data: Any)`
 :   Reservation of a MADSci Node.
     
@@ -358,6 +443,44 @@ Classes
 
     `check(self, ownership: madsci.common.types.auth_types.OwnershipInfo) ‑> bool`
     :   Check if the reservation is 1.) active or not, and 2.) owned by the given ownership.
+
+`NodeResourceTemplateDefinition(**data: Any)`
+:   Declarative resource template definition for node startup registration.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `description: str`
+    :
+
+    `model_config`
+    :
+
+    `required_overrides: list[str] | None`
+    :
+
+    `resource: madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :
+
+    `tags: list[str] | None`
+    :
+
+    `template_name: str`
+    :
+
+    `version: str`
+    :
 
 `NodeSetConfigResponse(**data: Any)`
 :   Response from a Node Set Config Request
