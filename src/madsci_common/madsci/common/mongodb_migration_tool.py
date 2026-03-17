@@ -9,7 +9,11 @@ from madsci.common.backup_tools.mongodb_backup import (
     MongoDBBackupSettings,
     MongoDBBackupTool,
 )
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from madsci.common.db_handlers.mongo_handler import PyMongoHandler
+from madsci.common.mongodb_version_checker import (
+    MongoDBVersionChecker,
+    ensure_schema_indexes,
+)
 from madsci.common.types.mongodb_migration_types import (
     IndexDefinition,
     MongoDBMigrationSettings,
@@ -141,13 +145,12 @@ class MongoDBMigrator:
     def apply_schema_migrations(self) -> None:
         """Apply schema migrations based on the expected schema."""
         try:
-            expected_schema = self.load_expected_schema()
-
             self.logger.info("Applying schema migrations...")
 
-            for collection_name, collection_def in expected_schema.collections.items():
-                self._ensure_collection_exists(collection_name)
-                self._ensure_indexes_exist(collection_name, collection_def.indexes)
+            # Use the shared ensure_schema_indexes() to create all collections
+            # and their indexes from schema.json in one idempotent pass.
+            handler = PyMongoHandler(self.database)
+            ensure_schema_indexes(handler, self.schema_file_path, self.logger)
 
             self.version_checker.create_schema_versions_collection()
 

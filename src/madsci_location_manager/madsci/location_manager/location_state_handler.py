@@ -98,7 +98,9 @@ class LocationStateHandler:
             "location_templates"
         )
 
-        # Create unique indexes for name-based lookups
+        # Ensure minimum unique indexes exist for correctness.
+        # These are a subset of what schema.json defines; the full set is
+        # applied by ensure_schema_indexes() in the manager's initialize().
         self._locations_collection.create_index(
             "location_name", unique=True, name="location_name_unique"
         )

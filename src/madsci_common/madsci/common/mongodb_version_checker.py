@@ -3,11 +3,103 @@
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Union
+from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
+from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
+from madsci.common.types.mongodb_migration_types import IndexDefinition, MongoDBSchema
 from pydantic_extra_types.semantic_version import SemanticVersion
 from pymongo import MongoClient
+
+
+def ensure_schema_indexes(
+    mongo_handler: MongoHandler,
+    schema_file_path: Path,
+    logger: Optional[EventClient] = None,
+) -> None:
+    """Create all indexes defined in a schema.json file, idempotently.
+
+    This is a best-effort operation: if the schema file is missing or
+    unparseable the function logs a warning and returns without raising.
+
+    Args:
+        mongo_handler: A MongoHandler (PyMongoHandler or InMemoryMongoHandler).
+        schema_file_path: Path to the schema.json file.
+        logger: Optional logger instance.
+    """
+    logger = logger or EventClient()
+
+    try:
+        if not schema_file_path.exists():
+            logger.warning(
+                "Schema file not found, skipping index creation",
+                schema_file_path=str(schema_file_path),
+            )
+            return
+
+        schema = MongoDBSchema.from_file(str(schema_file_path))
+    except Exception as e:
+        logger.warning(
+            "Could not load schema file, skipping index creation",
+            schema_file_path=str(schema_file_path),
+            error=str(e),
+        )
+        return
+
+    for collection_name, collection_def in schema.collections.items():
+        try:
+            collection = mongo_handler.get_collection(collection_name)
+            _create_missing_indexes(collection, collection_def.indexes, logger)
+        except Exception as e:
+            logger.warning(
+                "Error ensuring indexes for collection",
+                collection_name=collection_name,
+                error=str(e),
+            )
+
+
+def _create_missing_indexes(
+    collection: Any,
+    expected_indexes: list[IndexDefinition],
+    logger: EventClient,
+) -> None:
+    """Create indexes that don't already exist on *collection*."""
+    existing_names: set[str] = set()
+    try:
+        for idx in collection.list_indexes():
+            name = (
+                idx.get("name") if isinstance(idx, dict) else getattr(idx, "name", None)
+            )
+            if name:
+                existing_names.add(name)
+    except Exception:  # noqa: S110
+        # list_indexes may fail on empty/new collections; treat as no indexes
+        pass
+
+    for index_def in expected_indexes:
+        if isinstance(index_def, dict):
+            index_def = IndexDefinition(**index_def)  # noqa: PLW2901
+
+        if index_def.name in existing_names:
+            continue
+
+        keys = index_def.get_keys_as_tuples()
+        index_options = index_def.to_mongo_format()
+
+        try:
+            collection.create_index(keys, **index_options)
+            logger.info(
+                "Created index",
+                index_name=index_def.name,
+                collection_name=collection.name,
+            )
+        except Exception as e:
+            logger.warning(
+                "Failed to create index",
+                index_name=index_def.name,
+                collection_name=collection.name,
+                error=str(e),
+            )
 
 
 class MongoDBVersionChecker:
@@ -267,6 +359,8 @@ class MongoDBVersionChecker:
                     self.record_version(
                         expected, f"Auto-initialized schema version {expected}"
                     )
+                    # Create all data-collection indexes from schema.json
+                    self.ensure_schema_indexes()
                     self.logger.info(
                         "Successfully auto-initialized database",
                         database_name=self.database_name,
@@ -393,6 +487,15 @@ class MongoDBVersionChecker:
     def database_exists(self) -> bool:
         """Check if the database exists."""
         return self.database_name in self.client.list_database_names()
+
+    def ensure_schema_indexes(self) -> None:
+        """Create all indexes from the schema file on this database.
+
+        Wraps ``self.database`` in a ``PyMongoHandler`` and delegates to the
+        module-level :func:`ensure_schema_indexes` function.
+        """
+        handler = PyMongoHandler(self.database)
+        ensure_schema_indexes(handler, self.schema_file_path, self.logger)
 
     def collection_exists(self, collection_name: str) -> bool:
         """Check if a collection exists in the database."""

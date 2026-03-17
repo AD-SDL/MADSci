@@ -306,6 +306,15 @@ class InMemoryCollection:
         """Return metadata for all indexes."""
         return dict(self._indexes)
 
+    def list_indexes(self) -> list[dict[str, Any]]:
+        """Return a list of index info dicts, matching pymongo's ``Collection.list_indexes()``."""
+        result: list[dict[str, Any]] = []
+        for name, info in self._indexes.items():
+            entry = dict(info)
+            entry["name"] = name
+            result.append(entry)
+        return result
+
 
 # ---------------------------------------------------------------------------
 # Database & Client

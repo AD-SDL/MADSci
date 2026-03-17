@@ -2,6 +2,20 @@ Module madsci.common.mongodb_version_checker
 ============================================
 MongoDB version checking and validation for MADSci.
 
+Functions
+---------
+
+`ensure_schema_indexes(mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler, schema_file_path: pathlib.Path, logger: madsci.client.event_client.EventClient | None = None) ‑> None`
+:   Create all indexes defined in a schema.json file, idempotently.
+    
+    This is a best-effort operation: if the schema file is missing or
+    unparseable the function logs a warning and returns without raising.
+    
+    Args:
+        mongo_handler: A MongoHandler (PyMongoHandler or InMemoryMongoHandler).
+        schema_file_path: Path to the schema.json file.
+        logger: Optional logger instance.
+
 Classes
 -------
 
@@ -27,6 +41,12 @@ Classes
 
     `database_exists(self) ‑> bool`
     :   Check if the database exists.
+
+    `ensure_schema_indexes(self) ‑> None`
+    :   Create all indexes from the schema file on this database.
+        
+        Wraps ``self.database`` in a ``PyMongoHandler`` and delegates to the
+        module-level :func:`ensure_schema_indexes` function.
 
     `get_database_version(self) ‑> pydantic_extra_types.semantic_version.SemanticVersion | None`
     :   Get the current database schema version from the schema_versions collection.

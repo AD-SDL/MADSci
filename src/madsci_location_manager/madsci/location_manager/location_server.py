@@ -16,7 +16,10 @@ from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.db_handlers import MongoHandler, RedisHandler
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from madsci.common.mongodb_version_checker import (
+    MongoDBVersionChecker,
+    ensure_schema_indexes,
+)
 from madsci.common.ownership import ownership_class
 from madsci.common.settings_dir import walk_up_find
 from madsci.common.types.event_types import EventType
@@ -140,6 +143,14 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
             mongo_handler=self.mongo_handler,
+        )
+
+        # Ensure all schema-defined indexes exist (idempotent).
+        # This covers in-memory test handlers (which skip validate_or_fail)
+        # and is idempotent with the version checker call for real MongoDB.
+        schema_file = Path(__file__).parent / "schema.json"
+        ensure_schema_indexes(
+            self.state_handler._mongo_handler, schema_file, self.logger
         )
 
         # Initialize resource client with resource server URL from context
