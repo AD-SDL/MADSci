@@ -162,6 +162,8 @@ PGPASSWORD=madsci pg_restore -h localhost -p 5432 -U madsci -d postgres \
 
 ### 5. Migrate Redis to Valkey
 
+> **Note**: The automated `madsci migrate foss` tool **skips** Redis/Valkey migration because MADSci's Redis data is ephemeral (workcell state, location caches) and is repopulated automatically by the managers on startup. The manual file copy below is only needed if you have persistent Redis data you want to preserve.
+
 Copy the data files:
 
 ```bash

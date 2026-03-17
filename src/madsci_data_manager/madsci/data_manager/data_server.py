@@ -120,16 +120,16 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         )
 
     def _setup_object_storage(self) -> None:
-        """Setup MinIO object storage handler."""
+        """Setup object storage handler."""
         if self._object_storage_handler is not None:
             # Handler provided directly (e.g., InMemoryObjectStorageHandler for tests)
             return
 
-        minio_client = create_object_storage_client(
+        storage_client = create_object_storage_client(
             object_storage_settings=self._object_storage_settings
         )
-        if minio_client is not None:
-            self._object_storage_handler = RealObjectStorageHandler(minio_client)
+        if storage_client is not None:
+            self._object_storage_handler = RealObjectStorageHandler(storage_client)
 
     def get_health(self) -> DataManagerHealth:
         """Get the health status of the Data Manager."""
@@ -167,7 +167,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         return health
 
-    def _upload_file_to_minio(
+    def _upload_file_to_object_storage(
         self,
         file_path: Path,
         filename: str,
@@ -191,12 +191,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         # Add application-level fields expected by ObjectStorageDataPoint
         endpoint = oss.endpoint or ""
-        # Derive a public endpoint (SeaweedFS master/console port convention)
-        public_endpoint = endpoint
-        if ":8333" in public_endpoint and (
-            "localhost" in public_endpoint or "127.0.0.1" in public_endpoint
-        ):
-            public_endpoint = public_endpoint.replace(":8333", ":9333")
+        public_endpoint = oss.public_endpoint or endpoint
         protocol = "https" if oss.secure else "http"
         result["storage_endpoint"] = endpoint
         result["public_endpoint"] = public_endpoint
@@ -244,8 +239,8 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                         datapoint_obj.data_type.value == "file"
                         and self._object_storage_handler is not None
                     ):
-                        # Use MinIO object storage instead of local storage
-                        # First, save file temporarily to upload to MinIO
+                        # Use object storage instead of local storage
+                        # First, save file temporarily to upload to object storage
 
                         with tempfile.NamedTemporaryFile(
                             delete=False, suffix=f"_{file.filename}"
@@ -256,7 +251,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                             temp_path = Path(temp_file.name)
 
                         # Upload to object storage
-                        object_storage_info = self._upload_file_to_minio(
+                        object_storage_info = self._upload_file_to_object_storage(
                             file_path=temp_path,
                             filename=file.filename,
                             label=datapoint_obj.label,
@@ -278,9 +273,9 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                             self.datapoints.insert_one(datapoint_dict)
                             # Return the transformed datapoint
                             return DataPoint.discriminate(datapoint_dict)
-                        # If MinIO upload failed, fall back to local storage
+                        # If object storage upload failed, fall back to local storage
                         warnings.warn(
-                            "MinIO upload failed, falling back to local file storage",
+                            "Object storage upload failed, falling back to local file storage",
                             UserWarning,
                             stacklevel=2,
                         )

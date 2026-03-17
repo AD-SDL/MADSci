@@ -248,6 +248,11 @@ class ObjectStorageSettings(
         title="Region",
         description="Optional for AWS S3/other providers",
     )
+    public_endpoint: Optional[str] = Field(
+        default=None,
+        title="Public Endpoint",
+        description="Public-facing endpoint for object URLs (e.g., 'localhost:9333'). If not set, defaults to the same value as 'endpoint'.",
+    )
 
 
 class DataManagerSettings(

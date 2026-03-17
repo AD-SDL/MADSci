@@ -98,14 +98,15 @@ Settings for S3-compatible object storage.
 
 **Environment Prefix**: `OBJECT_STORAGE_`
 
-| Name                            | Type                   | Default         | Description                                                           | Example         |
-|---------------------------------|------------------------|-----------------|-----------------------------------------------------------------------|-----------------|
-| `OBJECT_STORAGE_ENDPOINT`       | `string` \| `NoneType` | `null`          | Endpoint for S3-compatible storage (e.g., 'storage.example.com:8333') | `null`          |
-| `OBJECT_STORAGE_ACCESS_KEY`     | `string`               | `""`            | Access key for authentication                                         | `""`            |
-| `OBJECT_STORAGE_SECRET_KEY`     | `string`               | `""`            | Secret key for authentication                                         | `""`            |
-| `OBJECT_STORAGE_SECURE`         | `boolean`              | `false`         | Whether to use HTTPS (True) or HTTP (False)                           | `false`         |
-| `OBJECT_STORAGE_DEFAULT_BUCKET` | `string`               | `"madsci-data"` | Default bucket to use for storing data                                | `"madsci-data"` |
-| `OBJECT_STORAGE_REGION`         | `string` \| `NoneType` | `null`          | Optional for AWS S3/other providers                                   | `null`          |
+| Name                             | Type                   | Default         | Description                                                                                                            | Example         |
+|----------------------------------|------------------------|-----------------|------------------------------------------------------------------------------------------------------------------------|-----------------|
+| `OBJECT_STORAGE_ENDPOINT`        | `string` \| `NoneType` | `null`          | Endpoint for S3-compatible storage (e.g., 'storage.example.com:8333')                                                  | `null`          |
+| `OBJECT_STORAGE_ACCESS_KEY`      | `string`               | `""`            | Access key for authentication                                                                                          | `""`            |
+| `OBJECT_STORAGE_SECRET_KEY`      | `string`               | `""`            | Secret key for authentication                                                                                          | `""`            |
+| `OBJECT_STORAGE_SECURE`          | `boolean`              | `false`         | Whether to use HTTPS (True) or HTTP (False)                                                                            | `false`         |
+| `OBJECT_STORAGE_DEFAULT_BUCKET`  | `string`               | `"madsci-data"` | Default bucket to use for storing data                                                                                 | `"madsci-data"` |
+| `OBJECT_STORAGE_REGION`          | `string` \| `NoneType` | `null`          | Optional for AWS S3/other providers                                                                                    | `null`          |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` | `string` \| `NoneType` | `null`          | Public-facing endpoint for object URLs (e.g., 'localhost:9333'). If not set, defaults to the same value as 'endpoint'. | `null`          |
 
 ## EventManagerSettings
 

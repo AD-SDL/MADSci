@@ -162,7 +162,7 @@ def test_query_datapoints(test_client: TestClient, test_manager: DataManager) ->
 
 
 def find_free_port():
-    """Find a free port to use for MinIO."""
+    """Find a free port to use for object storage."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         s.listen(1)
@@ -186,58 +186,43 @@ def is_docker_available():
 
 
 def cleanup_test_containers():
-    """Clean up any leftover MinIO test containers."""
+    """Clean up any leftover object storage test containers."""
     try:
-        # List all containers with our test prefix
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                "name=minio_test_",
-                "--format",
-                "{{.Names}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+        # List all containers with our test prefixes
+        for prefix in ("seaweedfs_test_", "minio_test_"):
+            result = subprocess.run(
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={prefix}",
+                    "--format",
+                    "{{.Names}}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
 
-        if result.returncode == 0 and result.stdout.strip():
-            container_names = result.stdout.strip().split("\n")
-            containers_cleaned = 0
+            if result.returncode == 0 and result.stdout.strip():
+                container_names = result.stdout.strip().split("\n")
 
-            for name in container_names:
-                if name.startswith("minio_test_"):
-                    print(f"  Stopping container: {name}")
-                    stop_result = subprocess.run(
-                        ["docker", "stop", name],
-                        capture_output=True,
-                        timeout=30,
-                        check=False,
-                    )
-
-                    print(f"  Removing container: {name}")
-                    rm_result = subprocess.run(
-                        ["docker", "rm", name],
-                        capture_output=True,
-                        timeout=30,
-                        check=False,
-                    )
-
-                    if stop_result.returncode == 0 and rm_result.returncode == 0:
-                        containers_cleaned += 1
-                    else:
-                        print(f"  Warning: Could not fully clean up {name}")
-
-            if containers_cleaned > 0:
-                print(f"Cleaned up {containers_cleaned} test container(s)")
-            else:
-                print("No containers needed cleanup")
-        else:
-            print("No MinIO test containers found")
+                for name in container_names:
+                    if name.startswith(prefix):
+                        subprocess.run(
+                            ["docker", "stop", name],
+                            capture_output=True,
+                            timeout=30,
+                            check=False,
+                        )
+                        subprocess.run(
+                            ["docker", "rm", name],
+                            capture_output=True,
+                            timeout=30,
+                            check=False,
+                        )
 
     except Exception as e:
         print(f"Could not clean up test containers: {e}")
@@ -276,24 +261,23 @@ def cleanup_on_interrupt():
 @pytest.fixture(scope="session")
 def minio_server():
     """
-    Fixture that starts a temporary MinIO server using Docker CLI directly.
+    Fixture that starts a temporary SeaweedFS S3-compatible server using Docker CLI.
     This is more reliable than testcontainers for some environments.
     """
     if not is_docker_available():
         pytest.skip("Docker not available")
 
-    # Find free ports
-    minio_port = find_free_port()
-    console_port = find_free_port()
+    # Find free port for S3 API
+    s3_port = find_free_port()
 
-    # Create temporary directory for MinIO data
-    temp_dir = tempfile.mkdtemp(prefix="minio_test_")
+    # Create temporary directory for SeaweedFS data
+    temp_dir = tempfile.mkdtemp(prefix="seaweedfs_test_")
 
     # Container name with timestamp to avoid conflicts
     timestamp = int(time.time())
-    container_name = f"minio_test_{timestamp}_{minio_port}"
+    container_name = f"seaweedfs_test_{timestamp}_{s3_port}"
 
-    # Start MinIO container using docker CLI
+    # Start SeaweedFS container using docker CLI
     docker_cmd = [
         "docker",
         "run",
@@ -301,44 +285,41 @@ def minio_server():
         "--name",
         container_name,
         "-p",
-        f"{minio_port}:9000",
-        "-p",
-        f"{console_port}:9001",
+        f"{s3_port}:8333",
         "-e",
-        "MINIO_ROOT_USER=minioadmin",
+        "AWS_ACCESS_KEY_ID=minioadmin",
         "-e",
-        "MINIO_ROOT_PASSWORD=minioadmin",
+        "AWS_SECRET_ACCESS_KEY=minioadmin",
         "-v",
         f"{temp_dir}:/data",
-        "minio/minio:latest",
+        "chrislusf/seaweedfs:4.17",
         "server",
-        "/data",
-        "--console-address",
-        ":9001",
+        "-s3",
+        "-dir=/data",
+        "-s3.port=8333",
     ]
 
     container_id = None
     try:
         # Start the container
-        print(f"Starting MinIO container on port {minio_port}...")
+        print(f"Starting SeaweedFS container on port {s3_port}...")
         result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)
         container_id = result.stdout.strip()
-        print(f"MinIO container started: {container_id[:12]}")
+        print(f"SeaweedFS container started: {container_id[:12]}")
 
-        # Wait for MinIO to be ready
-        minio_url = f"http://localhost:{minio_port}"
-        _wait_for_minio(minio_url)
-        print(f"MinIO is ready at {minio_url}")
+        # Wait for SeaweedFS to be ready
+        s3_url = f"http://localhost:{s3_port}"
+        _wait_for_object_storage(s3_url)
+        print(f"SeaweedFS is ready at {s3_url}")
 
         # Create test bucket
-        _create_test_bucket("localhost", minio_port)
+        _create_test_bucket("localhost", s3_port)
 
         yield {
             "host": "localhost",
-            "port": minio_port,
-            "console_port": console_port,
-            "endpoint": f"localhost:{minio_port}",
-            "url": minio_url,
+            "port": s3_port,
+            "endpoint": f"localhost:{s3_port}",
+            "url": s3_url,
             "access_key": "minioadmin",
             "secret_key": "minioadmin",
             "container_id": container_id,
@@ -346,60 +327,39 @@ def minio_server():
         }
 
     except subprocess.CalledProcessError as e:
-        pytest.skip(f"Failed to start MinIO container: {e.stderr}")
+        pytest.skip(f"Failed to start SeaweedFS container: {e.stderr}")
 
     finally:
-        # Individual container cleanup
         if container_id:
-            print(f"Cleaning up MinIO container {container_name}...")
             try:
-                # Stop container
-                stop_result = subprocess.run(
+                subprocess.run(
                     ["docker", "stop", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-                # Remove container
-                rm_result = subprocess.run(
+                subprocess.run(
                     ["docker", "rm", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-
-                if stop_result.returncode == 0 and rm_result.returncode == 0:
-                    print(f"Container {container_name} cleaned up")
-                else:
-                    print(
-                        f"Warning: Could not fully clean up container {container_name}"
-                    )
-
             except Exception as e:
                 print(f"Warning: Could not clean up container {container_name}: {e}")
 
-        # Remove temp directory
         try:
             shutil.rmtree(temp_dir)
-            print(f"Temporary directory {temp_dir} cleaned up")
         except Exception as e:
             print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
 
 
-def _wait_for_minio(minio_url, timeout=60):
-    """Wait for MinIO server to be ready."""
+def _wait_for_object_storage(url, timeout=60):
+    """Wait for S3-compatible object storage server to be ready."""
     start_time = time.time()
 
     while time.time() - start_time < timeout:
         try:
-            response = requests.get(f"{minio_url}/minio/health/live", timeout=5)
-            if response.status_code == 200:
-                return
-        except requests.exceptions.RequestException:
-            pass
-
-        try:
-            response = requests.get(minio_url, timeout=5)
+            response = requests.get(url, timeout=5)
             if response.status_code in [200, 403, 404]:
                 return
         except requests.exceptions.RequestException:
@@ -408,7 +368,7 @@ def _wait_for_minio(minio_url, timeout=60):
         time.sleep(2)
 
     raise TimeoutError(
-        f"MinIO server at {minio_url} did not become ready within {timeout} seconds"
+        f"Object storage server at {url} did not become ready within {timeout} seconds"
     )
 
 
@@ -516,8 +476,10 @@ def test_file_datapoint_with_minio(document_handler, tmp_path: Path) -> None:
         assert result["object_name"] == "test_minio_file"
         assert result["storage_endpoint"] == "localhost:8333"
         assert result["etag"] == "test-etag-123"
-        assert "localhost:9333" in result["url"]  # Should use port 9333 for public URL
-        assert result["url"] == "http://localhost:9333/madsci-test/test_minio_file"
+        assert (
+            "localhost:8333" in result["url"]
+        )  # Uses same endpoint when no public_endpoint set
+        assert result["url"] == "http://localhost:8333/madsci-test/test_minio_file"
 
         # Verify we can retrieve the datapoint with object storage info
         retrieved_result = test_client.get(

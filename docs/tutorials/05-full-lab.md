@@ -119,17 +119,15 @@ services:
   # ==========================================================================
 
   madsci_ferretdb:
-    image: ghcr.io/ferretdb/ferretdb:latest
+    image: ghcr.io/ferretdb/ferretdb:2
     <<: *madsci-service
     ports:
       - "27017:27017"
-    volumes:
-      - ferretdb_data:/state
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    environment:
+      - FERRETDB_POSTGRESQL_URL=postgres://postgres:postgres@postgres:5432/madsci
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine
@@ -160,7 +158,7 @@ services:
       retries: 5
 
   madsci_seaweedfs:
-    image: chrislusf/seaweedfs:latest
+    image: chrislusf/seaweedfs:4.17
     <<: *madsci-service
     ports:
       - "8333:8333"

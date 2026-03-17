@@ -761,7 +761,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
             ):
                 backup_dir = self._get_backup_dir()
                 backup_settings = DocumentDBBackupSettings(
-                    mongo_db_url=self.settings.document_db_url,
+                    document_db_url=self.settings.document_db_url,
                     database=self.settings.database_name,
                     backup_dir=backup_dir,
                     max_backups=self.settings.backup_max_count,
@@ -812,7 +812,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
                 if self._backup_dir_exists(backup_dir):
                     backup_settings = DocumentDBBackupSettings(
-                        mongo_db_url=self.settings.document_db_url,
+                        document_db_url=self.settings.document_db_url,
                         database=self.settings.database_name,
                         backup_dir=backup_dir,
                         max_backups=self.settings.backup_max_count,

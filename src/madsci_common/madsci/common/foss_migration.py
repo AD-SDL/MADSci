@@ -559,11 +559,9 @@ class FossMigrationTool:
             # mongodump
             dump_cmd = self.build_mongodump_command(db_name)
             dump_cmd.extend(["--out", dump_out])
-            result = subprocess.run(  # noqa: S603
+            subprocess.run(  # noqa: S603
                 dump_cmd, capture_output=True, text=True, check=True, timeout=600
             )
-            if result.returncode != 0:
-                raise RuntimeError(f"mongodump failed: {result.stderr}")
 
             dump_path = str(Path(dump_out) / db_name)
             if not Path(dump_path).exists():
@@ -575,11 +573,9 @@ class FossMigrationTool:
 
             # mongorestore
             restore_cmd = self.build_mongorestore_command(db_name, dump_path)
-            result = subprocess.run(  # noqa: S603
+            subprocess.run(  # noqa: S603
                 restore_cmd, capture_output=True, text=True, check=True, timeout=600
             )
-            if result.returncode != 0:
-                raise RuntimeError(f"mongorestore failed: {result.stderr}")
 
         self.logger.info("Migrated document database", database=db_name)
 
@@ -644,33 +640,33 @@ class FossMigrationTool:
             with tempfile.NamedTemporaryFile(suffix=".dump", delete=False) as tmp:
                 dump_file = tmp.name
 
-            env = environ.copy()
-            env["PGPASSWORD"] = old_info["password"]
+            try:
+                env = environ.copy()
+                env["PGPASSWORD"] = old_info["password"]
 
-            dump_cmd = self.build_pg_dump_command()
-            dump_cmd.extend(["--file", dump_file])
-            subprocess.run(  # noqa: S603
-                dump_cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=600,
-            )
+                dump_cmd = self.build_pg_dump_command()
+                dump_cmd.extend(["--file", dump_file])
+                subprocess.run(  # noqa: S603
+                    dump_cmd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=600,
+                )
 
-            env["PGPASSWORD"] = new_info["password"]
-            restore_cmd = self.build_pg_restore_command(dump_file)
-            subprocess.run(  # noqa: S603
-                restore_cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=600,
-            )
-
-            # Clean up temp file
-            Path(dump_file).unlink(missing_ok=True)
+                env["PGPASSWORD"] = new_info["password"]
+                restore_cmd = self.build_pg_restore_command(dump_file)
+                subprocess.run(  # noqa: S603
+                    restore_cmd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=600,
+                )
+            finally:
+                Path(dump_file).unlink(missing_ok=True)
 
             return FossMigrationStepResult(
                 step="migrate_postgresql",

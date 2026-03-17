@@ -11,7 +11,7 @@ See the main [README](../../README.md#installation) for installation options. Th
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_workcell.manager.yaml](../../examples/example_lab/managers/example_workcell.manager.yaml)
 
-**Dependencies**: FerretDB and Valkey (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../examples/example_lab/))
+**Dependencies**: FerretDB and Valkey (see [example_lab/compose.infra.yaml](../../examples/example_lab/compose.infra.yaml))
 
 ## Usage
 
