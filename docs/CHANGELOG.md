@@ -5,6 +5,61 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### FOSS Infrastructure Migration (Issue #212)
+- New FOSS migration tool (`madsci.common.foss_migration`) for automated data migration from proprietary infrastructure (MongoDB, Redis, MinIO) to FOSS alternatives (FerretDB, Valkey, SeaweedFS)
+  - `FossMigrationTool` orchestrator with 20+ methods covering prerequisite checks, Docker lifecycle management, database-specific migrations, and post-migration verification
+  - `FossMigrationSettings` with environment variable support and customizable compose file/service names
+  - `FossMigrationStepResult` and `FossMigrationReport` result models for structured migration reporting
+- New `madsci migrate foss` CLI command with `--dry-run`/`--apply` modes, per-step execution (`--step`), `--skip-backup`, `--skip-docker`, URL overrides, and Rich table output
+- Docker Compose migration overlay (`compose.migration.yaml`) for running old containers on alternate ports during migration (MongoDB:27018, PostgreSQL:5433, MinIO:9002)
+- Comprehensive FOSS migration guide (`docs/guides/foss_migration.md`) with prerequisites, quick start, troubleshooting, and data directory reference
+- FOSS migration test suites: CLI tests (129 lines) and tool unit tests (536 lines)
+
+### Changed
+
+#### Default Infrastructure: FOSS Alternatives
+- **MongoDB → FerretDB v2**: Default document database switched to FerretDB (MongoDB wire protocol, backed by PostgreSQL with DocumentDB extension); Python `pymongo` client unchanged
+- **Redis → Valkey 8**: Default key-value store switched to Valkey (drop-in API-compatible); Python `redis` client unchanged
+- **MinIO → SeaweedFS 4.17**: Default object storage switched to SeaweedFS (S3-compatible); Python `minio` SDK unchanged
+- **PostgreSQL split**: Two separate PostgreSQL instances — `madsci_postgres` (port 5432, `postgres-documentdb-dev:17-ferretdb` for FerretDB) and `madsci_postgres_resources` (port 5434, `postgres:17` for Resource Manager) — replacing the single shared instance
+
+#### Vendor-Neutral Renames
+- Handler files: `mongo_handler.py` → `document_storage_handler.py`, `minio_handler.py` → `object_storage_handler.py`
+- Handler classes: `PyMongoHandler` → `PyDocumentStorageHandler`, `InMemoryMongoHandler` → `InMemoryDocumentStorageHandler`, `RealMinioHandler` → `RealObjectStorageHandler`, `InMemoryMinioHandler` → `InMemoryObjectStorageHandler`
+- Backup tools: `mongodb_backup.py` → `document_db_backup.py`, `mongo_cli.py` → `document_db_cli.py`, `MongoDBBackupTool` → `DocumentDBBackupTool`, `MongoDBBackupSettings` → `DocumentDBBackupSettings`
+- Migration tools: `mongodb_migration_tool.py` → `document_db_migration_tool.py`, `mongodb_version_checker.py` → `document_db_version_checker.py`
+- Helper function: `create_minio_client()` → `create_object_storage_client()` (with new `_normalise_endpoint()` for URL scheme stripping)
+- Manager constructor parameters: `mongo_handler` → `document_handler`, `minio_handler` → `object_storage_handler`
+- Settings fields: `mongo_db_url` → `document_db_url` across all managers (backward-compatible via `AliasChoices` validation aliases)
+- Docker types: `MONGODB_PORT` → `DOCUMENT_DB_PORT`, `MINIO_PORT` → `OBJECT_STORAGE_PORT` (8333), `MINIO_CONSOLE_PORT` → `OBJECT_STORAGE_CONSOLE_PORT` (9333)
+- CLI entry point: `madsci-mongodb-backup` → `madsci-document-db-backup`
+- Backup settings files: now check for both `document_db_backup.*` and legacy `mongodb_backup.*` filenames
+
+#### Configuration and Port Changes
+- Default object storage ports changed from MinIO conventions (9000/9001) to SeaweedFS defaults (8333/9333)
+- Resource Manager PostgreSQL moved to port 5434 (FerretDB backend occupies 5432)
+- Default `POSTGRES_DB` changed from `resources` to `postgres` (FerretDB requirement)
+- SeaweedFS S3 credentials configured via `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` environment variables
+- New `public_endpoint` field on `ObjectStorageSettings` for customizable public-facing URLs (replaces hardcoded port rewriting)
+
+#### Templates
+- Lab templates (`standard`, `distributed`) updated: service names (`mongodb` → `ferretdb`, `redis` → `valkey`), environment variables, and dependencies aligned with FOSS stack
+
+#### Documentation
+- Operator guides updated for FOSS stack: backup/recovery, troubleshooting, updates/maintenance
+- Manager READMEs updated with FerretDB/Valkey/SeaweedFS references and new handler names
+- Tutorials updated with new service names, ports, and compose configuration
+- `madsci_common` README updated with new backup tool class names
+
+### Removed
+- `workcell_manager.compose.yaml` (redundant compose file)
+- MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)
+- Hardcoded MinIO console port rewriting logic in `object_storage_helpers.py` (replaced by configurable `public_endpoint`)
+
 ## [0.7.1] - 2026-03-10
 
 ### Added
