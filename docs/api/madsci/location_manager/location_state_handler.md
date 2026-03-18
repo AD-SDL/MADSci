@@ -8,7 +8,7 @@ and cache (Valkey) for transient state (locks, change counters).
 Classes
 -------
 
-`LocationStateHandler(settings: madsci.common.types.location_types.LocationManagerSettings, manager_id: str, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None)`
+`LocationStateHandler(settings: madsci.common.types.location_types.LocationManagerSettings, manager_id: str, redis_connection: Any | None = None, cache_handler: madsci.common.db_handlers.cache_handler.CacheHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None)`
 :   Manages state for a MADSci Location Manager.
     
     - Document storage handler: persistent location CRUD
@@ -23,9 +23,9 @@ Classes
     manager_id:
         Unique identifier for this manager instance.
     redis_connection:
-        Deprecated. Use redis_handler instead.
-    redis_handler:
-        Redis handler for transient state (locks, change counters).
+        Deprecated. Use cache_handler instead.
+    cache_handler:
+        Cache handler for transient state (locks, change counters).
     document_handler:
         Document storage handler for persistent location storage.
 

@@ -3,10 +3,10 @@
 import pytest
 import yaml
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     CapacityCostConfig,
     Location,
@@ -32,15 +32,15 @@ def document_handler():
 
 
 @pytest.fixture
-def redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def app(redis_handler, document_handler):
+def app(cache_handler, document_handler):
     """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -48,7 +48,7 @@ def app(redis_handler, document_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
     )
     return manager.create_server(
@@ -293,7 +293,7 @@ def test_location_state_persistence(client, sample_location):
 
 
 @pytest.fixture
-def transfer_setup(redis_handler):
+def transfer_setup(cache_handler):
     """Create a location manager with transfer capabilities for testing."""
     # Create sample transfer templates with simplified format
     transfer_template1 = TransferStepTemplate(
@@ -354,7 +354,7 @@ def transfer_setup(redis_handler):
     locations = [location1, location2, location3, location4]
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -911,14 +911,14 @@ def test_get_location_resources_endpoint_invalid_location(transfer_setup):
     assert "not found" in error_data["detail"]
 
 
-def test_transfer_graph_without_transfer_capabilities(redis_handler):
+def test_transfer_graph_without_transfer_capabilities(cache_handler):
     """Test transfer graph behavior when no transfer capabilities are defined."""
     # Create a location manager without transfer capabilities
     settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(
@@ -940,7 +940,7 @@ def test_transfer_graph_without_transfer_capabilities(redis_handler):
     assert response.json() == {}
 
 
-def test_get_location_by_id_query_endpoint(redis_handler):
+def test_get_location_by_id_query_endpoint(cache_handler):
     """Test the get location by ID via query parameter API endpoint."""
     location_def = Location(
         location_name="test_location_by_id_query",
@@ -952,7 +952,7 @@ def test_get_location_by_id_query_endpoint(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(location_def)
@@ -968,13 +968,13 @@ def test_get_location_by_id_query_endpoint(redis_handler):
     assert location_data["description"] == "A test location for ID-based query lookup"
 
 
-def test_get_location_by_name_endpoint_not_found(redis_handler):
+def test_get_location_by_name_endpoint_not_found(cache_handler):
     """Test the get location by name API endpoint when location doesn't exist."""
     settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -989,7 +989,7 @@ def test_get_location_by_name_endpoint_not_found(redis_handler):
 
 
 def test_get_location_by_name_endpoint_multiple_locations(
-    redis_handler,
+    cache_handler,
 ):
     """Test the get location by name API endpoint with multiple locations."""
     location_def1 = Location(
@@ -1014,7 +1014,7 @@ def test_get_location_by_name_endpoint_multiple_locations(
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1044,13 +1044,13 @@ def test_get_location_by_name_endpoint_multiple_locations(
     assert response.status_code == 404
 
 
-def test_get_location_query_parameter_validation(redis_handler):
+def test_get_location_query_parameter_validation(cache_handler):
     """Test query parameter validation for the new location endpoint."""
     settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -1068,7 +1068,7 @@ def test_get_location_query_parameter_validation(redis_handler):
     assert "exactly one" in error_data["detail"].lower()
 
 
-def test_get_location_by_id_query_parameter(redis_handler):
+def test_get_location_by_id_query_parameter(cache_handler):
     """Test lookup by location_id using query parameter."""
     location_def = Location(
         location_name="test_location_by_id",
@@ -1080,7 +1080,7 @@ def test_get_location_by_id_query_parameter(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(location_def)
@@ -1107,7 +1107,7 @@ def test_get_location_by_id_query_parameter(redis_handler):
 
 
 # Non-transfer location tests
-def test_non_transfer_location_creation(redis_handler):
+def test_non_transfer_location_creation(cache_handler):
     """Test creating locations with allow_transfers=False."""
     non_transfer_location = Location(
         location_name="non_transfer_station",
@@ -1127,7 +1127,7 @@ def test_non_transfer_location_creation(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1146,7 +1146,7 @@ def test_non_transfer_location_creation(redis_handler):
     assert location_data["allow_transfers"] is True
 
 
-def test_non_transfer_location_excluded_from_graph(redis_handler):
+def test_non_transfer_location_excluded_from_graph(cache_handler):
     """Test that non-transfer locations are excluded from transfer graph construction."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1188,7 +1188,7 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
     )
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1206,7 +1206,7 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
         assert dst != non_transfer_loc.location_id
 
 
-def test_non_transfer_location_plan_transfer_error(redis_handler):
+def test_non_transfer_location_plan_transfer_error(cache_handler):
     """Test that planning transfers to/from non-transfer locations raises appropriate errors."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1242,7 +1242,7 @@ def test_non_transfer_location_plan_transfer_error(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1338,7 +1338,7 @@ def test_location_allow_transfers_default():
 
 
 @pytest.fixture
-def override_transfer_setup(redis_handler):
+def override_transfer_setup(cache_handler):
     """Create a location manager with override transfer templates for testing."""
     # Create standard transfer templates
     default_robot_template = TransferStepTemplate(
@@ -1450,7 +1450,7 @@ def override_transfer_setup(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1567,7 +1567,7 @@ def test_default_templates_when_no_overrides(override_transfer_setup):
     assert edge.transfer_template.node_name != "conveyor_fast"
 
 
-def test_override_templates_with_location_ids(redis_handler):
+def test_override_templates_with_location_ids(cache_handler):
     """Test that override templates work with location IDs instead of names."""
     # Create locations
     station_x = Location(
@@ -1614,7 +1614,7 @@ def test_override_templates_with_location_ids(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1629,7 +1629,7 @@ def test_override_templates_with_location_ids(redis_handler):
     assert edge.cost == 0.1
 
 
-def test_override_templates_with_mixed_keys(redis_handler):
+def test_override_templates_with_mixed_keys(cache_handler):
     """Test that override templates work with mixed location names and IDs."""
     # Create locations
     station_1 = Location(
@@ -1679,7 +1679,7 @@ def test_override_templates_with_mixed_keys(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1725,7 +1725,7 @@ def test_plan_transfer_with_overrides(override_transfer_setup):
     assert step.action in ["special_transfer", "fast_move"]
 
 
-def test_no_override_templates_defined(redis_handler):
+def test_no_override_templates_defined(cache_handler):
     """Test that system works correctly when no override templates are defined."""
     # Create basic transfer capabilities without overrides
     default_template = TransferStepTemplate(
@@ -1759,7 +1759,7 @@ def test_no_override_templates_defined(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1774,7 +1774,7 @@ def test_no_override_templates_defined(redis_handler):
         assert edge.transfer_template.action == "basic_transfer"
 
 
-def test_empty_override_templates(redis_handler):
+def test_empty_override_templates(cache_handler):
     """Test that system works correctly when override templates are defined but empty."""
     # Create transfer capabilities with empty overrides
     default_template = TransferStepTemplate(
@@ -1809,7 +1809,7 @@ def test_empty_override_templates(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1840,7 +1840,7 @@ def mock_resource():
     return MockResource
 
 
-def test_capacity_cost_adjustment_disabled(redis_handler):
+def test_capacity_cost_adjustment_disabled(cache_handler):
     """Test that capacity cost adjustments are not applied when disabled."""
     # Create basic setup without capacity config
     template = TransferStepTemplate(
@@ -1873,7 +1873,7 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
     # Create manager without resource client to test disabled path
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1891,7 +1891,7 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
+def test_capacity_cost_adjustment_enabled_no_resource(cache_handler):
     """Test capacity cost adjustment when enabled but destination has no resource."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -1933,7 +1933,7 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -1946,7 +1946,7 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resource):
+def test_capacity_cost_adjustment_with_mock_resource(cache_handler, mock_resource):
     """Test capacity cost adjustments with various capacity levels."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -1986,7 +1986,7 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -2067,7 +2067,7 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
     manager.transfer_planner.resource_client.get_resource = original_get_resource
 
 
-def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resource):
+def test_capacity_cost_adjustment_with_no_capacity_set(cache_handler, mock_resource):
     """Test that no adjustment is applied when resource has no capacity set."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2107,7 +2107,7 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -2138,7 +2138,7 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
     assert edge.cost == 1.0  # No multiplier when capacity is None
 
 
-def test_capacity_cost_adjustment_resource_client_error(redis_handler):
+def test_capacity_cost_adjustment_resource_client_error(cache_handler):
     """Test that base cost is returned when resource client throws error."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2178,7 +2178,7 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -2207,7 +2207,7 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
     assert edge.cost == 1.0  # Should fallback to base cost on error
 
 
-def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resource):
+def test_transfer_planning_with_capacity_constraints(cache_handler, mock_resource):
     """Test that transfer planning chooses paths with lower capacity utilization."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2254,7 +2254,7 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_a, location_b, location_c]:
@@ -2300,7 +2300,7 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
 # Additional Arguments in Transfer Templates Tests
 
 
-def test_transfer_template_with_additional_standard_args(redis_handler):
+def test_transfer_template_with_additional_standard_args(cache_handler):
     """Test that transfer templates with additional standard arguments are handled correctly."""
     # Create transfer template with additional standard arguments
     template_with_args = TransferStepTemplate(
@@ -2341,7 +2341,7 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
@@ -2379,7 +2379,7 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
     assert step.action == "parameterized_transfer"
 
 
-def test_transfer_template_with_additional_location_args(redis_handler):
+def test_transfer_template_with_additional_location_args(cache_handler):
     """Test that transfer templates with additional location arguments are handled correctly."""
     # Create transfer template with additional location arguments
     template_with_locations = TransferStepTemplate(
@@ -2417,7 +2417,7 @@ def test_transfer_template_with_additional_location_args(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_a, location_b]:
@@ -2455,7 +2455,7 @@ def test_transfer_template_with_additional_location_args(redis_handler):
 
 
 def test_transfer_template_with_both_additional_args_types(
-    redis_handler,
+    cache_handler,
 ):
     """Test that transfer templates with both additional standard and location arguments work correctly."""
     # Create transfer template with both types of additional arguments
@@ -2499,7 +2499,7 @@ def test_transfer_template_with_both_additional_args_types(
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_x, location_y]:
@@ -2538,7 +2538,7 @@ def test_transfer_template_with_both_additional_args_types(
     assert step.action == "comprehensive_transfer"
 
 
-def test_override_templates_with_additional_args(redis_handler):
+def test_override_templates_with_additional_args(cache_handler):
     """Test that override templates with additional arguments work correctly."""
     # Create default template with minimal arguments
     default_template = TransferStepTemplate(
@@ -2607,7 +2607,7 @@ def test_override_templates_with_additional_args(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [enhanced_source, normal_destination, regular_source]:
@@ -2660,7 +2660,7 @@ def test_override_templates_with_additional_args(redis_handler):
     assert "checkpoint_location" not in step.locations  # No additional location args
 
 
-def test_multi_step_transfer_with_additional_args(redis_handler):
+def test_multi_step_transfer_with_additional_args(cache_handler):
     """Test that multi-step transfers preserve additional arguments for each step."""
     # Create templates with different additional arguments
     robot_template = TransferStepTemplate(
@@ -2724,7 +2724,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [station_a, station_b, station_c]:
@@ -2766,7 +2766,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
     assert step2.locations["sensor_location"] == "belt_sensor_point"
 
 
-def test_empty_additional_args_default_behavior(redis_handler):
+def test_empty_additional_args_default_behavior(cache_handler):
     """Test that templates without additional arguments work exactly as before."""
     # Create template without any additional arguments (should behave exactly as before)
     traditional_template = TransferStepTemplate(
@@ -2801,7 +2801,7 @@ def test_empty_additional_args_default_behavior(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_1, location_2]:
@@ -2836,7 +2836,7 @@ def test_empty_additional_args_default_behavior(redis_handler):
 # Remove Representation and Detach Resource Tests
 
 
-def test_remove_representation_success(redis_handler):
+def test_remove_representation_success(cache_handler):
     """Test successful removal of a representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2852,7 +2852,7 @@ def test_remove_representation_success(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -2872,13 +2872,13 @@ def test_remove_representation_success(redis_handler):
     assert updated_location.representations["robot_2"] == {"position": [1, 1, 1]}
 
 
-def test_remove_representation_location_not_found(redis_handler):
+def test_remove_representation_location_not_found(cache_handler):
     """Test removing representation from non-existent location."""
     settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -2891,7 +2891,7 @@ def test_remove_representation_location_not_found(redis_handler):
     assert "not found" in response.json()["detail"]
 
 
-def test_remove_representation_node_not_found(redis_handler):
+def test_remove_representation_node_not_found(cache_handler):
     """Test removing non-existent representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2904,7 +2904,7 @@ def test_remove_representation_node_not_found(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -2919,7 +2919,7 @@ def test_remove_representation_node_not_found(redis_handler):
     assert "Representation for node 'robot_2' not found" in response.json()["detail"]
 
 
-def test_remove_representation_no_representations(redis_handler):
+def test_remove_representation_no_representations(cache_handler):
     """Test removing representation from location with no representations."""
     location_id = new_ulid_str()
     location = Location(location_id=location_id, location_name="test_location")
@@ -2928,7 +2928,7 @@ def test_remove_representation_no_representations(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -2943,7 +2943,7 @@ def test_remove_representation_no_representations(redis_handler):
     assert "Representation for node 'robot_1' not found" in response.json()["detail"]
 
 
-def test_remove_last_representation(redis_handler):
+def test_remove_last_representation(cache_handler):
     """Test removing the last representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2956,7 +2956,7 @@ def test_remove_last_representation(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -2974,7 +2974,7 @@ def test_remove_last_representation(redis_handler):
     assert updated_location.representations == {}
 
 
-def test_attach_and_detach_resource_success(redis_handler):
+def test_attach_and_detach_resource_success(cache_handler):
     """Test successful detachment of a resource from a location."""
     location_id = new_ulid_str()
     resource_id = new_ulid_str()
@@ -2984,7 +2984,7 @@ def test_attach_and_detach_resource_success(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -3005,13 +3005,13 @@ def test_attach_and_detach_resource_success(redis_handler):
     assert updated_location.resource_id is None
 
 
-def test_detach_resource_location_not_found(redis_handler):
+def test_detach_resource_location_not_found(cache_handler):
     """Test detaching resource from non-existent location."""
     settings = LocationManagerSettings()
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -3022,7 +3022,7 @@ def test_detach_resource_location_not_found(redis_handler):
     assert "not found" in response.json()["detail"]
 
 
-def test_detach_resource_no_resource_attached(redis_handler):
+def test_detach_resource_no_resource_attached(cache_handler):
     """Test detaching resource from location with no resource attached."""
     location_id = new_ulid_str()
     location = Location(
@@ -3035,7 +3035,7 @@ def test_detach_resource_no_resource_attached(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -3050,7 +3050,7 @@ def test_detach_resource_no_resource_attached(redis_handler):
     assert "No resource attached" in response.json()["detail"]
 
 
-def test_remove_representation_rebuilds_transfer_graph(redis_handler):
+def test_remove_representation_rebuilds_transfer_graph(cache_handler):
     """Test that removing representation rebuilds the transfer graph."""
     # Create template with transfer capabilities
     template = TransferStepTemplate(
@@ -3074,7 +3074,7 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
@@ -3191,7 +3191,7 @@ def test_export_locations(client):
     assert len(locations) == 3
 
 
-def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
+def test_seed_file_loads_on_empty_db(tmp_path, cache_handler):
     """Seed file should be loaded when MongoDB is empty."""
     seed_file = tmp_path / "locations.yaml"
     seed_data = [
@@ -3208,7 +3208,7 @@ def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
     )
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_seed"),
     )
     client = TestClient(manager.create_server())
@@ -3222,7 +3222,7 @@ def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
     client.close()
 
 
-def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
+def test_seed_file_skipped_when_db_has_locations(tmp_path, cache_handler):
     """Seed file should be ignored when MongoDB already has data."""
     seed_file = tmp_path / "locations.yaml"
 
@@ -3241,7 +3241,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=mongo,
     )
     client = TestClient(manager.create_server())
@@ -3254,7 +3254,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     client.close()
 
 
-def test_seed_file_missing_no_error(redis_handler):
+def test_seed_file_missing_no_error(cache_handler):
     """No error if seed file path doesn't exist."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -3262,7 +3262,7 @@ def test_seed_file_missing_no_error(redis_handler):
     )
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=InMemoryDocumentStorageHandler(database_name="test_no_seed"),
     )
     client = TestClient(manager.create_server())

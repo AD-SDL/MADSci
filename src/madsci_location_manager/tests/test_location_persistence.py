@@ -7,10 +7,10 @@ Locations are persisted in the document database at runtime. This module tests:
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
     LocationManagerSettings,
@@ -28,9 +28,9 @@ def document_handler():
 
 
 @pytest.fixture
-def redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
@@ -53,7 +53,7 @@ def location_defs():
 
 
 @pytest.fixture
-def app_with_locations(redis_handler, document_handler, location_defs):
+def app_with_locations(cache_handler, document_handler, location_defs):
     """Create a test app with pre-configured locations and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -61,7 +61,7 @@ def app_with_locations(redis_handler, document_handler, location_defs):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
     )
     for location in location_defs:
@@ -78,7 +78,7 @@ def client_with_locations(app_with_locations):
 
 
 @pytest.fixture
-def empty_app(redis_handler, document_handler):
+def empty_app(cache_handler, document_handler):
     """Create a test app with no pre-configured locations."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -86,7 +86,7 @@ def empty_app(redis_handler, document_handler):
 
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
     )
     return manager.create_server(version="0.1.0")

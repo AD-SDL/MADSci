@@ -16,7 +16,7 @@ from madsci.client.location_client import (
 from madsci.common.context import (
     get_current_madsci_context,
 )
-from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
 from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
@@ -69,7 +69,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
         document_handler: Optional[DocumentStorageHandler] = None,
         start_engine: bool = True,
         **kwargs: Any,
@@ -77,7 +77,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         """Initialize the WorkcellManager."""
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -89,7 +89,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             )
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
-        self.redis_handler = redis_handler
+        self.cache_handler = cache_handler
         self.document_handler = document_handler
         self.start_engine = start_engine
 
@@ -130,7 +130,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
-                redis_handler=self.redis_handler,
+                cache_handler=self.cache_handler,
                 document_handler=self.document_handler,
             )
 
@@ -193,7 +193,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
-            redis_handler=self.redis_handler,
+            cache_handler=self.cache_handler,
             document_handler=self.document_handler,
         )
 
@@ -266,8 +266,8 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
 
         try:
             # Test cache connection via handler
-            if hasattr(self.state_handler, "_redis_handler"):
-                health.cache_connected = self.state_handler._redis_handler.ping()
+            if hasattr(self.state_handler, "_cache_handler"):
+                health.cache_connected = self.state_handler._cache_handler.ping()
             else:
                 health.cache_connected = None
 

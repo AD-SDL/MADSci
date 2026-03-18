@@ -19,7 +19,7 @@ Functions
 Classes
 -------
 
-`LocationMigrator(redis_handler: RedisHandler, document_handler: DocumentStorageHandler, manager_id: str, event_logger: Optional[Any] = None)`
+`LocationMigrator(cache_handler: CacheHandler, document_handler: DocumentStorageHandler, manager_id: str, event_logger: Optional[Any] = None)`
 :   Migrates locations from 0.7.1 Redis format to the document database.
     
     Initialize the migrator with cache/document database handlers and manager ID.

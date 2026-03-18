@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
 from madsci.common.types.location_types import Location
 
 logger = logging.getLogger(__name__)
@@ -40,13 +40,13 @@ class LocationMigrator:
 
     def __init__(
         self,
-        redis_handler: RedisHandler,
+        cache_handler: CacheHandler,
         document_handler: DocumentStorageHandler,
         manager_id: str,
         event_logger: Optional[Any] = None,
     ) -> None:
         """Initialize the migrator with cache/document database handlers and manager ID."""
-        self._redis_handler = redis_handler
+        self._cache_handler = cache_handler
         self._document_handler = document_handler
         self._manager_id = manager_id
         self._event_logger = event_logger
@@ -71,7 +71,7 @@ class LocationMigrator:
         old_key = f"madsci:location_manager:{self._manager_id}:locations"
 
         try:
-            old_dict = self._redis_handler.create_dict(old_key)
+            old_dict = self._cache_handler.create_dict(old_key)
             if not old_dict:
                 self._log("No old Redis data found, nothing to migrate.")
                 return result
@@ -234,11 +234,11 @@ def main() -> None:
     args = parser.parse_args()
 
     from madsci.common.db_handlers import (  # noqa: PLC0415
+        PyCacheHandler,
         PyDocumentStorageHandler,
-        PyRedisHandler,
     )
 
-    redis_handler = PyRedisHandler.from_settings(
+    cache_handler = PyCacheHandler.from_settings(
         host=args.redis_host,
         port=args.redis_port,
         password=args.redis_password,
@@ -246,7 +246,7 @@ def main() -> None:
     document_handler = PyDocumentStorageHandler.from_url(args.mongo_url, args.database)
 
     migrator = LocationMigrator(
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
         manager_id=args.manager_id,
     )

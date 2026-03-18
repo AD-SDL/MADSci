@@ -1,10 +1,10 @@
 """Tests for the dual-handler LocationStateHandler (document database + cache)."""
 
 import pytest
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
     LocationManagerSettings,
@@ -24,9 +24,9 @@ def document_handler():
 
 
 @pytest.fixture
-def redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
@@ -38,13 +38,13 @@ def settings():
 
 
 @pytest.fixture
-def state_handler(settings, document_handler, redis_handler):
+def state_handler(settings, document_handler, cache_handler):
     """Create a LocationStateHandler with both handlers."""
     handler = LocationStateHandler(
         settings=settings,
         manager_id="test_manager",
         document_handler=document_handler,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
     )
     yield handler
     handler.close()
@@ -63,16 +63,16 @@ def sample_location():
 class TestInit:
     """Tests for state handler initialization."""
 
-    def test_init_with_both_handlers(self, settings, document_handler, redis_handler):
-        """Construct with InMemoryDocumentStorageHandler + InMemoryRedisHandler."""
+    def test_init_with_both_handlers(self, settings, document_handler, cache_handler):
+        """Construct with InMemoryDocumentStorageHandler + InMemoryCacheHandler."""
         handler = LocationStateHandler(
             settings=settings,
             manager_id="test",
             document_handler=document_handler,
-            redis_handler=redis_handler,
+            cache_handler=cache_handler,
         )
         assert handler._document_handler is document_handler
-        assert handler._redis_handler is redis_handler
+        assert handler._cache_handler is cache_handler
         handler.close()
 
 
@@ -200,17 +200,17 @@ class TestDeleteLocation:
         assert result is False
 
 
-class TestRedisTransientState:
-    """Tests for Redis-based transient state operations."""
+class TestCacheTransientState:
+    """Tests for cache-based transient state operations."""
 
-    def test_state_change_counter_uses_redis(self, state_handler):
-        """mark_state_changed() increments Redis counter."""
+    def test_state_change_counter_uses_cache(self, state_handler):
+        """mark_state_changed() increments cache counter."""
         val1 = state_handler.mark_state_changed()
         val2 = state_handler.mark_state_changed()
         assert val2 > val1
 
-    def test_has_state_changed_uses_redis(self, state_handler):
-        """has_state_changed() reads from Redis."""
+    def test_has_state_changed_uses_cache(self, state_handler):
+        """has_state_changed() reads from cache."""
         # Synchronize the marker by reading once (initial state may differ)
         state_handler.has_state_changed()
         # Now no further changes, should be False
@@ -221,8 +221,8 @@ class TestRedisTransientState:
         # After checking, should be false until next change
         assert state_handler.has_state_changed() is False
 
-    def test_lock_uses_redis(self, state_handler):
-        """Lock is created via Redis handler."""
+    def test_lock_uses_cache(self, state_handler):
+        """Lock is created via cache handler."""
         lock = state_handler.location_state_lock()
         assert lock is not None
 
@@ -438,12 +438,12 @@ class TestClose:
     def test_close_closes_both_handlers(self, settings):
         """Close should close both document database and cache handlers."""
         mongo = InMemoryDocumentStorageHandler(database_name="test")
-        redis = InMemoryRedisHandler()
+        cache = InMemoryCacheHandler()
         handler = LocationStateHandler(
             settings=settings,
             manager_id="test",
             document_handler=mongo,
-            redis_handler=redis,
+            cache_handler=cache,
         )
         handler.close()
         # Both handlers should have been closed without errors

@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
 from madsci.common.document_db_version_checker import (
     DocumentDBVersionChecker,
     ensure_schema_indexes,
@@ -60,19 +60,19 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         self,
         settings: Optional[LocationManagerSettings] = None,
         redis_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
         document_handler: Optional[DocumentStorageHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.redis_connection = redis_connection
-        self.redis_handler = redis_handler
+        self.cache_handler = cache_handler
         self.document_handler = document_handler
         super().__init__(settings=settings, **kwargs)
 
@@ -141,7 +141,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             settings=self.settings,
             manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
-            redis_handler=self.redis_handler,
+            cache_handler=self.cache_handler,
             document_handler=self.document_handler,
         )
 
@@ -215,7 +215,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         old_prefix = f"madsci:location_manager:{self.settings.manager_id}"
         old_dict_key = f"{old_prefix}:locations"
         try:
-            old_locations = self.state_handler._redis_handler.create_dict(old_dict_key)
+            old_locations = self.state_handler._cache_handler.create_dict(old_dict_key)
             if not old_locations:
                 return  # No old cache data either
 
@@ -512,8 +512,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 health.document_db_connected = None
 
             # Test cache connection if configured
-            if hasattr(self.state_handler, "_redis_handler"):
-                health.cache_connected = self.state_handler._redis_handler.ping()
+            if hasattr(self.state_handler, "_cache_handler"):
+                health.cache_connected = self.state_handler._cache_handler.ping()
             else:
                 health.cache_connected = None
 

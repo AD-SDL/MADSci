@@ -8,7 +8,7 @@ database connections in production.
 
 Handler types:
 - DocumentStorageHandler: MongoDB-compatible document database access (PyDocumentStorageHandler, InMemoryDocumentStorageHandler)
-- RedisHandler: Redis/Valkey key-value + data structure access (PyRedisHandler, InMemoryRedisHandler)
+- CacheHandler: Redis/Valkey key-value + data structure access (PyCacheHandler, InMemoryCacheHandler)
 - PostgresHandler: PostgreSQL/SQLite via SQLAlchemy (SQLAlchemyHandler, SQLiteHandler)
 - ObjectStorageHandler: S3-compatible object storage access (RealObjectStorageHandler, InMemoryObjectStorageHandler)
 
@@ -17,7 +17,7 @@ Sub-modules
 * madsci.common.db_handlers.document_storage_handler
 * madsci.common.db_handlers.object_storage_handler
 * madsci.common.db_handlers.postgres_handler
-* madsci.common.db_handlers.redis_handler
+* madsci.common.db_handlers.cache_handler
 
 Classes
 -------
@@ -141,12 +141,12 @@ Classes
     `upload_file(self, bucket: str, object_name: str, file_path: Union[str, Path], content_type: Optional[str] = None, metadata: Optional[dict[str, str]] = None) ‑> dict[str, typing.Any]`
     :   Upload a file to in-memory storage.
 
-`InMemoryRedisHandler(client: Optional[Any] = None)`
-:   Redis handler backed by in-memory data structures for testing.
+`InMemoryCacheHandler(client: Optional[Any] = None)`
+:   Cache handler backed by in-memory data structures for testing.
     
     Usage::
     
-        handler = InMemoryRedisHandler()
+        handler = InMemoryCacheHandler()
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     
@@ -160,7 +160,7 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.redis_handler.RedisHandler
+    * madsci.common.db_handlers.cache_handler.CacheHandler
     * abc.ABC
 
     ### Methods
@@ -351,15 +351,15 @@ Classes
     `ping(self) ‑> bool`
     :   Ping the document database server.
 
-`PyRedisHandler(client: Any)`
-:   Redis handler backed by a real Redis server.
+`PyCacheHandler(client: Any)`
+:   Cache handler backed by a real Redis/Valkey server.
     
     Uses ``redis.Redis`` for basic operations and ``pottery`` for
     RedisDict, RedisList, and Redlock data structures.
     
     Usage::
     
-        handler = PyRedisHandler.from_settings(host="localhost", port=6379)
+        handler = PyCacheHandler.from_settings(host="localhost", port=6379)
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     
@@ -370,12 +370,12 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.redis_handler.RedisHandler
+    * madsci.common.db_handlers.cache_handler.CacheHandler
     * abc.ABC
 
     ### Static methods
 
-    `from_settings(host: str = 'localhost', port: int = 6379, password: Optional[str] = None) ‑> madsci.common.db_handlers.redis_handler.PyRedisHandler`
+    `from_settings(host: str = 'localhost', port: int = 6379, password: Optional[str] = None) ‑> madsci.common.db_handlers.cache_handler.PyCacheHandler`
     :   Create a handler by connecting to a Redis server.
         
         Args:
@@ -384,7 +384,7 @@ Classes
             password: Optional Redis password.
         
         Returns:
-            A new PyRedisHandler instance.
+            A new PyCacheHandler instance.
 
     ### Methods
 
@@ -465,9 +465,9 @@ Classes
     `upload_file(self, bucket: str, object_name: str, file_path: Union[str, Path], content_type: Optional[str] = None, metadata: Optional[dict[str, str]] = None) ‑> dict[str, typing.Any]`
     :   Upload a file to S3-compatible object storage.
 
-`RedisHandler()`
-:   Abstract interface for Redis access.
-    
+`CacheHandler()`
+:   Abstract interface for cache (Redis/Valkey) access.
+
     Managers use this interface instead of directly depending on
     ``redis.Redis`` and ``pottery`` data structures, enabling
     in-memory substitution for tests.
@@ -478,8 +478,8 @@ Classes
 
     ### Descendants
 
-    * madsci.common.db_handlers.redis_handler.InMemoryRedisHandler
-    * madsci.common.db_handlers.redis_handler.PyRedisHandler
+    * madsci.common.db_handlers.cache_handler.InMemoryCacheHandler
+    * madsci.common.db_handlers.cache_handler.PyCacheHandler
 
     ### Methods
 

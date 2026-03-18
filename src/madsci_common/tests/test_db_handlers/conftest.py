@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
@@ -10,7 +11,6 @@ from madsci.common.db_handlers.object_storage_handler import (
     InMemoryObjectStorageHandler,
 )
 from madsci.common.db_handlers.postgres_handler import SQLiteHandler
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 # ---------------------------------------------------------------------------
 # In-memory fixtures (always available, no Docker required)
@@ -26,9 +26,9 @@ def inmemory_document_handler():
 
 
 @pytest.fixture()
-def inmemory_redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def inmemory_cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
@@ -82,20 +82,20 @@ def real_document_handler():
 
 
 @pytest.fixture(scope="module")
-def real_redis_handler():
-    """Create a PyRedisHandler backed by a real Redis/Valkey container."""
+def real_cache_handler():
+    """Create a PyCacheHandler backed by a real Redis/Valkey container."""
     try:
         from testcontainers.redis import RedisContainer  # noqa: PLC0415
     except ImportError:
         pytest.skip("testcontainers[redis] not installed")
 
-    from madsci.common.db_handlers.redis_handler import PyRedisHandler  # noqa: PLC0415
+    from madsci.common.db_handlers.cache_handler import PyCacheHandler  # noqa: PLC0415
 
     try:
         with RedisContainer("redis:7") as redis_container:
             host = redis_container.get_container_host_ip()
             port = int(redis_container.get_exposed_port(6379))
-            handler = PyRedisHandler.from_settings(host=host, port=port)
+            handler = PyCacheHandler.from_settings(host=host, port=port)
             if not handler.ping():
                 handler.close()
                 pytest.skip("Redis container started but connection failed")

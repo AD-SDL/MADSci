@@ -3,10 +3,10 @@
 from datetime import datetime, timedelta
 
 import pytest
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import Location
 from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_migration import LocationMigrator
@@ -22,24 +22,24 @@ def document_handler():
 
 
 @pytest.fixture
-def redis_handler():
-    handler = InMemoryRedisHandler()
+def cache_handler():
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def migrator(redis_handler, document_handler):
+def migrator(cache_handler, document_handler):
     return LocationMigrator(
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
         manager_id=MANAGER_ID,
     )
 
 
-def _seed_redis(redis_handler, locations_dict):
-    """Seed old-format Redis data: ID-indexed dict under the legacy key."""
-    old_dict = redis_handler.create_dict(
+def _seed_cache(cache_handler, locations_dict):
+    """Seed old-format cache data: ID-indexed dict under the legacy key."""
+    old_dict = cache_handler.create_dict(
         f"madsci:location_manager:{MANAGER_ID}:locations"
     )
     for key, val in locations_dict.items():
@@ -55,13 +55,13 @@ class TestMigrateFromRedis:
         assert result.errors == []
 
     def test_migrate_redis_locations_to_mongo(
-        self, migrator, redis_handler, document_handler
+        self, migrator, cache_handler, document_handler
     ):
-        """Seed Redis with 0.7.1 format, run migration, verify all in document database."""
+        """Seed cache with 0.7.1 format, run migration, verify all in document database."""
         loc1_id = new_ulid_str()
         loc2_id = new_ulid_str()
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "station_a": {
                     "location_name": "station_a",
@@ -88,12 +88,12 @@ class TestMigrateFromRedis:
         assert names == {"station_a", "station_b"}
 
     def test_migrate_preserves_all_fields(
-        self, migrator, redis_handler, document_handler
+        self, migrator, cache_handler, document_handler
     ):
         """Verify representations, resource_id, allow_transfers are preserved."""
         loc_id = new_ulid_str()
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "full_location": {
                     "location_name": "full_location",
@@ -117,15 +117,15 @@ class TestMigrateFromRedis:
         assert loc.allow_transfers is False
 
     def test_migrate_handles_reservation_field_mapping(
-        self, migrator, redis_handler, document_handler
+        self, migrator, cache_handler, document_handler
     ):
         """Reservation start/end → created/expires."""
         now = datetime.now()
         later = now + timedelta(hours=1)
         loc_id = new_ulid_str()
         user_id = new_ulid_str()
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "reserved_loc": {
                     "location_name": "reserved_loc",
@@ -150,7 +150,7 @@ class TestMigrateFromRedis:
         assert loc.reservation.expires is not None
 
     def test_migrate_skips_duplicate_names(
-        self, migrator, redis_handler, document_handler
+        self, migrator, cache_handler, document_handler
     ):
         """If document database already has a location with the same name, skip it."""
         loc_id = new_ulid_str()
@@ -162,8 +162,8 @@ class TestMigrateFromRedis:
         )
         collection.insert_one(existing.model_dump(mode="json"))
 
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "Existing": {
                     "location_name": "Existing",
@@ -176,10 +176,10 @@ class TestMigrateFromRedis:
         assert result.migrated == 0
         assert result.skipped == 1
 
-    def test_migrate_idempotent(self, migrator, redis_handler, document_handler):
+    def test_migrate_idempotent(self, migrator, cache_handler, document_handler):
         """Running migration twice doesn't create duplicates."""
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "idem_loc": {
                     "location_name": "idem_loc",
@@ -198,10 +198,10 @@ class TestMigrateFromRedis:
         collection = document_handler.get_collection("locations")
         assert len(collection.find().to_list()) == 1
 
-    def test_migrate_returns_summary(self, migrator, redis_handler):
+    def test_migrate_returns_summary(self, migrator, cache_handler):
         """Verify counts in result."""
-        _seed_redis(
-            redis_handler,
+        _seed_cache(
+            cache_handler,
             {
                 "A": {
                     "location_name": "A",

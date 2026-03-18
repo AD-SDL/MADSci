@@ -2,10 +2,10 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
     LocationManagerSettings,
@@ -25,15 +25,15 @@ def document_handler():
 
 
 @pytest.fixture
-def redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def app(redis_handler, document_handler):
+def app(cache_handler, document_handler):
     """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -41,7 +41,7 @@ def app(redis_handler, document_handler):
     )
     manager = LocationManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
     )
     return manager.create_server(version="0.1.0")
@@ -213,7 +213,7 @@ class TestSeedFileWithLazyResolution:
     """Tests for seed file loading with lazy resource template resolution."""
 
     def test_seed_list_format_handles_missing_resource_template(
-        self, redis_handler, document_handler, tmp_path
+        self, cache_handler, document_handler, tmp_path
     ):
         """Seed file with list format loads even if resource template is unavailable."""
         import yaml  # noqa: PLC0415
@@ -237,7 +237,7 @@ class TestSeedFileWithLazyResolution:
         )
         manager = LocationManager(
             settings=settings,
-            redis_handler=redis_handler,
+            cache_handler=cache_handler,
             document_handler=document_handler,
         )
         app = manager.create_server(version="0.1.0")
@@ -260,13 +260,13 @@ class TestSeedFileWithLazyResolution:
         # still called but failures are caught.
         settings = LocationManagerSettings(enable_registry_resolution=False)
         handler = InMemoryDocumentStorageHandler(database_name="test")
-        redis = InMemoryRedisHandler()
+        cache = InMemoryCacheHandler()
         manager = LocationManager(
             settings=settings,
             document_handler=handler,
-            redis_handler=redis,
+            cache_handler=cache,
         )
         # If we got here without crashing, the test passes
         assert manager is not None
         handler.close()
-        redis.close()
+        cache.close()

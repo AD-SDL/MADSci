@@ -9,10 +9,10 @@ import warnings
 from typing import Any, Optional, Union
 
 from madsci.common.db_handlers import (
+    CacheHandler,
     DocumentStorageHandler,
+    PyCacheHandler,
     PyDocumentStorageHandler,
-    PyRedisHandler,
-    RedisHandler,
 )
 from madsci.common.types.location_types import (
     Location,
@@ -40,7 +40,7 @@ class LocationStateHandler:
         settings: LocationManagerSettings,
         manager_id: str,
         redis_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
         document_handler: Optional[DocumentStorageHandler] = None,
     ) -> None:
         """
@@ -53,28 +53,28 @@ class LocationStateHandler:
         manager_id:
             Unique identifier for this manager instance.
         redis_connection:
-            Deprecated. Use redis_handler instead.
-        redis_handler:
-            Redis handler for transient state (locks, change counters).
+            Deprecated. Use cache_handler instead.
+        cache_handler:
+            Cache handler for transient state (locks, change counters).
         document_handler:
             Document storage handler for persistent location storage.
         """
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.settings = settings
         self._manager_id = manager_id
 
-        # Initialize Redis handler (transient state)
-        if redis_handler is not None:
-            self._redis_handler = redis_handler
+        # Initialize cache handler (transient state)
+        if cache_handler is not None:
+            self._cache_handler = cache_handler
         elif redis_connection is not None:
-            self._redis_handler = PyRedisHandler(redis_connection)
+            self._cache_handler = PyCacheHandler(redis_connection)
         else:
-            self._redis_handler = PyRedisHandler.from_settings(
+            self._cache_handler = PyCacheHandler.from_settings(
                 host=str(settings.cache_host),
                 port=int(settings.cache_port),
                 password=settings.cache_password or None,
@@ -111,7 +111,7 @@ class LocationStateHandler:
             "template_name", unique=True, name="template_name_unique"
         )
 
-        # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
+        # Suppress InefficientAccessWarning from pottery if using PyCacheHandler
         try:
             from pottery import InefficientAccessWarning  # noqa: PLC0415
 
@@ -128,18 +128,18 @@ class LocationStateHandler:
         Gets a lock on the location state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us.
         """
-        return self._redis_handler.create_lock(
+        return self._cache_handler.create_lock(
             f"{self._location_prefix}:state_lock",
             auto_release_time=60,
         )
 
     def mark_state_changed(self) -> int:
         """Marks the state as changed and returns the current state change counter."""
-        return int(self._redis_handler.incr(f"{self._location_prefix}:state_changed"))
+        return int(self._cache_handler.incr(f"{self._location_prefix}:state_changed"))
 
     def has_state_changed(self) -> bool:
         """Returns True if the state has changed since the last time this method was called."""
-        state_change_marker = self._redis_handler.get(
+        state_change_marker = self._cache_handler.get(
             f"{self._location_prefix}:state_changed"
         )
         if state_change_marker != self.state_change_marker:
@@ -149,7 +149,7 @@ class LocationStateHandler:
 
     def close(self) -> None:
         """Release both cache and document storage connections and resources."""
-        self._redis_handler.close()
+        self._cache_handler.close()
         self._document_handler.close()
 
     # Location Management Methods (document database-backed)

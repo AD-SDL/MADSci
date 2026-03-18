@@ -1,20 +1,20 @@
-Module madsci.common.db_handlers.redis_handler
+Module madsci.common.db_handlers.cache_handler
 ==============================================
-Redis/Valkey handler abstraction.
+Cache handler abstraction (Redis/Valkey compatible).
 
-Provides an ABC for Redis/Valkey access and two implementations:
-- PyRedisHandler: wraps a real redis.Redis client + pottery data structures (compatible with both Redis and Valkey)
-- InMemoryRedisHandler: wraps InMemoryRedisClient for testing
+Provides an ABC for cache access and two implementations:
+- PyCacheHandler: wraps a real redis.Redis client + pottery data structures (compatible with both Redis and Valkey)
+- InMemoryCacheHandler: wraps InMemoryRedisClient for testing
 
 Classes
 -------
 
-`InMemoryRedisHandler(client: Optional[Any] = None)`
-:   Redis handler backed by in-memory data structures for testing.
+`InMemoryCacheHandler(client: Optional[Any] = None)`
+:   Cache handler backed by in-memory data structures for testing.
     
     Usage::
     
-        handler = InMemoryRedisHandler()
+        handler = InMemoryCacheHandler()
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     
@@ -28,7 +28,7 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.redis_handler.RedisHandler
+    * madsci.common.db_handlers.cache_handler.CacheHandler
     * abc.ABC
 
     ### Methods
@@ -57,15 +57,15 @@ Classes
     `set(self, key: str, value: Any) ‑> None`
     :   Set a value in the in-memory store.
 
-`PyRedisHandler(client: Any)`
-:   Redis handler backed by a real Redis server.
+`PyCacheHandler(client: Any)`
+:   Cache handler backed by a real Redis/Valkey server.
     
     Uses ``redis.Redis`` for basic operations and ``pottery`` for
     RedisDict, RedisList, and Redlock data structures.
     
     Usage::
     
-        handler = PyRedisHandler.from_settings(host="localhost", port=6379)
+        handler = PyCacheHandler.from_settings(host="localhost", port=6379)
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     
@@ -76,12 +76,12 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.db_handlers.redis_handler.RedisHandler
+    * madsci.common.db_handlers.cache_handler.CacheHandler
     * abc.ABC
 
     ### Static methods
 
-    `from_settings(host: str = 'localhost', port: int = 6379, password: Optional[str] = None) ‑> madsci.common.db_handlers.redis_handler.PyRedisHandler`
+    `from_settings(host: str = 'localhost', port: int = 6379, password: Optional[str] = None) ‑> madsci.common.db_handlers.cache_handler.PyCacheHandler`
     :   Create a handler by connecting to a Redis server.
         
         Args:
@@ -90,7 +90,7 @@ Classes
             password: Optional Redis password.
         
         Returns:
-            A new PyRedisHandler instance.
+            A new PyCacheHandler instance.
 
     ### Methods
 
@@ -118,8 +118,8 @@ Classes
     `set(self, key: str, value: Any) ‑> None`
     :   Set a value in Redis.
 
-`RedisHandler()`
-:   Abstract interface for Redis access.
+`CacheHandler()`
+:   Abstract interface for cache (Redis/Valkey) access.
     
     Managers use this interface instead of directly depending on
     ``redis.Redis`` and ``pottery`` data structures, enabling
@@ -131,8 +131,8 @@ Classes
 
     ### Descendants
 
-    * madsci.common.db_handlers.redis_handler.InMemoryRedisHandler
-    * madsci.common.db_handlers.redis_handler.PyRedisHandler
+    * madsci.common.db_handlers.cache_handler.InMemoryCacheHandler
+    * madsci.common.db_handlers.cache_handler.PyCacheHandler
 
     ### Methods
 

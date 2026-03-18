@@ -78,10 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Database Handler Abstractions
-- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `RedisHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
-- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
-- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
-- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
+- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `CacheHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
+- Real implementations: `PyMongoHandler`, `PyCacheHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
+- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryCacheHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
+- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `cache_handler`, `postgres_handler`), enabling dependency injection for testing
 - `LocalRunner` updated to use handler abstractions instead of raw in-memory clients
 - `InMemoryCollection` gained projection support, `replace_one()`, `client` property, and `list_collection_names()`
 
@@ -138,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InMemoryDocumentStorageHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
 
 #### Handler ABC Return Type Annotations
-- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
+- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `CacheHandler.create_dict() -> MutableMapping`, `CacheHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
 
 #### Manager Registry Lock Retry + Shutdown Release
 - `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet

@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from madsci.common.db_handlers import (
+    InMemoryCacheHandler,
     InMemoryDocumentStorageHandler,
-    InMemoryRedisHandler,
 )
 from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import (
@@ -31,9 +31,9 @@ from pydantic import AnyUrl
 
 
 @pytest.fixture
-def redis_handler() -> InMemoryRedisHandler:
-    """Create an in-memory Redis handler for testing."""
-    return InMemoryRedisHandler()
+def cache_handler() -> InMemoryCacheHandler:
+    """Create an in-memory cache handler for testing."""
+    return InMemoryCacheHandler()
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def document_handler() -> InMemoryDocumentStorageHandler:
 
 @pytest.fixture
 def test_client(
-    redis_handler: InMemoryRedisHandler,
+    cache_handler: InMemoryCacheHandler,
     document_handler: InMemoryDocumentStorageHandler,
 ) -> TestClient:
     """Workcell Server Test Client Fixture"""
@@ -53,7 +53,7 @@ def test_client(
     )
     manager = WorkcellManager(
         settings=settings,
-        redis_handler=redis_handler,
+        cache_handler=cache_handler,
         document_handler=document_handler,
         start_engine=False,
     )

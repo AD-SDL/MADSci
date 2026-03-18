@@ -7,10 +7,10 @@ from typing import Any, Callable, Optional, Union
 
 from fastapi import HTTPException
 from madsci.common.db_handlers import (
+    CacheHandler,
     DocumentStorageHandler,
+    PyCacheHandler,
     PyDocumentStorageHandler,
-    PyRedisHandler,
-    RedisHandler,
 )
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
@@ -40,7 +40,7 @@ class WorkcellStateHandler:
         nodes: Optional[dict[str, str]] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
         document_handler: Optional[DocumentStorageHandler] = None,
     ) -> None:
         """
@@ -48,7 +48,7 @@ class WorkcellStateHandler:
         """
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -64,13 +64,13 @@ class WorkcellStateHandler:
         )
         self._nodes_config = nodes or self.workcell_settings.nodes or {}
 
-        # Initialize Redis handler
-        if redis_handler is not None:
-            self._redis_handler = redis_handler
+        # Initialize cache handler
+        if cache_handler is not None:
+            self._cache_handler = cache_handler
         elif redis_connection is not None:
-            self._redis_handler = PyRedisHandler(redis_connection)
+            self._cache_handler = PyCacheHandler(redis_connection)
         else:
-            self._redis_handler = PyRedisHandler.from_settings(
+            self._cache_handler = PyCacheHandler.from_settings(
                 host=str(self.workcell_settings.cache_host),
                 port=int(self.workcell_settings.cache_port),
                 password=self.workcell_settings.cache_password or None,
@@ -94,7 +94,7 @@ class WorkcellStateHandler:
             "workflow_definitions"
         )
 
-        # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
+        # Suppress InefficientAccessWarning from pottery if using PyCacheHandler
         try:
             from pottery import InefficientAccessWarning  # noqa: PLC0415
 
@@ -133,34 +133,34 @@ class WorkcellStateHandler:
 
     @property
     def _workcell_info(self) -> Any:
-        return self._redis_handler.create_dict(f"{self._workcell_prefix}:workcell_info")
+        return self._cache_handler.create_dict(f"{self._workcell_prefix}:workcell_info")
 
     @property
     def _nodes(self) -> Any:
-        return self._redis_handler.create_dict(f"{self._workcell_prefix}:nodes")
+        return self._cache_handler.create_dict(f"{self._workcell_prefix}:nodes")
 
     @property
     def _workflow_queue(self) -> Any:
-        return self._redis_handler.create_list(
+        return self._cache_handler.create_list(
             f"{self._workcell_prefix}:workflow_queue"
         )
 
     @property
     def _active_workflows(self) -> Any:
-        return self._redis_handler.create_dict(
+        return self._cache_handler.create_dict(
             f"{self._workcell_prefix}:active_workflows"
         )
 
     @property
     def _workcell_status(self) -> Any:
-        return self._redis_handler.create_dict(f"{self._workcell_prefix}:status")
+        return self._cache_handler.create_dict(f"{self._workcell_prefix}:status")
 
     def wc_state_lock(self) -> Any:
         """
         Gets a lock on the workcell's state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us (i.e., in the engine).
         """
-        return self._redis_handler.create_lock(
+        return self._cache_handler.create_lock(
             f"{self._workcell_prefix}:state_lock",
             auto_release_time=60,
         )
@@ -170,7 +170,7 @@ class WorkcellStateHandler:
         Gets a lock on a specific node's state. This should be called before any state updates are made to a node,
         or where we don't want the node's state to be changing underneath us (i.e., in the engine).
         """
-        return self._redis_handler.create_lock(
+        return self._cache_handler.create_lock(
             f"{self._workcell_prefix}:node:{node_name}:lock",
             auto_release_time=60,
         )
@@ -204,11 +204,11 @@ class WorkcellStateHandler:
 
     def mark_state_changed(self) -> int:
         """Marks the state as changed and returns the current state change counter"""
-        return int(self._redis_handler.incr(f"{self._workcell_prefix}:state_changed"))
+        return int(self._cache_handler.incr(f"{self._workcell_prefix}:state_changed"))
 
     def has_state_changed(self) -> bool:
         """Returns True if the state has changed since the last time this method was called"""
-        state_change_marker = self._redis_handler.get(
+        state_change_marker = self._cache_handler.get(
             f"{self._workcell_prefix}:state_changed"
         )
         if state_change_marker != self.state_change_marker:
@@ -456,5 +456,5 @@ class WorkcellStateHandler:
 
     def close(self) -> None:
         """Release cache and document database connections."""
-        self._redis_handler.close()
+        self._cache_handler.close()
         self._document_handler.close()

@@ -10,8 +10,8 @@ import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.db_handlers import (
+    InMemoryCacheHandler,
     InMemoryDocumentStorageHandler,
-    InMemoryRedisHandler,
 )
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
@@ -143,7 +143,7 @@ def test_client() -> Generator[TestClient, None, None]:
 
         manager = WorkcellManager(
             settings=custom_settings,
-            redis_handler=InMemoryRedisHandler(),
+            cache_handler=InMemoryCacheHandler(),
             document_handler=InMemoryDocumentStorageHandler(),
             start_engine=False,
         )
