@@ -20,7 +20,7 @@ See the main [README](../../README.md#installation) for installation options. Th
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_event.manager.yaml](../../examples/example_lab/managers/example_event.manager.yaml)
 
-**Dependencies**: MongoDB database (see the [example_lab](../../examples/example_lab/))
+**Dependencies**: FerretDB database (see the [example_lab](../../examples/example_lab/))
 
 ## Usage
 
@@ -146,12 +146,12 @@ You can configure Email Alerts by setting up an `EmailAlertsConfig` (`madsci.com
 
 ## Database Migration Tools
 
-MADSci Event Manager includes automated MongoDB migration tools that handle schema changes and version tracking for the event management system.
+MADSci Event Manager includes automated FerretDB migration tools that handle schema changes and version tracking for the event management system.
 
 ### Features
 
-- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
-- **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and FerretDB schema version
+- **Automated Backup**: Creates database dumps using `mongodump` before applying migrations to enable rollback on failure
 - **Schema Management**: Creates collections and indexes based on schema definitions
 - **Index Management**: Ensures required indexes exist for optimal query performance
 - **Location Independence**: Auto-detects schema files or accepts explicit paths
@@ -162,22 +162,22 @@ MADSci Event Manager includes automated MongoDB migration tools that handle sche
 #### Standard Usage
 ```bash
 # Run migration for events database (auto-detects schema file)
-python -m madsci.common.mongodb_migration_tool --database madsci_events
+python -m madsci.common.document_db_migration_tool --database madsci_events
 
 # Migrate with explicit database URL
-python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_events
+python -m madsci.common.document_db_migration_tool --db-url mongodb://localhost:27017 --database madsci_events
 
 # Use custom schema file
-python -m madsci.common.mongodb_migration_tool --database madsci_events --schema-file /path/to/schema.json
+python -m madsci.common.document_db_migration_tool --database madsci_events --schema-file /path/to/schema.json
 
 # Create backup only
-python -m madsci.common.mongodb_migration_tool --database madsci_events --backup-only
+python -m madsci.common.document_db_migration_tool --database madsci_events --backup-only
 
 # Restore from backup
-python -m madsci.common.mongodb_migration_tool --database madsci_events --restore-from /path/to/backup
+python -m madsci.common.document_db_migration_tool --database madsci_events --restore-from /path/to/backup
 
 # Check version compatibility without migrating
-python -m madsci.common.mongodb_migration_tool --database madsci_events --check-version
+python -m madsci.common.document_db_migration_tool --database madsci_events --check-version
 ```
 
 #### Docker Usage
@@ -185,13 +185,13 @@ When running in Docker containers, use docker-compose to execute migration comma
 
 ```bash
 # Run migration for events database in Docker
-docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json'
+docker-compose run --rm event-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json'
 
 # Create backup only in Docker
-docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --backup-only
+docker-compose run --rm event-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --backup-only
 
 # Check version compatibility in Docker
-docker-compose run --rm event-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --check-version
+docker-compose run --rm event-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_events' --schema-file '/app/madsci/event_manager/schema.json' --check-version
 ```
 
 ### Server Integration
@@ -211,14 +211,14 @@ The migration tool automatically searches for schema files in:
 
 ### Backup Location
 
-Backups are stored in `.madsci/mongodb/backups/` with timestamped filenames:
+Backups are stored in `.madsci/document_db/backups/` with timestamped filenames:
 - Format: `madsci_events_backup_YYYYMMDD_HHMMSS`
 - Can be restored using the `--restore-from` option
 
 ### Requirements
 
-- MongoDB server running and accessible
-- MongoDB tools (`mongodump`, `mongorestore`) installed
+- FerretDB server running and accessible
+- MongoDB tools (`mongodump`, `mongorestore`) installed (for FerretDB backup/restore via the MongoDB wire protocol)
 - Appropriate database permissions for the specified user
 ## API Reference
 
@@ -296,17 +296,17 @@ The Event Manager also provides standard manager endpoints:
 
 Visit `http://localhost:8001/docs` when the Event Manager is running for interactive Swagger UI documentation.
 
-## MongoDB Setup
+## FerretDB Setup
 
-The Event Manager requires MongoDB for event storage. For local development:
+The Event Manager requires FerretDB for event storage. For local development:
 
 1. **Using Docker** (recommended):
    ```bash
-   docker run -d -p 27017:27017 --name mongodb mongo:latest
+   docker run -d -p 27017:27017 --name ferretdb ghcr.io/ferretdb/ferretdb:latest
    ```
 
 2. **Using the example lab**:
-   The [example_lab](../../examples/example_lab/) includes a pre-configured MongoDB instance.
+   The [example_lab](../../examples/example_lab/) includes a pre-configured FerretDB instance.
 
 3. **Configuration**:
    Set the database URL in your environment or manager configuration:

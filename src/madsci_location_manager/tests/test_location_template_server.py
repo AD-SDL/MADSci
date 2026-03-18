@@ -2,7 +2,9 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
@@ -15,9 +17,9 @@ from madsci.location_manager.location_server import LocationManager
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_locations")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_locations")
     yield handler
     handler.close()
 
@@ -31,13 +33,13 @@ def redis_handler():
 
 
 @pytest.fixture
-def app(redis_handler, mongo_handler):
+def app(redis_handler, document_handler):
     """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(enable_registry_resolution=False)
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     return manager.create_server(version="0.1.0")
 

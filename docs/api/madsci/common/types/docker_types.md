@@ -32,16 +32,16 @@ Classes
 
     ### Class variables
 
+    `DOCUMENT_DB_PORT: int`
+    :
+
     `GROUP_ID: int`
     :
 
-    `MINIO_CONSOLE_PORT: int`
+    `OBJECT_STORAGE_CONSOLE_PORT: int`
     :
 
-    `MINIO_PORT: int`
-    :
-
-    `MONGODB_PORT: int`
+    `OBJECT_STORAGE_PORT: int`
     :
 
     `POSTGRES_PORT: int`

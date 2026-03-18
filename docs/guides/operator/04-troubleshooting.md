@@ -46,7 +46,7 @@ docker compose ps <service_name>
 | Cause | Log Message | Fix |
 |-------|------------|-----|
 | Port in use | `Address already in use` | Stop conflicting process: `lsof -i :<port>` |
-| Database not ready | `Connection refused` to MongoDB/PostgreSQL | Wait for DB startup or check DB health |
+| Database not ready | `Connection refused` to FerretDB/PostgreSQL | Wait for DB startup or check DB health |
 | Missing env vars | `ValidationError` or `Field required` | Check `.env` file has all required variables |
 | Image not built | `No such image` | Run `docker compose build <service>` |
 | Volume permissions | `Permission denied` | Check volume ownership: `ls -la` |
@@ -68,7 +68,7 @@ docker stats <container_name>
 
 | Cause | Fix |
 |-------|-----|
-| Database connection lost | Restart the database: `docker compose restart mongodb` |
+| Database connection lost | Restart the database: `docker compose restart madsci_ferretdb` |
 | Out of memory | Increase Docker memory limit or reduce workload |
 | Deadlocked process | Restart the service: `docker compose restart <service>` |
 | Network issue | Check Docker network: `docker network inspect madsci_default` |
@@ -91,24 +91,24 @@ docker compose run --rm <service_name>  # Run interactively
 
 ## Database Issues
 
-### MongoDB Connection Failures
+### FerretDB Connection Failures
 
-**Symptom**: Managers report database connection errors.
+**Symptom**: Managers report document database connection errors.
 
 ```bash
-# Check MongoDB is running
-docker compose ps mongodb
+# Check FerretDB is running
+docker compose ps madsci_ferretdb
 
-# Test connection
-docker compose exec mongodb mongosh --eval "db.runCommand({ping: 1})"
+# Test connection (FerretDB uses the MongoDB wire protocol)
+docker compose exec madsci_ferretdb mongosh --eval "db.runCommand({ping: 1})"
 
-# Check MongoDB logs
-docker compose logs mongodb
+# Check FerretDB logs
+docker compose logs madsci_ferretdb
 ```
 
 **Fixes**:
-- Restart MongoDB: `docker compose restart mongodb`
-- Check disk space: `df -h` (MongoDB needs free space for journaling)
+- Restart FerretDB: `docker compose restart madsci_ferretdb`
+- Check disk space: `df -h` (FerretDB needs free space for its backing store)
 - Check connection string in environment variables
 
 ### PostgreSQL Connection Failures
@@ -126,14 +126,14 @@ docker compose exec postgres pg_isready
 docker compose logs postgres
 ```
 
-### Redis Connection Failures
+### Valkey Connection Failures
 
 **Symptom**: Workcell Manager can't queue workflows.
 
 ```bash
-# Check Redis
-docker compose ps redis
-docker compose exec redis redis-cli ping
+# Check Valkey
+docker compose ps madsci_valkey
+docker compose exec madsci_valkey valkey-cli ping
 # Should return: PONG
 ```
 
@@ -186,7 +186,7 @@ docker compose logs <node_name> --tail 50
 **Check**:
 1. Is the workcell in a paused state?
 2. Are all required nodes registered and healthy?
-3. Is Redis accessible?
+3. Is Valkey accessible?
 
 ```bash
 # Check workcell state
@@ -299,8 +299,8 @@ EVENT_SERVER_PORT=8011  # Use a different port
 # Check container memory usage
 docker stats --no-stream
 
-# Check MongoDB memory
-docker compose exec mongodb mongosh --eval "db.serverStatus().mem"
+# Check FerretDB memory
+docker compose exec madsci_ferretdb mongosh --eval "db.serverStatus().mem"
 
 # Restart memory-heavy service
 docker compose restart <service_name>

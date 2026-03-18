@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
-from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
+from madsci.common.db_handlers import (
+    InMemoryDocumentStorageHandler,
+    InMemoryRedisHandler,
+)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
@@ -141,7 +144,7 @@ def test_client() -> Generator[TestClient, None, None]:
         manager = WorkcellManager(
             settings=custom_settings,
             redis_handler=InMemoryRedisHandler(),
-            mongo_handler=InMemoryMongoHandler(),
+            document_handler=InMemoryDocumentStorageHandler(),
             start_engine=False,
         )
         app = manager.create_server()

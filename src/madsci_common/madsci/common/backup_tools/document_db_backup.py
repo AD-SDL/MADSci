@@ -1,4 +1,4 @@
-"""Standalone MongoDB backup and restore tool."""
+"""Standalone MongoDB-compatible document database backup and restore tool."""
 
 import hashlib
 import json
@@ -13,22 +13,22 @@ from madsci.client.event_client import EventClient
 from madsci.common.backup_tools.backup_manager import BackupManager
 from madsci.common.backup_tools.backup_validator import BackupValidator
 from madsci.common.backup_tools.base_backup import AbstractBackupTool, BackupInfo
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 from madsci.common.types.event_types import EventType
 from pymongo import MongoClient
 
 
-class MongoDBBackupTool(AbstractBackupTool):
-    """Standalone MongoDB backup and restore tool."""
+class DocumentDBBackupTool(AbstractBackupTool):
+    """Standalone MongoDB-compatible document database backup and restore tool."""
 
     def __init__(
-        self, settings: MongoDBBackupSettings, logger: Optional[EventClient] = None
+        self, settings: DocumentDBBackupSettings, logger: Optional[EventClient] = None
     ) -> None:
         """
-        Initialize MongoDB backup tool.
+        Initialize MongoDB-compatible document database backup tool.
 
         Args:
-            settings: MongoDB backup configuration settings
+            settings: MongoDB-compatible document database backup configuration settings
             logger: Optional logger instance
         """
         self.settings = settings
@@ -37,8 +37,8 @@ class MongoDBBackupTool(AbstractBackupTool):
         self.validator = BackupValidator()
         self.manager = BackupManager()
 
-        # Initialize MongoDB connection
-        self.client = MongoClient(str(settings.mongo_db_url))
+        # Initialize MongoDB-compatible document database connection
+        self.client = MongoClient(str(settings.document_db_url))
         self.database = self.client[settings.database]
 
     def _setup_backup_dir(self) -> Path:
@@ -98,7 +98,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         mongodump_cmd = ["mongodump"]
 
         # Add connection parameters
-        parsed_url = self.settings.mongo_db_url
+        parsed_url = self.settings.document_db_url
         if parsed_url.host:
             port = parsed_url.port or 27017
             mongodump_cmd.extend(["--host", f"{parsed_url.host}:{port}"])
@@ -238,7 +238,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         mongorestore_cmd = ["mongorestore"]
 
         # Add connection parameters
-        parsed_url = self.settings.mongo_db_url
+        parsed_url = self.settings.document_db_url
         if parsed_url.host:
             port = parsed_url.port or 27017
             mongorestore_cmd.extend(["--host", f"{parsed_url.host}:{port}"])
@@ -391,7 +391,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             raise RuntimeError(f"Failed to delete backup {backup_path}: {e}") from e
 
     def _validate_backup_integrity(self, backup_path: Path) -> bool:
-        """Perform comprehensive MongoDB backup validation."""
+        """Perform comprehensive MongoDB-compatible document database backup validation."""
         self.logger.info(
             "Validating backup integrity",
             event_type=EventType.BACKUP_CREATE,
@@ -426,7 +426,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         return True
 
     def _verify_backup_completion(self, backup_path: Path) -> bool:
-        """Verify that MongoDB backup completed successfully."""
+        """Verify that MongoDB-compatible document database backup completed successfully."""
         if not backup_path.exists():
             return False
 
@@ -466,7 +466,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         return True
 
     def _generate_backup_checksum(self, backup_path: Path) -> str:
-        """Generate SHA256 checksum for MongoDB backup directory."""
+        """Generate SHA256 checksum for MongoDB-compatible document database backup directory."""
         checksum = self._generate_backup_checksum_inline(backup_path)
 
         # Save checksum to file
@@ -497,7 +497,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         return sha256_hash.hexdigest()
 
     def _validate_backup_checksum(self, backup_path: Path) -> bool:
-        """Validate MongoDB backup directory against its checksum."""
+        """Validate MongoDB-compatible document database backup directory against its checksum."""
         checksum_file = backup_path / "backup.checksum"
 
         if not checksum_file.exists():
@@ -540,7 +540,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             return False
 
     def _test_backup_restore(self, backup_path: Path) -> bool:
-        """Test MongoDB backup by attempting restore to temporary database."""
+        """Test MongoDB-compatible document database backup by attempting restore to temporary database."""
         test_db_name = f"test_restore_{int(time.time())}"
 
         try:
@@ -548,7 +548,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             mongorestore_cmd = ["mongorestore"]
 
             # Add connection parameters
-            parsed_url = self.settings.mongo_db_url
+            parsed_url = self.settings.document_db_url
             if parsed_url.host:
                 port = parsed_url.port or 27017
                 mongorestore_cmd.extend(["--host", f"{parsed_url.host}:{port}"])
@@ -603,7 +603,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         finally:
             # Clean up test database
             try:
-                test_client = MongoClient(str(self.settings.mongo_db_url))
+                test_client = MongoClient(str(self.settings.document_db_url))
                 test_client.drop_database(test_db_name)
                 test_client.close()
             except Exception as e:
@@ -616,7 +616,7 @@ class MongoDBBackupTool(AbstractBackupTool):
                 )
 
     def _create_backup_metadata(self, backup_path: Path) -> None:
-        """Create metadata file for MongoDB backup."""
+        """Create metadata file for MongoDB-compatible document database backup."""
         checksum = self._generate_backup_checksum_inline(backup_path)
 
         metadata = {
@@ -653,7 +653,7 @@ class MongoDBBackupTool(AbstractBackupTool):
         )
 
     def _verify_restore_success(self, backup_path: Path) -> bool:
-        """Verify that MongoDB restore operation was successful."""
+        """Verify that MongoDB-compatible document database restore operation was successful."""
         try:
             # Check that collections exist and have expected structure
             db_backup_path = backup_path / self.settings.database
@@ -696,7 +696,7 @@ class MongoDBBackupTool(AbstractBackupTool):
             return False
 
     def _cleanup_failed_restore(self, backup_path: Path) -> None:  # noqa: ARG002
-        """Cleanup after a failed MongoDB restore operation."""
+        """Cleanup after a failed MongoDB-compatible document database restore operation."""
         try:
             # Drop all collections to clean state
             for collection_name in self.database.list_collection_names():

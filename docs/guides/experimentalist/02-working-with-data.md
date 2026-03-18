@@ -17,7 +17,7 @@ Experiment Run
             └── Action Result
                  ├── Value Datapoints (numbers, strings, JSON)
                  └── File Datapoints (CSVs, images, raw data)
-                      └── Stored in MinIO (object storage)
+                      └── Stored in SeaweedFS (object storage)
 ```
 
 Every piece of data in MADSci is a **DataPoint** with:
@@ -88,7 +88,7 @@ for step in wf.steps:
 
 ## Retrieving File Data
 
-File datapoints (CSVs, images, raw instrument data) are stored in MinIO object storage.
+File datapoints (CSVs, images, raw instrument data) are stored in SeaweedFS object storage.
 
 ### Download a File
 

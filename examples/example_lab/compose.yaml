@@ -51,14 +51,14 @@ services:
     container_name: event_manager
     command: python -m madsci.event_manager.event_server
     depends_on:
-      - madsci_mongodb
+      - madsci_ferretdb
 
   experiment_manager:
     <<: *madsci-service
     container_name: experiment_manager
     command: python -m madsci.experiment_manager.experiment_server
     depends_on:
-      - madsci_mongodb
+      - madsci_ferretdb
       - lab_manager
 
   resource_manager:
@@ -66,7 +66,7 @@ services:
     container_name: resource_manager
     command: python -m madsci.resource_manager.resource_server
     depends_on:
-      - madsci_postgres
+      - madsci_postgres_resources
       - event_manager
 
   data_manager:
@@ -74,7 +74,7 @@ services:
     container_name: data_manager
     command: python -m madsci.data_manager.data_server
     depends_on:
-      - madsci_mongodb
+      - madsci_ferretdb
       - event_manager
 
   location_manager:
@@ -82,8 +82,8 @@ services:
     container_name: location_manager
     command: python -m madsci.location_manager.location_server
     depends_on:
-      - madsci_redis
-      - madsci_mongodb
+      - madsci_valkey
+      - madsci_ferretdb
       - event_manager
       - resource_manager
 
@@ -92,8 +92,8 @@ services:
     container_name: workcell_manager
     command: python -m madsci.workcell_manager.workcell_server --cold_start_delay 0
     depends_on:
-      - madsci_redis
-      - madsci_mongodb
+      - madsci_valkey
+      - madsci_ferretdb
       - resource_manager
       - event_manager
       - location_manager

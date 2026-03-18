@@ -12,7 +12,7 @@ Classes
     
     Args:
         data_server_url: The base URL of the Data Manager. If not provided, it will be taken from the current MadsciContext.
-        object_storage_settings: Configuration for object storage (e.g., MinIO). If not provided, defaults will be used.
+        object_storage_settings: Configuration for S3-compatible object storage. If not provided, defaults will be used.
         config: Client configuration for retry and timeout settings. If not provided, uses default DataClientConfig.
 
     ### Class variables

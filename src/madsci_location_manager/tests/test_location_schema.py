@@ -3,7 +3,9 @@
 import json
 from pathlib import Path
 
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.location_manager.location_migration import SchemaUpgrader
 
 SCHEMA_PATH = (
@@ -107,8 +109,8 @@ class TestSchemaUpgrader:
 
     def test_upgrade_creates_version_record(self):
         """Upgrade records version 2.0.0 in schema_versions."""
-        handler = InMemoryMongoHandler(database_name="test")
-        upgrader = SchemaUpgrader(mongo_handler=handler)
+        handler = InMemoryDocumentStorageHandler(database_name="test")
+        upgrader = SchemaUpgrader(document_handler=handler)
 
         result = upgrader.upgrade_1_to_2()
         assert result.migrated == 1
@@ -121,8 +123,8 @@ class TestSchemaUpgrader:
 
     def test_upgrade_is_idempotent(self):
         """Running upgrade twice doesn't fail or duplicate."""
-        handler = InMemoryMongoHandler(database_name="test")
-        upgrader = SchemaUpgrader(mongo_handler=handler)
+        handler = InMemoryDocumentStorageHandler(database_name="test")
+        upgrader = SchemaUpgrader(document_handler=handler)
 
         result1 = upgrader.upgrade_1_to_2()
         assert result1.migrated == 1
@@ -135,13 +137,13 @@ class TestSchemaUpgrader:
 
     def test_upgrade_preserves_existing_locations(self):
         """Upgrade doesn't modify existing locations data."""
-        handler = InMemoryMongoHandler(database_name="test")
+        handler = InMemoryDocumentStorageHandler(database_name="test")
         locations = handler.get_collection("locations")
         locations.insert_one(
             {"location_name": "test_loc", "location_id": "12345678901234567890123456"}
         )
 
-        upgrader = SchemaUpgrader(mongo_handler=handler)
+        upgrader = SchemaUpgrader(document_handler=handler)
         result = upgrader.upgrade_1_to_2()
         assert result.errors == []
 
@@ -153,8 +155,8 @@ class TestSchemaUpgrader:
 
     def test_new_collections_are_accessible_after_upgrade(self):
         """New collections can be read/written after upgrade."""
-        handler = InMemoryMongoHandler(database_name="test")
-        upgrader = SchemaUpgrader(mongo_handler=handler)
+        handler = InMemoryDocumentStorageHandler(database_name="test")
+        upgrader = SchemaUpgrader(document_handler=handler)
         upgrader.upgrade_1_to_2()
 
         repr_coll = handler.get_collection("representation_templates")

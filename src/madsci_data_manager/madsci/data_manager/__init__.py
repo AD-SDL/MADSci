@@ -7,7 +7,7 @@ and integration with cloud object storage systems.
 Key Features
 ------------
 - **DataPoint Storage**: Store JSON values and files with rich metadata
-- **Flexible Storage Backends**: Local filesystem or S3-compatible object storage (MinIO, AWS S3, GCS)
+- **Flexible Storage Backends**: Local filesystem or S3-compatible object storage (SeaweedFS, AWS S3, GCS)
 - **Metadata Tracking**: Automatic ownership, timestamps, and custom labels
 - **Queryable Data**: MongoDB-backed search by value and metadata
 - **Cloud Integration**: Multi-provider cloud storage support with automatic failover
@@ -15,7 +15,7 @@ Key Features
 Storage Backends
 ----------------
 - **Local Filesystem**: Date-based hierarchy with automatic organization
-- **Object Storage**: MinIO, AWS S3, Google Cloud Storage, or any S3-compatible service
+- **Object Storage**: SeaweedFS, AWS S3, Google Cloud Storage, or any S3-compatible service
 - **Hybrid Mode**: Automatic fallback from object storage to local filesystem
 
 Components
@@ -72,7 +72,7 @@ The Data Manager uses environment variables with the ``DATA_`` prefix:
 
 For object storage, use the ``OBJECT_STORAGE_`` prefix:
 
-- ``OBJECT_STORAGE_ENDPOINT``: MinIO/S3 endpoint
+- ``OBJECT_STORAGE_ENDPOINT``: S3-compatible endpoint (e.g., SeaweedFS, MinIO, AWS S3)
 - ``OBJECT_STORAGE_ACCESS_KEY``: Storage access key
 - ``OBJECT_STORAGE_SECRET_KEY``: Storage secret key
 - ``OBJECT_STORAGE_DEFAULT_BUCKET``: Default storage bucket
@@ -81,5 +81,5 @@ See Also
 --------
 - :mod:`madsci.client.data_client`: Client library for DataPoint operations
 - :mod:`madsci.common.types.datapoint_types`: DataPoint type definitions
-- :mod:`madsci.common.mongodb_migration_tool`: Database migration utilities
+- :mod:`madsci.common.document_db_migration_tool`: Database migration utilities
 """

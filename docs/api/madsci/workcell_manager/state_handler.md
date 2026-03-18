@@ -5,7 +5,7 @@ State management for the WorkcellManager
 Classes
 -------
 
-`WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None)`
+`WorkcellStateHandler(workcell_settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, workcell_id: str | None = None, nodes: dict[str, str] | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None)`
 :   Manages state for a MADSci Workcell, providing transactional access to reading and writing state with
     optimistic check-and-set and locking.
     

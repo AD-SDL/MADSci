@@ -14,14 +14,15 @@ from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.db_handlers import MongoHandler, RedisHandler
-from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import (
-    MongoDBVersionChecker,
+from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.document_db_version_checker import (
+    DocumentDBVersionChecker,
     ensure_schema_indexes,
 )
+from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import ownership_class
 from madsci.common.settings_dir import walk_up_find
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     CreateLocationFromTemplateRequest,
@@ -32,7 +33,6 @@ from madsci.common.types.location_types import (
     LocationRepresentationTemplate,
     LocationTemplate,
 )
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -61,7 +61,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         settings: Optional[LocationManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         redis_handler: Optional[RedisHandler] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
@@ -73,7 +73,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
         self.redis_connection = redis_connection
         self.redis_handler = redis_handler
-        self.mongo_handler = mongo_handler
+        self.document_handler = document_handler
         super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
@@ -83,19 +83,19 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         manager_id = self.settings.manager_id
 
         # Skip version validation if external handler was provided (e.g., in tests)
-        if self.mongo_handler is not None:
+        if self.document_handler is not None:
             self.logger.info(
-                "External mongo handler provided, skipping MongoDB version validation",
+                "External document handler provided, skipping document DB version validation",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
                 manager_type="location",
-                mongo_external_connection=True,
+                document_handler_external=True,
             )
         else:
-            # Production path: validate MongoDB schema version
+            # Production path: validate document DB schema version
             self.logger.info(
-                "Validating MongoDB schema version",
+                "Validating document DB schema version",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
@@ -105,8 +105,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
             schema_file_path = Path(__file__).parent / "schema.json"
-            mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
-            version_checker = MongoDBVersionChecker(
+            mig_cfg = DocumentDBMigrationSettings(database=self.settings.database_name)
+            version_checker = DocumentDBVersionChecker(
                 db_url=str(self.settings.document_db_url),
                 database_name=self.settings.database_name,
                 schema_file_path=str(schema_file_path),
@@ -117,7 +117,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             try:
                 version_checker.validate_or_fail()
                 self.logger.info(
-                    "MongoDB version validation completed successfully",
+                    "Document DB version validation completed successfully",
                     event_type=EventType.MANAGER_START,
                     manager_name=manager_name,
                     manager_id=manager_id,
@@ -142,15 +142,15 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
             redis_handler=self.redis_handler,
-            mongo_handler=self.mongo_handler,
+            document_handler=self.document_handler,
         )
 
         # Ensure all schema-defined indexes exist (idempotent).
         # This covers in-memory test handlers (which skip validate_or_fail)
-        # and is idempotent with the version checker call for real MongoDB.
+        # and is idempotent with the version checker call for real document DB.
         schema_file = Path(__file__).parent / "schema.json"
         ensure_schema_indexes(
-            self.state_handler._mongo_handler, schema_file, self.logger
+            self.state_handler._document_handler, schema_file, self.logger
         )
 
         # Initialize resource client with resource server URL from context
@@ -503,9 +503,11 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         health = LocationManagerHealth()
 
         try:
-            # Test MongoDB connection
-            if hasattr(self.state_handler, "_mongo_handler"):
-                health.document_db_connected = self.state_handler._mongo_handler.ping()
+            # Test document DB connection
+            if hasattr(self.state_handler, "_document_handler"):
+                health.document_db_connected = (
+                    self.state_handler._document_handler.ping()
+                )
             else:
                 health.document_db_connected = None
 
@@ -1367,10 +1369,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 def create_app(
     settings: Optional[LocationManagerSettings] = None,
-    mongo_handler: Optional[MongoHandler] = None,
+    document_handler: Optional[DocumentStorageHandler] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    manager = LocationManager(settings=settings, mongo_handler=mongo_handler)
+    manager = LocationManager(settings=settings, document_handler=document_handler)
     app = manager.create_server(
         version="0.1.0",
         lifespan=lifespan,

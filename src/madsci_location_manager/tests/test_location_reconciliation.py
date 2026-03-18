@@ -2,7 +2,9 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
@@ -15,9 +17,9 @@ from madsci.location_manager.location_server import LocationManager
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_locations")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_locations")
     yield handler
     handler.close()
 
@@ -31,7 +33,7 @@ def redis_handler():
 
 
 @pytest.fixture
-def app(redis_handler, mongo_handler):
+def app(redis_handler, document_handler):
     """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -40,7 +42,7 @@ def app(redis_handler, mongo_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     return manager.create_server(version="0.1.0")
 
@@ -211,7 +213,7 @@ class TestSeedFileWithLazyResolution:
     """Tests for seed file loading with lazy resource template resolution."""
 
     def test_seed_list_format_handles_missing_resource_template(
-        self, redis_handler, mongo_handler, tmp_path
+        self, redis_handler, document_handler, tmp_path
     ):
         """Seed file with list format loads even if resource template is unavailable."""
         import yaml  # noqa: PLC0415
@@ -236,7 +238,7 @@ class TestSeedFileWithLazyResolution:
         manager = LocationManager(
             settings=settings,
             redis_handler=redis_handler,
-            mongo_handler=mongo_handler,
+            document_handler=document_handler,
         )
         app = manager.create_server(version="0.1.0")
 
@@ -257,11 +259,11 @@ class TestSeedFileWithLazyResolution:
         # a resource server. The _register_default_resource_template is
         # still called but failures are caught.
         settings = LocationManagerSettings(enable_registry_resolution=False)
-        handler = InMemoryMongoHandler(database_name="test")
+        handler = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         manager = LocationManager(
             settings=settings,
-            mongo_handler=handler,
+            document_handler=handler,
             redis_handler=redis,
         )
         # If we got here without crashing, the test passes

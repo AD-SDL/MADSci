@@ -1,7 +1,9 @@
 """Tests for the dual-handler LocationStateHandler (MongoDB + Redis)."""
 
 import pytest
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     Location,
@@ -14,9 +16,9 @@ from madsci.location_manager.location_state_handler import LocationStateHandler
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_locations")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_locations")
     yield handler
     handler.close()
 
@@ -36,12 +38,12 @@ def settings():
 
 
 @pytest.fixture
-def state_handler(settings, mongo_handler, redis_handler):
+def state_handler(settings, document_handler, redis_handler):
     """Create a LocationStateHandler with both handlers."""
     handler = LocationStateHandler(
         settings=settings,
         manager_id="test_manager",
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
         redis_handler=redis_handler,
     )
     yield handler
@@ -61,15 +63,15 @@ def sample_location():
 class TestInit:
     """Tests for state handler initialization."""
 
-    def test_init_with_both_handlers(self, settings, mongo_handler, redis_handler):
-        """Construct with InMemoryMongoHandler + InMemoryRedisHandler."""
+    def test_init_with_both_handlers(self, settings, document_handler, redis_handler):
+        """Construct with InMemoryDocumentStorageHandler + InMemoryRedisHandler."""
         handler = LocationStateHandler(
             settings=settings,
             manager_id="test",
-            mongo_handler=mongo_handler,
+            document_handler=document_handler,
             redis_handler=redis_handler,
         )
-        assert handler._mongo_handler is mongo_handler
+        assert handler._document_handler is document_handler
         assert handler._redis_handler is redis_handler
         handler.close()
 
@@ -435,12 +437,12 @@ class TestClose:
 
     def test_close_closes_both_handlers(self, settings):
         """Close should close both mongo and redis handlers."""
-        mongo = InMemoryMongoHandler(database_name="test")
+        mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         handler = LocationStateHandler(
             settings=settings,
             manager_id="test",
-            mongo_handler=mongo,
+            document_handler=mongo,
             redis_handler=redis,
         )
         handler.close()

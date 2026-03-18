@@ -9,7 +9,7 @@ import click
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
 from pydantic import AnyUrl
 
-from .mongodb_backup import MongoDBBackupSettings, MongoDBBackupTool
+from .document_db_backup import DocumentDBBackupSettings, DocumentDBBackupTool
 from .postgres_backup import PostgreSQLBackupTool
 
 
@@ -121,12 +121,12 @@ def create(
             if not database or database.startswith("mongodb"):
                 database = "default"
 
-            settings = MongoDBBackupSettings(
-                mongo_db_url=AnyUrl(db_url),
+            settings = DocumentDBBackupSettings(
+                document_db_url=AnyUrl(db_url),
                 database=database,
                 backup_dir=Path(backup_dir),
             )
-            tool = MongoDBBackupTool(settings)
+            tool = DocumentDBBackupTool(settings)
             backup_path = tool.create_backup(name)
 
         click.echo(f"✓ Backup created: {backup_path}")
@@ -174,12 +174,12 @@ def restore(backup: str, db_url: str, db_type: Optional[str]) -> None:
             if not database or database.startswith("mongodb"):
                 database = "default"
 
-            settings = MongoDBBackupSettings(
-                mongo_db_url=AnyUrl(db_url),
+            settings = DocumentDBBackupSettings(
+                document_db_url=AnyUrl(db_url),
                 database=database,
                 backup_dir=backup_path.parent,
             )
-            tool = MongoDBBackupTool(settings)
+            tool = DocumentDBBackupTool(settings)
             tool.restore_from_backup(backup_path)
 
         click.echo(f"✓ Backup restored successfully to {db_url}")
@@ -229,12 +229,12 @@ def validate(backup: str, db_url: str, db_type: Optional[str]) -> None:
             if not database or database.startswith("mongodb"):
                 database = "default"
 
-            settings = MongoDBBackupSettings(
-                mongo_db_url=AnyUrl(db_url),
+            settings = DocumentDBBackupSettings(
+                document_db_url=AnyUrl(db_url),
                 database=database,
                 backup_dir=backup_path.parent,
             )
-            tool = MongoDBBackupTool(settings)
+            tool = DocumentDBBackupTool(settings)
             is_valid = tool.validate_backup_integrity(backup_path)
 
         if is_valid:

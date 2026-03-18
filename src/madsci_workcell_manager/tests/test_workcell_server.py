@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
+from madsci.common.db_handlers import (
+    InMemoryDocumentStorageHandler,
+    InMemoryRedisHandler,
+)
 from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
@@ -34,14 +37,15 @@ def redis_handler() -> InMemoryRedisHandler:
 
 
 @pytest.fixture
-def mongo_handler() -> InMemoryMongoHandler:
-    """Create an in-memory MongoDB handler for testing."""
-    return InMemoryMongoHandler()
+def document_handler() -> InMemoryDocumentStorageHandler:
+    """Create an in-memory document storage handler for testing."""
+    return InMemoryDocumentStorageHandler()
 
 
 @pytest.fixture
 def test_client(
-    redis_handler: InMemoryRedisHandler, mongo_handler: InMemoryMongoHandler
+    redis_handler: InMemoryRedisHandler,
+    document_handler: InMemoryDocumentStorageHandler,
 ) -> TestClient:
     """Workcell Server Test Client Fixture"""
     settings = WorkcellManagerSettings(
@@ -50,7 +54,7 @@ def test_client(
     manager = WorkcellManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
         start_engine=False,
     )
     app = manager.create_server()

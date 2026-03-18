@@ -11,11 +11,17 @@ from classy_fastapi import get, post
 from fastapi import Form, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
-from madsci.common.db_handlers.minio_handler import MinioHandler, RealMinioHandler
-from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    DocumentStorageHandler,
+    PyDocumentStorageHandler,
+)
+from madsci.common.db_handlers.object_storage_handler import (
+    ObjectStorageHandler,
+    RealObjectStorageHandler,
+)
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.object_storage_helpers import create_minio_client
+from madsci.common.object_storage_helpers import create_object_storage_client
 from madsci.common.types.datapoint_types import (
     DataManagerHealth,
     DataManagerSettings,
@@ -36,22 +42,22 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         settings: Optional[DataManagerSettings] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         db_client: Optional[MongoClient] = None,
-        mongo_handler: Optional[MongoHandler] = None,
-        minio_handler: Optional[MinioHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
+        object_storage_handler: Optional[ObjectStorageHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Data Manager."""
         if db_client is not None:
             warnings.warn(
-                "The 'db_client' parameter is deprecated. Use 'mongo_handler' instead.",
+                "The 'db_client' parameter is deprecated. Use 'document_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         # Store additional dependencies before calling super().__init__
         self._object_storage_settings = object_storage_settings
         self._db_client = db_client
-        self._mongo_handler = mongo_handler
-        self._minio_handler = minio_handler
+        self._document_handler = document_handler
+        self._object_storage_handler = object_storage_handler
 
         super().__init__(settings=settings, **kwargs)
 
@@ -64,7 +70,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         super().initialize(**kwargs)
 
         # Skip version validation if an external handler/connection was provided (e.g., in tests)
-        if self._mongo_handler is not None or self._db_client is not None:
+        if self._document_handler is not None or self._db_client is not None:
             return
 
         self.logger.info(
@@ -74,8 +80,8 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         )
 
         schema_file_path = Path(__file__).parent / "schema.json"
-        version_checker = MongoDBVersionChecker(
-            db_url=str(self.settings.mongo_db_url),
+        version_checker = DocumentDBVersionChecker(
+            db_url=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
             logger=self.logger,
@@ -98,32 +104,32 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
-        if self._mongo_handler is None:
+        if self._document_handler is None:
             if self._db_client is not None:
                 # Legacy path: wrap an externally provided MongoClient
                 db = self._db_client[self.settings.database_name]
-                self._mongo_handler = PyMongoHandler(db)
+                self._document_handler = PyDocumentStorageHandler(db)
             else:
-                self._mongo_handler = PyMongoHandler.from_url(
-                    str(self.settings.mongo_db_url),
+                self._document_handler = PyDocumentStorageHandler.from_url(
+                    str(self.settings.document_db_url),
                     self.settings.database_name,
                 )
 
-        self.datapoints = self._mongo_handler.get_collection(
+        self.datapoints = self._document_handler.get_collection(
             self.settings.collection_name
         )
 
     def _setup_object_storage(self) -> None:
-        """Setup MinIO object storage handler."""
-        if self._minio_handler is not None:
-            # Handler provided directly (e.g., InMemoryMinioHandler for tests)
+        """Setup object storage handler."""
+        if self._object_storage_handler is not None:
+            # Handler provided directly (e.g., InMemoryObjectStorageHandler for tests)
             return
 
-        minio_client = create_minio_client(
+        storage_client = create_object_storage_client(
             object_storage_settings=self._object_storage_settings
         )
-        if minio_client is not None:
-            self._minio_handler = RealMinioHandler(minio_client)
+        if storage_client is not None:
+            self._object_storage_handler = RealObjectStorageHandler(storage_client)
 
     def get_health(self) -> DataManagerHealth:
         """Get the health status of the Data Manager."""
@@ -131,15 +137,15 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         try:
             # Test database connection via handler
-            health.db_connected = self._mongo_handler.ping()
+            health.db_connected = self._document_handler.ping()
 
             # Get total datapoints count
             health.total_datapoints = self.datapoints.count_documents({})
 
             # Test storage accessibility
             try:
-                if self._minio_handler is not None:
-                    health.storage_accessible = self._minio_handler.ping()
+                if self._object_storage_handler is not None:
+                    health.storage_accessible = self._object_storage_handler.ping()
                 else:
                     # No object storage configured, but file storage should be accessible
                     storage_path = Path(self.settings.file_storage_path).expanduser()
@@ -161,7 +167,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         return health
 
-    def _upload_file_to_minio(
+    def _upload_file_to_object_storage(
         self,
         file_path: Path,
         filename: str,
@@ -169,14 +175,14 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         metadata: Optional[Dict[str, str]] = None,
     ) -> Optional[Dict[str, Any]]:
         """Upload a file to object storage via the handler and return storage info."""
-        if self._minio_handler is None:
+        if self._object_storage_handler is None:
             return None
 
         oss = self._object_storage_settings or ObjectStorageSettings()
         bucket_name = oss.default_bucket
-        self._minio_handler.ensure_bucket(bucket_name)
+        self._object_storage_handler.ensure_bucket(bucket_name)
         object_name = label or filename
-        result = self._minio_handler.upload_file(
+        result = self._object_storage_handler.upload_file(
             bucket=bucket_name,
             object_name=object_name,
             file_path=file_path,
@@ -185,12 +191,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
 
         # Add application-level fields expected by ObjectStorageDataPoint
         endpoint = oss.endpoint or ""
-        # Derive a public endpoint (MinIO console port convention)
-        public_endpoint = endpoint
-        if ":9000" in public_endpoint and (
-            "localhost" in public_endpoint or "127.0.0.1" in public_endpoint
-        ):
-            public_endpoint = public_endpoint.replace(":9000", ":9001")
+        public_endpoint = oss.public_endpoint or endpoint
         protocol = "https" if oss.secure else "http"
         result["storage_endpoint"] = endpoint
         result["public_endpoint"] = public_endpoint
@@ -236,10 +237,10 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                     # Check if this is a file datapoint and object storage is configured
                     if (
                         datapoint_obj.data_type.value == "file"
-                        and self._minio_handler is not None
+                        and self._object_storage_handler is not None
                     ):
-                        # Use MinIO object storage instead of local storage
-                        # First, save file temporarily to upload to MinIO
+                        # Use object storage instead of local storage
+                        # First, save file temporarily to upload to object storage
 
                         with tempfile.NamedTemporaryFile(
                             delete=False, suffix=f"_{file.filename}"
@@ -250,7 +251,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                             temp_path = Path(temp_file.name)
 
                         # Upload to object storage
-                        object_storage_info = self._upload_file_to_minio(
+                        object_storage_info = self._upload_file_to_object_storage(
                             file_path=temp_path,
                             filename=file.filename,
                             label=datapoint_obj.label,
@@ -272,9 +273,9 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                             self.datapoints.insert_one(datapoint_dict)
                             # Return the transformed datapoint
                             return DataPoint.discriminate(datapoint_dict)
-                        # If MinIO upload failed, fall back to local storage
+                        # If object storage upload failed, fall back to local storage
                         warnings.warn(
-                            "MinIO upload failed, falling back to local file storage",
+                            "Object storage upload failed, falling back to local file storage",
                             UserWarning,
                             stacklevel=2,
                         )

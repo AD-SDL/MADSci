@@ -7,8 +7,8 @@ from typing import Any, Callable, Optional, Union
 
 from fastapi import HTTPException
 from madsci.common.db_handlers import (
-    MongoHandler,
-    PyMongoHandler,
+    DocumentStorageHandler,
+    PyDocumentStorageHandler,
     PyRedisHandler,
     RedisHandler,
 )
@@ -41,7 +41,7 @@ class WorkcellStateHandler:
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
         redis_handler: Optional[RedisHandler] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
     ) -> None:
         """
         Initialize a StateManager for a given workcell.
@@ -54,7 +54,7 @@ class WorkcellStateHandler:
             )
         if mongo_connection is not None:
             warnings.warn(
-                "The 'mongo_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                "The 'mongo_connection' parameter is deprecated. Use 'document_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -76,21 +76,21 @@ class WorkcellStateHandler:
                 password=self.workcell_settings.redis_password or None,
             )
 
-        # Initialize MongoDB handler
-        if mongo_handler is not None:
-            self._mongo_handler = mongo_handler
+        # Initialize document storage handler
+        if document_handler is not None:
+            self._document_handler = document_handler
         elif mongo_connection is not None:
-            self._mongo_handler = PyMongoHandler(mongo_connection)
+            self._document_handler = PyDocumentStorageHandler(mongo_connection)
         else:
-            self._mongo_handler = PyMongoHandler.from_url(
-                str(self.workcell_settings.mongo_db_url),
+            self._document_handler = PyDocumentStorageHandler.from_url(
+                str(self.workcell_settings.document_db_url),
                 self.workcell_settings.database_name or "workcell_manager",
             )
 
-        self.archived_workflows = self._mongo_handler.get_collection(
+        self.archived_workflows = self._document_handler.get_collection(
             "archived_workflows"
         )
-        self.workflow_definitions = self._mongo_handler.get_collection(
+        self.workflow_definitions = self._document_handler.get_collection(
             "workflow_definitions"
         )
 
@@ -457,4 +457,4 @@ class WorkcellStateHandler:
     def close(self) -> None:
         """Release Redis and MongoDB connections."""
         self._redis_handler.close()
-        self._mongo_handler.close()
+        self._document_handler.close()

@@ -3,7 +3,9 @@
 from datetime import datetime, timedelta
 
 import pytest
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import Location
 from madsci.common.utils import new_ulid_str
@@ -13,8 +15,8 @@ MANAGER_ID = "test_manager_001"
 
 
 @pytest.fixture
-def mongo_handler():
-    handler = InMemoryMongoHandler(database_name="test_migration")
+def document_handler():
+    handler = InMemoryDocumentStorageHandler(database_name="test_migration")
     yield handler
     handler.close()
 
@@ -27,10 +29,10 @@ def redis_handler():
 
 
 @pytest.fixture
-def migrator(redis_handler, mongo_handler):
+def migrator(redis_handler, document_handler):
     return LocationMigrator(
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
         manager_id=MANAGER_ID,
     )
 
@@ -53,7 +55,7 @@ class TestMigrateFromRedis:
         assert result.errors == []
 
     def test_migrate_redis_locations_to_mongo(
-        self, migrator, redis_handler, mongo_handler
+        self, migrator, redis_handler, document_handler
     ):
         """Seed Redis with 0.7.1 format, run migration, verify all in MongoDB."""
         loc1_id = new_ulid_str()
@@ -79,13 +81,15 @@ class TestMigrateFromRedis:
         assert result.skipped == 0
 
         # Verify in MongoDB
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         docs = collection.find().to_list()
         assert len(docs) == 2
         names = {d["location_name"] for d in docs}
         assert names == {"station_a", "station_b"}
 
-    def test_migrate_preserves_all_fields(self, migrator, redis_handler, mongo_handler):
+    def test_migrate_preserves_all_fields(
+        self, migrator, redis_handler, document_handler
+    ):
         """Verify representations, resource_id, allow_transfers are preserved."""
         loc_id = new_ulid_str()
         _seed_redis(
@@ -105,7 +109,7 @@ class TestMigrateFromRedis:
         result = migrator.migrate_from_redis()
         assert result.migrated == 1
 
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         doc = collection.find_one({"location_name": "full_location"})
         loc = Location.model_validate(doc)
         assert loc.representations == {"robot1": {"x": 1, "y": 2}}
@@ -113,7 +117,7 @@ class TestMigrateFromRedis:
         assert loc.allow_transfers is False
 
     def test_migrate_handles_reservation_field_mapping(
-        self, migrator, redis_handler, mongo_handler
+        self, migrator, redis_handler, document_handler
     ):
         """Reservation start/end → created/expires."""
         now = datetime.now()
@@ -138,7 +142,7 @@ class TestMigrateFromRedis:
         result = migrator.migrate_from_redis()
         assert result.migrated == 1
 
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         doc = collection.find_one({"location_name": "reserved_loc"})
         loc = Location.model_validate(doc)
         assert loc.reservation is not None
@@ -146,12 +150,12 @@ class TestMigrateFromRedis:
         assert loc.reservation.expires is not None
 
     def test_migrate_skips_duplicate_names(
-        self, migrator, redis_handler, mongo_handler
+        self, migrator, redis_handler, document_handler
     ):
         """If MongoDB already has a location with the same name, skip it."""
         loc_id = new_ulid_str()
         # Pre-populate MongoDB
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         existing = Location(
             location_name="Existing",
             location_id=new_ulid_str(),
@@ -172,7 +176,7 @@ class TestMigrateFromRedis:
         assert result.migrated == 0
         assert result.skipped == 1
 
-    def test_migrate_idempotent(self, migrator, redis_handler, mongo_handler):
+    def test_migrate_idempotent(self, migrator, redis_handler, document_handler):
         """Running migration twice doesn't create duplicates."""
         _seed_redis(
             redis_handler,
@@ -191,7 +195,7 @@ class TestMigrateFromRedis:
         assert result2.migrated == 0
         assert result2.skipped == 1
 
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         assert len(collection.find().to_list()) == 1
 
     def test_migrate_returns_summary(self, migrator, redis_handler):
@@ -217,7 +221,7 @@ class TestMigrateFromRedis:
 
 
 class TestMigrateFromSettings:
-    def test_migrate_from_settings_format(self, migrator, mongo_handler):
+    def test_migrate_from_settings_format(self, migrator, document_handler):
         """Test migrating inline LocationDefinition list."""
         settings_locations = [
             {
@@ -235,7 +239,7 @@ class TestMigrateFromSettings:
         assert result.migrated == 2
         assert result.skipped == 0
 
-        collection = mongo_handler.get_collection("locations")
+        collection = document_handler.get_collection("locations")
         docs = collection.find().to_list()
         assert len(docs) == 2
 

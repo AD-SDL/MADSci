@@ -1,4 +1,4 @@
-"""MongoDB version checking and validation for MADSci."""
+"""MongoDB-compatible document database version checking and validation for MADSci."""
 
 import json
 from datetime import datetime, timezone
@@ -6,14 +6,20 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 from madsci.client.event_client import EventClient
-from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
-from madsci.common.types.mongodb_migration_types import IndexDefinition, MongoDBSchema
+from madsci.common.db_handlers.document_storage_handler import (
+    DocumentStorageHandler,
+    PyDocumentStorageHandler,
+)
+from madsci.common.types.document_db_migration_types import (
+    IndexDefinition,
+    MongoDBSchema,
+)
 from pydantic_extra_types.semantic_version import SemanticVersion
 from pymongo import MongoClient
 
 
 def ensure_schema_indexes(
-    mongo_handler: MongoHandler,
+    document_handler: DocumentStorageHandler,
     schema_file_path: Path,
     logger: Optional[EventClient] = None,
 ) -> None:
@@ -23,7 +29,7 @@ def ensure_schema_indexes(
     unparseable the function logs a warning and returns without raising.
 
     Args:
-        mongo_handler: A MongoHandler (PyMongoHandler or InMemoryMongoHandler).
+        document_handler: A DocumentStorageHandler (PyDocumentStorageHandler or InMemoryDocumentStorageHandler).
         schema_file_path: Path to the schema.json file.
         logger: Optional logger instance.
     """
@@ -48,7 +54,7 @@ def ensure_schema_indexes(
 
     for collection_name, collection_def in schema.collections.items():
         try:
-            collection = mongo_handler.get_collection(collection_name)
+            collection = document_handler.get_collection(collection_name)
             _create_missing_indexes(collection, collection_def.indexes, logger)
         except Exception as e:
             logger.warning(
@@ -102,8 +108,8 @@ def _create_missing_indexes(
             )
 
 
-class MongoDBVersionChecker:
-    """Handles MongoDB database version validation and checking."""
+class DocumentDBVersionChecker:
+    """Handles MongoDB-compatible document database version validation and checking."""
 
     def __init__(
         self,
@@ -114,13 +120,13 @@ class MongoDBVersionChecker:
         logger: Optional[EventClient] = None,
     ) -> None:
         """
-        Initialize the MongoDBVersionChecker.
+        Initialize the DocumentDBVersionChecker.
 
         Args:
-            db_url: MongoDB connection URL
+            db_url: MongoDB-compatible document database connection URL
             database_name: Name of the database to check
             schema_file_path: Path to the schema.json file (used for validation only)
-            backup_dir: Optional backup directory for MongoDB backups
+            backup_dir: Optional backup directory for document database backups
             logger: Optional logger instance
         """
         self.db_url = db_url
@@ -129,22 +135,22 @@ class MongoDBVersionChecker:
         self.backup_dir = str(Path(backup_dir).expanduser()) if backup_dir else None
         self.logger = logger or EventClient()
 
-        # Initialize MongoDB connection
+        # Initialize MongoDB-compatible document database connection
         self.client = MongoClient(db_url)
         self.database = self.client[database_name]
 
     def __del__(self) -> None:
-        """Cleanup MongoDB client resources."""
+        """Cleanup MongoDB-compatible document database client resources."""
         if hasattr(self, "client") and self.client:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
-                self.logger.debug("MongoDB version checker client disposed")
+                self.logger.debug("Document database version checker client disposed")
 
     def _build_migration_base_args(self) -> list[str]:
         args = [
             "python",
             "-m",
-            "madsci.common.mongodb_migration_tool",
+            "madsci.common.document_db_migration_tool",
             "--db_url",
             self.db_url,
             "--database",
@@ -491,10 +497,10 @@ class MongoDBVersionChecker:
     def ensure_schema_indexes(self) -> None:
         """Create all indexes from the schema file on this database.
 
-        Wraps ``self.database`` in a ``PyMongoHandler`` and delegates to the
+        Wraps ``self.database`` in a ``PyDocumentStorageHandler`` and delegates to the
         module-level :func:`ensure_schema_indexes` function.
         """
-        handler = PyMongoHandler(self.database)
+        handler = PyDocumentStorageHandler(self.database)
         ensure_schema_indexes(handler, self.schema_file_path, self.logger)
 
     def collection_exists(self, collection_name: str) -> bool:

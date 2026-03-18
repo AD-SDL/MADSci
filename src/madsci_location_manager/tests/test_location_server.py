@@ -3,7 +3,9 @@
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     CapacityCostConfig,
@@ -22,9 +24,9 @@ from madsci.location_manager.location_server import LocationManager
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_locations")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_locations")
     yield handler
     handler.close()
 
@@ -38,7 +40,7 @@ def redis_handler():
 
 
 @pytest.fixture
-def app(redis_handler, mongo_handler):
+def app(redis_handler, document_handler):
     """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
@@ -47,7 +49,7 @@ def app(redis_handler, mongo_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     return manager.create_server(
         version="0.1.0",
@@ -353,7 +355,7 @@ def transfer_setup(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -917,7 +919,7 @@ def test_transfer_graph_without_transfer_capabilities(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(
         Location(
@@ -951,7 +953,7 @@ def test_get_location_by_id_query_endpoint(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(location_def)
     client = TestClient(manager.create_server())
@@ -973,7 +975,7 @@ def test_get_location_by_name_endpoint_not_found(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -1013,7 +1015,7 @@ def test_get_location_by_name_endpoint_multiple_locations(
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1049,7 +1051,7 @@ def test_get_location_query_parameter_validation(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -1079,7 +1081,7 @@ def test_get_location_by_id_query_parameter(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     manager.add_location(location_def)
     client = TestClient(manager.create_server())
@@ -1126,7 +1128,7 @@ def test_non_transfer_location_creation(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1187,7 +1189,7 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1241,7 +1243,7 @@ def test_non_transfer_location_plan_transfer_error(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1449,7 +1451,7 @@ def override_transfer_setup(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1613,7 +1615,7 @@ def test_override_templates_with_location_ids(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1678,7 +1680,7 @@ def test_override_templates_with_mixed_keys(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1758,7 +1760,7 @@ def test_no_override_templates_defined(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1808,7 +1810,7 @@ def test_empty_override_templates(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1872,7 +1874,7 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1932,7 +1934,7 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -1985,7 +1987,7 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -2106,7 +2108,7 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -2177,7 +2179,7 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -2253,7 +2255,7 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_a, location_b, location_c]:
         manager.add_location(location)
@@ -2340,7 +2342,7 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in locations:
         manager.add_location(location)
@@ -2416,7 +2418,7 @@ def test_transfer_template_with_additional_location_args(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_a, location_b]:
         manager.add_location(location)
@@ -2498,7 +2500,7 @@ def test_transfer_template_with_both_additional_args_types(
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_x, location_y]:
         manager.add_location(location)
@@ -2606,7 +2608,7 @@ def test_override_templates_with_additional_args(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [enhanced_source, normal_destination, regular_source]:
         manager.add_location(location)
@@ -2723,7 +2725,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [station_a, station_b, station_c]:
         manager.add_location(location)
@@ -2800,7 +2802,7 @@ def test_empty_additional_args_default_behavior(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     for location in [location_1, location_2]:
         manager.add_location(location)
@@ -2851,7 +2853,7 @@ def test_remove_representation_success(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -2877,7 +2879,7 @@ def test_remove_representation_location_not_found(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -2903,7 +2905,7 @@ def test_remove_representation_node_not_found(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -2927,7 +2929,7 @@ def test_remove_representation_no_representations(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -2955,7 +2957,7 @@ def test_remove_last_representation(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -2983,7 +2985,7 @@ def test_attach_and_detach_resource_success(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -3010,7 +3012,7 @@ def test_detach_resource_location_not_found(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -3034,7 +3036,7 @@ def test_detach_resource_no_resource_attached(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -3073,7 +3075,7 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_locations"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
     client = TestClient(manager.create_server())
 
@@ -3207,7 +3209,7 @@ def test_seed_file_loads_on_empty_db(tmp_path, redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_seed"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_seed"),
     )
     client = TestClient(manager.create_server())
 
@@ -3227,7 +3229,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     with seed_file.open("w") as f:
         yaml.dump([{"location_name": "should_not_appear"}], f)
 
-    mongo = InMemoryMongoHandler(database_name="test_seed_skip")
+    mongo = InMemoryDocumentStorageHandler(database_name="test_seed_skip")
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
         seed_locations_file=str(seed_file),
@@ -3240,7 +3242,7 @@ def test_seed_file_skipped_when_db_has_locations(tmp_path, redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo,
+        document_handler=mongo,
     )
     client = TestClient(manager.create_server())
 
@@ -3261,7 +3263,7 @@ def test_seed_file_missing_no_error(redis_handler):
     manager = LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=InMemoryMongoHandler(database_name="test_no_seed"),
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_no_seed"),
     )
     client = TestClient(manager.create_server())
 

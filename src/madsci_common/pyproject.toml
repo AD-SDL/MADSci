@@ -53,7 +53,7 @@ otel-instrumentation = [
 
 [project.scripts]
 madsci-backup = "madsci.common.backup_tools.cli:main"
-madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"
+madsci-document-db-backup = "madsci.common.backup_tools.document_db_cli:main_document_db_backup"
 madsci-postgres-backup = "madsci.common.backup_tools.postgres_cli:main_postgres_backup"
 
 [project.urls]

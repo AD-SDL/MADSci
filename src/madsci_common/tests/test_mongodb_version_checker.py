@@ -1,13 +1,15 @@
-"""Pytest unit tests for the MongoDBVersionChecker with schema versioning."""
+"""Pytest unit tests for the DocumentDBVersionChecker with schema versioning."""
 
 import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
-from madsci.common.mongodb_version_checker import (
-    MongoDBVersionChecker,
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
+from madsci.common.document_db_version_checker import (
+    DocumentDBVersionChecker,
     ensure_schema_indexes,
 )
 from pydantic_extra_types.semantic_version import SemanticVersion
@@ -55,7 +57,7 @@ def temp_schema_file(tmp_path):
 @pytest.fixture
 def mock_mongo_client():
     """Mock MongoDB client for testing."""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -92,7 +94,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -119,7 +121,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.0-rc1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -146,7 +148,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.1.0"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -173,7 +175,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "2.0.0"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -194,7 +196,7 @@ class TestSchemaVersionComparison:
         # Database and Schema both have 1.0.0
         mock_collection.find_one.return_value = {"version": "1.0.0"}
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -221,7 +223,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -242,7 +244,7 @@ class TestSchemaVersionComparison:
         # Database has invalid semantic version
         mock_collection.find_one.return_value = {"version": "invalid-version"}
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -268,7 +270,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.0-beta.2"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -287,7 +289,9 @@ class TestExistingFunctionality:
 
     def test_migration_needed_for_no_version_tracking(self, temp_schema_file):
         """Test that databases without version tracking trigger migration."""
-        with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
             mock_db = Mock()
             mock_client_instance = Mock()
             mock_client_instance.__getitem__ = Mock(return_value=mock_db)
@@ -296,7 +300,7 @@ class TestExistingFunctionality:
             # Database exists but no schema_versions collection
             mock_db.list_collection_names.return_value = ["test_collection"]
 
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 
@@ -310,7 +314,9 @@ class TestExistingFunctionality:
 
     def test_migration_needed_for_nonexistent_database(self, temp_schema_file):
         """Test that non-existent databases trigger migration."""
-        with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
             mock_db = Mock()
             mock_client_instance = Mock()
             mock_client_instance.__getitem__ = Mock(return_value=mock_db)
@@ -319,7 +325,7 @@ class TestExistingFunctionality:
             # Database doesn't exist (no collections)
             mock_db.list_collection_names.return_value = []
 
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 
@@ -337,7 +343,7 @@ class TestEnsureSchemaIndexes:
 
     def test_creates_missing_indexes(self, temp_schema_file):
         """Test that ensure_schema_indexes creates indexes defined in schema."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
 
         ensure_schema_indexes(handler, Path(temp_schema_file))
 
@@ -355,7 +361,7 @@ class TestEnsureSchemaIndexes:
 
     def test_skips_existing_indexes(self, temp_schema_file):
         """Test that existing indexes are not recreated."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
 
         # Pre-create one of the indexes
         coll = handler.get_collection("test_collection")
@@ -370,7 +376,7 @@ class TestEnsureSchemaIndexes:
 
     def test_creates_missing_collections(self, temp_schema_file):
         """Test that collections are auto-created."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
 
         # No collections exist yet
         assert handler.list_collection_names() == []
@@ -384,7 +390,7 @@ class TestEnsureSchemaIndexes:
 
     def test_handles_missing_schema_file(self, tmp_path):
         """Test that missing schema file is handled gracefully (no exception)."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
         missing_path = tmp_path / "nonexistent_schema.json"
 
         # Should not raise
@@ -392,7 +398,7 @@ class TestEnsureSchemaIndexes:
 
     def test_handles_invalid_schema_file(self, tmp_path):
         """Test that invalid schema file is handled gracefully."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
         bad_schema = tmp_path / "bad_schema.json"
         bad_schema.write_text('{"schema_version": "1.0.0"}')
 
@@ -401,7 +407,7 @@ class TestEnsureSchemaIndexes:
 
     def test_idempotent_multiple_calls(self, temp_schema_file):
         """Test that calling ensure_schema_indexes multiple times is safe."""
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
 
         ensure_schema_indexes(handler, Path(temp_schema_file))
         ensure_schema_indexes(handler, Path(temp_schema_file))
@@ -413,9 +419,11 @@ class TestEnsureSchemaIndexes:
 
     def test_validate_or_fail_fresh_db_creates_indexes(self, temp_schema_file):
         """Test that validate_or_fail on a fresh DB auto-creates schema indexes."""
-        with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
             # Use an in-memory handler to verify indexes get created
-            in_mem_handler = InMemoryMongoHandler()
+            in_mem_handler = InMemoryDocumentStorageHandler()
 
             mock_db = Mock()
             mock_client_instance = Mock()
@@ -448,7 +456,7 @@ class TestEnsureSchemaIndexes:
             mock_db.__getitem__ = Mock(side_effect=getitem_side_effect)
             mock_client_instance.list_database_names = Mock(return_value=[])
 
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017",
                 "test_db",
                 temp_schema_file,
@@ -456,7 +464,7 @@ class TestEnsureSchemaIndexes:
 
             # Patch ensure_schema_indexes on the instance to verify it's called
             with patch(
-                "madsci.common.mongodb_version_checker.MongoDBVersionChecker.ensure_schema_indexes"
+                "madsci.common.document_db_version_checker.DocumentDBVersionChecker.ensure_schema_indexes"
             ) as mock_ensure:
                 checker.validate_or_fail()
                 mock_ensure.assert_called_once()

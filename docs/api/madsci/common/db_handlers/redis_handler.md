@@ -1,9 +1,9 @@
 Module madsci.common.db_handlers.redis_handler
 ==============================================
-Redis handler abstraction.
+Redis/Valkey handler abstraction.
 
-Provides an ABC for Redis access and two implementations:
-- PyRedisHandler: wraps a real redis.Redis client + pottery data structures
+Provides an ABC for Redis/Valkey access and two implementations:
+- PyRedisHandler: wraps a real redis.Redis client + pottery data structures (compatible with both Redis and Valkey)
 - InMemoryRedisHandler: wraps InMemoryRedisClient for testing
 
 Classes

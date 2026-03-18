@@ -112,7 +112,7 @@ Each manager settings class uses `prefixed_alias_generator()` from `base_types.p
 Key configuration patterns:
 - Each manager has its own settings class with environment prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - Server URLs default to localhost with specific ports
-- Database connections default to MongoDB/PostgreSQL on localhost
+- Database connections default to FerretDB (MongoDB-compatible)/PostgreSQL on localhost
 - File storage paths default to `~/.madsci/` subdirectories
 
 ### Settings Directory (Walk-Up Discovery)
@@ -167,7 +167,7 @@ Each manager service follows this pattern:
 1. Settings class inheriting from `MadsciBaseSettings`
 2. Server class inheriting from `AbstractManagerBase` with FastAPI endpoints
 3. Client class for programmatic interaction
-4. Database models (SQLModel for PostgreSQL, Pydantic for MongoDB)
+4. Database models (SQLModel for PostgreSQL, Pydantic for document database)
 
 The `AbstractManagerBase` class provides:
 - Common functionality for all managers (settings, logging, CORS middleware)
@@ -193,7 +193,7 @@ MADSci uses two database systems optimized for different use cases:
 
 #### Database Types
 - **PostgreSQL**: Used by Resource Manager for relational data with strict schemas
-- **MongoDB**: Used by Event, Data, Experiment, and Workcell Managers for flexible document storage
+- **FerretDB** (MongoDB-compatible document database, backed by PostgreSQL): Used by Event, Data, Experiment, and Workcell Managers for flexible document storage
 
 #### Backup and Restore
 
@@ -213,17 +213,17 @@ settings = PostgreSQLBackupSettings(
 backup_tool = PostgreSQLBackupTool(settings)
 backup_path = backup_tool.create_backup("pre_migration")
 
-# MongoDB backups
-from madsci.common.backup_tools import MongoDBBackupTool
-from madsci.common.types.backup_types import MongoDBBackupSettings
+# Document database backups
+from madsci.common.backup_tools import DocumentDBBackupTool
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017"),
     database="events",
     backup_dir=Path("./backups"),
     max_backups=10
 )
-backup_tool = MongoDBBackupTool(settings)
+backup_tool = DocumentDBBackupTool(settings)
 backup_path = backup_tool.create_backup("hourly")
 ```
 
@@ -235,7 +235,7 @@ madsci-backup create --db-url mongodb://localhost:27017/events
 
 # Database-specific CLIs
 madsci-postgres-backup create --db-url postgresql://localhost/resources
-madsci-mongodb-backup create --mongo-url mongodb://localhost:27017 --database events
+madsci-document-db-backup create --mongo-url mongodb://localhost:27017 --database events
 ```
 
 #### Database Connections
@@ -255,11 +255,11 @@ with Session(engine) as session:
     session.commit()
 ```
 
-**MongoDB** (using pymongo):
+**FerretDB** (MongoDB-compatible, using pymongo):
 ```python
 from pymongo import MongoClient
 
-with MongoClient(mongo_url) as client:
+with MongoClient(document_db_url) as client:
     db = client[database_name]
     collection = db[collection_name]
     # Perform operations
@@ -275,7 +275,7 @@ with MongoClient(mongo_url) as client:
 python -m madsci.resource_manager.migration_tool --db-url postgresql://localhost/resources
 ```
 
-**MongoDB migrations** (per manager):
+**Document database migrations** (per manager):
 - Handle index creation and schema validation
 - Manager-specific migration tools
 - Automatic pre-migration backups

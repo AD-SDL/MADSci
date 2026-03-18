@@ -1,55 +1,55 @@
-"""MongoDB migration tool for MADSci databases with backup, schema management, and CLI."""
+"""MongoDB-compatible document database migration tool for MADSci databases with backup, schema management, and CLI."""
 
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.backup_tools.mongodb_backup import (
-    MongoDBBackupSettings,
-    MongoDBBackupTool,
+from madsci.common.backup_tools.document_db_backup import (
+    DocumentDBBackupSettings,
+    DocumentDBBackupTool,
 )
-from madsci.common.db_handlers.mongo_handler import PyMongoHandler
-from madsci.common.mongodb_version_checker import (
-    MongoDBVersionChecker,
+from madsci.common.db_handlers.document_storage_handler import PyDocumentStorageHandler
+from madsci.common.document_db_version_checker import (
+    DocumentDBVersionChecker,
     ensure_schema_indexes,
 )
-from madsci.common.types.mongodb_migration_types import (
+from madsci.common.types.document_db_migration_types import (
+    DocumentDBMigrationSettings,
     IndexDefinition,
-    MongoDBMigrationSettings,
     MongoDBSchema,
 )
 from pydantic import AnyUrl
 from pymongo import MongoClient
 
 
-class MongoDBMigrator:
-    """Handles MongoDB schema migrations for MADSci with backup and restore capabilities."""
+class DocumentDBMigrator:
+    """Handles MongoDB-compatible document database schema migrations for MADSci with backup and restore capabilities."""
 
     def __init__(
         self,
-        settings: MongoDBMigrationSettings,
+        settings: DocumentDBMigrationSettings,
         logger: Optional[EventClient] = None,
     ) -> None:
         """
-        Initialize the MongoDB migrator.
+        Initialize the MongoDB-compatible document database migrator.
 
         Args:
             settings: Migration configuration settings
             logger: Optional logger instance
         """
         self.settings = settings
-        self.db_url = str(settings.mongo_db_url)
+        self.db_url = str(settings.document_db_url)
         database_name = settings.database
         if not database_name:
-            raise ValueError("MongoDBMigrator requires settings.database to be set")
+            raise ValueError("DocumentDBMigrator requires settings.database to be set")
 
         database_name_str = str(database_name)
         self.database_name = database_name_str
         self.schema_file_path = settings.get_effective_schema_file_path()
         self.logger = logger or EventClient()
 
-        # Initialize MongoDB connection
+        # Initialize MongoDB-compatible document database connection
         self.client = MongoClient(self.db_url)
         self.database = self.client[self.database_name]
 
@@ -62,8 +62,8 @@ class MongoDBMigrator:
         self.logger.info("Using backup directory", backup_dir=str(self.backup_dir))
 
         # Create backup tool instance with migration-appropriate settings
-        backup_settings = MongoDBBackupSettings(
-            mongo_db_url=settings.mongo_db_url,
+        backup_settings = DocumentDBBackupSettings(
+            document_db_url=settings.document_db_url,
             database=self.database_name,
             backup_dir=self.backup_dir,
             max_backups=10,  # Migration-specific default
@@ -72,10 +72,10 @@ class MongoDBMigrator:
                 settings, "collections", None
             ),  # Support collection-specific settings
         )
-        self.backup_tool = MongoDBBackupTool(backup_settings, logger=self.logger)
+        self.backup_tool = DocumentDBBackupTool(backup_settings, logger=self.logger)
 
         # Initialize version checker
-        self.version_checker = MongoDBVersionChecker(
+        self.version_checker = DocumentDBVersionChecker(
             db_url=self.db_url,
             database_name=self.database_name,
             schema_file_path=str(self.schema_file_path),
@@ -85,18 +85,18 @@ class MongoDBMigrator:
 
     @property
     def parsed_db_url(self) -> AnyUrl:
-        """Parse MongoDB connection URL using pydantic AnyUrl."""
-        return self.settings.mongo_db_url
+        """Parse MongoDB-compatible document database connection URL using pydantic AnyUrl."""
+        return self.settings.document_db_url
 
     def __del__(self) -> None:
-        """Cleanup MongoDB client and version checker resources."""
+        """Cleanup MongoDB-compatible document database client and version checker resources."""
         if hasattr(self, "version_checker") and self.version_checker:
             # Version checker now has its own __del__ method
             pass
         if hasattr(self, "client") and self.client:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
-                self.logger.debug("MongoDB migrator client disposed")
+                self.logger.debug("Document database migrator client disposed")
 
     def load_expected_schema(self) -> MongoDBSchema:
         """Load the expected schema from the schema.json file."""
@@ -149,7 +149,7 @@ class MongoDBMigrator:
 
             # Use the shared ensure_schema_indexes() to create all collections
             # and their indexes from schema.json in one idempotent pass.
-            handler = PyMongoHandler(self.database)
+            handler = PyDocumentStorageHandler(self.database)
             ensure_schema_indexes(handler, self.schema_file_path, self.logger)
 
             self.version_checker.create_schema_versions_collection()
@@ -299,7 +299,7 @@ class MongoDBMigrator:
 
                 # Record new version in our tracking system
                 migration_notes = (
-                    "MongoDB schema migration from "
+                    "Document database schema migration from "
                     f"{current_db_version or 'unversioned'} to {target_version}"
                 )
                 self.version_checker.record_version(target_version, migration_notes)
@@ -344,9 +344,9 @@ class MongoDBMigrator:
 
 
 def handle_migration_commands(
-    settings: MongoDBMigrationSettings,
-    version_checker: MongoDBVersionChecker,
-    migrator: MongoDBMigrator,
+    settings: DocumentDBMigrationSettings,
+    version_checker: DocumentDBVersionChecker,
+    migrator: DocumentDBMigrator,
     logger: EventClient,
 ) -> None:
     """Handle different migration command options."""
@@ -390,11 +390,11 @@ def handle_migration_commands(
 
 
 def main() -> None:  # noqa
-    """Command line interface for the MongoDB migration tool."""
+    """Command line interface for the MongoDB-compatible document database migration tool."""
     logger = EventClient()
 
     try:
-        settings = MongoDBMigrationSettings()
+        settings = DocumentDBMigrationSettings()
 
         logger.info("Using database", database=settings.database)
         logger.info(
@@ -402,7 +402,7 @@ def main() -> None:  # noqa
             schema_file_path=str(settings.get_effective_schema_file_path()),
         )
 
-        migrator = MongoDBMigrator(settings, logger)
+        migrator = DocumentDBMigrator(settings, logger)
 
         if getattr(settings, "validate_schema", False):
             validation_result = migrator.validate_schema()

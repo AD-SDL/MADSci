@@ -20,7 +20,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-from madsci.common.db_handlers import MongoHandler, RedisHandler
+from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
 from madsci.common.types.location_types import Location
 
 logger = logging.getLogger(__name__)
@@ -41,16 +41,16 @@ class LocationMigrator:
     def __init__(
         self,
         redis_handler: RedisHandler,
-        mongo_handler: MongoHandler,
+        document_handler: DocumentStorageHandler,
         manager_id: str,
         event_logger: Optional[Any] = None,
     ) -> None:
         """Initialize the migrator with Redis/MongoDB handlers and manager ID."""
         self._redis_handler = redis_handler
-        self._mongo_handler = mongo_handler
+        self._document_handler = document_handler
         self._manager_id = manager_id
         self._event_logger = event_logger
-        self._locations_collection = self._mongo_handler.get_collection("locations")
+        self._locations_collection = self._document_handler.get_collection("locations")
 
     def _log(self, msg: str, **kwargs: Any) -> None:
         if self._event_logger:
@@ -150,11 +150,11 @@ class SchemaUpgrader:
 
     def __init__(
         self,
-        mongo_handler: MongoHandler,
+        document_handler: DocumentStorageHandler,
         event_logger: Optional[Any] = None,
     ) -> None:
         """Initialize the schema upgrader."""
-        self._mongo_handler = mongo_handler
+        self._document_handler = document_handler
         self._event_logger = event_logger
 
     def _log(self, msg: str, **kwargs: Any) -> None:
@@ -172,7 +172,9 @@ class SchemaUpgrader:
 
         try:
             # Create representation_templates collection (idempotent)
-            repr_coll = self._mongo_handler.get_collection("representation_templates")
+            repr_coll = self._document_handler.get_collection(
+                "representation_templates"
+            )
             # Accessing the collection creates it; insert a marker if desired
             self._log(
                 "Ensured representation_templates collection exists",
@@ -180,14 +182,14 @@ class SchemaUpgrader:
             )
 
             # Create location_templates collection (idempotent)
-            loc_coll = self._mongo_handler.get_collection("location_templates")
+            loc_coll = self._document_handler.get_collection("location_templates")
             self._log(
                 "Ensured location_templates collection exists",
                 collection="location_templates",
             )
 
             # Record migration version
-            versions_coll = self._mongo_handler.get_collection("schema_versions")
+            versions_coll = self._document_handler.get_collection("schema_versions")
             existing = versions_coll.find_one({"version": "2.0.0"})
             if existing is None:
                 from datetime import datetime, timezone  # noqa: PLC0415
@@ -232,7 +234,7 @@ def main() -> None:
     args = parser.parse_args()
 
     from madsci.common.db_handlers import (  # noqa: PLC0415
-        PyMongoHandler,
+        PyDocumentStorageHandler,
         PyRedisHandler,
     )
 
@@ -241,11 +243,11 @@ def main() -> None:
         port=args.redis_port,
         password=args.redis_password,
     )
-    mongo_handler = PyMongoHandler.from_url(args.mongo_url, args.database)
+    document_handler = PyDocumentStorageHandler.from_url(args.mongo_url, args.database)
 
     migrator = LocationMigrator(
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
         manager_id=args.manager_id,
     )
 

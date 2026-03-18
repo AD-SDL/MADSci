@@ -9,7 +9,7 @@ from madsci.client.event_client import EventClient
 from madsci.common.context import get_current_madsci_context
 from madsci.common.object_storage_helpers import (
     ObjectNamingStrategy,
-    create_minio_client,
+    create_object_storage_client,
     download_file_from_object_storage,
     get_object_data_from_storage,
     upload_file_to_object_storage,
@@ -45,7 +45,7 @@ class DataClient:
 
         Args:
             data_server_url: The base URL of the Data Manager. If not provided, it will be taken from the current MadsciContext.
-            object_storage_settings: Configuration for object storage (e.g., MinIO). If not provided, defaults will be used.
+            object_storage_settings: Configuration for S3-compatible object storage. If not provided, defaults will be used.
             config: Client configuration for retry and timeout settings. If not provided, uses default DataClientConfig.
         """
         self.data_server_url = (
@@ -64,7 +64,7 @@ class DataClient:
         self.object_storage_settings = (
             object_storage_settings or ObjectStorageSettings()
         )
-        self._minio_client = create_minio_client(
+        self._minio_client = create_object_storage_client(
             object_storage_settings=self.object_storage_settings
         )
 
@@ -107,7 +107,7 @@ class DataClient:
         datapoint = self.get_datapoint(datapoint_id, timeout=timeout)
         # Handle based on datapoint type (regardless of URL configuration)
         if self._minio_client is not None:
-            # Use MinIO client if configured
+            # Use object storage client if configured
             if datapoint.data_type == DataPointTypeEnum.OBJECT_STORAGE:
                 data = get_object_data_from_storage(
                     self._minio_client, datapoint.bucket_name, datapoint.object_name
@@ -117,7 +117,7 @@ class DataClient:
                 # Fall back to server API if object storage fails
             else:
                 self.logger.warn(
-                    "Cannot access object_storage datapoint: MinIO client not configured",
+                    "Cannot access object_storage datapoint: object storage client not configured",
                     event_type=EventType.LOG_WARNING,
                 )
 
@@ -377,7 +377,7 @@ class DataClient:
 
         # Use the helper function to upload the file
         object_storage_info = upload_file_to_object_storage(
-            minio_client=self._minio_client,
+            storage_client=self._minio_client,
             object_storage_settings=self.object_storage_settings,
             file_path=file_path,
             bucket_name=bucket_name,

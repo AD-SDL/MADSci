@@ -3,7 +3,9 @@
 import pytest
 import yaml
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 from madsci.common.types.location_types import (
     LocationManagerSettings,
@@ -12,12 +14,12 @@ from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
 
 
-def _create_manager(settings, redis_handler, mongo_handler):
+def _create_manager(settings, redis_handler, document_handler):
     """Create a LocationManager with test handlers."""
     return LocationManager(
         settings=settings,
         redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
 
 
@@ -47,7 +49,7 @@ class TestOldFormatSeedFile:
             seed_locations_file=str(seed_file),
             reconciliation_enabled=False,
         )
-        mongo = InMemoryMongoHandler(database_name="test")
+        mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         manager = _create_manager(settings, redis, mongo)
         app = manager.create_server(version="0.1.0")
@@ -103,7 +105,7 @@ class TestNewFormatSeedFile:
             seed_locations_file=str(seed_file),
             reconciliation_enabled=False,
         )
-        mongo = InMemoryMongoHandler(database_name="test")
+        mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         manager = _create_manager(settings, redis, mongo)
         app = manager.create_server(version="0.1.0")
@@ -158,7 +160,7 @@ class TestNewFormatSeedFile:
             seed_locations_file=str(seed_file),
             reconciliation_enabled=False,
         )
-        mongo = InMemoryMongoHandler(database_name="test")
+        mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         manager = _create_manager(settings, redis, mongo)
         app = manager.create_server(version="0.1.0")
@@ -227,7 +229,7 @@ class TestExampleLocationsSeedFile:
             seed_locations_file=str(seed_path),
             reconciliation_enabled=False,
         )
-        mongo = InMemoryMongoHandler(database_name="test")
+        mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         manager = _create_manager(settings, redis, mongo)
         app = manager.create_server(version="0.1.0")

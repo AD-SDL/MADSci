@@ -9,8 +9,8 @@ import warnings
 from typing import Any, Optional, Union
 
 from madsci.common.db_handlers import (
-    MongoHandler,
-    PyMongoHandler,
+    DocumentStorageHandler,
+    PyDocumentStorageHandler,
     PyRedisHandler,
     RedisHandler,
 )
@@ -28,7 +28,7 @@ class LocationStateHandler:
     """
     Manages state for a MADSci Location Manager.
 
-    - MongoDB handler: persistent location CRUD
+    - Document storage handler: persistent location CRUD
     - Redis handler: transient state (locks, change counters)
     """
 
@@ -41,7 +41,7 @@ class LocationStateHandler:
         manager_id: str,
         redis_connection: Optional[Any] = None,
         redis_handler: Optional[RedisHandler] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
     ) -> None:
         """
         Initialize a LocationStateHandler.
@@ -56,8 +56,8 @@ class LocationStateHandler:
             Deprecated. Use redis_handler instead.
         redis_handler:
             Redis handler for transient state (locks, change counters).
-        mongo_handler:
-            MongoDB handler for persistent location storage.
+        document_handler:
+            Document storage handler for persistent location storage.
         """
         if redis_connection is not None:
             warnings.warn(
@@ -80,21 +80,21 @@ class LocationStateHandler:
                 password=settings.redis_password or None,
             )
 
-        # Initialize MongoDB handler (persistent locations)
-        if mongo_handler is not None:
-            self._mongo_handler = mongo_handler
+        # Initialize document storage handler (persistent locations)
+        if document_handler is not None:
+            self._document_handler = document_handler
         else:
-            self._mongo_handler = PyMongoHandler.from_url(
+            self._document_handler = PyDocumentStorageHandler.from_url(
                 str(settings.document_db_url),
                 settings.database_name,
             )
 
         # Set up collections
-        self._locations_collection = self._mongo_handler.get_collection("locations")
-        self._repr_templates_collection = self._mongo_handler.get_collection(
+        self._locations_collection = self._document_handler.get_collection("locations")
+        self._repr_templates_collection = self._document_handler.get_collection(
             "representation_templates"
         )
-        self._location_templates_collection = self._mongo_handler.get_collection(
+        self._location_templates_collection = self._document_handler.get_collection(
             "location_templates"
         )
 
@@ -148,9 +148,9 @@ class LocationStateHandler:
         return False
 
     def close(self) -> None:
-        """Release both Redis and MongoDB connections and resources."""
+        """Release both Redis and document storage connections and resources."""
         self._redis_handler.close()
-        self._mongo_handler.close()
+        self._document_handler.close()
 
     # Location Management Methods (MongoDB-backed)
 
