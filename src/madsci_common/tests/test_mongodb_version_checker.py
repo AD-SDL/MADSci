@@ -1,11 +1,11 @@
-"""Pytest unit tests for the MongoDBVersionChecker with schema versioning."""
+"""Pytest unit tests for the DocumentDBVersionChecker with schema versioning."""
 
 import json
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from pydantic_extra_types.semantic_version import SemanticVersion
 
 
@@ -38,7 +38,7 @@ def temp_schema_file(tmp_path):
 @pytest.fixture
 def mock_mongo_client():
     """Mock MongoDB client for testing."""
-    with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+    with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_collection = Mock()
 
@@ -73,7 +73,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -100,7 +100,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.0-rc1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -127,7 +127,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.1.0"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -154,7 +154,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "2.0.0"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -175,7 +175,7 @@ class TestSchemaVersionComparison:
         # Database and Schema both have 1.0.0
         mock_collection.find_one.return_value = {"version": "1.0.0"}
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -202,7 +202,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.1"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -223,7 +223,7 @@ class TestSchemaVersionComparison:
         # Database has invalid semantic version
         mock_collection.find_one.return_value = {"version": "invalid-version"}
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -249,7 +249,7 @@ class TestSchemaVersionComparison:
         schema_content["schema_version"] = "1.0.0-beta.2"
         schema_path.write_text(json.dumps(schema_content))
 
-        checker = MongoDBVersionChecker(
+        checker = DocumentDBVersionChecker(
             "mongodb://localhost:27017", "test_db", temp_schema_file
         )
 
@@ -268,7 +268,9 @@ class TestExistingFunctionality:
 
     def test_migration_needed_for_no_version_tracking(self, temp_schema_file):
         """Test that databases without version tracking trigger migration."""
-        with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
             mock_db = Mock()
             mock_client_instance = Mock()
             mock_client_instance.__getitem__ = Mock(return_value=mock_db)
@@ -277,7 +279,7 @@ class TestExistingFunctionality:
             # Database exists but no schema_versions collection
             mock_db.list_collection_names.return_value = ["test_collection"]
 
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 
@@ -291,7 +293,9 @@ class TestExistingFunctionality:
 
     def test_migration_needed_for_nonexistent_database(self, temp_schema_file):
         """Test that non-existent databases trigger migration."""
-        with patch("madsci.common.mongodb_version_checker.MongoClient") as mock_client:
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
             mock_db = Mock()
             mock_client_instance = Mock()
             mock_client_instance.__getitem__ = Mock(return_value=mock_db)
@@ -300,7 +304,7 @@ class TestExistingFunctionality:
             # Database doesn't exist (no collections)
             mock_db.list_collection_names.return_value = []
 
-            checker = MongoDBVersionChecker(
+            checker = DocumentDBVersionChecker(
                 "mongodb://localhost:27017", "test_db", temp_schema_file
             )
 

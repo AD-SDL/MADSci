@@ -9,13 +9,14 @@ Sub-modules
 * madsci.common.data_manipulation
 * madsci.common.db_handlers
 * madsci.common.deprecation
+* madsci.common.document_db_migration_tool
+* madsci.common.document_db_version_checker
 * madsci.common.exceptions
+* madsci.common.foss_migration
 * madsci.common.local_backends
 * madsci.common.manager_base
 * madsci.common.middleware
 * madsci.common.migration
-* madsci.common.mongodb_migration_tool
-* madsci.common.mongodb_version_checker
 * madsci.common.nodes
 * madsci.common.object_storage_helpers
 * madsci.common.openapi_utils

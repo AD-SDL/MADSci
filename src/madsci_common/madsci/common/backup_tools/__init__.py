@@ -3,8 +3,8 @@
 from .backup_manager import BackupManager
 from .backup_validator import BackupValidator
 from .base_backup import AbstractBackupTool, BackupInfo
-from .mongo_cli import main_mongodb_backup
-from .mongodb_backup import MongoDBBackupTool
+from .document_db_backup import DocumentDBBackupTool
+from .document_db_cli import main_document_db_backup
 from .postgres_backup import PostgreSQLBackupTool
 from .postgres_cli import main_postgres_backup
 
@@ -13,8 +13,8 @@ __all__ = [
     "BackupInfo",
     "BackupManager",
     "BackupValidator",
-    "MongoDBBackupTool",
+    "DocumentDBBackupTool",
     "PostgreSQLBackupTool",
-    "main_mongodb_backup",
+    "main_document_db_backup",
     "main_postgres_backup",
 ]

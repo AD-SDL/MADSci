@@ -11,7 +11,7 @@ See the main [README](../../README.md#installation) for installation options. Th
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_workcell.manager.yaml](../../examples/example_lab/managers/example_workcell.manager.yaml)
 
-**Dependencies**: MongoDB and Redis (see [example docker-compose](./workcell_manager.compose.yaml) or [example_lab](../../examples/example_lab/))
+**Dependencies**: FerretDB and Valkey (see [example_lab/compose.infra.yaml](../../examples/example_lab/compose.infra.yaml))
 
 ## Usage
 
@@ -265,12 +265,12 @@ stateDiagram
 ```
 ## Database Migration Tools
 
-MADSci Workcell Manager includes automated MongoDB migration tools that handle schema changes and version tracking for the workcell management system.
+MADSci Workcell Manager includes automated FerretDB migration tools that handle schema changes and version tracking for the workcell management system.
 
 ### Features
 
-- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
-- **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and FerretDB schema version
+- **Automated Backup**: Creates database dumps using `mongodump` before applying migrations to enable rollback on failure
 - **Schema Management**: Creates collections and indexes based on schema definitions
 - **Index Management**: Ensures required indexes exist for optimal query performance
 - **Location Independence**: Auto-detects schema files or accepts explicit paths
@@ -281,22 +281,22 @@ MADSci Workcell Manager includes automated MongoDB migration tools that handle s
 #### Standard Usage
 ```bash
 # Run migration for workcells database (auto-detects schema file)
-python -m madsci.common.mongodb_migration_tool --database madsci_workcells
+python -m madsci.common.document_db_migration_tool --database madsci_workcells
 
 # Migrate with explicit database URL
-python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_workcells
+python -m madsci.common.document_db_migration_tool --db-url mongodb://localhost:27017 --database madsci_workcells
 
 # Use custom schema file
-python -m madsci.common.mongodb_migration_tool --database madsci_workcells --schema-file /path/to/schema.json
+python -m madsci.common.document_db_migration_tool --database madsci_workcells --schema-file /path/to/schema.json
 
 # Create backup only
-python -m madsci.common.mongodb_migration_tool --database madsci_workcells --backup-only
+python -m madsci.common.document_db_migration_tool --database madsci_workcells --backup-only
 
 # Restore from backup
-python -m madsci.common.mongodb_migration_tool --database madsci_workcells --restore-from /path/to/backup
+python -m madsci.common.document_db_migration_tool --database madsci_workcells --restore-from /path/to/backup
 
 # Check version compatibility without migrating
-python -m madsci.common.mongodb_migration_tool --database madsci_workcells --check-version
+python -m madsci.common.document_db_migration_tool --database madsci_workcells --check-version
 ```
 
 #### Docker Usage
@@ -304,13 +304,13 @@ When running in Docker containers, use docker-compose to execute migration comma
 
 ```bash
 # Run migration for workcells database in Docker
-docker-compose run --rm workcell-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json'
+docker-compose run --rm workcell-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json'
 
 # Create backup only in Docker
-docker-compose run --rm workcell-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json' --backup-only
+docker-compose run --rm workcell-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json' --backup-only
 
 # Check version compatibility in Docker
-docker-compose run --rm workcell-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json' --check-version
+docker-compose run --rm workcell-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_workcells' --schema-file '/app/madsci/workcell_manager/schema.json' --check-version
 ```
 
 ### Server Integration
@@ -330,14 +330,14 @@ The migration tool automatically searches for schema files in:
 
 ### Backup Location
 
-Backups are stored in `.madsci/mongodb/backups/` with timestamped filenames:
+Backups are stored in `.madsci/document_db/backups/` with timestamped filenames:
 - Format: `madsci_workcells_backup_YYYYMMDD_HHMMSS`
 - Can be restored using the `--restore-from` option
 
 ### Requirements
 
-- MongoDB server running and accessible
-- MongoDB tools (`mongodump`, `mongorestore`) installed
+- FerretDB server running and accessible
+- MongoDB tools (`mongodump`, `mongorestore`) installed (for FerretDB backup/restore via the MongoDB wire protocol)
 - Appropriate database permissions for the specified user
 
 ## ID Generation
@@ -427,10 +427,10 @@ The Workcell Manager can be configured using environment variables with the `WOR
 |----------|---------|-------------|
 | `WORKCELL_SERVER_URL` | `http://localhost:8005` | The URL where the workcell manager server will run |
 | `WORKCELLS_DIRECTORY` | `~/.madsci/workcells` | Directory for storing workcell-related files |
-| `WORKCELL_REDIS_HOST` | `localhost` | Redis server hostname for state management |
-| `WORKCELL_REDIS_PORT` | `6379` | Redis server port |
-| `WORKCELL_REDIS_PASSWORD` | `None` | Redis server password (if required) |
-| `WORKCELL_MONGO_URL` | `None` | MongoDB connection URL for persistent storage |
+| `WORKCELL_REDIS_HOST` | `localhost` | Valkey server hostname for state management |
+| `WORKCELL_REDIS_PORT` | `6379` | Valkey server port |
+| `WORKCELL_REDIS_PASSWORD` | `None` | Valkey server password (if required) |
+| `WORKCELL_MONGO_URL` | `None` | FerretDB connection URL for persistent storage |
 | `WORKCELL_SCHEDULER_UPDATE_INTERVAL` | `2.0` | Scheduler iteration interval (seconds) |
 | `WORKCELL_NODE_UPDATE_INTERVAL` | `1.0` | Node status polling interval (seconds) |
 | `WORKCELL_COLD_START_DELAY` | `0` | Startup delay for the workcell engine (seconds) |
@@ -478,7 +478,7 @@ WORKCELL_SCHEDULER_UPDATE_INTERVAL=3.0
 
 #### Resource Configuration
 - **Action Result Retries**: Increase for unreliable network conditions or high-latency environments.
-- **Redis Configuration**: For high-throughput scenarios, consider Redis clustering or dedicated Redis instances.
+- **Valkey Configuration**: For high-throughput scenarios, consider Valkey clustering or dedicated Valkey instances.
 
 ### Integration with Other Services
 
@@ -499,7 +499,7 @@ The Workcell Manager provides robust error handling and recovery mechanisms to e
 
 - **Node Connection Recovery**: Automatically retries connections to unresponsive nodes
 - **Action Result Retrieval**: Configurable retry attempts for retrieving step results (default: 3 retries)
-- **Workflow State Persistence**: Redis-based state management ensures workflow state survives service restarts
+- **Workflow State Persistence**: Valkey-based state management ensures workflow state survives service restarts
 - **Resource Cleanup**: Automatic cleanup of failed workflows to prevent resource leaks
 
 ### Error Types and Handling
@@ -642,12 +642,12 @@ def test_workflow_execution_mock(mock_find_node):
 
 ### Common Issues
 
-#### Redis Connection Problems
+#### Valkey Connection Problems
 ```bash
-# Check Redis connectivity
+# Check Valkey connectivity
 redis-cli ping
 
-# Verify Redis configuration
+# Verify Valkey configuration
 echo "WORKCELL_REDIS_HOST=localhost" >> .env
 echo "WORKCELL_REDIS_PORT=6379" >> .env
 ```
@@ -691,7 +691,7 @@ for step in workflow.steps:
 - Check for excessive workflow submissions
 
 #### Memory Usage
-- Monitor Redis memory usage with `redis-cli info memory`
+- Monitor Valkey memory usage with `redis-cli info memory`
 - Clear completed workflows: `client.clear_completed_workflows()`
 - Reduce workflow history retention if needed
 

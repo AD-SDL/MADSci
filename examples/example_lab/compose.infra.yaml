@@ -1,28 +1,45 @@
 # Infrastructure services for the MADSci Example Lab.
-# Provides MongoDB, Redis, PostgreSQL, and MinIO.
+# Provides FerretDB (MongoDB-compatible), Valkey (Redis-compatible), PostgreSQL, and SeaweedFS (S3-compatible).
 
 services:
-  madsci_mongodb:
-    container_name: madsci_mongodb
-    image: mongo:8.0
+  madsci_ferretdb:
+    container_name: madsci_ferretdb
+    image: ghcr.io/ferretdb/ferretdb:2
     restart: unless-stopped
     ports:
-      - ${MONGODB_PORT:-27017}:27017
-    volumes:
-      - ${REPO_PATH:-../..}/.madsci/mongodb:/data/db
+      - ${DOCUMENT_DB_PORT:-27017}:27017
+    environment:
+      - FERRETDB_POSTGRESQL_URL=postgres://madsci:madsci@madsci_postgres:5432/postgres
+    depends_on:
+      - madsci_postgres
 
-  madsci_redis:
-    container_name: madsci_redis
-    image: redis:7.4
+  madsci_valkey:
+    container_name: madsci_valkey
+    image: valkey/valkey:8
     restart: unless-stopped
     ports:
       - ${REDIS_PORT:-6379}:6379
     volumes:
-      - ${REPO_PATH:-../..}/.madsci/redis:/data
-    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
+      - ${REPO_PATH:-../..}/.madsci/valkey:/data
+    command: valkey-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
 
+  # PostgreSQL with DocumentDB extension — used exclusively by FerretDB.
   madsci_postgres:
     container_name: madsci_postgres
+    image: ghcr.io/ferretdb/postgres-documentdb-dev:17-ferretdb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=madsci
+      - POSTGRES_PASSWORD=madsci
+      - POSTGRES_DB=postgres
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/postgresql/data:/var/lib/postgresql/data
+
+  # Standard PostgreSQL — used by the Resource Manager for relational data.
+  madsci_postgres_resources:
+    container_name: madsci_postgres_resources
     image: postgres:17
     restart: unless-stopped
     environment:
@@ -30,20 +47,21 @@ services:
       - POSTGRES_PASSWORD=madsci
       - POSTGRES_DB=resources
     ports:
-      - ${POSTGRES_PORT:-5432}:5432
+      - ${RESOURCE_POSTGRES_PORT:-5434}:5432
     volumes:
-      - ${REPO_PATH:-../..}/.madsci/postgresql/data:/var/lib/postgresql/data
+      - ${REPO_PATH:-../..}/.madsci/postgresql_resources/data:/var/lib/postgresql/data
 
-  madsci_minio:
-    container_name: madsci_minio
-    image: minio/minio
+  madsci_seaweedfs:
+    container_name: madsci_seaweedfs
+    image: chrislusf/seaweedfs:4.17
     restart: unless-stopped
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
     ports:
-      - ${MINIO_PORT:-9000}:9000
-      - ${MINIO_CONSOLE_PORT:-9001}:9001
+      - ${OBJECT_STORAGE_PORT:-8333}:8333
+      - ${OBJECT_STORAGE_CONSOLE_PORT:-9333}:9333
+      - ${SEAWEEDFS_MASTER_PORT:-8080}:8080
+    environment:
+      - AWS_ACCESS_KEY_ID=${OBJECT_STORAGE_ACCESS_KEY:-madsci}
+      - AWS_SECRET_ACCESS_KEY=${OBJECT_STORAGE_SECRET_KEY:-madsci}
     volumes:
-      - ${REPO_PATH:-../..}/.madsci/minio:/home/madsci/.madsci/minio
-    command: server /home/madsci/.madsci/minio --console-address ":9001"
+      - ${REPO_PATH:-../..}/.madsci/seaweedfs:/data
+    command: "server -s3 -dir=/data -s3.port=8333"

@@ -17,14 +17,12 @@ lab_server_url: http://localhost:8000/
 # Event Manager
 event_server_url: http://localhost:8001/
 event_database_name: events
-# Note: mongo_db_url is in settings.yaml for local dev (no auth).
-# Move to .env if your MongoDB requires credentials.
-event_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Experiment Manager
 experiment_server_url: http://localhost:8002/
 experiment_database_name: experiments
-experiment_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Resource Manager
 resource_server_url: http://localhost:8003/
@@ -33,12 +31,12 @@ resource_server_url: http://localhost:8003/
 # Data Manager
 data_server_url: http://localhost:8004/
 data_database_name: data
-data_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Workcell Manager
 workcell_server_url: http://localhost:8005/
 workcell_database_name: workcells
-workcell_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Location Manager
 location_server_url: http://localhost:8006/

@@ -62,8 +62,8 @@ default_settings = [
     "madsci.common.types.node_types:NodeConfig",
     "madsci.common.types.node_types:RestNodeConfig",
     "madsci.common.types.backup_types:PostgreSQLBackupSettings",
-    "madsci.common.types.backup_types:MongoDBBackupSettings",
-    "madsci.common.types.mongodb_migration_types:MongoDBMigrationSettings",
+    "madsci.common.types.backup_types:DocumentDBBackupSettings",
+    "madsci.common.types.document_db_migration_types:DocumentDBMigrationSettings",
     "madsci.resource_manager.migration_tool:DatabaseMigrationSettings",
 ]
 

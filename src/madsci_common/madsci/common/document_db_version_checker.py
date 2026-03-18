@@ -1,4 +1,4 @@
-"""MongoDB version checking and validation for MADSci."""
+"""MongoDB-compatible document database version checking and validation for MADSci."""
 
 import json
 from datetime import datetime, timezone
@@ -10,8 +10,8 @@ from pydantic_extra_types.semantic_version import SemanticVersion
 from pymongo import MongoClient
 
 
-class MongoDBVersionChecker:
-    """Handles MongoDB database version validation and checking."""
+class DocumentDBVersionChecker:
+    """Handles MongoDB-compatible document database version validation and checking."""
 
     def __init__(
         self,
@@ -22,13 +22,13 @@ class MongoDBVersionChecker:
         logger: Optional[EventClient] = None,
     ) -> None:
         """
-        Initialize the MongoDBVersionChecker.
+        Initialize the DocumentDBVersionChecker.
 
         Args:
-            db_url: MongoDB connection URL
+            db_url: MongoDB-compatible document database connection URL
             database_name: Name of the database to check
             schema_file_path: Path to the schema.json file (used for validation only)
-            backup_dir: Optional backup directory for MongoDB backups
+            backup_dir: Optional backup directory for document database backups
             logger: Optional logger instance
         """
         self.db_url = db_url
@@ -37,22 +37,22 @@ class MongoDBVersionChecker:
         self.backup_dir = str(Path(backup_dir).expanduser()) if backup_dir else None
         self.logger = logger or EventClient()
 
-        # Initialize MongoDB connection
+        # Initialize MongoDB-compatible document database connection
         self.client = MongoClient(db_url)
         self.database = self.client[database_name]
 
     def __del__(self) -> None:
-        """Cleanup MongoDB client resources."""
+        """Cleanup MongoDB-compatible document database client resources."""
         if hasattr(self, "client") and self.client:
             self.client.close()
             if hasattr(self, "logger") and self.logger:
-                self.logger.debug("MongoDB version checker client disposed")
+                self.logger.debug("Document database version checker client disposed")
 
     def _build_migration_base_args(self) -> list[str]:
         args = [
             "python",
             "-m",
-            "madsci.common.mongodb_migration_tool",
+            "madsci.common.document_db_migration_tool",
             "--db_url",
             self.db_url,
             "--database",

@@ -157,13 +157,13 @@ Classes
     `database_name: str`
     :
 
+    `document_db_url: pydantic.networks.AnyUrl | None`
+    :
+
     `get_action_result_retries: int`
     :
 
     `manager_type: madsci.common.types.manager_types.ManagerType | None`
-    :
-
-    `mongo_db_url: pydantic.networks.AnyUrl | None`
     :
 
     `node_info_update_interval: float`

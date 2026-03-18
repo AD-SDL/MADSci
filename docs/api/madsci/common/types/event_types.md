@@ -402,6 +402,9 @@ Classes
     `database_name: str`
     :
 
+    `document_db_url: pydantic.networks.AnyUrl`
+    :
+
     `email_alerts: madsci.common.types.event_types.EmailAlertsConfig | None`
     :
 
@@ -415,9 +418,6 @@ Classes
     :
 
     `max_batches_per_run: int`
-    :
-
-    `mongo_db_url: pydantic.networks.AnyUrl`
     :
 
     `retention_check_interval_hours: int`

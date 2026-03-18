@@ -1,8 +1,8 @@
-"""MongoDB handler abstraction.
+"""MongoDB-compatible document storage handler abstraction.
 
-Provides an ABC for MongoDB database access and two implementations:
-- PyMongoHandler: wraps a real pymongo Database
-- InMemoryMongoHandler: wraps InMemoryMongoClient for testing
+Provides an ABC for document database access and two implementations:
+- PyDocumentStorageHandler: wraps a real pymongo Database (works with MongoDB, FerretDB, etc.)
+- InMemoryDocumentStorageHandler: wraps InMemoryMongoClient for testing
 """
 
 from __future__ import annotations
@@ -15,8 +15,8 @@ if TYPE_CHECKING:
     from pymongo.collection import Collection
 
 
-class MongoHandler(ABC):
-    """Abstract interface for MongoDB database access.
+class DocumentStorageHandler(ABC):
+    """Abstract interface for MongoDB-compatible document database access.
 
     Managers use this interface instead of directly depending on
     ``pymongo.Database``, enabling in-memory substitution for tests.
@@ -52,12 +52,12 @@ class MongoHandler(ABC):
         """Execute a database command (e.g. ``ping``)."""
 
 
-class PyMongoHandler(MongoHandler):
-    """MongoDB handler backed by a real pymongo connection.
+class PyDocumentStorageHandler(DocumentStorageHandler):
+    """Document storage handler backed by a real pymongo connection (MongoDB, FerretDB, etc.).
 
     Usage::
 
-        handler = PyMongoHandler.from_url("mongodb://localhost:27017", "my_db")
+        handler = PyDocumentStorageHandler.from_url("mongodb://localhost:27017", "my_db")
         collection = handler.get_collection("events")
         collection.insert_one({"key": "value"})
     """
@@ -71,15 +71,15 @@ class PyMongoHandler(MongoHandler):
         self._database = database
 
     @classmethod
-    def from_url(cls, url: str, database_name: str) -> PyMongoHandler:
-        """Create a handler by connecting to a MongoDB server.
+    def from_url(cls, url: str, database_name: str) -> PyDocumentStorageHandler:
+        """Create a handler by connecting to a MongoDB-compatible server.
 
         Args:
-            url: MongoDB connection URL.
+            url: MongoDB-compatible connection URL.
             database_name: Name of the database to use.
 
         Returns:
-            A new PyMongoHandler instance.
+            A new PyDocumentStorageHandler instance.
         """
         from pymongo import MongoClient  # noqa: PLC0415
 
@@ -91,7 +91,7 @@ class PyMongoHandler(MongoHandler):
         return self._database[name]
 
     def ping(self) -> bool:
-        """Ping the MongoDB server."""
+        """Ping the document database server."""
         try:
             self._database.client.admin.command("ping")
             return True
@@ -112,12 +112,12 @@ class PyMongoHandler(MongoHandler):
         return self._database.command(cmd, **kwargs)
 
 
-class InMemoryMongoHandler(MongoHandler):
-    """MongoDB handler backed by in-memory collections for testing.
+class InMemoryDocumentStorageHandler(DocumentStorageHandler):
+    """Document storage handler backed by in-memory collections for testing.
 
     Usage::
 
-        handler = InMemoryMongoHandler()
+        handler = InMemoryDocumentStorageHandler()
         collection = handler.get_collection("events")
         collection.insert_one({"key": "value"})
     """

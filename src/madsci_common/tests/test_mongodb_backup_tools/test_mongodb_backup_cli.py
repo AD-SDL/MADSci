@@ -1,4 +1,4 @@
-"""Test MongoDB backup CLI interface."""
+"""Test document database backup CLI interface."""
 
 import json
 import tempfile
@@ -9,11 +9,11 @@ from unittest.mock import Mock, patch
 import pytest
 from click.testing import CliRunner
 from madsci.common.backup_tools.base_backup import BackupInfo
-from madsci.common.backup_tools.mongo_cli import mongodb_backup
+from madsci.common.backup_tools.document_db_cli import document_db_backup
 
 
-class TestMongoDBBackupCLI:
-    """Test MongoDB backup CLI interface."""
+class TestDocumentDBBackupCLI:
+    """Test document database backup CLI interface."""
 
     @pytest.fixture
     def temp_backup_dir(self):
@@ -41,7 +41,7 @@ class TestMongoDBBackupCLI:
         """Test CLI backup creation command."""
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.return_value = Path(
@@ -49,7 +49,7 @@ class TestMongoDBBackupCLI:
             )
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -69,12 +69,12 @@ class TestMongoDBBackupCLI:
         """Test CLI backup creation with custom name suffix."""
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -94,16 +94,16 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -125,16 +125,16 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -168,12 +168,12 @@ class TestMongoDBBackupCLI:
         mock_backup_tool.list_available_backups.return_value = [mock_backup_info]
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -195,12 +195,12 @@ class TestMongoDBBackupCLI:
         mock_backup_tool.list_available_backups.return_value = []
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -220,12 +220,12 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -251,12 +251,12 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -281,13 +281,13 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.validate_backup_integrity.return_value = True
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -313,13 +313,13 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.validate_backup_integrity.return_value = False
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -340,13 +340,13 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             # Provide 'y' input to confirm deletion
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -371,13 +371,13 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             # Provide 'n' input to cancel deletion
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -402,12 +402,12 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -427,13 +427,13 @@ class TestMongoDBBackupCLI:
         """Test CLI error handling for backup creation failure."""
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.side_effect = RuntimeError("Backup failed")
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -455,7 +455,7 @@ class TestMongoDBBackupCLI:
         backup_path.mkdir()
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
             mock_backup_tool.restore_from_backup.side_effect = RuntimeError(
@@ -463,7 +463,7 @@ class TestMongoDBBackupCLI:
             )
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -481,12 +481,12 @@ class TestMongoDBBackupCLI:
         """Test CLI with non-existent backup path."""
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -508,7 +508,7 @@ class TestMongoDBBackupCLI:
         # Create config file
         config_file = temp_backup_dir / "config.json"
         config_data = {
-            "mongo_db_url": "mongodb://localhost:27017/",
+            "document_db_url": "mongodb://localhost:27017/",
             "database": "test_db",
             "backup_dir": str(temp_backup_dir),
             "max_backups": 5,
@@ -517,14 +517,16 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
             ) as mock_tool_class,
-            patch("madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"),
+            patch(
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupSettings"
+            ),
         ):
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup, ["--config-file", str(config_file), "create"]
+                document_db_backup, ["--config-file", str(config_file), "create"]
             )
 
             assert result.exit_code == 0
@@ -533,13 +535,16 @@ class TestMongoDBBackupCLI:
         """Test CLI help commands work correctly."""
 
         # Test main help
-        result = cli_runner.invoke(mongodb_backup, ["--help"])
+        result = cli_runner.invoke(document_db_backup, ["--help"])
         assert result.exit_code == 0
-        assert "MongoDB backup management commands" in result.output
+        assert (
+            "MongoDB-compatible document database backup management commands"
+            in result.output
+        )
 
         # Test create help (provide required parent options)
         result = cli_runner.invoke(
-            mongodb_backup,
+            document_db_backup,
             [
                 "--mongo-url",
                 "mongodb://localhost:27017/",
@@ -550,11 +555,13 @@ class TestMongoDBBackupCLI:
             ],
         )
         assert result.exit_code == 0
-        assert "Create a new MongoDB backup" in result.output
+        assert (
+            "Create a new MongoDB-compatible document database backup" in result.output
+        )
 
         # Test restore help (provide required parent options)
         result = cli_runner.invoke(
-            mongodb_backup,
+            document_db_backup,
             [
                 "--mongo-url",
                 "mongodb://localhost:27017/",
@@ -565,26 +572,28 @@ class TestMongoDBBackupCLI:
             ],
         )
         assert result.exit_code == 0
-        assert "Restore from MongoDB backup" in result.output
+        assert (
+            "Restore from MongoDB-compatible document database backup" in result.output
+        )
 
     def test_cli_missing_required_options(self, cli_runner):
         """Test CLI with missing required options."""
 
         # Test create without required options
-        result = cli_runner.invoke(mongodb_backup, ["create"])
+        result = cli_runner.invoke(document_db_backup, ["create"])
         assert result.exit_code != 0
-        assert "MongoDB URL is required" in result.output
+        assert "MongoDB-compatible document database URL is required" in result.output
 
     def test_cli_verbose_output(self, cli_runner, mock_backup_tool):
         """Test CLI verbose output option."""
 
         with patch(
-            "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+            "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
         ) as mock_tool_class:
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",
@@ -602,16 +611,16 @@ class TestMongoDBBackupCLI:
 
         with (
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupTool"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupTool"
             ) as mock_tool_class,
             patch(
-                "madsci.common.backup_tools.mongo_cli.MongoDBBackupSettings"
+                "madsci.common.backup_tools.document_db_cli.DocumentDBBackupSettings"
             ) as mock_settings,
         ):
             mock_tool_class.return_value = mock_backup_tool
 
             result = cli_runner.invoke(
-                mongodb_backup,
+                document_db_backup,
                 [
                     "--mongo-url",
                     "mongodb://localhost:27017/",

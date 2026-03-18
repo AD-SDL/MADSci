@@ -12,8 +12,8 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 
 ## Server Architecture
 - **DataManager class**: Inherits from `AbstractManagerBase[DataManagerSettings]`
-- **MongoDB Integration**: Uses `MongoHandler` abstraction for datapoint metadata storage in the `madsci_data` database (`mongo_handler` parameter)
-- **MinIO/S3 Integration**: Uses `MinioHandler` abstraction for object storage (`minio_handler` parameter), with fallback to local filesystem when no object storage is configured
+- **Document Database Integration**: Uses `DocumentStorageHandler` abstraction for datapoint metadata storage in the `madsci_data` database (`document_handler` parameter)
+- **Object Storage Integration**: Uses `ObjectStorageHandler` abstraction for S3-compatible object storage (`object_storage_handler` parameter), with fallback to local filesystem when no object storage is configured
 - **FastAPI Server**: Provides REST endpoints with automatic OpenAPI documentation
 - **Discriminated Union Types**: Uses `DataPoint.discriminate()` for type-safe datapoint handling
 
@@ -32,8 +32,8 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 
 ### Storage Behavior
 - **Local Files**: Organized by date hierarchy (`year/month/day/ulid_filename`)
-- **Object Storage**: All MinIO operations routed through `self._minio_handler` (no direct `Minio` client usage). Uses label-based object naming for uploads.
-- **Automatic Fallback**: MinIO upload failure falls back to local storage with warning
+- **Object Storage**: All S3-compatible operations routed through `self._object_storage_handler` (no direct client usage). Uses label-based object naming for uploads.
+- **Automatic Fallback**: Object storage upload failure falls back to local storage with warning
 
 ## API Endpoints
 
@@ -47,18 +47,18 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 ### DataPoint Types
 - **JSON DataPoints**: Store structured data with `data_type: "json"` and `value` field
 - **File DataPoints**: Store file references with `data_type: "file"` and `path` field
-- **Object Storage DataPoints**: Store cloud/MinIO references with `data_type: "object_storage"`
+- **Object Storage DataPoints**: Store S3-compatible object references with `data_type: "object_storage"`
 
 ## Configuration
 
 ### DataManagerSettings (Environment prefix: `DATA_`)
 - `DATA_SERVER_URL`: Server URL (default: `http://localhost:8004`)
-- `DATA_DB_URL`: MongoDB connection string (default: `mongodb://localhost:27017`)
+- `DATA_DB_URL`: FerretDB/MongoDB-compatible connection string (default: `mongodb://localhost:27017`)
 - `DATA_FILE_STORAGE_PATH`: Local file storage path (default: `~/.madsci/datapoints`)
 
 
 ### ObjectStorageSettings (Environment prefix: `OBJECT_STORAGE_`)
-- `OBJECT_STORAGE_ENDPOINT`: MinIO/S3 endpoint
+- `OBJECT_STORAGE_ENDPOINT`: S3-compatible endpoint (e.g., SeaweedFS, MinIO, AWS S3)
 - `OBJECT_STORAGE_ACCESS_KEY`: Storage access key
 - `OBJECT_STORAGE_SECRET_KEY`: Storage secret key
 - `OBJECT_STORAGE_SECURE`: Use HTTPS (default: false)

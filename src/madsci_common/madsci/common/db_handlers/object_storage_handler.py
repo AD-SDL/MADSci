@@ -1,8 +1,8 @@
-"""MinIO/object storage handler abstraction.
+"""S3-compatible object storage handler abstraction.
 
 Provides an ABC for object storage access and two implementations:
-- RealMinioHandler: wraps a real Minio client
-- InMemoryMinioHandler: stores objects in-memory for testing
+- RealObjectStorageHandler: wraps a real Minio client for S3-compatible storage (MinIO, SeaweedFS, etc.)
+- InMemoryObjectStorageHandler: stores objects in-memory for testing
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 
-class MinioHandler(ABC):
-    """Abstract interface for object storage access.
+class ObjectStorageHandler(ABC):
+    """Abstract interface for S3-compatible object storage access.
 
     Managers use this interface instead of directly depending on
     ``minio.Minio``, enabling in-memory substitution for tests.
@@ -111,12 +111,12 @@ class MinioHandler(ABC):
             self.make_bucket(bucket)
 
 
-class RealMinioHandler(MinioHandler):
-    """Object storage handler backed by a real MinIO/S3 server.
+class RealObjectStorageHandler(ObjectStorageHandler):
+    """Object storage handler backed by a real S3-compatible server (MinIO, SeaweedFS, etc.).
 
     Usage::
 
-        handler = RealMinioHandler.from_settings(object_storage_settings)
+        handler = RealObjectStorageHandler.from_settings(object_storage_settings)
         handler.upload_file("my-bucket", "data.csv", "/path/to/data.csv")
     """
 
@@ -129,7 +129,7 @@ class RealMinioHandler(MinioHandler):
         self._client = client
 
     @classmethod
-    def from_settings(cls, settings: Any) -> RealMinioHandler:
+    def from_settings(cls, settings: Any) -> RealObjectStorageHandler:
         """Create a handler from ObjectStorageSettings.
 
         Args:
@@ -137,7 +137,7 @@ class RealMinioHandler(MinioHandler):
                 access_key, secret_key, secure, and region fields.
 
         Returns:
-            A new RealMinioHandler instance.
+            A new RealObjectStorageHandler instance.
         """
         from minio import Minio  # noqa: PLC0415
 
@@ -158,7 +158,7 @@ class RealMinioHandler(MinioHandler):
         content_type: Optional[str] = None,
         metadata: Optional[dict[str, str]] = None,
     ) -> dict[str, Any]:
-        """Upload a file to MinIO."""
+        """Upload a file to S3-compatible object storage."""
         file_path = Path(file_path).expanduser().resolve()
         content_type = content_type or _guess_content_type(file_path)
 
@@ -186,13 +186,13 @@ class RealMinioHandler(MinioHandler):
         object_name: str,
         output_path: Union[str, Path],
     ) -> None:
-        """Download an object from MinIO."""
+        """Download an object from S3-compatible object storage."""
         output_path = Path(output_path).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         self._client.fget_object(bucket, object_name, str(output_path))
 
     def get_object_data(self, bucket: str, object_name: str) -> bytes:
-        """Get object contents from MinIO."""
+        """Get object contents from S3-compatible object storage."""
         response = self._client.get_object(bucket, object_name)
         try:
             return response.read()
@@ -201,11 +201,11 @@ class RealMinioHandler(MinioHandler):
             response.release_conn()
 
     def bucket_exists(self, bucket: str) -> bool:
-        """Check if a bucket exists in MinIO."""
+        """Check if a bucket exists in object storage."""
         return self._client.bucket_exists(bucket)
 
     def make_bucket(self, bucket: str) -> None:
-        """Create a bucket in MinIO."""
+        """Create a bucket in object storage."""
         self._client.make_bucket(bucket)
 
     def list_buckets(self) -> list[str]:
@@ -221,17 +221,17 @@ class RealMinioHandler(MinioHandler):
             return False
 
     def close(self) -> None:
-        """No-op for MinIO client (uses HTTP, no persistent connection)."""
+        """No-op for S3 client (uses HTTP, no persistent connection)."""
 
 
-class InMemoryMinioHandler(MinioHandler):
+class InMemoryObjectStorageHandler(ObjectStorageHandler):
     """Object storage handler backed by in-memory storage for testing.
 
     Stores files as bytes in a dictionary keyed by ``(bucket, object_name)``.
 
     Usage::
 
-        handler = InMemoryMinioHandler()
+        handler = InMemoryObjectStorageHandler()
         handler.make_bucket("test-bucket")
         handler.upload_file("test-bucket", "data.csv", "/path/to/data.csv")
         data = handler.get_object_data("test-bucket", "data.csv")

@@ -1,4 +1,4 @@
-"""MongoDB backup management commands."""
+"""MongoDB-compatible document database backup management commands."""
 
 import json
 import sys
@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Optional
 
 import click
-from madsci.common.backup_tools.mongodb_backup import MongoDBBackupTool
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.backup_tools.document_db_backup import DocumentDBBackupTool
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 
 
 def load_config_file(config_path: str) -> dict:
@@ -23,7 +23,7 @@ def load_config_file(config_path: str) -> dict:
 @click.option(
     "--config-file", help="Configuration file path", type=click.Path(exists=True)
 )
-@click.option("--mongo-url", help="MongoDB connection URL")
+@click.option("--mongo-url", help="MongoDB-compatible document database connection URL")
 @click.option("--database", help="Database name")
 @click.option(
     "--backup-dir",
@@ -32,7 +32,7 @@ def load_config_file(config_path: str) -> dict:
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
-def mongodb_backup(
+def document_db_backup(
     ctx: click.Context,
     config_file: Optional[str],
     mongo_url: Optional[str],
@@ -40,7 +40,7 @@ def mongodb_backup(
     backup_dir: str,
     verbose: bool,
 ) -> None:
-    """MongoDB backup management commands."""
+    """MongoDB-compatible document database backup management commands."""
     ctx.ensure_object(dict)
 
     # Resolve backup_dir default via sentry
@@ -57,14 +57,14 @@ def mongodb_backup(
         config_data = load_config_file(config_file)
         ctx.obj["config"] = config_data
         # Use config file values as defaults
-        mongo_url = mongo_url or config_data.get("mongo_db_url")
+        mongo_url = mongo_url or config_data.get("document_db_url")
         database = database or config_data.get("database")
         backup_dir = config_data.get("backup_dir", backup_dir)
 
     # Validate required parameters
     if not mongo_url:
         raise click.ClickException(
-            "MongoDB URL is required (use --mongo-url or config file)"
+            "MongoDB-compatible document database URL is required (use --mongo-url or config file)"
         )
     if not database:
         raise click.ClickException(
@@ -77,7 +77,7 @@ def mongodb_backup(
     ctx.obj["verbose"] = verbose
 
 
-@mongodb_backup.command()
+@document_db_backup.command()
 @click.option("--name-suffix", help="Optional backup name suffix")
 @click.option("--no-validate", is_flag=True, help="Skip integrity validation")
 @click.option("--no-compression", is_flag=True, help="Disable backup compression")
@@ -90,7 +90,7 @@ def create(
     no_compression: bool,
     collections: Optional[str],
 ) -> None:
-    """Create a new MongoDB backup."""
+    """Create a new MongoDB-compatible document database backup."""
     try:
         # Parse collections list
         collections_list = None
@@ -98,8 +98,8 @@ def create(
             collections_list = [c.strip() for c in collections.split(",")]
 
         # Create settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url=ctx.obj["mongo_url"],
+        settings = DocumentDBBackupSettings(
+            document_db_url=ctx.obj["mongo_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
             validate_integrity=not no_validate,
@@ -108,7 +108,7 @@ def create(
         )
 
         # Create backup tool
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         # Create backup
         backup_path = tool.create_backup(name_suffix)
@@ -119,20 +119,20 @@ def create(
         sys.exit(1)
 
 
-@mongodb_backup.command()
+@document_db_backup.command()
 @click.pass_context
 def list(ctx: click.Context) -> None:
-    """List available MongoDB backups."""
+    """List available MongoDB-compatible document database backups."""
     try:
         # Create settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url=ctx.obj["mongo_url"],
+        settings = DocumentDBBackupSettings(
+            document_db_url=ctx.obj["mongo_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
 
         # Create backup tool
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         # List backups
         backups = tool.list_available_backups()
@@ -163,7 +163,7 @@ def list(ctx: click.Context) -> None:
         sys.exit(1)
 
 
-@mongodb_backup.command()
+@document_db_backup.command()
 @click.argument("backup_path", type=click.Path())
 @click.option(
     "--target-database", help="Target database name (defaults to original database)"
@@ -172,7 +172,7 @@ def list(ctx: click.Context) -> None:
 def restore(
     ctx: click.Context, backup_path: str, target_database: Optional[str]
 ) -> None:
-    """Restore from MongoDB backup."""
+    """Restore from MongoDB-compatible document database backup."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -181,14 +181,14 @@ def restore(
             sys.exit(1)
 
         # Create settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url=ctx.obj["mongo_url"],
+        settings = DocumentDBBackupSettings(
+            document_db_url=ctx.obj["mongo_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
 
         # Create backup tool
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         # Restore backup
         tool.restore_from_backup(backup_path_obj, target_database)
@@ -201,11 +201,11 @@ def restore(
         sys.exit(1)
 
 
-@mongodb_backup.command()
+@document_db_backup.command()
 @click.argument("backup_path", type=click.Path())
 @click.pass_context
 def validate(ctx: click.Context, backup_path: str) -> None:
-    """Validate MongoDB backup integrity."""
+    """Validate MongoDB-compatible document database backup integrity."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -214,14 +214,14 @@ def validate(ctx: click.Context, backup_path: str) -> None:
             sys.exit(1)
 
         # Create settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url=ctx.obj["mongo_url"],
+        settings = DocumentDBBackupSettings(
+            document_db_url=ctx.obj["mongo_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
 
         # Create backup tool
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         # Validate backup
         is_valid = tool.validate_backup_integrity(backup_path_obj)
@@ -237,12 +237,12 @@ def validate(ctx: click.Context, backup_path: str) -> None:
         sys.exit(1)
 
 
-@mongodb_backup.command()
+@document_db_backup.command()
 @click.argument("backup_path", type=click.Path())
 @click.option("--force", is_flag=True, help="Delete without confirmation")
 @click.pass_context
 def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
-    """Delete MongoDB backup."""
+    """Delete MongoDB-compatible document database backup."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -257,14 +257,14 @@ def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
             return
 
         # Create settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url=ctx.obj["mongo_url"],
+        settings = DocumentDBBackupSettings(
+            document_db_url=ctx.obj["mongo_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
 
         # Create backup tool
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         # Delete backup
         tool.delete_backup(backup_path_obj)
@@ -275,10 +275,10 @@ def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
         sys.exit(1)
 
 
-def main_mongodb_backup() -> None:
-    """Entry point for MongoDB backup CLI."""
-    mongodb_backup()
+def main_document_db_backup() -> None:
+    """Entry point for MongoDB-compatible document database backup CLI."""
+    document_db_backup()
 
 
 if __name__ == "__main__":
-    main_mongodb_backup()
+    main_document_db_backup()

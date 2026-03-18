@@ -12,11 +12,11 @@ services:
   # --- Infrastructure ---
 
   postgres:
-    image: postgres:16-alpine
+    image: ghcr.io/ferretdb/postgres-documentdb-dev:17-ferretdb
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-madsci}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-madsci}
-      POSTGRES_DB: ${POSTGRES_DB:-resources}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
     ports:
       - "5432:5432"
     volumes:
@@ -27,24 +27,22 @@ services:
       timeout: 5s
       retries: 5
 
-  mongodb:
-    image: mongo:7
+  ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:2
     ports:
       - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+    environment:
+      - FERRETDB_POSTGRESQL_URL=postgres://madsci:madsci@postgres:5432/postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
 
-  redis:
-    image: redis:7-alpine
+  valkey:
+    image: valkey/valkey:8
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -60,8 +58,8 @@ services:
       - "8000:8000"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      ferretdb:
+        condition: service_started
 
   event_manager:
     image: madsci-event-manager:latest
@@ -69,8 +67,8 @@ services:
       - "8001:8001"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      ferretdb:
+        condition: service_started
 
   experiment_manager:
     image: madsci-experiment-manager:latest
@@ -78,8 +76,8 @@ services:
       - "8002:8002"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      ferretdb:
+        condition: service_started
 
   resource_manager:
     image: madsci-resource-manager:latest
@@ -96,8 +94,8 @@ services:
       - "8004:8004"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      ferretdb:
+        condition: service_started
 
   workcell_manager:
     image: madsci-workcell-manager:latest
@@ -105,9 +103,9 @@ services:
       - "8005:8005"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
-      redis:
+      ferretdb:
+        condition: service_started
+      valkey:
         condition: service_healthy
 
   location_manager:
@@ -116,9 +114,8 @@ services:
       - "8006:8006"
     env_file: .env
     depends_on:
-      mongodb:
-        condition: service_healthy
+      ferretdb:
+        condition: service_started
 
 volumes:
   postgres_data:
-  mongo_data:

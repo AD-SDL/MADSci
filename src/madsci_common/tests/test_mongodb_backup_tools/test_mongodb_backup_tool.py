@@ -1,4 +1,4 @@
-"""Test MongoDB backup tool functionality."""
+"""Test document database backup tool functionality."""
 
 import json
 import os
@@ -11,12 +11,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 from madsci.common.backup_tools.base_backup import BackupInfo
-from madsci.common.backup_tools.mongodb_backup import MongoDBBackupTool
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.backup_tools.document_db_backup import DocumentDBBackupTool
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 
 
-class TestMongoDBBackupTool:
-    """Test MongoDB backup tool functionality."""
+class TestDocumentDBBackupTool:
+    """Test document database backup tool functionality."""
 
     @pytest.fixture
     def temp_backup_dir(self):
@@ -50,10 +50,10 @@ class TestMongoDBBackupTool:
         return mock_client
 
     @pytest.fixture
-    def mongodb_backup_settings(self, temp_backup_dir):
-        """Create MongoDB backup settings for testing."""
-        return MongoDBBackupSettings(
-            mongo_db_url="mongodb://test:test@localhost:27017/",
+    def document_db_backup_settings(self, temp_backup_dir):
+        """Create document database backup settings for testing."""
+        return DocumentDBBackupSettings(
+            document_db_url="mongodb://test:test@localhost:27017/",
             database="test_events",
             backup_dir=temp_backup_dir,
             max_backups=5,
@@ -63,14 +63,14 @@ class TestMongoDBBackupTool:
         )
 
     @pytest.fixture
-    def backup_tool(self, mongodb_backup_settings, mock_mongo_client):
-        """Create MongoDB backup tool for testing."""
+    def backup_tool(self, document_db_backup_settings, mock_mongo_client):
+        """Create document database backup tool for testing."""
 
         with patch(
-            "madsci.common.backup_tools.mongodb_backup.MongoClient"
+            "madsci.common.backup_tools.document_db_backup.MongoClient"
         ) as mock_client_class:
             mock_client_class.return_value = mock_mongo_client
-            tool = MongoDBBackupTool(mongodb_backup_settings)
+            tool = DocumentDBBackupTool(document_db_backup_settings)
             tool.client = mock_mongo_client
             tool.database = mock_mongo_client["test_events"]
             return tool
@@ -103,7 +103,7 @@ class TestMongoDBBackupTool:
         with (
             patch("subprocess.run", side_effect=mock_mongodump) as mock_run,
             patch(
-                "madsci.common.backup_tools.mongodb_backup.datetime"
+                "madsci.common.backup_tools.document_db_backup.datetime"
             ) as mock_datetime,
         ):
             # Mock datetime to get predictable backup path
@@ -136,12 +136,12 @@ class TestMongoDBBackupTool:
 
     def test_create_backup_specific_collections(
         self,
-        mongodb_backup_settings,
+        document_db_backup_settings,
         temp_backup_dir,
     ):
         """Test backup creation for specific collections only."""
         # Update settings to specify collections
-        mongodb_backup_settings.collections = ["collection1"]
+        document_db_backup_settings.collections = ["collection1"]
 
         def mock_mongodump(*args, **_kwargs):
             """Mock mongodump by creating expected directory structure."""
@@ -172,12 +172,12 @@ class TestMongoDBBackupTool:
 
         with (
             patch(
-                "madsci.common.backup_tools.mongodb_backup.MongoClient",
+                "madsci.common.backup_tools.document_db_backup.MongoClient",
                 return_value=mock_client,
             ),
             patch("subprocess.run", side_effect=mock_mongodump) as mock_run,
         ):
-            tool = MongoDBBackupTool(mongodb_backup_settings)
+            tool = DocumentDBBackupTool(document_db_backup_settings)
 
             with (
                 patch.object(
@@ -531,10 +531,10 @@ class TestMongoDBBackupTool:
                 mock_run.assert_called_once()
 
     def test_backup_settings_validation(self, temp_backup_dir):
-        """Test MongoDB backup settings validation."""
+        """Test document database backup settings validation."""
         # Test valid settings
-        settings = MongoDBBackupSettings(
-            mongo_db_url="mongodb://localhost:27017/",
+        settings = DocumentDBBackupSettings(
+            document_db_url="mongodb://localhost:27017/",
             database="test_db",
             backup_dir=temp_backup_dir,
             collections=["collection1", "collection2"],
@@ -544,12 +544,12 @@ class TestMongoDBBackupTool:
         assert settings.collections == ["collection1", "collection2"]
         assert settings.max_backups == 10  # default value
 
-    def test_backup_tool_initialization(self, mongodb_backup_settings):
-        """Test MongoDB backup tool proper initialization."""
-        with patch("madsci.common.backup_tools.mongodb_backup.MongoClient"):
-            tool = MongoDBBackupTool(mongodb_backup_settings)
+    def test_backup_tool_initialization(self, document_db_backup_settings):
+        """Test document database backup tool proper initialization."""
+        with patch("madsci.common.backup_tools.document_db_backup.MongoClient"):
+            tool = DocumentDBBackupTool(document_db_backup_settings)
 
-            assert tool.settings == mongodb_backup_settings
+            assert tool.settings == document_db_backup_settings
             assert tool.backup_dir.exists()
             assert tool.settings.database == "test_events"
 
