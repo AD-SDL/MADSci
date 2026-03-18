@@ -89,5 +89,6 @@ Classes
         
         Behavior:
         - If completely fresh database (no collections) -> Auto-initialize
+        - If collections exist but no version tracking (0.0.0) -> Auto-initialize
         - If version tracking exists and versions match -> Allow server to start
-        - If version tracking exists/missing with mismatch -> Raise error, require migration
+        - If version tracking exists with version mismatch -> Raise error, require migration

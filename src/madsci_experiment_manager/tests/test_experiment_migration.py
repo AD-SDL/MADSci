@@ -145,16 +145,22 @@ def test_experiment_version_checker_auto_initializes_fresh_database():
             schema_file.unlink()
 
 
-def test_experiment_version_checker_still_requires_migration_for_existing_db():
-    """Test that version checker still requires manual migration for existing databases without version tracking"""
+def test_experiment_version_checker_auto_initializes_for_existing_db():
+    """Test that version checker auto-initializes databases with collections but no version tracking."""
     with patch("madsci.common.document_db_version_checker.MongoClient") as mock_client:
         mock_db = Mock()
         mock_db.list_collection_names.return_value = [
             "experiments"
         ]  # Existing collections but no schema_versions
 
+        mock_schema_versions = Mock()
+        mock_schema_versions.list_indexes.return_value = []
+        mock_schema_versions.find_one.return_value = None
+        mock_db.__getitem__ = Mock(return_value=mock_schema_versions)
+
         mock_client_instance = Mock()
         mock_client_instance.__getitem__ = Mock(return_value=mock_db)
+        mock_client_instance.list_database_names = Mock(return_value=[])
         mock_client.return_value = mock_client_instance
 
         schema_file = Path("experiment_schema.json")
@@ -165,11 +171,14 @@ def test_experiment_version_checker_still_requires_migration_for_existing_db():
                 "mongodb://localhost:27017", "madsci_experiments", str(schema_file)
             )
 
-            # This should still raise an error requiring manual migration
-            with pytest.raises(
-                RuntimeError, match="needs version tracking initialization"
-            ):
+            # Should auto-initialize, not raise
+            with patch.object(checker, "ensure_schema_indexes"):
                 checker.validate_or_fail()
+
+            # Verify version was recorded
+            mock_schema_versions.insert_one.assert_called_once()
+            inserted_doc = mock_schema_versions.insert_one.call_args[0][0]
+            assert inserted_doc["version"] == "1.0.0"
         finally:
             schema_file.unlink()
 

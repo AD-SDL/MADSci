@@ -105,10 +105,10 @@ class LocationStateHandler:
             "location_name", unique=True, name="location_name_unique"
         )
         self._repr_templates_collection.create_index(
-            "template_name", unique=True, name="template_name_unique"
+            "template_name", unique=True, name="repr_template_name_unique"
         )
         self._location_templates_collection.create_index(
-            "template_name", unique=True, name="template_name_unique"
+            "template_name", unique=True, name="loc_template_name_unique"
         )
 
         # Suppress InefficientAccessWarning from pottery if using PyCacheHandler

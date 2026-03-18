@@ -468,3 +468,81 @@ class TestEnsureSchemaIndexes:
             ) as mock_ensure:
                 checker.validate_or_fail()
                 mock_ensure.assert_called_once()
+
+    def test_validate_or_fail_untracked_db_auto_initializes(self, temp_schema_file):
+        """Test that validate_or_fail auto-initializes when collections exist but no schema_versions.
+
+        This covers the case where a database has data collections (e.g. from a
+        prior run or created by _setup_database) but no schema_versions collection,
+        resulting in version 0.0.0.  The version checker should auto-initialize
+        rather than raising RuntimeError.
+        """
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
+            mock_db = Mock()
+            mock_client_instance = Mock()
+            mock_client_instance.__getitem__ = Mock(return_value=mock_db)
+            mock_client.return_value = mock_client_instance
+
+            # Database has a data collection but no schema_versions
+            mock_db.list_collection_names.return_value = ["events"]
+
+            # schema_versions collection operations
+            mock_schema_versions = Mock()
+            mock_schema_versions.list_indexes.return_value = []
+            # No existing version record — record_version will use insert_one path
+            mock_schema_versions.find_one.return_value = None
+
+            def getitem_side_effect(_name):
+                return mock_schema_versions
+
+            mock_db.__getitem__ = Mock(side_effect=getitem_side_effect)
+            mock_client_instance.list_database_names = Mock(return_value=[])
+
+            checker = DocumentDBVersionChecker(
+                "mongodb://localhost:27017",
+                "test_db",
+                temp_schema_file,
+            )
+
+            # Should NOT raise — should auto-initialize
+            with patch(
+                "madsci.common.document_db_version_checker.DocumentDBVersionChecker.ensure_schema_indexes"
+            ) as mock_ensure:
+                checker.validate_or_fail()
+                mock_ensure.assert_called_once()
+
+            # Verify schema_versions was created and version was recorded
+            mock_schema_versions.insert_one.assert_called_once()
+            inserted_doc = mock_schema_versions.insert_one.call_args[0][0]
+            assert inserted_doc["version"] == "1.0.0"
+
+    def test_validate_or_fail_version_mismatch_raises(self, temp_schema_file):
+        """Test that validate_or_fail raises when version tracking exists but mismatches."""
+        with patch(
+            "madsci.common.document_db_version_checker.MongoClient"
+        ) as mock_client:
+            mock_db = Mock()
+            mock_collection = Mock()
+            mock_client_instance = Mock()
+            mock_client_instance.__getitem__ = Mock(return_value=mock_db)
+            mock_client.return_value = mock_client_instance
+
+            # Database has schema_versions with a different version
+            mock_db.list_collection_names.return_value = [
+                "events",
+                "schema_versions",
+            ]
+            mock_db.__getitem__ = Mock(return_value=mock_collection)
+            mock_collection.find_one.return_value = {"version": "0.9.0"}
+
+            checker = DocumentDBVersionChecker(
+                "mongodb://localhost:27017",
+                "test_db",
+                temp_schema_file,
+            )
+
+            # Should raise because version tracking exists with a real mismatch
+            with pytest.raises(RuntimeError, match="schema version mismatch"):
+                checker.validate_or_fail()

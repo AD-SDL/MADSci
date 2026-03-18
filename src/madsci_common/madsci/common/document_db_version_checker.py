@@ -345,51 +345,51 @@ class DocumentDBVersionChecker:
 
         Behavior:
         - If completely fresh database (no collections) -> Auto-initialize
+        - If collections exist but no version tracking (0.0.0) -> Auto-initialize
         - If version tracking exists and versions match -> Allow server to start
-        - If version tracking exists/missing with mismatch -> Raise error, require migration
+        - If version tracking exists with version mismatch -> Raise error, require migration
         """
         needs_migration, expected, current = self.is_migration_needed()
 
-        # Handle completely fresh database auto-initialization
-        if needs_migration and current is None:
-            collection_names = self.database.list_collection_names()
-            if not collection_names:
-                self.logger.info(
-                    "Auto-initializing fresh database with schema version",
-                    database_name=self.database_name,
-                    expected_schema_version=str(expected),
+        # Handle database auto-initialization for fresh or untracked databases.
+        # current is None  => completely empty database (no collections at all)
+        # current is 0.0.0 => collections exist but no schema_versions collection
+        # Both cases are safe to auto-initialize because no prior version tracking
+        # existed, so there is no risk of overwriting an incompatible schema.
+        if needs_migration and (current is None or current == SemanticVersion(0, 0, 0)):
+            self.logger.info(
+                "Auto-initializing database with schema version",
+                database_name=self.database_name,
+                expected_schema_version=str(expected),
+                current_version=str(current),
+            )
+            try:
+                # Create schema_versions collection and record initial version
+                self.create_schema_versions_collection()
+                self.record_version(
+                    expected, f"Auto-initialized schema version {expected}"
                 )
-                try:
-                    # Create schema_versions collection and record initial version
-                    self.create_schema_versions_collection()
-                    self.record_version(
-                        expected, f"Auto-initialized schema version {expected}"
-                    )
-                    # Create all data-collection indexes from schema.json
-                    self.ensure_schema_indexes()
-                    self.logger.info(
-                        "Successfully auto-initialized database",
-                        database_name=self.database_name,
-                        schema_version=str(expected),
-                    )
-                    return
-                except Exception as e:
-                    self.logger.error(
-                        "Failed to auto-initialize database",
-                        database_name=self.database_name,
-                        error=str(e),
-                        exc_info=True,
-                    )
-                    raise RuntimeError(
-                        f"Failed to auto-initialize database: {e}"
-                    ) from e
+                # Create all data-collection indexes from schema.json
+                self.ensure_schema_indexes()
+                self.logger.info(
+                    "Successfully auto-initialized database",
+                    database_name=self.database_name,
+                    schema_version=str(expected),
+                )
+                return
+            except Exception as e:
+                self.logger.error(
+                    "Failed to auto-initialize database",
+                    database_name=self.database_name,
+                    error=str(e),
+                    exc_info=True,
+                )
+                raise RuntimeError(f"Failed to auto-initialize database: {e}") from e
 
         if needs_migration:
-            # Handle existing databases that need manual migration
-            if current == SemanticVersion(0, 0, 0):
-                error_msg = f"Database {self.database_name} needs version tracking initialization"
-            else:
-                error_msg = f"Database schema version mismatch detected for {self.database_name}"
+            error_msg = (
+                f"Database schema version mismatch detected for {self.database_name}"
+            )
 
             cmds = self.get_migration_commands()
             self.logger.error(error_msg)
