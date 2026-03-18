@@ -259,7 +259,7 @@ def cleanup_on_interrupt():
 
 
 @pytest.fixture(scope="session")
-def minio_server():
+def object_storage_server():
     """
     Fixture that starts a temporary SeaweedFS S3-compatible server using Docker CLI.
     This is more reliable than testcontainers for some environments.
@@ -395,9 +395,9 @@ def _create_test_bucket(host, port):
         print(f"Warning: Could not create test bucket: {e}")
 
 
-def test_file_datapoint_with_minio(document_handler, tmp_path: Path) -> None:
+def test_file_datapoint_with_object_storage(document_handler, tmp_path: Path) -> None:
     """
-    Test that file datapoints are uploaded to MinIO object storage when configured.
+    Test that file datapoints are uploaded to object storage when configured.
     This version uses mocks for fast unit testing.
     """
     # Create mock objects
@@ -491,11 +491,13 @@ def test_file_datapoint_with_minio(document_handler, tmp_path: Path) -> None:
 
 
 @pytest.mark.skipif(not is_docker_available(), reason="Docker not available")
-def test_real_minio_upload(document_handler, minio_server, tmp_path: Path) -> None:
-    """Test actual MinIO upload using the subprocess MinIO server."""
-    # No mocks - use real MinIO from the fixture
+def test_real_object_storage_upload(
+    document_handler, object_storage_server, tmp_path: Path
+) -> None:
+    """Test actual object storage upload using the subprocess SeaweedFS server."""
+    # No mocks - use real object storage from the fixture
     settings = DataManagerSettings(
-        manager_name="test_data_manager_with_minio",
+        manager_name="test_data_manager_with_object_storage",
         enable_registry_resolution=False,
     )
 
@@ -503,9 +505,9 @@ def test_real_minio_upload(document_handler, minio_server, tmp_path: Path) -> No
         settings=settings,
         document_handler=document_handler,
         object_storage_settings=ObjectStorageSettings(
-            endpoint=minio_server["endpoint"],
-            access_key=minio_server["access_key"],
-            secret_key=minio_server["secret_key"],
+            endpoint=object_storage_server["endpoint"],
+            access_key=object_storage_server["access_key"],
+            secret_key=object_storage_server["secret_key"],
             secure=False,
             default_bucket="test-bucket",
         ),
@@ -516,7 +518,7 @@ def test_real_minio_upload(document_handler, minio_server, tmp_path: Path) -> No
     # Create a test file
     test_file = tmp_path / "real_test.txt"
     test_file.parent.mkdir(parents=True, exist_ok=True)
-    test_content = "This is a real test file for MinIO upload!"
+    test_content = "This is a real test file for object storage upload!"
     with test_file.open("w") as f:
         f.write(test_content)
 
@@ -548,14 +550,14 @@ def test_real_minio_upload(document_handler, minio_server, tmp_path: Path) -> No
     assert result["size_bytes"] == len(test_content)
     assert "url" in result
 
-    # Verify the file actually exists in MinIO using the real client
+    # Verify the file actually exists in object storage using the real client
     from minio import Minio
 
-    # Create a real MinIO client to verify upload
-    real_minio_client = Minio(
-        endpoint=minio_server["endpoint"],
-        access_key=minio_server["access_key"],
-        secret_key=minio_server["secret_key"],
+    # Create a real S3-compatible client to verify upload
+    real_client = Minio(
+        endpoint=object_storage_server["endpoint"],
+        access_key=object_storage_server["access_key"],
+        secret_key=object_storage_server["secret_key"],
         secure=False,
     )
 
@@ -564,11 +566,11 @@ def test_real_minio_upload(document_handler, minio_server, tmp_path: Path) -> No
     object_name = result["object_name"]
 
     # Try to get object info (this will raise an exception if it doesn't exist)
-    object_info = real_minio_client.stat_object(bucket_name, object_name)
+    object_info = real_client.stat_object(bucket_name, object_name)
     assert object_info.size == len(test_content)
 
     # Download and verify content
-    response = real_minio_client.get_object(bucket_name, object_name)
+    response = real_client.get_object(bucket_name, object_name)
     downloaded_content = response.read().decode("utf-8")
     assert downloaded_content == test_content
 

@@ -192,7 +192,7 @@ def is_docker_available():
 
 
 @pytest.fixture(scope="session")
-def minio_server():
+def object_storage_server():
     """
     Fixture that starts a temporary SeaweedFS S3-compatible server using Docker CLI.
     This is more reliable than testcontainers for some environments.
@@ -332,22 +332,22 @@ def _create_test_bucket(host, port):  # noqa
 
 
 @pytest.fixture(scope="function")
-def minio_config(minio_server):  # noqa
+def object_storage_config(object_storage_server):  # noqa
     """
-    Fixture that provides MinIO configuration for individual tests.
+    Fixture that provides object storage configuration for individual tests.
     """
     return ObjectStorageSettings(
-        endpoint=minio_server["endpoint"],
-        access_key=minio_server["access_key"],
-        secret_key=minio_server["secret_key"],
+        endpoint=object_storage_server["endpoint"],
+        access_key=object_storage_server["access_key"],
+        secret_key=object_storage_server["secret_key"],
         secure=False,  # Use HTTP for testing
         default_bucket="madsci-test",
     )
 
 
-def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # noqa
+def test_object_storage_from_file_datapoint(tmp_path: Path, object_storage_config):  # noqa
     """
-    Test uploading and downloading a file using MinIO.
+    Test uploading and downloading a file using S3-compatible object storage.
     Uses the subprocess Docker CLI approach.
     """
     # Create a test file
@@ -355,10 +355,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     file_content = "This is a test file for MinIO storage"
     file_path.write_text(file_content)
 
-    # Initialize DataClient with the test MinIO configuration
+    # Initialize DataClient with the test object storage configuration
     with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
-            object_storage_settings=minio_config,
+            object_storage_settings=object_storage_config,
         )
 
     # Create file datapoint
@@ -407,8 +407,8 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
 
 def test_direct_object_storage_datapoint_submission(  # noqa
     tmp_path: Path,
-    minio_config,
-    minio_server,  # noqa
+    object_storage_config,
+    object_storage_server,  # noqa
 ):
     """
     Test creating and submitting an ObjectStorageDataPoint directly.
@@ -419,10 +419,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     file_content = "This is a direct ObjectStorageDataPoint test file"
     file_path.write_text(file_content)
 
-    # Initialize DataClient with the test MinIO configuration
+    # Initialize DataClient with the test object storage configuration
     with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
-            object_storage_settings=minio_config,
+            object_storage_settings=object_storage_config,
         )
 
     # Custom metadata for the object
@@ -440,8 +440,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
         path=str(file_path),
         bucket_name=bucket_name,
         object_name=object_name,
-        storage_endpoint=minio_server["endpoint"],
-        public_endpoint=minio_server["endpoint"],  # Use same endpoint for testing
+        storage_endpoint=object_storage_server["endpoint"],
+        public_endpoint=object_storage_server[
+            "endpoint"
+        ],  # Use same endpoint for testing
         content_type="text/plain",
         custom_metadata=metadata,
         size_bytes=file_path.stat().st_size,
@@ -479,7 +481,7 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     assert downloaded_content == file_content, "File contents don't match"
 
     # Verify the URL format is correct
-    expected_url_prefix = f"http://{minio_server['host']}:{minio_server['port']}/madsci-test/direct_{file_path.name}"
+    expected_url_prefix = f"http://{object_storage_server['host']}:{object_storage_server['port']}/madsci-test/direct_{file_path.name}"
     assert uploaded_datapoint.url.startswith(expected_url_prefix), (
         f"URL format incorrect. Expected to start with {expected_url_prefix}, got {uploaded_datapoint.url}"
     )

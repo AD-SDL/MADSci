@@ -92,7 +92,7 @@ madsci migrate foss --apply \
   --old-mongo-url mongodb://localhost:27018/ \
   --new-mongo-url mongodb://madsci:madsci@localhost:27017/ \
   --old-postgres-url postgresql://madsci:madsci@localhost:5433/resources \
-  --new-postgres-url postgresql://madsci:madsci@localhost:5432/postgres
+  --new-postgres-url postgresql://madsci:madsci@localhost:5434/resources
 
 # Specify compose file directory
 madsci migrate foss --apply --compose-dir /path/to/lab
@@ -106,7 +106,7 @@ All settings can be overridden via environment variables with the `FOSS_MIGRATIO
 export FOSS_MIGRATION_OLD_DOCUMENT_DB_URL=mongodb://localhost:27018/
 export FOSS_MIGRATION_NEW_DOCUMENT_DB_URL=mongodb://madsci:madsci@localhost:27017/
 export FOSS_MIGRATION_OLD_POSTGRES_URL=postgresql://madsci:madsci@localhost:5433/resources
-export FOSS_MIGRATION_NEW_POSTGRES_URL=postgresql://madsci:madsci@localhost:5432/postgres
+export FOSS_MIGRATION_NEW_POSTGRES_URL=postgresql://madsci:madsci@localhost:5434/resources
 ```
 
 ## Manual Migration
@@ -131,7 +131,7 @@ docker compose -f compose.infra.yaml -f compose.migration.yaml up -d \
 
 This starts:
 - Old MongoDB on port **27018** (avoids conflict with FerretDB on 27017)
-- Old PostgreSQL on port **5433** (avoids conflict with new PostgreSQL on 5432)
+- Old PostgreSQL on port **5433** (avoids conflict with FerretDB's PostgreSQL on 5432 and Resource Manager's PostgreSQL on 5434)
 
 ### 3. Migrate Document Databases
 
@@ -155,8 +155,8 @@ mongorestore --host localhost:27017 \
 PGPASSWORD=madsci pg_dump -h localhost -p 5433 -U madsci -d resources \
   --format=custom --file /tmp/pg_dump.dump
 
-# Restore to new PostgreSQL (port 5432)
-PGPASSWORD=madsci pg_restore -h localhost -p 5432 -U madsci -d postgres \
+# Restore to new PostgreSQL (port 5434)
+PGPASSWORD=madsci pg_restore -h localhost -p 5434 -U madsci -d resources \
   --clean --if-exists /tmp/pg_dump.dump
 ```
 
@@ -224,8 +224,8 @@ for db_name in ['madsci_events', 'madsci_experiments', 'madsci_data', 'madsci_wo
 client.close()
 "
 
-# Check PostgreSQL
-PGPASSWORD=madsci psql -h localhost -p 5432 -U madsci -d postgres \
+# Check PostgreSQL (Resource Manager on port 5434)
+PGPASSWORD=madsci psql -h localhost -p 5434 -U madsci -d resources \
   -c "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
 
 # Check Valkey
@@ -256,9 +256,14 @@ FerretDB requires authentication (unlike standalone MongoDB). Ensure your connec
 mongodb://madsci:madsci@localhost:27017/
 ```
 
-### PostgreSQL "database does not exist" Error
+### PostgreSQL Architecture
 
-The new FOSS stack uses a single `postgres` database (not `resources`). FerretDB stores document data in the same PostgreSQL instance. Make sure your `new_postgres_url` targets the correct database.
+The FOSS stack runs two separate PostgreSQL containers for clean separation of concerns:
+
+- **`madsci_postgres`** (port 5432) — `ghcr.io/ferretdb/postgres-documentdb-dev:17-ferretdb`. Used exclusively by FerretDB for document storage (Event, Experiment, Data, Workcell managers). The DocumentDB extension and `pg_cron` are installed by the image's built-in init scripts.
+- **`madsci_postgres_resources`** (port 5434) — Standard `postgres:17`. Used exclusively by the Resource Manager for relational data (SQLModel/Alembic). No special extensions needed.
+
+This two-container approach avoids schema conflicts and allows each service to use the most appropriate PostgreSQL image. The Resource Manager container is lightweight (plain upstream postgres), while the FerretDB backend gets the heavier DocumentDB-enabled image it requires.
 
 ### Permission Errors on Data Directories
 
@@ -298,7 +303,7 @@ OLD_MONGODB_VERSION=8
 
 The migration tool automatically handles the conflict between old and new PostgreSQL data directories. The old data is moved from `.madsci/postgresql/data/` to `.madsci/postgresql_old/data/` so the new FOSS PostgreSQL can initialize fresh with the DocumentDB extension required by FerretDB.
 
-If you see `schema "documentdb_api" does not exist` errors, ensure the new PostgreSQL started with a clean data directory.
+If you see `schema "documentdb_api" does not exist` or `extension "documentdb" does not exist` errors, ensure the `madsci_postgres` (DocumentDB) container started with a clean data directory so the built-in init scripts ran.
 
 ### Valkey RDB Format Incompatibility
 

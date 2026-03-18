@@ -40,7 +40,7 @@ Classes
     ### Instance variables
 
     `all_succeeded: bool`
-    :   Return True if every step succeeded.
+    :   Return True if every step succeeded (False when no steps recorded).
 
     `total_duration_seconds: float`
     :   Total wall-clock duration of all steps.
@@ -227,7 +227,10 @@ Classes
     :   Start old MongoDB and PostgreSQL containers via Docker Compose.
 
     `stop_old_containers(self) ‑> madsci.common.foss_migration.FossMigrationStepResult`
-    :   Stop and remove old migration containers.
+    :   Stop and remove only the old migration containers.
+        
+        Uses ``docker compose stop`` + ``docker compose rm -f`` targeting
+        specific service names so the FOSS stack keeps running.
 
     `verify_migration(self) ‑> madsci.common.foss_migration.FossMigrationStepResult`
     :   Connect to each new service and verify data presence.

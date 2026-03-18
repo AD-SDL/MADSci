@@ -333,6 +333,9 @@ Classes
     `endpoint: str | None`
     :
 
+    `public_endpoint: str | None`
+    :
+
     `region: str | None`
     :
 

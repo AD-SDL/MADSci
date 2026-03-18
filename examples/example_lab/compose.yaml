@@ -66,7 +66,7 @@ services:
     container_name: resource_manager
     command: python -m madsci.resource_manager.resource_server
     depends_on:
-      - madsci_postgres
+      - madsci_postgres_resources
       - event_manager
 
   data_manager:

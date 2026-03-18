@@ -71,7 +71,7 @@ class TestFossMigrationReport:
     def test_empty_report(self) -> None:
         report = FossMigrationReport()
         assert report.steps == []
-        assert report.all_succeeded is True
+        assert report.all_succeeded is False
         assert report.total_duration_seconds == 0.0
 
     def test_report_all_succeeded(self) -> None:
@@ -111,7 +111,7 @@ class TestFossMigrationSettings:
         assert "27018" in str(settings.old_document_db_url)
         assert "27017" in str(settings.new_document_db_url)
         assert "5433" in str(settings.old_postgres_url)
-        assert "5432" in str(settings.new_postgres_url)
+        assert "5434" in str(settings.new_postgres_url)
         assert settings.document_db_databases == DEFAULT_DOCUMENT_DBS
         # Path may be resolved to absolute by the settings system
         assert str(settings.backup_dir).endswith(".madsci/backups/foss_migration")
@@ -215,6 +215,7 @@ class TestCheckPrerequisites:
         assert result.success is False
         assert "mongodump" in result.error
         assert "pg_dump" in result.error
+        assert "psql" in result.error
 
 
 # ---------------------------------------------------------------------------
@@ -257,6 +258,19 @@ class TestCommandBuilding:
         assert cmd[username_idx + 1] == "madsci"
         password_idx = cmd.index("--password")
         assert cmd[password_idx + 1] == "madsci"
+        assert "--authenticationDatabase" in cmd
+        auth_idx = cmd.index("--authenticationDatabase")
+        assert cmd[auth_idx + 1] == "admin"
+
+    def test_mongodump_no_auth_database_without_creds(self) -> None:
+        cmd = self.tool.build_mongodump_command("test_db")
+        # Default old URL has no auth
+        assert "--authenticationDatabase" not in cmd
+
+    def test_mongorestore_auth_database_with_creds(self) -> None:
+        cmd = self.tool.build_mongorestore_command("test_db", ".scratch/dump")
+        # Default new URL has auth (madsci:madsci)
+        assert "--authenticationDatabase" in cmd
 
     def test_pg_dump_command(self) -> None:
         cmd = self.tool.build_pg_dump_command()
@@ -273,9 +287,9 @@ class TestCommandBuilding:
         assert cmd[0] == "pg_restore"
         assert "--clean" in cmd
         assert "--if-exists" in cmd
-        # New PG port is 5432
+        # New PG port is 5434 (dedicated resources container)
         port_idx = cmd.index("-p")
-        assert cmd[port_idx + 1] == "5432"
+        assert cmd[port_idx + 1] == "5434"
 
 
 # ---------------------------------------------------------------------------

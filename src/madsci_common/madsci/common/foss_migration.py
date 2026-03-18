@@ -68,8 +68,8 @@ class FossMigrationReport(MadsciBaseModel):
 
     @property
     def all_succeeded(self) -> bool:
-        """Return True if every step succeeded."""
-        return all(s.success for s in self.steps)
+        """Return True if every step succeeded (False when no steps recorded)."""
+        return bool(self.steps) and all(s.success for s in self.steps)
 
     @property
     def total_duration_seconds(self) -> float:
@@ -119,7 +119,7 @@ class FossMigrationSettings(
         json_schema_extra={"secret": True},
     )
     new_postgres_url: str = Field(
-        default="postgresql://madsci:madsci@localhost:5432/postgres",
+        default="postgresql://madsci:madsci@localhost:5434/resources",
         title="New PostgreSQL URL",
         description="PostgreSQL connection URL for the new (target) database",
         json_schema_extra={"secret": True},
@@ -214,6 +214,64 @@ class FossMigrationTool:
         # Resolve the .madsci/ directory via the canonical sentry walk-up
         self._madsci_dir = find_madsci_dir()
 
+        # Warn if compose files cannot be found at the configured compose_dir
+        compose_dir = self.settings.compose_dir
+        missing = [
+            f
+            for f in self.settings.compose_files + self.settings.migration_compose_files
+            if not (compose_dir / f).exists()
+        ]
+        if missing:
+            self.logger.warning(
+                "Some compose files not found in compose_dir; "
+                "use --compose-dir or --skip-docker if this is intentional",
+                compose_dir=str(compose_dir),
+                missing_files=missing,
+            )
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _wait_for_service(
+        check_fn: "callable",
+        timeout: float = 30.0,
+        interval: float = 2.0,
+    ) -> bool:
+        """Poll *check_fn* until it returns truthy or *timeout* expires.
+
+        Args:
+            check_fn: Zero-argument callable; should return truthy when the
+                service is ready, and raise or return falsy otherwise.
+            timeout: Maximum seconds to wait.
+            interval: Seconds between poll attempts.
+
+        Returns:
+            ``True`` if the service became ready, ``False`` on timeout.
+        """
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                if check_fn():
+                    return True
+            except Exception:  # noqa: S110
+                pass
+            time.sleep(interval)
+        return False
+
+    def _check_mongo_connection(self, url: "AnyUrl") -> bool:
+        """Return True if a pymongo connection to *url* succeeds."""
+        try:
+            from pymongo import MongoClient  # noqa: PLC0415
+
+            client = MongoClient(str(url), serverSelectionTimeoutMS=2000)
+            client.admin.command("ping")
+            client.close()
+            return True
+        except Exception:
+            return False
+
     # ------------------------------------------------------------------
     # Detection
     # ------------------------------------------------------------------
@@ -250,6 +308,7 @@ class FossMigrationTool:
             "mongorestore": "MongoDB Database Tools",
             "pg_dump": "PostgreSQL client tools",
             "pg_restore": "PostgreSQL client tools",
+            "psql": "PostgreSQL client tools",
             "docker": "Docker",
         }
 
@@ -327,9 +386,37 @@ class FossMigrationTool:
             destination=str(dest),
         )
 
+    def _prepare_old_mongodb_data(self) -> None:
+        """Remove stale MongoDB lock files that prevent startup after unclean shutdown.
+
+        MongoDB creates ``mongod.lock`` and ``WiredTiger.lock`` files that
+        persist after a crash or forced container stop.  Removing them allows
+        the old container to start cleanly for migration.
+        """
+        mongodb_dir = self._resolve_data_path("mongodb")
+        if not mongodb_dir.exists():
+            return
+        for lock_name in ("mongod.lock", "WiredTiger.lock"):
+            lock_file = mongodb_dir / lock_name
+            if lock_file.exists():
+                lock_file.unlink()
+                self.logger.info(
+                    "Removed stale MongoDB lock file",
+                    path=str(lock_file),
+                )
+
     def start_old_containers(self) -> FossMigrationStepResult:
         """Start old MongoDB and PostgreSQL containers via Docker Compose."""
         t0 = time.monotonic()
+
+        # Remove stale MongoDB lock files that would prevent startup.
+        try:
+            self._prepare_old_mongodb_data()
+        except Exception as exc:
+            self.logger.warning(
+                "Could not prepare old MongoDB data",
+                error=str(exc),
+            )
 
         # Ensure old PG data is in its own directory so the new stack can
         # initialise FerretDB cleanly on the live PG data path.
@@ -353,8 +440,15 @@ class FossMigrationTool:
             subprocess.run(  # noqa: S603
                 cmd, capture_output=True, text=True, check=True, timeout=120
             )
-            # Give containers a moment to initialize
-            time.sleep(3)
+            # Wait for old MongoDB to accept connections
+            if not self._wait_for_service(
+                lambda: self._check_mongo_connection(self.settings.old_document_db_url),
+                timeout=30,
+                interval=2,
+            ):
+                self.logger.warning(
+                    "Old MongoDB did not respond to ping within timeout; continuing anyway"
+                )
             return FossMigrationStepResult(
                 step="start_old_containers",
                 success=True,
@@ -378,8 +472,15 @@ class FossMigrationTool:
             subprocess.run(  # noqa: S603
                 cmd, capture_output=True, text=True, check=True, timeout=120
             )
-            # Give FerretDB time to connect to PostgreSQL and initialize
-            time.sleep(5)
+            # Wait for FerretDB to accept connections
+            if not self._wait_for_service(
+                lambda: self._check_mongo_connection(self.settings.new_document_db_url),
+                timeout=60,
+                interval=2,
+            ):
+                self.logger.warning(
+                    "FerretDB did not respond to ping within timeout; continuing anyway"
+                )
             return FossMigrationStepResult(
                 step="start_foss_stack",
                 success=True,
@@ -404,15 +505,21 @@ class FossMigrationTool:
             )
 
     def stop_old_containers(self) -> FossMigrationStepResult:
-        """Stop and remove old migration containers."""
+        """Stop and remove only the old migration containers.
+
+        Uses ``docker compose stop`` + ``docker compose rm -f`` targeting
+        specific service names so the FOSS stack keeps running.
+        """
         t0 = time.monotonic()
-        cmd = self._compose_cmd(
-            "down",
-            "--remove-orphans",
-        )
+        services = self.settings.old_container_services
         try:
+            stop_cmd = self._compose_cmd("stop", *services)
             subprocess.run(  # noqa: S603
-                cmd, capture_output=True, text=True, check=True, timeout=60
+                stop_cmd, capture_output=True, text=True, check=True, timeout=60
+            )
+            rm_cmd = self._compose_cmd("rm", "-f", *services)
+            subprocess.run(  # noqa: S603
+                rm_cmd, capture_output=True, text=True, check=True, timeout=60
             )
             return FossMigrationStepResult(
                 step="stop_old_containers",
@@ -506,6 +613,8 @@ class FossMigrationTool:
             cmd.extend(["--username", info["username"]])
         if info["password"]:
             cmd.extend(["--password", info["password"]])
+        if info["username"] or info["password"]:
+            cmd.extend(["--authenticationDatabase", "admin"])
         return cmd
 
     def build_mongorestore_command(self, database: str, dump_path: str) -> list[str]:
@@ -523,6 +632,8 @@ class FossMigrationTool:
             cmd.extend(["--username", info["username"]])
         if info["password"]:
             cmd.extend(["--password", info["password"]])
+        if info["username"] or info["password"]:
+            cmd.extend(["--authenticationDatabase", "admin"])
         cmd.append(dump_path)
         return cmd
 

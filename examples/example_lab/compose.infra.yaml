@@ -23,6 +23,7 @@ services:
       - ${REPO_PATH:-../..}/.madsci/valkey:/data
     command: valkey-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
 
+  # PostgreSQL with DocumentDB extension — used exclusively by FerretDB.
   madsci_postgres:
     container_name: madsci_postgres
     image: ghcr.io/ferretdb/postgres-documentdb-dev:17-ferretdb
@@ -35,6 +36,20 @@ services:
       - ${POSTGRES_PORT:-5432}:5432
     volumes:
       - ${REPO_PATH:-../..}/.madsci/postgresql/data:/var/lib/postgresql/data
+
+  # Standard PostgreSQL — used by the Resource Manager for relational data.
+  madsci_postgres_resources:
+    container_name: madsci_postgres_resources
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=madsci
+      - POSTGRES_PASSWORD=madsci
+      - POSTGRES_DB=resources
+    ports:
+      - ${RESOURCE_POSTGRES_PORT:-5434}:5432
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/postgresql_resources/data:/var/lib/postgresql/data
 
   madsci_seaweedfs:
     container_name: madsci_seaweedfs
