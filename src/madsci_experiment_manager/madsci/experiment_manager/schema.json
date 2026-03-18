@@ -1,7 +1,7 @@
 {
     "database": "madsci_experiments",
     "schema_version": "1.0.0",
-    "description": "Schema definition for MADSci Experiment Manager MongoDB",
+    "description": "Schema definition for MADSci Experiment Manager document database",
     "collections": {
       "experiments": {
         "description": "Main experiments collection for storing experiment data",

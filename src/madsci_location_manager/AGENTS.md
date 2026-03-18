@@ -8,14 +8,14 @@ The Location Manager (Port 8006) handles laboratory location management, resourc
 ### Core Server
 - **location_server.py**: Main FastAPI server inheriting from `AbstractManagerBase`
 - REST API for location CRUD operations, resource attachments, transfer planning, and bulk import/export
-- Dual-handler architecture: MongoDB for persistent location storage, Redis for transient state (locks, change counters)
-- MongoDB schema versioning via `schema.json` and `MongoDBVersionChecker`
+- Dual-handler architecture: document database (FerretDB) for persistent location storage, cache (Valkey) for transient state (locks, change counters)
+- Document database schema versioning via `schema.json` and `DocumentDBVersionChecker`
 - One-time seed file loading from `seed_locations_file` on empty database startup
 
 ### State Management
 - **location_state_handler.py**: Dual-handler state storage
-  - MongoDB handler: Persistent location CRUD (all location data)
-  - Redis handler: Transient state only (locks, change counters)
+  - Document storage handler: Persistent location CRUD (all location data)
+  - Cache handler: Transient state only (locks, change counters)
 - Thread-safe operations with ownership context support
 
 ### Transfer Planning
@@ -26,8 +26,8 @@ The Location Manager (Port 8006) handles laboratory location management, resourc
 - Override transfer templates for specialized scenarios
 
 ### Migration
-- **location_migration.py**: One-time migration tool from 0.7.1 Redis format to MongoDB
-- Auto-migration on startup if MongoDB is empty but Redis has legacy data
+- **location_migration.py**: One-time migration tool from 0.7.1 Redis format to document database
+- Auto-migration on startup if document database is empty but cache has legacy data
 - CLI entry point: `python -m madsci.location_manager.location_migration`
 
 ## Core Features
@@ -42,7 +42,7 @@ The Location Manager (Port 8006) handles laboratory location management, resourc
 ## Data Model
 Locations are simple containers with the following structure:
 - **location_id**: Unique ULID identifier
-- **location_name**: Human-readable name (unique constraint in MongoDB)
+- **location_name**: Human-readable name (unique constraint in document database)
 - **description**: Optional text description
 - **representations**: Dictionary mapping node names to arbitrary JSON-serializable values
 - **resource_id**: Optional attached resource ID
@@ -74,7 +74,7 @@ Locations are simple containers with the following structure:
 - `GET /location/{location_name}/resources` - Get resource hierarchy for location
 
 ### System Endpoints
-- `GET /health` - Health check with MongoDB and Redis connection status
+- `GET /health` - Health check with document database and cache connection status
 - `GET /definition` - Get Location Manager definition
 - `GET /` - Root endpoint returning manager definition
 
@@ -86,9 +86,9 @@ Environment variables with `LOCATION_` prefix:
 - `LOCATION_DOCUMENT_DB_URL` - MongoDB/FerretDB URL for persistent storage (default: mongodb://localhost:27017/)
 - `LOCATION_DATABASE_NAME` - Database name (default: madsci_locations)
 - `LOCATION_SEED_LOCATIONS_FILE` - Path to seed file for one-time bootstrap (default: locations.yaml)
-- `LOCATION_REDIS_HOST` - Redis host for transient state (locks, counters)
-- `LOCATION_REDIS_PORT` - Redis port
-- `LOCATION_REDIS_PASSWORD` - Redis password (optional)
+- `LOCATION_CACHE_HOST` - Cache host for transient state (locks, counters)
+- `LOCATION_CACHE_PORT` - Cache port
+- `LOCATION_CACHE_PASSWORD` - Cache password (optional)
 
 ## Transfer Capabilities
 Transfer planning is configured through `transfer_capabilities` in the manager definition:
@@ -124,5 +124,5 @@ Optional feature that adjusts transfer costs based on target resource utilizatio
 - Representations can store any JSON-serializable data (dicts, lists, strings, numbers)
 - Transfer planning automatically rebuilds graphs when locations or representations change
 - Non-transfer locations (`allow_transfers: false`) are excluded from transfer graph
-- MongoDB is required for persistent location storage; Redis for transient state (locks, counters)
+- A document database (FerretDB) is required for persistent location storage; a cache (Valkey) for transient state (locks, counters)
 - The `seed_locations_file` is loaded **once** to bootstrap an empty database; it is not re-read on subsequent startups

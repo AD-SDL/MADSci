@@ -365,7 +365,7 @@ class TestDocumentDBBackupTool:
         for backup_info in backups:
             assert isinstance(backup_info, BackupInfo)
             assert backup_info.backup_path.exists()
-            assert backup_info.backup_type == "mongodb"
+            assert backup_info.backup_type == "document_db"
 
     def test_backup_rotation_policy(self, backup_tool, temp_backup_dir):
         """Test backup rotation removes oldest backups."""

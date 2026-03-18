@@ -288,6 +288,9 @@ Classes
 
     ### Class variables
 
+    `cache_connected: bool | None`
+    :
+
     `document_db_connected: bool | None`
     :
 
@@ -304,9 +307,6 @@ Classes
     :
 
     `num_unresolved_locations: int`
-    :
-
-    `redis_connected: bool | None`
     :
 
 `LocationManagerSettings(**kwargs: Any)`
@@ -337,6 +337,15 @@ Classes
 
     ### Class variables
 
+    `cache_host: str`
+    :
+
+    `cache_password: str | None`
+    :
+
+    `cache_port: int`
+    :
+
     `database_name: str`
     :
 
@@ -350,15 +359,6 @@ Classes
     :
 
     `reconciliation_interval_seconds: float`
-    :
-
-    `redis_host: str`
-    :
-
-    `redis_password: str | None`
-    :
-
-    `redis_port: int`
     :
 
     `seed_locations_file: str | None`

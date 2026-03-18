@@ -11,7 +11,7 @@ The Location Manager is a dedicated microservice for managing laboratory locatio
 - **Capacity-Aware Routing**: Intelligent transfer planning that avoids congested resources by adjusting costs based on utilization
 - **Non-Transfer Locations**: Support for locations that are excluded from transfer operations for safety or design requirements
 - **Resource Hierarchy Queries**: Query resource hierarchies for resources attached to locations
-- **Redis State Management**: Persistent state storage using Redis
+- **Cache State Management**: Transient state storage using Valkey (Redis-compatible cache)
 - **RESTful API**: Clean REST endpoints for all location operations
 
 ## API Endpoints
@@ -56,7 +56,7 @@ The Location Manager returns standard HTTP status codes with descriptive error m
   - No attached resource to detach
   - No transfer path exists between locations
 - **500 Internal Server Error** - Server errors
-  - Redis connection failures
+  - Cache connection failures
   - Resource client errors
   - Transfer planning failures
 
@@ -107,9 +107,9 @@ The Location Manager uses environment variables with the `LOCATION_` prefix:
 - `LOCATION_MANAGER_ID` - Unique identifier for this manager instance
 - `LOCATION_SERVER_HOST` - Server host (default: localhost)
 - `LOCATION_SERVER_PORT` - Server port (default: 8006)
-- `LOCATION_REDIS_HOST` - Redis host for state storage
-- `LOCATION_REDIS_PORT` - Redis port
-- `LOCATION_REDIS_PASSWORD` - Redis password (optional)
+- `LOCATION_CACHE_HOST` - Cache host for transient state (locks, counters)
+- `LOCATION_CACHE_PORT` - Cache port
+- `LOCATION_CACHE_PASSWORD` - Cache password (optional)
 
 ## Usage
 
@@ -155,7 +155,7 @@ client.set_representations("location_id", "sensor", "position_A")         # stri
 ### LocationManager
 The main server class inheriting from `AbstractManagerBase` that provides:
 - FastAPI-based REST API endpoints
-- Redis-backed state management via `LocationStateHandler`
+- Cache-backed state management via `LocationStateHandler`
 - Resource integration via `ResourceClient`
 - Transfer planning via `TransferPlanner`
 - Automatic location initialization from definition

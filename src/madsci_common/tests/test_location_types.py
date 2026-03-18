@@ -47,10 +47,10 @@ class TestLocationManagerHealth:
         health = LocationManagerHealth()
         assert health.document_db_connected is None
 
-    def test_health_has_redis_connected(self):
-        """Verify redis_connected field still exists."""
+    def test_health_has_cache_connected(self):
+        """Verify cache_connected field still exists."""
         health = LocationManagerHealth()
-        assert health.redis_connected is None
+        assert health.cache_connected is None
 
     def test_health_document_db_connected_set(self):
         """Verify document_db_connected can be set."""

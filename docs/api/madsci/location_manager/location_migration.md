@@ -1,10 +1,10 @@
 Module madsci.location_manager.location_migration
 =================================================
-One-time migration tool for Location Manager: 0.7.1 Redis → MongoDB.
+One-time migration tool for Location Manager: 0.7.1 Redis → document database.
 
 The 0.7.1 system stores locations in Redis indexed by location_id under key
 ``madsci:location_manager:{manager_id}:locations``. This tool reads from that
-old format, maps fields to the current ``Location`` model, and writes to MongoDB.
+old format, maps fields to the current ``Location`` model, and writes to the document database.
 
 Usage (CLI)::
 
@@ -19,15 +19,15 @@ Functions
 Classes
 -------
 
-`LocationMigrator(redis_handler: RedisHandler, mongo_handler: MongoHandler, manager_id: str, event_logger: Optional[Any] = None)`
-:   Migrates locations from 0.7.1 Redis format to MongoDB.
+`LocationMigrator(redis_handler: RedisHandler, document_handler: DocumentStorageHandler, manager_id: str, event_logger: Optional[Any] = None)`
+:   Migrates locations from 0.7.1 Redis format to the document database.
     
-    Initialize the migrator with Redis/MongoDB handlers and manager ID.
+    Initialize the migrator with cache/document database handlers and manager ID.
 
     ### Methods
 
     `migrate_from_redis(self) ‑> madsci.location_manager.location_migration.MigrationResult`
-    :   Read old Redis data, transform, and write to MongoDB.
+    :   Read old Redis data, transform, and write to the document database.
         
         The 0.7.1 format stores locations in a Redis dict at
         ``madsci:location_manager:{manager_id}:locations`` keyed by
@@ -50,8 +50,8 @@ Classes
     `skipped: int`
     :
 
-`SchemaUpgrader(mongo_handler: MongoHandler, event_logger: Optional[Any] = None)`
-:   Handles schema upgrades for the Location Manager MongoDB.
+`SchemaUpgrader(document_handler: DocumentStorageHandler, event_logger: Optional[Any] = None)`
+:   Handles schema upgrades for the Location Manager document database.
     
     Initialize the schema upgrader.
 

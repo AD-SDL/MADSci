@@ -1,7 +1,7 @@
 {
     "database": "madsci_locations",
     "schema_version": "2.0.0",
-    "description": "Schema definition for MADSci Location Manager MongoDB",
+    "description": "Schema definition for MADSci Location Manager document database",
     "collections": {
       "locations": {
         "description": "Locations managed by this Location Manager",

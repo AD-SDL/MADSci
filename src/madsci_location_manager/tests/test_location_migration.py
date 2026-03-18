@@ -1,4 +1,4 @@
-"""Tests for the 0.7.1 Redis → MongoDB migration tool."""
+"""Tests for the 0.7.1 Redis → document database migration tool."""
 
 from datetime import datetime, timedelta
 
@@ -57,7 +57,7 @@ class TestMigrateFromRedis:
     def test_migrate_redis_locations_to_mongo(
         self, migrator, redis_handler, document_handler
     ):
-        """Seed Redis with 0.7.1 format, run migration, verify all in MongoDB."""
+        """Seed Redis with 0.7.1 format, run migration, verify all in document database."""
         loc1_id = new_ulid_str()
         loc2_id = new_ulid_str()
         _seed_redis(
@@ -80,7 +80,7 @@ class TestMigrateFromRedis:
         assert result.migrated == 2
         assert result.skipped == 0
 
-        # Verify in MongoDB
+        # Verify in document database
         collection = document_handler.get_collection("locations")
         docs = collection.find().to_list()
         assert len(docs) == 2
@@ -152,9 +152,9 @@ class TestMigrateFromRedis:
     def test_migrate_skips_duplicate_names(
         self, migrator, redis_handler, document_handler
     ):
-        """If MongoDB already has a location with the same name, skip it."""
+        """If document database already has a location with the same name, skip it."""
         loc_id = new_ulid_str()
-        # Pre-populate MongoDB
+        # Pre-populate document database
         collection = document_handler.get_collection("locations")
         existing = Location(
             location_name="Existing",

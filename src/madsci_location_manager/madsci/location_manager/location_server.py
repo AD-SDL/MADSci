@@ -162,10 +162,10 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         # Register default location container template
         self._register_default_resource_template()
 
-        # Auto-migration: if MongoDB is empty but Redis has old-format data, migrate
+        # Auto-migration: if document database is empty but cache has old-format data, migrate
         self._auto_migrate_from_redis()
 
-        # Seed file loading: if MongoDB is still empty and seed file exists, load it once
+        # Seed file loading: if document database is still empty and seed file exists, load it once
         self._seed_from_file()
 
         self.transfer_planner = TransferPlanner(
@@ -206,21 +206,21 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
     def _auto_migrate_from_redis(self) -> None:
-        """Auto-migrate locations from old Redis format to MongoDB if MongoDB is empty."""
+        """Auto-migrate locations from old Redis format to document database if document database is empty."""
         existing_locations = self.state_handler.get_locations()
         if existing_locations:
-            return  # MongoDB already has data, skip migration
+            return  # Document database already has data, skip migration
 
-        # Check if Redis has data at the old key prefix
+        # Check if cache has data at the old key prefix
         old_prefix = f"madsci:location_manager:{self.settings.manager_id}"
         old_dict_key = f"{old_prefix}:locations"
         try:
             old_locations = self.state_handler._redis_handler.create_dict(old_dict_key)
             if not old_locations:
-                return  # No old Redis data either
+                return  # No old cache data either
 
             self.logger.warning(
-                "Auto-migrating locations from Redis to MongoDB. "
+                "Auto-migrating locations from cache to document database. "
                 "This is a one-time migration from the 0.7.1 format.",
                 event_type=EventType.MANAGER_START,
                 manager_id=self.settings.manager_id,
@@ -235,24 +235,24 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                         migrated_count += 1
                 except Exception as e:
                     self.logger.warning(
-                        "Failed to migrate location from Redis",
+                        "Failed to migrate location from cache",
                         location_data=str(loc_data),
                         error=str(e),
                     )
 
             self.logger.info(
-                "Redis to MongoDB migration completed",
+                "Cache to document database migration completed",
                 event_type=EventType.MANAGER_START,
                 migrated_count=migrated_count,
             )
         except Exception as e:
             self.logger.debug(
-                "No legacy Redis data to migrate (expected on fresh installs)",
+                "No legacy cache data to migrate (expected on fresh installs)",
                 error=str(e),
             )
 
     def _seed_from_file(self) -> None:
-        """Load seed locations from file if MongoDB is empty and seed file exists.
+        """Load seed locations from file if document database is empty and seed file exists.
 
         Supports two formats:
         - **Old format** (list): A flat list of Location objects. Loaded directly.
@@ -262,7 +262,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         """
         existing_locations = self.state_handler.get_locations()
         if existing_locations:
-            return  # MongoDB already has data, skip seeding
+            return  # Document database already has data, skip seeding
 
         if not self.settings.seed_locations_file:
             return
@@ -511,11 +511,11 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             else:
                 health.document_db_connected = None
 
-            # Test Redis connection if configured
+            # Test cache connection if configured
             if hasattr(self.state_handler, "_redis_handler"):
-                health.redis_connected = self.state_handler._redis_handler.ping()
+                health.cache_connected = self.state_handler._redis_handler.ping()
             else:
-                health.redis_connected = None
+                health.cache_connected = None
 
             # Count managed locations
             locations = self.state_handler.get_locations()
@@ -542,7 +542,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         except Exception as e:
             health.healthy = False
             if "redis" in str(e).lower():
-                health.redis_connected = False
+                health.cache_connected = False
             if "mongo" in str(e).lower() or "document" in str(e).lower():
                 health.document_db_connected = False
             health.description = f"Health check failed: {e!s}"

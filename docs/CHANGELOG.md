@@ -27,6 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MinIO → SeaweedFS 4.17**: Default object storage switched to SeaweedFS (S3-compatible); Python `minio` SDK unchanged
 - **PostgreSQL split**: Two separate PostgreSQL instances — `madsci_postgres` (port 5432, `postgres-documentdb-dev:17-ferretdb` for FerretDB) and `madsci_postgres_resources` (port 5434, `postgres:17` for Resource Manager) — replacing the single shared instance
 
+#### FOSS Terminology Audit
+- **BREAKING**: `DocumentDBBackupSettings` env prefix changed from `MONGODB_` to `DOCUMENT_DB_` (e.g., `MONGODB_BACKUP_DIR` → `DOCUMENT_DB_BACKUP_DIR`)
+- **BREAKING**: `DocumentDBMigrationSettings` env prefix changed from `MONGODB_MIGRATION_` to `DOCUMENT_DB_MIGRATION_` (e.g., `MONGODB_MIGRATION_DATABASE` → `DOCUMENT_DB_MIGRATION_DATABASE`)
+- **BREAKING**: Settings fields `redis_host`, `redis_port`, `redis_password` renamed to `cache_host`, `cache_port`, `cache_password` on `WorkcellManagerSettings` and `LocationManagerSettings` (old names accepted via `validation_alias` for backward compatibility)
+- **BREAKING**: Health model fields `redis_connected` renamed to `cache_connected` on `WorkcellManagerHealth` and `LocationManagerHealth`
+- **BREAKING**: Docker types field `REDIS_PORT` renamed to `CACHE_PORT` (old name accepted via `validation_alias`)
+- Default backup directory for document database migrations changed from `.madsci/backups/mongodb` to `.madsci/backups/document_db`
+- Backup metadata `backup_type` value changed from `"mongodb"` to `"document_db"` for document database backups
+- Comprehensive terminology updates across all comments, docstrings, schema descriptions, and documentation to use vendor-neutral terms ("document database" instead of "MongoDB", "cache" instead of "Redis")
+- Deleted stale auto-generated API doc files referencing old module names (`mongo_cli.md`, `mongodb_backup.md`, `mongo_handler.md`, etc.)
+- Test directory renamed: `test_mongodb_backup_tools/` → `test_document_db_backup_tools/`
+- Manual test file renamed: `manual_test_minio.py` → `manual_test_object_storage.py`
+
 #### Vendor-Neutral Renames
 - Handler files: `mongo_handler.py` → `document_storage_handler.py`, `minio_handler.py` → `object_storage_handler.py`
 - Handler classes: `PyMongoHandler` → `PyDocumentStorageHandler`, `InMemoryMongoHandler` → `InMemoryDocumentStorageHandler`, `RealMinioHandler` → `RealObjectStorageHandler`, `InMemoryMinioHandler` → `InMemoryObjectStorageHandler`

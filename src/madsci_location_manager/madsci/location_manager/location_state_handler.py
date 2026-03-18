@@ -1,8 +1,8 @@
 """
 State management for the LocationManager.
 
-Uses MongoDB (document storage) for persistent location CRUD,
-and Redis for transient state (locks, change counters).
+Uses document database (FerretDB) for persistent location CRUD,
+and cache (Valkey) for transient state (locks, change counters).
 """
 
 import warnings
@@ -29,7 +29,7 @@ class LocationStateHandler:
     Manages state for a MADSci Location Manager.
 
     - Document storage handler: persistent location CRUD
-    - Redis handler: transient state (locks, change counters)
+    - Cache handler: transient state (locks, change counters)
     """
 
     state_change_marker = "0"
@@ -75,9 +75,9 @@ class LocationStateHandler:
             self._redis_handler = PyRedisHandler(redis_connection)
         else:
             self._redis_handler = PyRedisHandler.from_settings(
-                host=str(settings.redis_host),
-                port=int(settings.redis_port),
-                password=settings.redis_password or None,
+                host=str(settings.cache_host),
+                port=int(settings.cache_port),
+                password=settings.cache_password or None,
             )
 
         # Initialize document storage handler (persistent locations)
@@ -148,11 +148,11 @@ class LocationStateHandler:
         return False
 
     def close(self) -> None:
-        """Release both Redis and document storage connections and resources."""
+        """Release both cache and document storage connections and resources."""
         self._redis_handler.close()
         self._document_handler.close()
 
-    # Location Management Methods (MongoDB-backed)
+    # Location Management Methods (document database-backed)
 
     def get_location(self, location_name: str) -> Optional[Location]:
         """Returns a location by name."""
@@ -244,7 +244,7 @@ class LocationStateHandler:
         self.mark_state_changed()
         return location
 
-    # Representation Template CRUD (MongoDB-backed)
+    # Representation Template CRUD (document database-backed)
 
     def get_representation_template(
         self, template_name: str
@@ -320,7 +320,7 @@ class LocationStateHandler:
         )
         return result.deleted_count > 0
 
-    # Location Template CRUD (MongoDB-backed)
+    # Location Template CRUD (document database-backed)
 
     def get_location_template(self, template_name: str) -> Optional[LocationTemplate]:
         """Returns a location template by name."""

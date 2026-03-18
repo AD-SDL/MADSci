@@ -226,17 +226,17 @@ class TestRealSettingsSecretAnnotations:
         safe = s.model_dump_safe()
         assert safe["document_db_url"] == REDACTED_PLACEHOLDER
 
-    def test_workcell_manager_redis_password_redacted(self) -> None:
-        """WorkcellManagerSettings.redis_password is classified as secret."""
+    def test_workcell_manager_cache_password_redacted(self) -> None:
+        """WorkcellManagerSettings.cache_password is classified as secret."""
         s = WorkcellManagerSettings()
         safe = s.model_dump_safe()
-        assert safe["redis_password"] == REDACTED_PLACEHOLDER
+        assert safe["cache_password"] == REDACTED_PLACEHOLDER
 
-    def test_location_manager_redis_password_redacted(self) -> None:
-        """LocationManagerSettings.redis_password is classified as secret."""
+    def test_location_manager_cache_password_redacted(self) -> None:
+        """LocationManagerSettings.cache_password is classified as secret."""
         s = LocationManagerSettings()
         safe = s.model_dump_safe()
-        assert safe["redis_password"] == REDACTED_PLACEHOLDER
+        assert safe["cache_password"] == REDACTED_PLACEHOLDER
 
     def test_data_manager_document_db_url_redacted(self) -> None:
         """DataManagerSettings.document_db_url is classified as secret."""

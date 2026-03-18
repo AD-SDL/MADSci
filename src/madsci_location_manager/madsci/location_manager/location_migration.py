@@ -1,8 +1,8 @@
-"""One-time migration tool for Location Manager: 0.7.1 Redis → MongoDB.
+"""One-time migration tool for Location Manager: 0.7.1 Redis → document database.
 
 The 0.7.1 system stores locations in Redis indexed by location_id under key
 ``madsci:location_manager:{manager_id}:locations``. This tool reads from that
-old format, maps fields to the current ``Location`` model, and writes to MongoDB.
+old format, maps fields to the current ``Location`` model, and writes to the document database.
 
 Usage (CLI)::
 
@@ -36,7 +36,7 @@ class MigrationResult:
 
 
 class LocationMigrator:
-    """Migrates locations from 0.7.1 Redis format to MongoDB."""
+    """Migrates locations from 0.7.1 Redis format to the document database."""
 
     def __init__(
         self,
@@ -45,7 +45,7 @@ class LocationMigrator:
         manager_id: str,
         event_logger: Optional[Any] = None,
     ) -> None:
-        """Initialize the migrator with Redis/MongoDB handlers and manager ID."""
+        """Initialize the migrator with cache/document database handlers and manager ID."""
         self._redis_handler = redis_handler
         self._document_handler = document_handler
         self._manager_id = manager_id
@@ -61,7 +61,7 @@ class LocationMigrator:
             self._event_logger.warning(msg, **kwargs)
 
     def migrate_from_redis(self) -> MigrationResult:
-        """Read old Redis data, transform, and write to MongoDB.
+        """Read old Redis data, transform, and write to the document database.
 
         The 0.7.1 format stores locations in a Redis dict at
         ``madsci:location_manager:{manager_id}:locations`` keyed by
@@ -86,7 +86,7 @@ class LocationMigrator:
                 normalized = self._normalize_reservation_fields(raw_loc)
                 location = Location.model_validate(normalized)
 
-                # Check for duplicate in MongoDB
+                # Check for duplicate in document database
                 existing = self._locations_collection.find_one(
                     {"location_name": location.location_name}
                 )
@@ -146,7 +146,7 @@ class LocationMigrator:
 
 
 class SchemaUpgrader:
-    """Handles schema upgrades for the Location Manager MongoDB."""
+    """Handles schema upgrades for the Location Manager document database."""
 
     def __init__(
         self,
@@ -222,7 +222,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(
-        description="Migrate Location Manager data from 0.7.1 Redis to MongoDB"
+        description="Migrate Location Manager data from 0.7.1 Redis to document database"
     )
     parser.add_argument("--redis-host", default="localhost")
     parser.add_argument("--redis-port", type=int, default=6379)

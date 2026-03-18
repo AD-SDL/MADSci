@@ -83,13 +83,13 @@ class DocumentDBBackupSettings(
         "document_db_backup.settings.json",
         "mongodb_backup.settings.json",
     ),
-    env_prefix="MONGODB_",
+    env_prefix="DOCUMENT_DB_",
 ):
-    """MongoDB-compatible document database backup settings."""
+    """Document database backup settings."""
 
     document_db_url: AnyUrl = Field(
         title="Document Database URL",
-        description="MongoDB-compatible document database connection URL",
+        description="Document database connection URL (FerretDB/MongoDB-compatible)",
         validation_alias=AliasChoices("document_db_url", "mongo_db_url"),
         alias="document_db_url",  # avoid double prefixing
         default="mongodb://localhost:27017",

@@ -23,7 +23,7 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 - **ULID IDs**: Uses `new_ulid_str()` for `datapoint_id` generation
 - **Ownership Tracking**: Automatic `ownership_info` from current context
 - **Timestamps**: Auto-generated `data_timestamp` using `datetime.now()`
-- **MongoDB Serialization**: Custom `to_mongo()` method for database storage
+- **Document Database Serialization**: Custom `to_mongo()` method for database storage
 
 ### Type-Specific Fields
 - **FileDataPoint**: Requires `path` field pointing to local file
@@ -42,7 +42,7 @@ The Data Manager (Port 8004) handles DataPoint capture, storage, and querying fo
 - `GET /datapoint/{datapoint_id}`: Retrieve datapoint metadata by ID
 - `GET /datapoint/{datapoint_id}/value`: Get datapoint value (JSON response or file download)
 - `GET /datapoints`: List recent datapoints (default 100, configurable)
-- `POST /datapoints/query`: MongoDB-style query interface for complex searches
+- `POST /datapoints/query`: Document database-style query interface for complex searches
 
 ### DataPoint Types
 - **JSON DataPoints**: Store structured data with `data_type: "json"` and `value` field

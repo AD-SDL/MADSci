@@ -5,7 +5,7 @@ MADSci Location Manager using AbstractManagerBase.
 Functions
 ---------
 
-`create_app(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None) ‑> fastapi.applications.FastAPI`
+`create_app(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None) ‑> fastapi.applications.FastAPI`
 :   Create and configure the FastAPI application.
 
 `lifespan(app: fastapi.applications.FastAPI) ‑> AsyncGenerator[None, None]`
@@ -14,7 +14,7 @@ Functions
 Classes
 -------
 
-`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, **kwargs: Any)`
+`LocationManager(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None, **kwargs: Any)`
 :   MADSci Location Manager using the new AbstractManagerBase pattern.
     
     This class is decorated with @ownership_class() which automatically

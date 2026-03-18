@@ -49,7 +49,7 @@ class TestBackupInfo:
             database_version=None,
             backup_size=0,
             checksum="",
-            backup_type="mongodb",
+            backup_type="document_db",
             is_valid=False,
         )
 
@@ -195,7 +195,7 @@ class TestAbstractBackupTool:
                         database_version="1.1.0",
                         backup_size=2000,
                         checksum="checksum2",
-                        backup_type="mongodb",
+                        backup_type="document_db",
                         is_valid=False,
                     ),
                 ]
@@ -222,7 +222,7 @@ class TestAbstractBackupTool:
         backup2 = backups[1]
         assert backup2.backup_path == Path("/test/backup2.dump")
         assert backup2.database_version == "1.1.0"
-        assert backup2.backup_type == "mongodb"
+        assert backup2.backup_type == "document_db"
         assert backup2.is_valid is False
 
 

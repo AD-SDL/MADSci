@@ -1,7 +1,7 @@
-"""Tests for location persistence via MongoDB state and settings initialization.
+"""Tests for location persistence via document database state and settings initialization.
 
-Locations are persisted in MongoDB at runtime. This module tests:
-1. Locations added/modified/deleted via the API persist in MongoDB.
+Locations are persisted in the document database at runtime. This module tests:
+1. Locations added/modified/deleted via the API persist in the document database.
 2. Initial location configuration is preserved across runtime changes.
 """
 
@@ -104,7 +104,7 @@ def empty_client(empty_app):
 
 
 def test_added_location_persists_in_redis(empty_client):
-    """A location added via the API should be retrievable from Redis."""
+    """A location added via the API should be retrievable from the database."""
     location = Location(
         location_id=new_ulid_str(),
         location_name="runtime_location",
@@ -140,7 +140,7 @@ def test_deleted_location_removed_from_redis(empty_client):
 
 
 def test_updated_representation_persists_in_redis(empty_client):
-    """Representations set via the API should persist in Redis."""
+    """Representations set via the API should persist in the document database."""
     location = Location(
         location_id=new_ulid_str(),
         location_name="rep_test_location",

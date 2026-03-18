@@ -71,9 +71,9 @@ class WorkcellStateHandler:
             self._redis_handler = PyRedisHandler(redis_connection)
         else:
             self._redis_handler = PyRedisHandler.from_settings(
-                host=str(self.workcell_settings.redis_host),
-                port=int(self.workcell_settings.redis_port),
-                password=self.workcell_settings.redis_password or None,
+                host=str(self.workcell_settings.cache_host),
+                port=int(self.workcell_settings.cache_port),
+                password=self.workcell_settings.cache_password or None,
             )
 
         # Initialize document storage handler
@@ -246,7 +246,7 @@ class WorkcellStateHandler:
 
     # Workflow Definition Method
     def save_workflow_definition(self, workflow_definition: WorkflowDefinition) -> None:
-        """move a workflow from redis to mongo"""
+        """move a workflow from cache to document database"""
         self.workflow_definitions.insert_one(workflow_definition.to_mongo())
         return workflow_definition.workflow_definition_id
 
@@ -375,7 +375,7 @@ class WorkcellStateHandler:
             self.mark_state_changed()
 
     def archive_workflow(self, workflow_id: str) -> None:
-        """Move a workflow from redis to mongo"""
+        """Move a workflow from cache to document database"""
         try:
             workflow = self.get_active_workflow(workflow_id)
         except Exception:
@@ -384,7 +384,7 @@ class WorkcellStateHandler:
         self.delete_active_workflow(workflow_id)
 
     def archive_terminal_workflows(self) -> None:
-        """Move all completed workflows from redis to mongo"""
+        """Move all completed workflows from cache to document database"""
         for workflow_id, workflow in self._active_workflows.items():
             if Workflow.model_validate(workflow).status.terminal:
                 self.archive_workflow(workflow_id)
@@ -455,6 +455,6 @@ class WorkcellStateHandler:
         self.set_node(node_name, func(self.get_node(node_name), *args, **kwargs))
 
     def close(self) -> None:
-        """Release Redis and MongoDB connections."""
+        """Release cache and document database connections."""
         self._redis_handler.close()
         self._document_handler.close()

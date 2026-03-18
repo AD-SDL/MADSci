@@ -86,7 +86,7 @@ def test_health_endpoint(client):
     # Check that required fields are present
     assert isinstance(health.healthy, bool)
     assert isinstance(health.description, str)
-    assert health.redis_connected is not None  # Should be True for test Redis
+    assert health.cache_connected is not None  # Should be True for test cache
     assert isinstance(health.num_locations, int)
     assert health.num_locations >= 0
 
@@ -3107,12 +3107,12 @@ def test_health_reports_document_db_connected(client):
     assert health.document_db_connected is True
 
 
-def test_health_reports_redis_connected(client):
-    """Health endpoint should still report redis_connected: True."""
+def test_health_reports_cache_connected(client):
+    """Health endpoint should still report cache_connected: True."""
     response = client.get("/health")
     assert response.status_code == 200
     health = LocationManagerHealth.model_validate(response.json())
-    assert health.redis_connected is True
+    assert health.cache_connected is True
 
 
 def test_import_locations_bulk(client):

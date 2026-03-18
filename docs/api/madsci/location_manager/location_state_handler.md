@@ -2,17 +2,17 @@ Module madsci.location_manager.location_state_handler
 =====================================================
 State management for the LocationManager.
 
-Uses MongoDB (document storage) for persistent location CRUD,
-and Redis for transient state (locks, change counters).
+Uses document database (FerretDB) for persistent location CRUD,
+and cache (Valkey) for transient state (locks, change counters).
 
 Classes
 -------
 
-`LocationStateHandler(settings: madsci.common.types.location_types.LocationManagerSettings, manager_id: str, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None)`
+`LocationStateHandler(settings: madsci.common.types.location_types.LocationManagerSettings, manager_id: str, redis_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None)`
 :   Manages state for a MADSci Location Manager.
     
-    - MongoDB handler: persistent location CRUD
-    - Redis handler: transient state (locks, change counters)
+    - Document storage handler: persistent location CRUD
+    - Cache handler: transient state (locks, change counters)
     
     Initialize a LocationStateHandler.
     
@@ -26,8 +26,8 @@ Classes
         Deprecated. Use redis_handler instead.
     redis_handler:
         Redis handler for transient state (locks, change counters).
-    mongo_handler:
-        MongoDB handler for persistent location storage.
+    document_handler:
+        Document storage handler for persistent location storage.
 
     ### Class variables
 
@@ -50,7 +50,7 @@ Classes
     :   Adds a representation template. Returns None if the name already exists.
 
     `close(self) ‑> None`
-    :   Release both Redis and MongoDB connections and resources.
+    :   Release both cache and document storage connections and resources.
 
     `delete_location(self, location_name: str) ‑> bool`
     :   Deletes a location by name.

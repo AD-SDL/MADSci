@@ -309,13 +309,13 @@ def test_health_endpoint(test_client: TestClient) -> None:
     health_data = response.json()
     assert "healthy" in health_data
     assert "description" in health_data
-    assert "redis_connected" in health_data
+    assert "cache_connected" in health_data
     assert "nodes_reachable" in health_data
     assert "total_nodes" in health_data
 
     # Health should be True for basic functionality
     assert health_data["healthy"] is True
-    # Note: redis_connected may be None if Redis is not configured
+    # Note: cache_connected may be None if cache is not configured
     assert isinstance(health_data["total_nodes"], int)
     assert isinstance(health_data["nodes_reachable"], int)
     assert health_data["total_nodes"] >= 0

@@ -17,7 +17,7 @@ Functions
 ---------
 
 `main_document_db_backup() ‑> None`
-:   Entry point for MongoDB-compatible document database backup CLI.
+:   Entry point for document database backup CLI.
 
 `main_postgres_backup() ‑> None`
 :   Entry point for PostgreSQL backup CLI.
@@ -315,12 +315,12 @@ Classes
             True if structure is valid, False otherwise
 
 `DocumentDBBackupTool(settings: madsci.common.types.backup_types.DocumentDBBackupSettings, logger: madsci.client.event_client.EventClient | None = None)`
-:   Standalone MongoDB-compatible document database backup and restore tool.
+:   Standalone document database backup and restore tool.
     
-    Initialize MongoDB-compatible document database backup tool.
+    Initialize document database backup tool.
     
     Args:
-        settings: MongoDB-compatible document database backup configuration settings
+        settings: Document database backup configuration settings
         logger: Optional logger instance
 
     ### Ancestors (in MRO)
@@ -331,7 +331,7 @@ Classes
     ### Methods
 
     `create_backup(self, name_suffix: str | None = None) ‑> pathlib.Path`
-    :   Create a MongoDB backup using mongodump.
+    :   Create a document database backup using mongodump.
         
         Args:
             name_suffix: Optional suffix to add to backup name

@@ -1,4 +1,4 @@
-"""Tests for the dual-handler LocationStateHandler (MongoDB + Redis)."""
+"""Tests for the dual-handler LocationStateHandler (document database + cache)."""
 
 import pytest
 from madsci.common.db_handlers.document_storage_handler import (
@@ -80,12 +80,12 @@ class TestAddLocation:
     """Tests for adding locations."""
 
     def test_add_location_stores_in_mongo(self, state_handler, sample_location):
-        """Add location, verify it's stored in mongo collection."""
+        """Add location, verify it's stored in document database collection."""
         result = state_handler.add_location(sample_location)
         assert result is not None
         assert result.location_name == sample_location.location_name
 
-        # Verify it's in the MongoDB collection
+        # Verify it's in the document database collection
         retrieved = state_handler.get_location(sample_location.location_name)
         assert retrieved is not None
         assert retrieved.location_id == sample_location.location_id
@@ -436,7 +436,7 @@ class TestClose:
     """Tests for closing the handler."""
 
     def test_close_closes_both_handlers(self, settings):
-        """Close should close both mongo and redis handlers."""
+        """Close should close both document database and cache handlers."""
         mongo = InMemoryDocumentStorageHandler(database_name="test")
         redis = InMemoryRedisHandler()
         handler = LocationStateHandler(

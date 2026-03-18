@@ -75,7 +75,7 @@ Classes
     :   Get info on a specific workflow.
 
     `get_workflow_definition(self, workflow_definition_id: str) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------
@@ -112,7 +112,7 @@ Classes
     :   Send admin command to a node.
 
     `start_workflow(self, workflow_definition_id: typing.Annotated[str, Form(PydanticUndefined)], ownership_info: typing.Annotated[str | None, Form(PydanticUndefined)] = None, json_inputs: typing.Annotated[str | None, Form(PydanticUndefined)] = None, file_input_paths: typing.Annotated[str | None, Form(PydanticUndefined)] = None, files: list[fastapi.datastructures.UploadFile] = []) ‑> madsci.common.types.workflow_types.Workflow`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------
@@ -133,7 +133,7 @@ Classes
         - a workflow run object for the requested run_id
 
     `submit_workflow_definition(self, workflow_definition: madsci.common.types.workflow_types.WorkflowDefinition) ‑> str`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------

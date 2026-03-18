@@ -1,4 +1,4 @@
-"""MongoDB-compatible document database backup management commands."""
+"""Document database backup management commands."""
 
 import json
 import sys
@@ -23,12 +23,14 @@ def load_config_file(config_path: str) -> dict:
 @click.option(
     "--config-file", help="Configuration file path", type=click.Path(exists=True)
 )
-@click.option("--mongo-url", help="MongoDB-compatible document database connection URL")
+@click.option(
+    "--mongo-url", help="Document database connection URL (FerretDB/MongoDB-compatible)"
+)
 @click.option("--database", help="Database name")
 @click.option(
     "--backup-dir",
     default=None,
-    help="Backup directory (default: .madsci/backups/mongodb)",
+    help="Backup directory (default: .madsci/backups/document_db)",
 )
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.pass_context
@@ -40,7 +42,7 @@ def document_db_backup(
     backup_dir: str,
     verbose: bool,
 ) -> None:
-    """MongoDB-compatible document database backup management commands."""
+    """Document database backup management commands."""
     ctx.ensure_object(dict)
 
     # Resolve backup_dir default via sentry
@@ -50,7 +52,7 @@ def document_db_backup(
             get_madsci_subdir,
         )
 
-        backup_dir = str(get_madsci_subdir(SUBDIR_BACKUPS) / "mongodb")
+        backup_dir = str(get_madsci_subdir(SUBDIR_BACKUPS) / "document_db")
 
     # Load configuration from file if provided
     if config_file:
@@ -64,14 +66,14 @@ def document_db_backup(
     # Validate required parameters
     if not mongo_url:
         raise click.ClickException(
-            "MongoDB-compatible document database URL is required (use --mongo-url or config file)"
+            "Document database URL is required (use --mongo-url or config file)"
         )
     if not database:
         raise click.ClickException(
             "Database name is required (use --database or config file)"
         )
 
-    ctx.obj["mongo_url"] = mongo_url
+    ctx.obj["document_db_url"] = mongo_url
     ctx.obj["database"] = database
     ctx.obj["backup_dir"] = Path(backup_dir)
     ctx.obj["verbose"] = verbose
@@ -90,7 +92,7 @@ def create(
     no_compression: bool,
     collections: Optional[str],
 ) -> None:
-    """Create a new MongoDB-compatible document database backup."""
+    """Create a new document database backup."""
     try:
         # Parse collections list
         collections_list = None
@@ -99,7 +101,7 @@ def create(
 
         # Create settings
         settings = DocumentDBBackupSettings(
-            document_db_url=ctx.obj["mongo_url"],
+            document_db_url=ctx.obj["document_db_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
             validate_integrity=not no_validate,
@@ -122,11 +124,11 @@ def create(
 @document_db_backup.command()
 @click.pass_context
 def list(ctx: click.Context) -> None:
-    """List available MongoDB-compatible document database backups."""
+    """List available document database backups."""
     try:
         # Create settings
         settings = DocumentDBBackupSettings(
-            document_db_url=ctx.obj["mongo_url"],
+            document_db_url=ctx.obj["document_db_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
@@ -172,7 +174,7 @@ def list(ctx: click.Context) -> None:
 def restore(
     ctx: click.Context, backup_path: str, target_database: Optional[str]
 ) -> None:
-    """Restore from MongoDB-compatible document database backup."""
+    """Restore from document database backup."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -182,7 +184,7 @@ def restore(
 
         # Create settings
         settings = DocumentDBBackupSettings(
-            document_db_url=ctx.obj["mongo_url"],
+            document_db_url=ctx.obj["document_db_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
@@ -205,7 +207,7 @@ def restore(
 @click.argument("backup_path", type=click.Path())
 @click.pass_context
 def validate(ctx: click.Context, backup_path: str) -> None:
-    """Validate MongoDB-compatible document database backup integrity."""
+    """Validate document database backup integrity."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -215,7 +217,7 @@ def validate(ctx: click.Context, backup_path: str) -> None:
 
         # Create settings
         settings = DocumentDBBackupSettings(
-            document_db_url=ctx.obj["mongo_url"],
+            document_db_url=ctx.obj["document_db_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
@@ -242,7 +244,7 @@ def validate(ctx: click.Context, backup_path: str) -> None:
 @click.option("--force", is_flag=True, help="Delete without confirmation")
 @click.pass_context
 def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
-    """Delete MongoDB-compatible document database backup."""
+    """Delete document database backup."""
     try:
         backup_path_obj = Path(backup_path)
 
@@ -258,7 +260,7 @@ def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
 
         # Create settings
         settings = DocumentDBBackupSettings(
-            document_db_url=ctx.obj["mongo_url"],
+            document_db_url=ctx.obj["document_db_url"],
             database=ctx.obj["database"],
             backup_dir=ctx.obj["backup_dir"],
         )
@@ -276,7 +278,7 @@ def delete(ctx: click.Context, backup_path: str, force: bool) -> None:
 
 
 def main_document_db_backup() -> None:
-    """Entry point for MongoDB-compatible document database backup CLI."""
+    """Entry point for document database backup CLI."""
     document_db_backup()
 
 

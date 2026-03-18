@@ -11,7 +11,7 @@ The example lab simulates a real laboratory environment with:
 ### Infrastructure Services
 - **MongoDB** (Port 27017): Event and experiment data storage
 - **PostgreSQL** (Port 5432): Resource and inventory management
-- **Redis** (Port 6379): Real-time state management and task queuing
+- **Valkey** (Port 6379): Real-time state management and task queuing (Redis-compatible cache)
 - **MinIO** (Port 9000/9001): Object storage for data files
 
 ### Core Managers
@@ -237,7 +237,7 @@ docker compose up
 # Check database logs
 docker compose logs postgres
 docker compose logs mongodb
-docker compose logs redis
+docker compose logs madsci_valkey
 ```
 
 #### Node Communication Issues

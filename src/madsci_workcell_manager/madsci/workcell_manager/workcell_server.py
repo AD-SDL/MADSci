@@ -108,16 +108,16 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         manager_id = self.settings.manager_id
 
         # Skip version validation if external connections or handlers were provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
+        # This is commonly done in tests where a mock or in-memory document database is used
         if self.mongo_connection is not None or self.document_handler is not None:
             # External connection/handler provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo connection/handler provided, skipping MongoDB version validation",
+                "External document handler provided, skipping document database version validation",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
                 manager_type="workcell",
-                mongo_external_connection=True,
+                document_handler_external=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
             global_ownership_info.workcell_id = manager_id
@@ -141,7 +141,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             return
 
         self.logger.info(
-            "Validating MongoDB schema version",
+            "Validating document database schema version",
             event_type=EventType.MANAGER_START,
             manager_name=manager_name,
             manager_id=manager_id,
@@ -163,7 +163,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         try:
             version_checker.validate_or_fail()
             self.logger.info(
-                "MongoDB version validation completed successfully",
+                "Document database version validation completed successfully",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
@@ -265,11 +265,11 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         health = WorkcellManagerHealth()
 
         try:
-            # Test Redis connection via handler
+            # Test cache connection via handler
             if hasattr(self.state_handler, "_redis_handler"):
-                health.redis_connected = self.state_handler._redis_handler.ping()
+                health.cache_connected = self.state_handler._redis_handler.ping()
             else:
-                health.redis_connected = None
+                health.cache_connected = None
 
             # Count nodes and check their reachability
             total_nodes = len(self.settings.nodes or {})
@@ -284,7 +284,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         except Exception as e:
             health.healthy = False
             if "redis" in str(e).lower():
-                health.redis_connected = False
+                health.cache_connected = False
             health.description = f"Health check failed: {e!s}"
 
         return health
@@ -469,7 +469,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition: WorkflowDefinition,
     ) -> str:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -511,7 +511,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition_id: str,
     ) -> WorkflowDefinition:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -538,7 +538,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------

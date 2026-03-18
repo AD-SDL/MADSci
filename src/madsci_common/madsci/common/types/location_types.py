@@ -535,22 +535,25 @@ class LocationManagerSettings(
         default="madsci_locations",
     )
 
-    # Redis settings (transient state only: locks, change counters)
-    redis_host: str = Field(
-        title="Redis Host",
-        description="The host of the Redis server for transient state (locks, change counters).",
+    # Cache settings (transient state only: locks, change counters)
+    cache_host: str = Field(
+        title="Cache Host",
+        description="The host of the cache server (Valkey/Redis-compatible) for transient state (locks, change counters).",
         default="localhost",
+        validation_alias=AliasChoices("cache_host", "redis_host"),
     )
-    redis_port: int = Field(
-        title="Redis Port",
-        description="The port of the Redis server for transient state.",
+    cache_port: int = Field(
+        title="Cache Port",
+        description="The port of the cache server (Valkey/Redis-compatible) for transient state.",
         default=6379,
+        validation_alias=AliasChoices("cache_port", "redis_port"),
     )
-    redis_password: Optional[str] = Field(
-        title="Redis Password",
-        description="The password for the Redis server (if required).",
+    cache_password: Optional[str] = Field(
+        title="Cache Password",
+        description="The password for the cache server (Valkey/Redis-compatible) (if required).",
         default=None,
         json_schema_extra={"secret": True},
+        validation_alias=AliasChoices("cache_password", "redis_password"),
     )
 
 
@@ -613,9 +616,9 @@ class LocationManagerHealth(ManagerHealth):
         description="Whether the Location Manager is connected to the document database (MongoDB/FerretDB).",
         default=None,
     )
-    redis_connected: Optional[bool] = Field(
-        title="Redis Connection Status",
-        description="Whether the Location Manager is connected to the Redis server.",
+    cache_connected: Optional[bool] = Field(
+        title="Cache Connection Status",
+        description="Whether the Location Manager is connected to the cache server (Valkey/Redis-compatible).",
         default=None,
     )
     num_locations: int = Field(

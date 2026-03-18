@@ -1,7 +1,7 @@
 """Docker Helper Types (used for the automatic example.env and Configuration.md generation)"""
 
 from madsci.common.types.base_types import MadsciBaseSettings
-from pydantic import Field
+from pydantic import AliasChoices, Field
 
 
 class DockerComposeSettings(MadsciBaseSettings):
@@ -19,9 +19,10 @@ class DockerComposeSettings(MadsciBaseSettings):
         default="./",
         description="The path to the MADSci repository on the host machine. This is mounted into the Docker containers to provide access to the codebase.",
     )
-    REDIS_PORT: int = Field(
+    CACHE_PORT: int = Field(
         default=6379,
-        description="The port on the host machine to bind the Redis service to. This allows other services to connect to Redis running inside the Docker container.",
+        description="The port on the host machine to bind the cache service (Valkey) to. This allows other services to connect to the cache running inside the Docker container.",
+        validation_alias=AliasChoices("CACHE_PORT", "REDIS_PORT"),
     )
     DOCUMENT_DB_PORT: int = Field(
         default=27017,

@@ -22,16 +22,16 @@ Classes
     ### Methods
 
     `archive_terminal_workflows(self) ‑> None`
-    :   Move all completed workflows from redis to mongo
+    :   Move all completed workflows from cache to document database
 
     `archive_workflow(self, workflow_id: str) ‑> None`
-    :   Move a workflow from redis to mongo
+    :   Move a workflow from cache to document database
 
     `clear_workcell_info(self) ‑> None`
     :   Empty the workcell info.
 
     `close(self) ‑> None`
-    :   Release Redis and MongoDB connections.
+    :   Release cache and document database connections.
 
     `delete_active_workflow(self, workflow_id: str) ‑> None`
     :   Deletes an active workflow by ID
@@ -98,7 +98,7 @@ Classes
         or where we don't want the node's state to be changing underneath us (i.e., in the engine).
 
     `save_workflow_definition(self, workflow_definition: madsci.common.types.workflow_types.WorkflowDefinition) ‑> None`
-    :   move a workflow from redis to mongo
+    :   move a workflow from cache to document database
 
     `set_active_workflow(self, wf: madsci.common.types.workflow_types.Workflow, mark_state_changed: bool = True) ‑> None`
     :   Sets a workflow by ID

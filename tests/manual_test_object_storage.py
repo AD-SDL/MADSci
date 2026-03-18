@@ -1,6 +1,6 @@
 # flake8: noqa
 """
-Simplified MinIO test script for MADSci.
+Simplified object storage test script for MADSci.
 """
 
 import logging
@@ -25,7 +25,7 @@ from madsci.common.types.datapoint_types import (  # noqa
 
 def test_object_storage(file_path: str) -> None:
     """
-    Test uploading and downloading a file using MinIO.
+    Test uploading and downloading a file using object storage.
 
     Args:
         file_path: Path to the file to test with
@@ -37,8 +37,8 @@ def test_object_storage(file_path: str) -> None:
 
     logger.info(f"Testing with file: {file_path}")
 
-    # Create MinIO configuration
-    minio_config = ObjectStorageSettings(
+    # Create object storage configuration
+    object_storage_config = ObjectStorageSettings(
         endpoint="localhost:9000",
         access_key="minioadmin",
         secret_key="minioadmin",  # noqa
@@ -49,7 +49,7 @@ def test_object_storage(file_path: str) -> None:
     # Initialize DataClient
     client = DataClient(
         data_server_url=None,  # Local mode
-        object_storage_settings=minio_config,
+        object_storage_settings=object_storage_config,
     )
 
     try:
@@ -59,7 +59,7 @@ def test_object_storage(file_path: str) -> None:
         )
 
         # Upload file (will automatically use object storage)
-        logger.info("Uploading file to MinIO...")
+        logger.info("Uploading file to object storage...")
         uploaded_datapoint = client.submit_datapoint(file_datapoint)
 
         # Log details
