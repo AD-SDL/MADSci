@@ -432,6 +432,67 @@ class TestLocationTemplateCRUD:
         assert repr_tmpl.template_id != loc_tmpl.template_id
 
 
+class TestCountMethods:
+    """Tests for efficient count methods."""
+
+    def test_count_locations_empty(self, state_handler):
+        """Count locations on empty database returns 0."""
+        assert state_handler.count_locations() == 0
+
+    def test_count_locations_with_data(self, state_handler):
+        """Count locations returns correct count."""
+        state_handler.add_location(
+            Location(location_name="loc_a", location_id=new_ulid_str())
+        )
+        state_handler.add_location(
+            Location(location_name="loc_b", location_id=new_ulid_str())
+        )
+        assert state_handler.count_locations() == 2
+
+    def test_count_unresolved_locations(self, state_handler):
+        """Count only locations with resource_template_name but no resource_id."""
+        # Resolved (has resource_id)
+        state_handler.add_location(
+            Location(
+                location_name="resolved",
+                location_id=new_ulid_str(),
+                resource_template_name="tmpl",
+                resource_id="res-123",
+            )
+        )
+        # Unresolved (has resource_template_name but no resource_id)
+        state_handler.add_location(
+            Location(
+                location_name="unresolved",
+                location_id=new_ulid_str(),
+                resource_template_name="tmpl",
+                resource_id=None,
+            )
+        )
+        # No template at all
+        state_handler.add_location(
+            Location(location_name="plain", location_id=new_ulid_str())
+        )
+        assert state_handler.count_unresolved_locations() == 1
+
+    def test_count_representation_templates(self, state_handler):
+        """Count representation templates."""
+        assert state_handler.count_representation_templates() == 0
+        state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="repr_a")
+        )
+        state_handler.add_representation_template(
+            LocationRepresentationTemplate(template_name="repr_b")
+        )
+        assert state_handler.count_representation_templates() == 2
+
+    def test_count_location_templates(self, state_handler):
+        """Count location templates."""
+        assert state_handler.count_location_templates() == 0
+        state_handler.add_location_template(LocationTemplate(template_name="tmpl_a"))
+        assert state_handler.count_location_templates() == 1
+
+
 class TestClose:
     """Tests for closing the handler."""
 

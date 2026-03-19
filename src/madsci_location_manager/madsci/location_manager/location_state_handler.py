@@ -32,9 +32,6 @@ class LocationStateHandler:
     - Cache handler: transient state (locks, change counters)
     """
 
-    state_change_marker = "0"
-    shutdown: bool = False
-
     def __init__(
         self,
         settings: LocationManagerSettings,
@@ -67,6 +64,8 @@ class LocationStateHandler:
             )
         self.settings = settings
         self._manager_id = manager_id
+        self.state_change_marker = "0"
+        self.shutdown = False
 
         # Initialize cache handler (transient state)
         if cache_handler is not None:
@@ -151,6 +150,26 @@ class LocationStateHandler:
         """Release both cache and document storage connections and resources."""
         self._cache_handler.close()
         self._document_handler.close()
+
+    # Count Methods (avoid deserializing all documents for health checks)
+
+    def count_locations(self) -> int:
+        """Returns the total number of locations."""
+        return self._locations_collection.count_documents({})
+
+    def count_unresolved_locations(self) -> int:
+        """Returns the number of locations with unresolved resource template references."""
+        return self._locations_collection.count_documents(
+            {"resource_template_name": {"$ne": None}, "resource_id": None}
+        )
+
+    def count_representation_templates(self) -> int:
+        """Returns the total number of representation templates."""
+        return self._repr_templates_collection.count_documents({})
+
+    def count_location_templates(self) -> int:
+        """Returns the total number of location templates."""
+        return self._location_templates_collection.count_documents({})
 
     # Location Management Methods (document database-backed)
 

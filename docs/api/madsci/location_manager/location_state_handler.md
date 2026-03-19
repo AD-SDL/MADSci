@@ -29,14 +29,6 @@ Classes
     document_handler:
         Document storage handler for persistent location storage.
 
-    ### Class variables
-
-    `shutdown: bool`
-    :
-
-    `state_change_marker`
-    :
-
     ### Methods
 
     `add_location(self, location: madsci.common.types.location_types.Location | dict[str, typing.Any]) ‑> madsci.common.types.location_types.Location | None`
@@ -51,6 +43,18 @@ Classes
 
     `close(self) ‑> None`
     :   Release both cache and document storage connections and resources.
+
+    `count_location_templates(self) ‑> int`
+    :   Returns the total number of location templates.
+
+    `count_locations(self) ‑> int`
+    :   Returns the total number of locations.
+
+    `count_representation_templates(self) ‑> int`
+    :   Returns the total number of representation templates.
+
+    `count_unresolved_locations(self) ‑> int`
+    :   Returns the number of locations with unresolved resource template references.
 
     `delete_location(self, location_name: str) ‑> bool`
     :   Deletes a location by name.

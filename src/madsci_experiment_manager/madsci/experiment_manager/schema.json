@@ -7,13 +7,6 @@
         "description": "Main experiments collection for storing experiment data",
         "indexes": [
           {
-            "keys": [["experiment_id", 1]],
-            "name": "experiment_id_1",
-            "background": true,
-            "unique": true,
-            "description": "Unique constraint on experiment_id for fast lookups"
-          },
-          {
             "keys": [["status", 1], ["started_at", -1]],
             "name": "status_started_at",
             "background": true,

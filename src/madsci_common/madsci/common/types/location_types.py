@@ -1,6 +1,6 @@
 """Location types for MADSci."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
@@ -83,7 +83,7 @@ class LocationRepresentationTemplate(MadsciBaseModel):
     created_at: datetime = Field(
         title="Created At",
         description="When this template was created.",
-        default_factory=datetime.now,
+        default_factory=lambda: datetime.now(timezone.utc),
     )
     updated_at: Optional[datetime] = Field(
         title="Updated At",
@@ -157,7 +157,7 @@ class LocationTemplate(MadsciBaseModel):
     created_at: datetime = Field(
         title="Created At",
         description="When this template was created.",
-        default_factory=datetime.now,
+        default_factory=lambda: datetime.now(timezone.utc),
     )
     updated_at: Optional[datetime] = Field(
         title="Updated At",
@@ -333,8 +333,8 @@ class LocationReservation(MadsciBaseModel):
         """Check if the reservation is 1.) active or not, and 2.) owned by the given ownership."""
         return not (
             not self.owned_by.check(ownership)
-            and self.created <= datetime.now()
-            and self.expires >= datetime.now()
+            and self.created <= datetime.now(timezone.utc)
+            and self.expires >= datetime.now(timezone.utc)
         )
 
 

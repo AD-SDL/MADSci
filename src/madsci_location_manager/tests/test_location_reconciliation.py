@@ -192,7 +192,7 @@ class TestReconcileOnInit:
             },
         )
 
-        # 3. Init the repr template (should trigger reconciliation)
+        # 3. Init the repr template (marks state dirty for background reconciliation)
         repr_tmpl = LocationRepresentationTemplate(
             template_name="late_repr",
             default_values={"default_key": "default_val"},
@@ -202,7 +202,10 @@ class TestReconcileOnInit:
             json=repr_tmpl.model_dump(mode="json"),
         )
 
-        # 4. Check location was updated with defaults
+        # 4. Trigger reconciliation explicitly (init defers to background loop)
+        client.post("/reconcile")
+
+        # 5. Check location was updated with defaults
         response = client.get("/location/late_loc")
         loc = Location.model_validate(response.json())
         assert loc.representations["node_1"]["default_key"] == "default_val"

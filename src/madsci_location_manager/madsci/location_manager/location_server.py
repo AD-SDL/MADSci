@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import warnings
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional
 
@@ -517,23 +517,16 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             else:
                 health.cache_connected = None
 
-            # Count managed locations
-            locations = self.state_handler.get_locations()
-            health.num_locations = len(locations)
-
-            # Count templates
-            health.num_representation_templates = len(
-                self.state_handler.get_representation_templates()
+            # Count managed locations and templates using efficient count queries
+            health.num_locations = self.state_handler.count_locations()
+            health.num_representation_templates = (
+                self.state_handler.count_representation_templates()
             )
-            health.num_location_templates = len(
-                self.state_handler.get_location_templates()
+            health.num_location_templates = (
+                self.state_handler.count_location_templates()
             )
-
-            # Count unresolved locations (have resource_template_name but no resource_id)
-            health.num_unresolved_locations = sum(
-                1
-                for loc in locations
-                if loc.resource_template_name and loc.resource_id is None
+            health.num_unresolved_locations = (
+                self.state_handler.count_unresolved_locations()
             )
 
             health.healthy = True
@@ -661,7 +654,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
         # Update the location with new representations
-        if location.representations is None:
+        if not location.representations:
             location.representations = {}
         location.representations[node_name] = representation_val
 
@@ -881,8 +874,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                         detail=f"Failed to create or retrieve representation template '{template.template_name}'",
                     )
                 return result
-            # Trigger reconciliation for locations referencing this template
-            self._reconcile_for_repr_template(template.template_name)
+            # Mark state dirty so background reconciliation picks up locations referencing this template
+            self.state_handler.mark_state_changed()
             return result
 
         if existing.version == template.version:
@@ -891,10 +884,10 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         # Version differs, update
         template.template_id = existing.template_id
-        template.updated_at = datetime.now()
+        template.updated_at = datetime.now(timezone.utc)
         result = self.state_handler.update_representation_template(template)
-        # Trigger reconciliation for locations referencing this template
-        self._reconcile_for_repr_template(template.template_name)
+        # Mark state dirty so background reconciliation picks up locations referencing this template
+        self.state_handler.mark_state_changed()
         return result
 
     @delete(
@@ -970,7 +963,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             return existing
 
         template.template_id = existing.template_id
-        template.updated_at = datetime.now()
+        template.updated_at = datetime.now(timezone.utc)
         return self.state_handler.update_location_template(template)
 
     @delete("/location_template/{template_name}", tags=["Location Templates"])
