@@ -1,4 +1,4 @@
-"""Standalone MongoDB-compatible document database backup and restore tool."""
+"""Standalone document database backup and restore tool."""
 
 import hashlib
 import json
@@ -19,16 +19,16 @@ from pymongo import MongoClient
 
 
 class DocumentDBBackupTool(AbstractBackupTool):
-    """Standalone MongoDB-compatible document database backup and restore tool."""
+    """Standalone document database backup and restore tool."""
 
     def __init__(
         self, settings: DocumentDBBackupSettings, logger: Optional[EventClient] = None
     ) -> None:
         """
-        Initialize MongoDB-compatible document database backup tool.
+        Initialize document database backup tool.
 
         Args:
-            settings: MongoDB-compatible document database backup configuration settings
+            settings: Document database backup configuration settings
             logger: Optional logger instance
         """
         self.settings = settings
@@ -37,7 +37,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
         self.validator = BackupValidator()
         self.manager = BackupManager()
 
-        # Initialize MongoDB-compatible document database connection
+        # Initialize document database connection
         self.client = MongoClient(str(settings.document_db_url))
         self.database = self.client[settings.database]
 
@@ -52,7 +52,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
 
     def create_backup(self, name_suffix: Optional[str] = None) -> Path:
         """
-        Create a MongoDB backup using mongodump.
+        Create a document database backup using mongodump.
 
         Args:
             name_suffix: Optional suffix to add to backup name
@@ -162,7 +162,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
                     if not collections:
                         raise RuntimeError(
                             f"Cannot backup database '{self.settings.database}': database is empty (no collections). "
-                            f"MongoDB does not create backup files for empty databases."
+                            f"The database does not create backup files for empty databases."
                         )
                 except RuntimeError:
                     # Re-raise our own RuntimeError about empty database
@@ -346,7 +346,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
                             database_version=metadata.get("database_version"),
                             backup_size=metadata["backup_size"],
                             checksum=metadata["checksum"],
-                            backup_type="mongodb",
+                            backup_type="document_db",
                             is_valid=self._check_backup_validity(item),
                         )
                         backups.append(backup_info)
@@ -391,7 +391,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
             raise RuntimeError(f"Failed to delete backup {backup_path}: {e}") from e
 
     def _validate_backup_integrity(self, backup_path: Path) -> bool:
-        """Perform comprehensive MongoDB-compatible document database backup validation."""
+        """Perform comprehensive document database backup validation."""
         self.logger.info(
             "Validating backup integrity",
             event_type=EventType.BACKUP_CREATE,
@@ -426,7 +426,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
         return True
 
     def _verify_backup_completion(self, backup_path: Path) -> bool:
-        """Verify that MongoDB-compatible document database backup completed successfully."""
+        """Verify that document database backup completed successfully."""
         if not backup_path.exists():
             return False
 
@@ -466,7 +466,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
         return True
 
     def _generate_backup_checksum(self, backup_path: Path) -> str:
-        """Generate SHA256 checksum for MongoDB-compatible document database backup directory."""
+        """Generate SHA256 checksum for document database backup directory."""
         checksum = self._generate_backup_checksum_inline(backup_path)
 
         # Save checksum to file
@@ -497,7 +497,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
         return sha256_hash.hexdigest()
 
     def _validate_backup_checksum(self, backup_path: Path) -> bool:
-        """Validate MongoDB-compatible document database backup directory against its checksum."""
+        """Validate document database backup directory against its checksum."""
         checksum_file = backup_path / "backup.checksum"
 
         if not checksum_file.exists():
@@ -540,7 +540,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
             return False
 
     def _test_backup_restore(self, backup_path: Path) -> bool:
-        """Test MongoDB-compatible document database backup by attempting restore to temporary database."""
+        """Test document database backup by attempting restore to temporary database."""
         test_db_name = f"test_restore_{int(time.time())}"
 
         try:
@@ -616,12 +616,12 @@ class DocumentDBBackupTool(AbstractBackupTool):
                 )
 
     def _create_backup_metadata(self, backup_path: Path) -> None:
-        """Create metadata file for MongoDB-compatible document database backup."""
+        """Create metadata file for document database backup."""
         checksum = self._generate_backup_checksum_inline(backup_path)
 
         metadata = {
             "timestamp": datetime.now().isoformat(),
-            "database_version": None,  # MongoDB doesn't have schema versions like PostgreSQL
+            "database_version": None,  # Document database doesn't have schema versions like PostgreSQL
             "backup_size": sum(
                 f.stat().st_size for f in backup_path.rglob("*") if f.is_file()
             ),
@@ -653,7 +653,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
         )
 
     def _verify_restore_success(self, backup_path: Path) -> bool:
-        """Verify that MongoDB-compatible document database restore operation was successful."""
+        """Verify that document database restore operation was successful."""
         try:
             # Check that collections exist and have expected structure
             db_backup_path = backup_path / self.settings.database
@@ -696,7 +696,7 @@ class DocumentDBBackupTool(AbstractBackupTool):
             return False
 
     def _cleanup_failed_restore(self, backup_path: Path) -> None:  # noqa: ARG002
-        """Cleanup after a failed MongoDB-compatible document database restore operation."""
+        """Cleanup after a failed document database restore operation."""
         try:
             # Drop all collections to clean state
             for collection_name in self.database.list_collection_names():

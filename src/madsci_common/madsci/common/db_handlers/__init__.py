@@ -6,11 +6,16 @@ database connections in production.
 
 Handler types:
 - DocumentStorageHandler: MongoDB-compatible document database access (PyDocumentStorageHandler, InMemoryDocumentStorageHandler)
-- RedisHandler: Redis/Valkey key-value + data structure access (PyRedisHandler, InMemoryRedisHandler)
+- CacheHandler: Redis/Valkey-compatible cache access (PyCacheHandler, InMemoryCacheHandler)
 - PostgresHandler: PostgreSQL/SQLite via SQLAlchemy (SQLAlchemyHandler, SQLiteHandler)
 - ObjectStorageHandler: S3-compatible object storage access (RealObjectStorageHandler, InMemoryObjectStorageHandler)
 """
 
+from madsci.common.db_handlers.cache_handler import (
+    CacheHandler,
+    InMemoryCacheHandler,
+    PyCacheHandler,
+)
 from madsci.common.db_handlers.document_storage_handler import (
     DocumentStorageHandler,
     InMemoryDocumentStorageHandler,
@@ -26,23 +31,18 @@ from madsci.common.db_handlers.postgres_handler import (
     SQLAlchemyHandler,
     SQLiteHandler,
 )
-from madsci.common.db_handlers.redis_handler import (
-    InMemoryRedisHandler,
-    PyRedisHandler,
-    RedisHandler,
-)
 
 __all__ = [
+    "CacheHandler",
     "DocumentStorageHandler",
+    "InMemoryCacheHandler",
     "InMemoryDocumentStorageHandler",
     "InMemoryObjectStorageHandler",
-    "InMemoryRedisHandler",
     "ObjectStorageHandler",
     "PostgresHandler",
+    "PyCacheHandler",
     "PyDocumentStorageHandler",
-    "PyRedisHandler",
     "RealObjectStorageHandler",
-    "RedisHandler",
     "SQLAlchemyHandler",
     "SQLiteHandler",
 ]

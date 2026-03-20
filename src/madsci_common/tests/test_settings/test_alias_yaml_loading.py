@@ -176,7 +176,7 @@ class TestWorkcellManagerAliases:
         settings = WorkcellManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "workcell_server_url" in data
-        assert "workcell_redis_host" in data
+        assert "workcell_cache_host" in data
 
     def test_explicit_alias_field_preserved(self) -> None:
         """workcells_directory has alias='workcells_directory' which should take precedence."""
@@ -195,7 +195,7 @@ class TestWorkcellManagerAliases:
         settings = WorkcellManagerSettings()
         data = settings.model_dump_safe(by_alias=True)
         assert data["workcell_document_db_url"] == REDACTED_PLACEHOLDER
-        assert data["workcell_redis_password"] == REDACTED_PLACEHOLDER
+        assert data["workcell_cache_password"] == REDACTED_PLACEHOLDER
 
 
 class TestResourceManagerAliases:
@@ -247,12 +247,12 @@ class TestLocationManagerAliases:
         settings = LocationManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "location_server_url" in data
-        assert "location_redis_host" in data
+        assert "location_cache_host" in data
 
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
-        settings = LocationManagerSettings(redis_password="secret123")  # noqa: S106
+        settings = LocationManagerSettings(cache_password="secret123")  # noqa: S106
         data = settings.model_dump_safe(by_alias=True)
-        assert data["location_redis_password"] == REDACTED_PLACEHOLDER
+        assert data["location_cache_password"] == REDACTED_PLACEHOLDER
 
 
 class TestLabManagerAliases:

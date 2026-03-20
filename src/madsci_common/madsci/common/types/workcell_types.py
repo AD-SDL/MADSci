@@ -27,7 +27,7 @@ from pydantic_settings import SettingsConfigDict
 
 
 class WorkcellInfo(MadsciBaseModel):
-    """Runtime info for a MADSci Workcell, stored in Redis for state sharing."""
+    """Runtime info for a MADSci Workcell, stored in cache for state sharing."""
 
     name: str = Field(
         title="Workcell Name",
@@ -231,21 +231,24 @@ class WorkcellManagerSettings(
         default=Path(".madsci/workcells"),
         alias="workcells_directory",  # * Don't double prefix
     )
-    redis_host: str = Field(
+    cache_host: str = Field(
         default="localhost",
-        title="Redis Host",
-        description="The hostname for the redis server .",
+        title="Cache Host",
+        description="The hostname for the cache server (Valkey/Redis-compatible).",
+        validation_alias=AliasChoices("cache_host", "redis_host"),
     )
-    redis_port: int = Field(
+    cache_port: int = Field(
         default=6379,
-        title="Redis Port",
-        description="The port for the redis server.",
+        title="Cache Port",
+        description="The port for the cache server (Valkey/Redis-compatible).",
+        validation_alias=AliasChoices("cache_port", "redis_port"),
     )
-    redis_password: Union[str, None] = Field(
+    cache_password: Union[str, None] = Field(
         default=None,
-        title="Redis Password",
-        description="The password for the redis server.",
+        title="Cache Password",
+        description="The password for the cache server (Valkey/Redis-compatible).",
         json_schema_extra={"secret": True},
+        validation_alias=AliasChoices("cache_password", "redis_password"),
     )
     scheduler_update_interval: float = Field(
         default=5.0,
@@ -289,12 +292,12 @@ class WorkcellManagerSettings(
     database_name: str = Field(
         default="madsci_workcells",
         title="Database Name",
-        description="The name of the MongoDB database where events are stored.",
+        description="The name of the document database where events are stored.",
     )
     collection_name: str = Field(
         default="archived_workflows",
         title="Collection Name",
-        description="The name of the MongoDB collection where events are stored.",
+        description="The name of the document database collection where events are stored.",
     )
     get_action_result_retries: int = Field(
         default=3,
@@ -304,11 +307,11 @@ class WorkcellManagerSettings(
 
 
 class WorkcellManagerHealth(ManagerHealth):
-    """Health status for Workcell Manager including Redis connectivity."""
+    """Health status for Workcell Manager including cache connectivity."""
 
-    redis_connected: Optional[bool] = Field(
-        title="Redis Connected",
-        description="Whether the Redis connection is working.",
+    cache_connected: Optional[bool] = Field(
+        title="Cache Connected",
+        description="Whether the cache (Valkey/Redis-compatible) connection is working.",
         default=None,
     )
     nodes_reachable: Optional[int] = Field(

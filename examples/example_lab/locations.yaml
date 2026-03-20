@@ -1,0 +1,160 @@
+# MADSci Example Lab - Location Definitions (Template Format)
+#
+# This file demonstrates the template-based location configuration format.
+# Templates are registered first, then locations reference them with concrete
+# node bindings. Inline (old-style) locations are also supported.
+
+representation_templates:
+  - template_name: robotarm_deck_access
+    description: "Robot arm access to a deck slot. Requires position override."
+    default_values:
+      gripper_config: standard
+      max_payload: 2.0
+    required_overrides:
+      - position
+    tags: [robot_arm, deck]
+    version: "1.0.0"
+
+  - template_name: robotarm_wide_access
+    description: "Robot arm access with wide gripper for large items."
+    default_values:
+      gripper_config: wide
+      max_payload: 10.0
+    required_overrides:
+      - position
+    tags: [robot_arm, wide]
+    version: "1.0.0"
+
+  - template_name: lh_deck_repr
+    description: "Liquid handler deck slot representation."
+    default_values:
+      deck_type: standard
+      max_plates: 1
+    required_overrides:
+      - deck_position
+    tags: [liquid_handler, deck]
+    version: "1.0.0"
+
+location_templates:
+  - template_name: lh_accessible_deck_slot
+    description: "Liquid handler deck slot accessible by both liquid handler and robot arm."
+    resource_template_name: location_container
+    representation_templates:
+      deck_controller: lh_deck_repr
+      transfer_arm: robotarm_deck_access
+    tags: [liquid_handler, deck, accessible]
+    version: "1.0.0"
+
+  - template_name: lh_only_deck_slot
+    description: "Liquid handler deck slot accessible only by the liquid handler (no robot arm access)."
+    resource_template_name: location_container
+    representation_templates:
+      deck_controller: lh_deck_repr
+    tags: [liquid_handler, deck, internal]
+    version: "1.0.0"
+
+locations:
+  # Template-based locations for liquidhandler_1
+  - location_name: liquidhandler_1.deck_1
+    template_name: lh_accessible_deck_slot
+    description: "Deck 1 on liquidhandler_1 - accessible by robotarm_1"
+    node_bindings:
+      deck_controller: liquidhandler_1
+      transfer_arm: robotarm_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 1
+      transfer_arm:
+        position: [10, 15, 5]
+
+  - location_name: liquidhandler_1.deck_2
+    template_name: lh_only_deck_slot
+    description: "Deck 2 on liquidhandler_1 - liquid handler only"
+    node_bindings:
+      deck_controller: liquidhandler_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 2
+
+  - location_name: liquidhandler_1.deck_3
+    template_name: lh_accessible_deck_slot
+    description: "Deck 3 on liquidhandler_1 - accessible by robotarm_1"
+    node_bindings:
+      deck_controller: liquidhandler_1
+      transfer_arm: robotarm_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 3
+      transfer_arm:
+        position: [20, 15, 5]
+
+  - location_name: liquidhandler_1.deck_4
+    template_name: lh_only_deck_slot
+    description: "Deck 4 on liquidhandler_1 - liquid handler only"
+    node_bindings:
+      deck_controller: liquidhandler_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 4
+
+  # Template-based locations for liquidhandler_2
+  - location_name: liquidhandler_2.deck_1
+    template_name: lh_accessible_deck_slot
+    description: "Deck 1 on liquidhandler_2 - accessible by robotarm_1"
+    node_bindings:
+      deck_controller: liquidhandler_2
+      transfer_arm: robotarm_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 1
+      transfer_arm:
+        position: [5, 15, 5]
+
+  - location_name: liquidhandler_2.deck_2
+    template_name: lh_only_deck_slot
+    description: "Deck 2 on liquidhandler_2 - liquid handler only"
+    node_bindings:
+      deck_controller: liquidhandler_2
+    representation_overrides:
+      deck_controller:
+        deck_position: 2
+
+  - location_name: liquidhandler_2.deck_3
+    template_name: lh_accessible_deck_slot
+    description: "Deck 3 on liquidhandler_2 - accessible by robotarm_1"
+    node_bindings:
+      deck_controller: liquidhandler_2
+      transfer_arm: robotarm_1
+    representation_overrides:
+      deck_controller:
+        deck_position: 3
+      transfer_arm:
+        position: [25, 15, 5]
+
+  - location_name: liquidhandler_2.deck_4
+    template_name: lh_only_deck_slot
+    description: "Deck 4 on liquidhandler_2 - liquid handler only"
+    node_bindings:
+      deck_controller: liquidhandler_2
+    representation_overrides:
+      deck_controller:
+        deck_position: 4
+
+  # Inline locations (old-style, still supported)
+  - location_name: storage_rack
+    description: "Storage Rack - High-capacity storage accessible only by robot arm"
+    representations:
+      robotarm_1:
+        gripper_config: wide
+        max_payload: 10.0
+        position: [30, 25, 10]
+    resource_template_name: location_container
+
+  - location_name: platereader_1.plate_carriage
+    description: "Plate carriage - accessible by robotarm_1 for plate transport"
+    representations:
+      robotarm_1:
+        gripper_config: wide
+        max_payload: 3.0
+        position: [15, 10, 8]
+    resource_template_name: location_container

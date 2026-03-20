@@ -53,10 +53,8 @@ def _get_location_from_condition(
         if condition.location_id:
             return scheduler.location_client.get_location(condition.location_id)
         if condition.location_name:
-            locations = scheduler.location_client.get_locations()
-            return next(
-                (loc for loc in locations if loc.name == condition.location_name),
-                None,
+            return scheduler.location_client.get_location_by_name(
+                condition.location_name
             )
     except Exception:
         # If LocationManager is not available, return None

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import uvicorn
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
@@ -26,7 +27,6 @@ from madsci.common.db_handlers.object_storage_handler import (
     InMemoryObjectStorageHandler,
 )
 from madsci.common.db_handlers.postgres_handler import SQLiteHandler
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 # Default ports for each manager — matches the standard MADSci port assignments.
 MANAGER_PORTS = {
@@ -63,7 +63,7 @@ class LocalRunner:
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
 
         # Shared in-memory handler abstractions
-        self._redis_handler = InMemoryRedisHandler()
+        self._cache_handler = InMemoryCacheHandler()
         self._event_document_handler = InMemoryDocumentStorageHandler(
             database_name="events"
         )
@@ -75,6 +75,9 @@ class LocalRunner:
         )
         self._workcell_document_handler = InMemoryDocumentStorageHandler(
             database_name="workcell"
+        )
+        self._location_document_handler = InMemoryDocumentStorageHandler(
+            database_name="locations"
         )
         self._object_storage_handler = InMemoryObjectStorageHandler()
 
@@ -161,14 +164,15 @@ class LocalRunner:
 
         # Workcell Manager (8005) — in-memory Redis + document storage handlers
         managers["workcell"] = WorkcellManager(
-            redis_handler=self._redis_handler,
+            cache_handler=self._cache_handler,
             document_handler=self._workcell_document_handler,
             start_engine=False,
         )
 
-        # Location Manager (8006) — in-memory Redis handler
+        # Location Manager (8006) — in-memory Redis + document storage handlers
         managers["location"] = LocationManager(
-            redis_handler=self._redis_handler,
+            cache_handler=self._cache_handler,
+            document_handler=self._location_document_handler,
         )
 
         return managers

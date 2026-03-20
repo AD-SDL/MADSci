@@ -2,6 +2,20 @@ Module madsci.common.document_db_version_checker
 ================================================
 MongoDB-compatible document database version checking and validation for MADSci.
 
+Functions
+---------
+
+`ensure_schema_indexes(document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler, schema_file_path: pathlib.Path, logger: madsci.client.event_client.EventClient | None = None) ‑> None`
+:   Create all indexes defined in a schema.json file, idempotently.
+    
+    This is a best-effort operation: if the schema file is missing or
+    unparseable the function logs a warning and returns without raising.
+    
+    Args:
+        document_handler: A DocumentStorageHandler (PyDocumentStorageHandler or InMemoryDocumentStorageHandler).
+        schema_file_path: Path to the schema.json file.
+        logger: Optional logger instance.
+
 Classes
 -------
 
@@ -27,6 +41,12 @@ Classes
 
     `database_exists(self) ‑> bool`
     :   Check if the database exists.
+
+    `ensure_schema_indexes(self) ‑> None`
+    :   Create all indexes from the schema file on this database.
+        
+        Wraps ``self.database`` in a ``PyDocumentStorageHandler`` and delegates to the
+        module-level :func:`ensure_schema_indexes` function.
 
     `get_database_version(self) ‑> pydantic_extra_types.semantic_version.SemanticVersion | None`
     :   Get the current database schema version from the schema_versions collection.
@@ -69,5 +89,6 @@ Classes
         
         Behavior:
         - If completely fresh database (no collections) -> Auto-initialize
+        - If collections exist but no version tracking (0.0.0) -> Auto-initialize
         - If version tracking exists and versions match -> Allow server to start
-        - If version tracking exists/missing with mismatch -> Raise error, require migration
+        - If version tracking exists with version mismatch -> Raise error, require migration

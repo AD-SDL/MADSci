@@ -537,10 +537,7 @@ class TestDocumentDBBackupCLI:
         # Test main help
         result = cli_runner.invoke(document_db_backup, ["--help"])
         assert result.exit_code == 0
-        assert (
-            "MongoDB-compatible document database backup management commands"
-            in result.output
-        )
+        assert "Document database backup management commands" in result.output
 
         # Test create help (provide required parent options)
         result = cli_runner.invoke(
@@ -555,9 +552,7 @@ class TestDocumentDBBackupCLI:
             ],
         )
         assert result.exit_code == 0
-        assert (
-            "Create a new MongoDB-compatible document database backup" in result.output
-        )
+        assert "Create a new document database backup" in result.output
 
         # Test restore help (provide required parent options)
         result = cli_runner.invoke(
@@ -572,9 +567,7 @@ class TestDocumentDBBackupCLI:
             ],
         )
         assert result.exit_code == 0
-        assert (
-            "Restore from MongoDB-compatible document database backup" in result.output
-        )
+        assert "Restore from document database backup" in result.output
 
     def test_cli_missing_required_options(self, cli_runner):
         """Test CLI with missing required options."""
@@ -582,7 +575,7 @@ class TestDocumentDBBackupCLI:
         # Test create without required options
         result = cli_runner.invoke(document_db_backup, ["create"])
         assert result.exit_code != 0
-        assert "MongoDB-compatible document database URL is required" in result.output
+        assert "Document database URL is required" in result.output
 
     def test_cli_verbose_output(self, cli_runner, mock_backup_tool):
         """Test CLI verbose output option."""

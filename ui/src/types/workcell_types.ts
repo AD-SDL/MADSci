@@ -1543,9 +1543,9 @@ export interface WorkcellManagerSettings {
    */
   scheduler?: string;
   /**
-   * The URL for the mongo database.
+   * The URL for the document database.
    */
-  mongo_url?: string | null;
+  document_db_url?: string | null;
   /**
    * Number of times to retry getting an action result
    */

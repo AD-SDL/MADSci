@@ -27,6 +27,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MinIO → SeaweedFS 4.17**: Default object storage switched to SeaweedFS (S3-compatible); Python `minio` SDK unchanged
 - **PostgreSQL split**: Two separate PostgreSQL instances — `madsci_postgres` (port 5432, `postgres-documentdb-dev:17-ferretdb` for FerretDB) and `madsci_postgres_resources` (port 5434, `postgres:17` for Resource Manager) — replacing the single shared instance
 
+#### FOSS Terminology Audit
+- **BREAKING**: `DocumentDBBackupSettings` env prefix changed from `MONGODB_` to `DOCUMENT_DB_` (e.g., `MONGODB_BACKUP_DIR` → `DOCUMENT_DB_BACKUP_DIR`)
+- **BREAKING**: `DocumentDBMigrationSettings` env prefix changed from `MONGODB_MIGRATION_` to `DOCUMENT_DB_MIGRATION_` (e.g., `MONGODB_MIGRATION_DATABASE` → `DOCUMENT_DB_MIGRATION_DATABASE`)
+- **BREAKING**: Settings fields `redis_host`, `redis_port`, `redis_password` renamed to `cache_host`, `cache_port`, `cache_password` on `WorkcellManagerSettings` and `LocationManagerSettings` (old names accepted via `validation_alias` for backward compatibility)
+- **BREAKING**: Health model fields `redis_connected` renamed to `cache_connected` on `WorkcellManagerHealth` and `LocationManagerHealth`
+- **BREAKING**: Docker types field `REDIS_PORT` renamed to `CACHE_PORT` (old name accepted via `validation_alias`)
+- Default backup directory for document database migrations changed from `.madsci/backups/mongodb` to `.madsci/backups/document_db`
+- Backup metadata `backup_type` value changed from `"mongodb"` to `"document_db"` for document database backups
+- Comprehensive terminology updates across all comments, docstrings, schema descriptions, and documentation to use vendor-neutral terms ("document database" instead of "MongoDB", "cache" instead of "Redis")
+- Deleted stale auto-generated API doc files referencing old module names (`mongo_cli.md`, `mongodb_backup.md`, `mongo_handler.md`, etc.)
+- Test directory renamed: `test_mongodb_backup_tools/` → `test_document_db_backup_tools/`
+- Manual test file renamed: `manual_test_minio.py` → `manual_test_object_storage.py`
+
 #### Vendor-Neutral Renames
 - Handler files: `mongo_handler.py` → `document_storage_handler.py`, `minio_handler.py` → `object_storage_handler.py`
 - Handler classes: `PyMongoHandler` → `PyDocumentStorageHandler`, `InMemoryMongoHandler` → `InMemoryDocumentStorageHandler`, `RealMinioHandler` → `RealObjectStorageHandler`, `InMemoryMinioHandler` → `InMemoryObjectStorageHandler`
@@ -65,10 +78,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 #### Database Handler Abstractions
-- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `RedisHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
-- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
-- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
-- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
+- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `CacheHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
+- Real implementations: `PyMongoHandler`, `PyCacheHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
+- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryCacheHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
+- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `cache_handler`, `postgres_handler`), enabling dependency injection for testing
 - `LocalRunner` updated to use handler abstractions instead of raw in-memory clients
 - `InMemoryCollection` gained projection support, `replace_one()`, `client` property, and `list_collection_names()`
 
@@ -125,7 +138,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `InMemoryDocumentStorageHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
 
 #### Handler ABC Return Type Annotations
-- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
+- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `CacheHandler.create_dict() -> MutableMapping`, `CacheHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
 
 #### Manager Registry Lock Retry + Shutdown Release
 - `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet

@@ -16,7 +16,7 @@ from madsci.client.location_client import (
 from madsci.common.context import (
     get_current_madsci_context,
 )
-from madsci.common.db_handlers import DocumentStorageHandler, RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
 from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import global_ownership_info, ownership_context
@@ -69,7 +69,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
         document_handler: Optional[DocumentStorageHandler] = None,
         start_engine: bool = True,
         **kwargs: Any,
@@ -77,7 +77,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         """Initialize the WorkcellManager."""
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -89,7 +89,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             )
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
-        self.redis_handler = redis_handler
+        self.cache_handler = cache_handler
         self.document_handler = document_handler
         self.start_engine = start_engine
 
@@ -108,16 +108,16 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         manager_id = self.settings.manager_id
 
         # Skip version validation if external connections or handlers were provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
+        # This is commonly done in tests where a mock or in-memory document database is used
         if self.mongo_connection is not None or self.document_handler is not None:
             # External connection/handler provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo connection/handler provided, skipping MongoDB version validation",
+                "External document handler provided, skipping document database version validation",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
                 manager_type="workcell",
-                mongo_external_connection=True,
+                document_handler_external=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
             global_ownership_info.workcell_id = manager_id
@@ -130,7 +130,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
-                redis_handler=self.redis_handler,
+                cache_handler=self.cache_handler,
                 document_handler=self.document_handler,
             )
 
@@ -141,7 +141,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             return
 
         self.logger.info(
-            "Validating MongoDB schema version",
+            "Validating document database schema version",
             event_type=EventType.MANAGER_START,
             manager_name=manager_name,
             manager_id=manager_id,
@@ -163,7 +163,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         try:
             version_checker.validate_or_fail()
             self.logger.info(
-                "MongoDB version validation completed successfully",
+                "Document database version validation completed successfully",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
@@ -193,7 +193,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
-            redis_handler=self.redis_handler,
+            cache_handler=self.cache_handler,
             document_handler=self.document_handler,
         )
 
@@ -265,11 +265,11 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         health = WorkcellManagerHealth()
 
         try:
-            # Test Redis connection via handler
-            if hasattr(self.state_handler, "_redis_handler"):
-                health.redis_connected = self.state_handler._redis_handler.ping()
+            # Test cache connection via handler
+            if hasattr(self.state_handler, "_cache_handler"):
+                health.cache_connected = self.state_handler._cache_handler.ping()
             else:
-                health.redis_connected = None
+                health.cache_connected = None
 
             # Count nodes and check their reachability
             total_nodes = len(self.settings.nodes or {})
@@ -284,7 +284,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         except Exception as e:
             health.healthy = False
             if "redis" in str(e).lower():
-                health.redis_connected = False
+                health.cache_connected = False
             health.description = f"Health check failed: {e!s}"
 
         return health
@@ -469,7 +469,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition: WorkflowDefinition,
     ) -> str:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -511,7 +511,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition_id: str,
     ) -> WorkflowDefinition:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -538,7 +538,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------

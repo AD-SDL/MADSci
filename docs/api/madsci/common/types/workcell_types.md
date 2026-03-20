@@ -6,7 +6,7 @@ Classes
 -------
 
 `WorkcellInfo(**data: Any)`
-:   Runtime info for a MADSci Workcell, stored in Redis for state sharing.
+:   Runtime info for a MADSci Workcell, stored in cache for state sharing.
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -91,7 +91,7 @@ Classes
     :   Emit deprecation warning on instantiation.
 
 `WorkcellManagerHealth(**data: Any)`
-:   Health status for Workcell Manager including Redis connectivity.
+:   Health status for Workcell Manager including cache connectivity.
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -108,13 +108,13 @@ Classes
 
     ### Class variables
 
+    `cache_connected: bool | None`
+    :
+
     `model_config`
     :
 
     `nodes_reachable: int | None`
-    :
-
-    `redis_connected: bool | None`
     :
 
     `total_nodes: int | None`
@@ -148,6 +148,15 @@ Classes
 
     ### Class variables
 
+    `cache_host: str`
+    :
+
+    `cache_password: str | None`
+    :
+
+    `cache_port: int`
+    :
+
     `cold_start_delay: int`
     :
 
@@ -176,15 +185,6 @@ Classes
     :
 
     `reconnect_attempt_interval: float`
-    :
-
-    `redis_host: str`
-    :
-
-    `redis_password: str | None`
-    :
-
-    `redis_port: int`
     :
 
     `scheduler: str`

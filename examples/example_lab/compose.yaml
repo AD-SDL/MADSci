@@ -83,6 +83,7 @@ services:
     command: python -m madsci.location_manager.location_server
     depends_on:
       - madsci_valkey
+      - madsci_ferretdb
       - event_manager
       - resource_manager
 
@@ -107,6 +108,10 @@ services:
       - NODE_MODULE_NAME=liquidhandler
       - NODE_URL=http://localhost:2000
     command: python example_modules/liquidhandler.py
+    depends_on:
+      - resource_manager
+      - location_manager
+      - event_manager
 
   liquidhandler_2:
     <<: *madsci-service
@@ -116,6 +121,10 @@ services:
       - NODE_MODULE_NAME=liquidhandler
       - NODE_URL=http://localhost:2001
     command: python example_modules/liquidhandler.py
+    depends_on:
+      - resource_manager
+      - location_manager
+      - event_manager
 
   robotarm_1:
     <<: *madsci-service
@@ -125,6 +134,10 @@ services:
       - NODE_MODULE_NAME=robotarm
       - NODE_URL=http://localhost:2002
     command: python example_modules/robotarm.py
+    depends_on:
+      - resource_manager
+      - location_manager
+      - event_manager
 
   platereader_1:
     <<: *madsci-service
@@ -134,6 +147,10 @@ services:
       - NODE_MODULE_NAME=platereader
       - NODE_URL=http://localhost:2003
     command: python example_modules/platereader.py
+    depends_on:
+      - resource_manager
+      - location_manager
+      - event_manager
 
   advanced_example_node:
     <<: *madsci-service
@@ -143,6 +160,10 @@ services:
       - NODE_MODULE_NAME=advanced_example_node
       - NODE_URL=http://localhost:2004
     command: python example_modules/advanced_example_module.py
+    depends_on:
+      - resource_manager
+      - location_manager
+      - event_manager
 
   # *Notebook Validator
 
@@ -151,3 +172,14 @@ services:
     profiles:
       - testing
     restart: "no"
+    depends_on:
+      - lab_manager
+      - event_manager
+      - experiment_manager
+      - resource_manager
+      - data_manager
+      - location_manager
+      - workcell_manager
+      - liquidhandler_1
+      - robotarm_1
+      - platereader_1

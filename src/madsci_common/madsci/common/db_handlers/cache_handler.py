@@ -1,8 +1,8 @@
-"""Redis/Valkey handler abstraction.
+"""Cache handler abstraction (Redis/Valkey compatible).
 
-Provides an ABC for Redis/Valkey access and two implementations:
-- PyRedisHandler: wraps a real redis.Redis client + pottery data structures (compatible with both Redis and Valkey)
-- InMemoryRedisHandler: wraps InMemoryRedisClient for testing
+Provides an ABC for cache access and two implementations:
+- PyCacheHandler: wraps a real redis.Redis client + pottery data structures (compatible with both Redis and Valkey)
+- InMemoryCacheHandler: wraps InMemoryRedisClient for testing
 """
 
 from __future__ import annotations
@@ -13,8 +13,8 @@ from collections.abc import MutableMapping
 from typing import Any, ContextManager, Optional
 
 
-class RedisHandler(ABC):
-    """Abstract interface for Redis access.
+class CacheHandler(ABC):
+    """Abstract interface for cache access (Redis/Valkey compatible).
 
     Managers use this interface instead of directly depending on
     ``redis.Redis`` and ``pottery`` data structures, enabling
@@ -35,19 +35,19 @@ class RedisHandler(ABC):
 
     @abstractmethod
     def ping(self) -> bool:
-        """Check connectivity to Redis.
+        """Check connectivity to the cache server.
 
         Returns:
-            True if Redis is reachable, False otherwise.
+            True if the cache server is reachable, False otherwise.
         """
 
     @abstractmethod
     def close(self) -> None:
-        """Release Redis connections and resources."""
+        """Release cache connections and resources."""
 
     @abstractmethod
     def create_dict(self, key: str) -> MutableMapping:
-        """Create a dict-like object backed by Redis.
+        """Create a dict-like object backed by the cache.
 
         Returns an object supporting ``__getitem__``, ``__setitem__``,
         ``__delitem__``, ``__contains__``, ``__iter__``, ``__len__``,
@@ -56,7 +56,7 @@ class RedisHandler(ABC):
 
     @abstractmethod
     def create_list(self, key: str) -> Any:
-        """Create a list-like object backed by Redis.
+        """Create a list-like object backed by the cache.
 
         Returns an object supporting ``append``, ``remove``,
         ``__iter__``, ``__len__``, ``__contains__``.
@@ -75,15 +75,15 @@ class RedisHandler(ABC):
         """
 
 
-class PyRedisHandler(RedisHandler):
-    """Redis handler backed by a real Redis server.
+class PyCacheHandler(CacheHandler):
+    """Cache handler backed by a real Redis/Valkey server.
 
     Uses ``redis.Redis`` for basic operations and ``pottery`` for
     RedisDict, RedisList, and Redlock data structures.
 
     Usage::
 
-        handler = PyRedisHandler.from_settings(host="localhost", port=6379)
+        handler = PyCacheHandler.from_settings(host="localhost", port=6379)
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     """
@@ -102,16 +102,16 @@ class PyRedisHandler(RedisHandler):
         host: str = "localhost",
         port: int = 6379,
         password: Optional[str] = None,
-    ) -> PyRedisHandler:
-        """Create a handler by connecting to a Redis server.
+    ) -> PyCacheHandler:
+        """Create a handler by connecting to a cache server.
 
         Args:
-            host: Redis server hostname.
-            port: Redis server port.
-            password: Optional Redis password.
+            host: Cache server hostname.
+            port: Cache server port.
+            password: Optional cache server password.
 
         Returns:
-            A new PyRedisHandler instance.
+            A new PyCacheHandler instance.
         """
         import redis  # noqa: PLC0415
 
@@ -125,26 +125,26 @@ class PyRedisHandler(RedisHandler):
         return cls(client)
 
     def incr(self, key: str, amount: int = 1) -> int:
-        """Increment a key in Redis."""
+        """Increment a key in the cache."""
         return self._client.incr(key, amount)
 
     def get(self, key: str) -> Optional[str]:
-        """Get a value from Redis."""
+        """Get a value from the cache."""
         return self._client.get(key)
 
     def set(self, key: str, value: Any) -> None:
-        """Set a value in Redis."""
+        """Set a value in the cache."""
         self._client.set(key, value)
 
     def ping(self) -> bool:
-        """Ping the Redis server."""
+        """Ping the cache server."""
         try:
             return self._client.ping()
         except Exception:
             return False
 
     def close(self) -> None:
-        """Close the Redis connection."""
+        """Close the cache connection."""
         with contextlib.suppress(Exception):
             self._client.close()
 
@@ -171,12 +171,12 @@ class PyRedisHandler(RedisHandler):
         )
 
 
-class InMemoryRedisHandler(RedisHandler):
-    """Redis handler backed by in-memory data structures for testing.
+class InMemoryCacheHandler(CacheHandler):
+    """Cache handler backed by in-memory data structures for testing.
 
     Usage::
 
-        handler = InMemoryRedisHandler()
+        handler = InMemoryCacheHandler()
         d = handler.create_dict("my:key")
         d["foo"] = "bar"
     """
@@ -214,11 +214,11 @@ class InMemoryRedisHandler(RedisHandler):
         self._client.set(key, value)
 
     def ping(self) -> bool:
-        """Always returns True for in-memory Redis."""
+        """Always returns True for in-memory cache."""
         return True
 
     def close(self) -> None:
-        """No-op for in-memory Redis."""
+        """No-op for in-memory cache."""
 
     def create_dict(self, key: str) -> Any:
         """Create an InMemoryRedisDict."""

@@ -55,7 +55,7 @@ Classes
     :   Convert backup_dir to Path object.
 
 `DocumentDBBackupSettings(**kwargs: Any)`
-:   MongoDB-compatible document database backup settings.
+:   Document database backup settings.
     
     Initialize settings with walk-up file discovery.
     

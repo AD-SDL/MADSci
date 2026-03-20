@@ -32,6 +32,9 @@ Classes
 
     ### Class variables
 
+    `CACHE_PORT: int`
+    :
+
     `DOCUMENT_DB_PORT: int`
     :
 
@@ -45,9 +48,6 @@ Classes
     :
 
     `POSTGRES_PORT: int`
-    :
-
-    `REDIS_PORT: int`
     :
 
     `REPO_PATH: str`

@@ -1,4 +1,4 @@
-"""MongoDB-compatible document database migration configuration types."""
+"""Document database migration configuration types."""
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -14,14 +14,14 @@ class DocumentDBMigrationSettings(
     toml_file=("settings.toml", "mongodb.settings.toml", "migration.settings.toml"),
     yaml_file=("settings.yaml", "mongodb.settings.yaml", "migration.settings.yaml"),
     json_file=("settings.json", "mongodb.settings.json", "migration.settings.json"),
-    env_prefix="MONGODB_MIGRATION_",
+    env_prefix="DOCUMENT_DB_MIGRATION_",
 ):
-    """Configuration settings for MongoDB-compatible document database migration operations."""
+    """Configuration settings for document database migration operations."""
 
     document_db_url: AnyUrl = Field(
         default=AnyUrl("mongodb://localhost:27017"),
         title="Document Database URL",
-        description="MongoDB-compatible document database connection URL (e.g., mongodb://localhost:27017). "
+        description="Document database connection URL (FerretDB/MongoDB-compatible, e.g., mongodb://localhost:27017). "
         "Defaults to localhost instance.",
         validation_alias=AliasChoices(
             "document_db_url",
@@ -42,10 +42,12 @@ class DocumentDBMigrationSettings(
         default=None,
         title="Schema File Path",
         description="Explicit path to schema.json. If not provided, will auto-detect based on database name.",
-        validation_alias=AliasChoices("schema_file", "MONGODB_SCHEMA_FILE"),
+        validation_alias=AliasChoices(
+            "schema_file", "DOCUMENT_DB_SCHEMA_FILE", "MONGODB_SCHEMA_FILE"
+        ),
     )
     backup_dir: PathLike = Field(
-        default=Path(".madsci/backups/mongodb"),
+        default=Path(".madsci/backups/document_db"),
         title="Backup Directory",
         description="Directory where database backups will be stored.",
     )
@@ -141,7 +143,7 @@ class DocumentDBMigrationSettings(
 
 
 class IndexKey(BaseModel):
-    """Represents a single key in a MongoDB index."""
+    """Represents a single key in a document database index."""
 
     field: str = Field(description="Field name to index")
     direction: int = Field(
@@ -175,7 +177,7 @@ class IndexKey(BaseModel):
 
 
 class IndexDefinition(BaseModel):
-    """MongoDB index definition."""
+    """Document database index definition."""
 
     keys: List[IndexKey] = Field(description="List of index keys with directions")
     name: str = Field(description="Name of the index")
@@ -238,7 +240,7 @@ class IndexDefinition(BaseModel):
 
 
 class CollectionDefinition(BaseModel):
-    """MongoDB collection definition."""
+    """Document database collection definition."""
 
     description: Optional[str] = Field(
         default=None, description="Human-readable description of the collection"

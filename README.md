@@ -116,7 +116,7 @@ docker compose up  # Starts all services with example configuration
 MADSci uses environment variables for configuration with hierarchical precedence. Key patterns:
 
 - **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, Resource: 8003, Data: 8004, Workcell: 8005, Location: 8006, etc.)
-- **Database connections**: MongoDB/PostgreSQL on localhost by default
+- **Database connections**: FerretDB (document database)/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.

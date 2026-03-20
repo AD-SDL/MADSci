@@ -373,10 +373,10 @@ class TransferPlanner:
 
             # Create step definition with locations mapped to template argument names
             step_locations = {
-                template.source_argument_name: self.state_handler.get_location(
+                template.source_argument_name: self.state_handler.get_location_by_id(
                     edge.source_location_id
                 ).name,
-                template.target_argument_name: self.state_handler.get_location(
+                template.target_argument_name: self.state_handler.get_location_by_id(
                     edge.target_location_id
                 ).name,
             }
@@ -407,10 +407,12 @@ class TransferPlanner:
         # Create the composite workflow
         if path:
             # Get source and destination locations for names and IDs
-            source_location = self.state_handler.get_location(
+            source_location = self.state_handler.get_location_by_id(
                 path[0].source_location_id
             )
-            dest_location = self.state_handler.get_location(path[-1].target_location_id)
+            dest_location = self.state_handler.get_location_by_id(
+                path[-1].target_location_id
+            )
 
             # Use location names in workflow name
             workflow_name = (
@@ -466,11 +468,11 @@ class TransferPlanner:
         Raises:
             ValueError: If either location is not found
         """
-        source_location = self.state_handler.get_location(source_id)
+        source_location = self.state_handler.get_location_by_id(source_id)
         if source_location is None:
             raise ValueError(f"Source location {source_id} not found")
 
-        dest_location = self.state_handler.get_location(dest_id)
+        dest_location = self.state_handler.get_location_by_id(dest_id)
         if dest_location is None:
             raise ValueError(f"Target location {dest_id} not found")
 

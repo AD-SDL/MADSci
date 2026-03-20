@@ -1,12 +1,12 @@
 Module madsci.common.types.document_db_migration_types
 ======================================================
-MongoDB-compatible document database migration configuration types.
+Document database migration configuration types.
 
 Classes
 -------
 
 `CollectionDefinition(**data: Any)`
-:   MongoDB collection definition.
+:   Document database collection definition.
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -41,7 +41,7 @@ Classes
     :   Convert to schema.json format.
 
 `DocumentDBMigrationSettings(**kwargs: Any)`
-:   Configuration settings for MongoDB-compatible document database migration operations.
+:   Configuration settings for document database migration operations.
     
     Initialize settings with walk-up file discovery.
     
@@ -100,7 +100,7 @@ Classes
     :   Get the effective schema file path as a Path object.
 
 `IndexDefinition(**data: Any)`
-:   MongoDB index definition.
+:   Document database index definition.
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -150,7 +150,7 @@ Classes
     :   Convert to schema.json format.
 
 `IndexKey(**data: Any)`
-:   Represents a single key in a MongoDB index.
+:   Represents a single key in a document database index.
     
     Create a new model by parsing and validating input data from keyword arguments.
     

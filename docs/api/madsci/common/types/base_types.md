@@ -149,10 +149,13 @@ Classes
     * madsci.common.types.experiment_types.ExperimentRegistration
     * madsci.common.types.experiment_types.ExperimentalCampaign
     * madsci.common.types.location_types.CapacityCostConfig
+    * madsci.common.types.location_types.CreateLocationFromTemplateRequest
     * madsci.common.types.location_types.Location
     * madsci.common.types.location_types.LocationArgument
-    * madsci.common.types.location_types.LocationDefinition
+    * madsci.common.types.location_types.LocationImportResult
+    * madsci.common.types.location_types.LocationRepresentationTemplate
     * madsci.common.types.location_types.LocationReservation
+    * madsci.common.types.location_types.LocationTemplate
     * madsci.common.types.location_types.LocationTransferCapabilities
     * madsci.common.types.location_types.TransferGraphEdge
     * madsci.common.types.location_types.TransferStepTemplate
@@ -165,7 +168,10 @@ Classes
     * madsci.common.types.node_types.Node
     * madsci.common.types.node_types.NodeClientCapabilities
     * madsci.common.types.node_types.NodeDefinition
+    * madsci.common.types.node_types.NodeLocationTemplateDefinition
+    * madsci.common.types.node_types.NodeRepresentationTemplateDefinition
     * madsci.common.types.node_types.NodeReservation
+    * madsci.common.types.node_types.NodeResourceTemplateDefinition
     * madsci.common.types.node_types.NodeSetConfigResponse
     * madsci.common.types.node_types.NodeStatus
     * madsci.common.types.parameter_types.WorkflowParameter
