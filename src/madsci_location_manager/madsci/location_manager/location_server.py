@@ -150,7 +150,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         # and is idempotent with the version checker call for real document DB.
         schema_file = Path(__file__).parent / "schema.json"
         ensure_schema_indexes(
-            self.state_handler._document_handler, schema_file, self.logger
+            self.state_handler.document_handler, schema_file, self.logger
         )
 
         # Initialize resource client with resource server URL from context
@@ -679,11 +679,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 status_code=404, detail=f"Location {location_name} not found"
             )
 
-        # Check if representations exist and if the node_name exists
-        if (
-            location.representations is None
-            or node_name not in location.representations
-        ):
+        # Check if the node_name exists in representations
+        if node_name not in location.representations:
             raise HTTPException(
                 status_code=404,
                 detail=f"Representation for node '{node_name}' not found in location {location_name}",
@@ -1111,7 +1108,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             "representations_updated": 0,
         }
 
-        for location in self.state_handler.get_locations():
+        for location in self.state_handler.get_unresolved_locations():
             results["resources_resolved"] += self._reconcile_resource(location)
             results["representations_updated"] += self._reconcile_representations(
                 location
@@ -1235,8 +1232,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         Plan a transfer workflow from source to target.
 
         Args:
-            source_location: Source location ID
-            target_location: Target location ID
+            source_location_id: Source location ID
+            target_location_id: Target location ID
 
         Returns:
             Composite workflow definition to execute the transfer

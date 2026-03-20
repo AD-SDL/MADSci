@@ -325,17 +325,16 @@ class LocationReservation(MadsciBaseModel):
         description="When the reservation was created.",
     )
     expires: datetime = Field(
-        title="End Datetime",
+        title="Expires Datetime",
         description="When the reservation ends.",
     )
 
     def check(self, ownership: OwnershipInfo) -> bool:
         """Check if the reservation is 1.) active or not, and 2.) owned by the given ownership."""
-        return not (
-            not self.owned_by.check(ownership)
-            and self.created <= datetime.now(timezone.utc)
-            and self.expires >= datetime.now(timezone.utc)
-        )
+        is_owner = self.owned_by.check(ownership)
+        now = datetime.now(timezone.utc)
+        is_active = self.created <= now <= self.expires
+        return is_owner or not is_active
 
 
 class TransferStepTemplate(MadsciBaseModel):

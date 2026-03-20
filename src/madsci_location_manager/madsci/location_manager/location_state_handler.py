@@ -119,6 +119,11 @@ class LocationStateHandler:
             pass
 
     @property
+    def document_handler(self) -> DocumentStorageHandler:
+        """Public accessor for the document storage handler."""
+        return self._document_handler
+
+    @property
     def _location_prefix(self) -> str:
         return f"madsci:location_manager:{self._manager_id}"
 
@@ -201,6 +206,31 @@ class LocationStateHandler:
         """Returns all locations as a list."""
         valid_locations = []
         for location_data in self._locations_collection.find().to_list():
+            try:
+                valid_locations.append(Location.model_validate(location_data))
+            except ValidationError:
+                continue
+        return valid_locations
+
+    def get_unresolved_locations(self) -> list[Location]:
+        """Returns locations that may need reconciliation.
+
+        Matches locations with either:
+        - An unresolved resource template (resource_template_name set, resource_id null)
+        - A location template with node bindings (may need representation defaults)
+        """
+        valid_locations = []
+        for location_data in self._locations_collection.find(
+            {
+                "$or": [
+                    {"resource_template_name": {"$ne": None}, "resource_id": None},
+                    {
+                        "location_template_name": {"$ne": None},
+                        "node_bindings": {"$ne": None},
+                    },
+                ]
+            }
+        ).to_list():
             try:
                 valid_locations.append(Location.model_validate(location_data))
             except ValidationError:

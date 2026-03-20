@@ -227,7 +227,7 @@ def main() -> None:
     parser.add_argument("--redis-host", default="localhost")
     parser.add_argument("--redis-port", type=int, default=6379)
     parser.add_argument("--redis-password", default=None)
-    parser.add_argument("--mongo-url", default="mongodb://localhost:27017/")
+    parser.add_argument("--document-db-url", default="mongodb://localhost:27017/")
     parser.add_argument("--database", default="madsci_locations")
     parser.add_argument("--manager-id", required=True)
 
@@ -243,7 +243,9 @@ def main() -> None:
         port=args.redis_port,
         password=args.redis_password,
     )
-    document_handler = PyDocumentStorageHandler.from_url(args.mongo_url, args.database)
+    document_handler = PyDocumentStorageHandler.from_url(
+        args.document_db_url, args.database
+    )
 
     migrator = LocationMigrator(
         cache_handler=cache_handler,

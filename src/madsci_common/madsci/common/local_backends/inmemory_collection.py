@@ -440,20 +440,29 @@ def _nested_set(doc: dict[str, Any], key: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def _matches_field(doc_val: Any, condition: Any) -> bool:
+    """Check if a single document field matches a query condition."""
+    if isinstance(condition, dict):
+        # Operator query: {"field": {"$gte": 10, "$lt": 20}}
+        return all(
+            _apply_operator(doc_val, op, op_val) for op, op_val in condition.items()
+        )
+    if isinstance(condition, re.Pattern):
+        return doc_val is not None and condition.search(str(doc_val)) is not None
+    # Exact match
+    return doc_val == condition
+
+
 def _matches(doc: dict[str, Any], query: dict[str, Any]) -> bool:
     """Check if a document matches a MongoDB-style query filter."""
     for key, condition in query.items():
-        doc_val = _nested_get(doc, key)
-        if isinstance(condition, dict):
-            # Operator query: {"field": {"$gte": 10, "$lt": 20}}
-            for op, op_val in condition.items():
-                if not _apply_operator(doc_val, op, op_val):
-                    return False
-        elif isinstance(condition, re.Pattern):
-            if doc_val is None or not condition.search(str(doc_val)):
+        if key == "$or":
+            if not any(_matches(doc, sub) for sub in condition):
                 return False
-        # Exact match
-        elif doc_val != condition:
+        elif key == "$and":
+            if not all(_matches(doc, sub) for sub in condition):
+                return False
+        elif not _matches_field(_nested_get(doc, key), condition):
             return False
     return True
 

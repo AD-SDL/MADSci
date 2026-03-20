@@ -161,8 +161,8 @@ Classes
     :   Plan a transfer workflow from source to target.
         
         Args:
-            source_location: Source location ID
-            target_location: Target location ID
+            source_location_id: Source location ID
+            target_location_id: Target location ID
         
         Returns:
             Composite workflow definition to execute the transfer

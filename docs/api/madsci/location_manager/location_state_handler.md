@@ -29,6 +29,11 @@ Classes
     document_handler:
         Document storage handler for persistent location storage.
 
+    ### Instance variables
+
+    `document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler`
+    :   Public accessor for the document storage handler.
+
     ### Methods
 
     `add_location(self, location: madsci.common.types.location_types.Location | dict[str, typing.Any]) ‑> madsci.common.types.location_types.Location | None`
@@ -86,6 +91,13 @@ Classes
 
     `get_representation_templates(self) ‑> list[madsci.common.types.location_types.LocationRepresentationTemplate]`
     :   Returns all representation templates.
+
+    `get_unresolved_locations(self) ‑> list[madsci.common.types.location_types.Location]`
+    :   Returns locations that may need reconciliation.
+        
+        Matches locations with either:
+        - An unresolved resource template (resource_template_name set, resource_id null)
+        - A location template with node bindings (may need representation defaults)
 
     `has_state_changed(self) ‑> bool`
     :   Returns True if the state has changed since the last time this method was called.
