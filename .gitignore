@@ -321,8 +321,8 @@ coverage.xml
 src/madsci_resource_manager/madsci/resource_manager/alembic/versions/*.py
 
 
-# Agentic coding
-.claude/
+# Agentic coding (track .claude/ project config but ignore user-local settings)
+.claude/settings.local.json
 agent_docs/
 
 # Scratch directory for local testing

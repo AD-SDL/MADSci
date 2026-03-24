@@ -182,7 +182,9 @@ class TemplateEngine:
         Returns:
             Path to _skills/ directory, or None if not found.
         """
-        # Walk up from template_dir looking for _skills/ sibling
+        # Walk up from template_dir looking for _skills/ sibling.
+        # Bundled templates are at most 2-3 levels deep (e.g.
+        # bundled_templates/module/device/), so 5 levels is sufficient.
         current = self.template_dir
         for _ in range(5):
             candidate = current / "_skills"
@@ -204,6 +206,50 @@ class TemplateEngine:
             pass
 
         return None
+
+    def _copy_skills(
+        self,
+        output_dir: Path,
+        dry_run: bool,
+    ) -> tuple[list[Path], list[str]]:
+        """Copy declared agent skills into the generated project.
+
+        Args:
+            output_dir: Directory to write skill files into.
+            dry_run: If True, track paths but don't write files.
+
+        Returns:
+            Tuple of (files_created, skills_included).
+        """
+        files_created: list[Path] = []
+        skills_included: list[str] = []
+
+        if not self.manifest.skills:
+            return files_created, skills_included
+
+        skills_dir = self._resolve_skills_dir()
+        if not skills_dir:
+            logger.warning("Skills directory not found, skipping skill copying")
+            return files_created, skills_included
+
+        for skill_name in self.manifest.skills:
+            skill_source = skills_dir / skill_name / "SKILL.md"
+            if not skill_source.is_file():
+                logger.warning("Skill not found, skipping: skill_name=%s", skill_name)
+                continue
+            skill_dest = output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
+            if not dry_run:
+                skill_dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(skill_source, skill_dest)
+                logger.debug(
+                    "Copied skill: skill_name=%s dest=%s",
+                    skill_name,
+                    str(skill_dest),
+                )
+            files_created.append(skill_dest)
+            skills_included.append(skill_name)
+
+        return files_created, skills_included
 
     def validate_parameters(self, values: dict[str, Any]) -> list[str]:  # noqa: C901, PLR0912
         """Validate parameter values against manifest.
@@ -309,7 +355,7 @@ class TemplateEngine:
 
         return defaults
 
-    def render(  # noqa: C901, PLR0912, PLR0915
+    def render(  # noqa: C901, PLR0912
         self,
         output_dir: Path,
         parameters: dict[str, Any],
@@ -401,32 +447,8 @@ class TemplateEngine:
             files_created.append(dest_full)
 
         # Copy agent skills
-        skills_included: list[str] = []
-        if self.manifest.skills:
-            skills_dir = self._resolve_skills_dir()
-            if skills_dir:
-                for skill_name in self.manifest.skills:
-                    skill_source = skills_dir / skill_name / "SKILL.md"
-                    if not skill_source.is_file():
-                        logger.warning(
-                            "Skill not found, skipping: skill_name=%s", skill_name
-                        )
-                        continue
-                    skill_dest = (
-                        output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
-                    )
-                    if not dry_run:
-                        skill_dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(skill_source, skill_dest)
-                        logger.debug(
-                            "Copied skill: skill_name=%s dest=%s",
-                            skill_name,
-                            str(skill_dest),
-                        )
-                    files_created.append(skill_dest)
-                    skills_included.append(skill_name)
-            else:
-                logger.warning("Skills directory not found, skipping skill copying")
+        skill_files, skills_included = self._copy_skills(output_dir, dry_run)
+        files_created.extend(skill_files)
 
         # Run post-generation hooks
         hooks_executed: list[str] = []
