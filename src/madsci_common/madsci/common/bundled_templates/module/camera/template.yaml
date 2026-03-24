@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A camera/vision system module with image capture and configuration actions"
 category: "module"
 tags: ["camera", "vision", "imaging"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

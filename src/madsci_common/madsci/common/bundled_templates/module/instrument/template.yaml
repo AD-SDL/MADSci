@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A measurement instrument module with calibration and data acquisition actions"
 category: "module"
 tags: ["instrument", "measurement", "calibration"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

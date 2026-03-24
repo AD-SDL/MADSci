@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A minimal lab configuration with no Docker required"
 category: "lab"
 tags: ["minimal", "starter", "no-docker"]
+skills: ["madsci-nodes", "madsci-experiments", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"

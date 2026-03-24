@@ -28,7 +28,7 @@ import click
     help="Skip interactive prompts; use defaults.",
 )
 @click.pass_context
-def init(
+def init(  # noqa: PLR0915
     ctx: click.Context,
     directory: str | None,
     template_name: str,
@@ -117,6 +117,11 @@ def init(
 
     for path in result.files_created:
         console.print(f"  [green]\u2713[/green] Created {path}")
+
+    if result.skills_included:
+        console.print(
+            f"  [green]\u2713[/green] Included {len(result.skills_included)} agent skill(s)"
+        )
 
     # Initialize .madsci/ sentry directory
     from madsci.common.sentry import ensure_madsci_dir

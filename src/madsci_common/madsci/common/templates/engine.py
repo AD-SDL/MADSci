@@ -4,6 +4,7 @@ Template engine for MADSci.
 This module provides the engine for rendering templates into generated projects.
 """
 
+import importlib.resources
 import logging
 import re
 import shlex
@@ -172,6 +173,38 @@ class TemplateEngine:
 
         return env
 
+    def _resolve_skills_dir(self) -> Path | None:
+        """Resolve the _skills/ directory containing bundled agent skills.
+
+        Walks up from the template directory to find _skills/ in bundled_templates,
+        falling back to importlib.resources for installed packages.
+
+        Returns:
+            Path to _skills/ directory, or None if not found.
+        """
+        # Walk up from template_dir looking for _skills/ sibling
+        current = self.template_dir
+        for _ in range(5):
+            candidate = current.parent / "_skills"
+            if candidate.is_dir():
+                return candidate
+            current = current.parent
+
+        # Fallback: use importlib.resources
+        try:
+            resource = (
+                importlib.resources.files("madsci.common")
+                / "bundled_templates"
+                / "_skills"
+            )
+            path = Path(str(resource))
+            if path.is_dir():
+                return path
+        except (TypeError, FileNotFoundError):
+            pass
+
+        return None
+
     def validate_parameters(self, values: dict[str, Any]) -> list[str]:  # noqa: C901, PLR0912
         """Validate parameter values against manifest.
 
@@ -276,7 +309,7 @@ class TemplateEngine:
 
         return defaults
 
-    def render(  # noqa: C901, PLR0912
+    def render(  # noqa: C901, PLR0912, PLR0915
         self,
         output_dir: Path,
         parameters: dict[str, Any],
@@ -367,6 +400,34 @@ class TemplateEngine:
 
             files_created.append(dest_full)
 
+        # Copy agent skills
+        skills_included: list[str] = []
+        if self.manifest.skills:
+            skills_dir = self._resolve_skills_dir()
+            if skills_dir:
+                for skill_name in self.manifest.skills:
+                    skill_source = skills_dir / skill_name / "SKILL.md"
+                    if not skill_source.is_file():
+                        logger.warning(
+                            "Skill not found, skipping: skill_name=%s", skill_name
+                        )
+                        continue
+                    skill_dest = (
+                        output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
+                    )
+                    if not dry_run:
+                        skill_dest.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(skill_source, skill_dest)
+                        logger.debug(
+                            "Copied skill: skill_name=%s dest=%s",
+                            skill_name,
+                            str(skill_dest),
+                        )
+                    files_created.append(skill_dest)
+                    skills_included.append(skill_name)
+            else:
+                logger.warning("Skills directory not found, skipping skill copying")
+
         # Run post-generation hooks
         hooks_executed: list[str] = []
         if not dry_run and self.manifest.hooks:
@@ -407,4 +468,5 @@ class TemplateEngine:
             files_created=files_created,
             parameters_used=values,
             hooks_executed=hooks_executed,
+            skills_included=skills_included,
         )

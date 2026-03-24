@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A liquid handling module with aspirate, dispense, and transfer actions"
 category: "module"
 tags: ["liquid-handler", "pipetting", "automation"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

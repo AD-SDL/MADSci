@@ -5,6 +5,7 @@ the registry discovers templates, and generated code is valid.
 """
 
 import ast
+import importlib.resources
 from pathlib import Path
 
 import pytest
@@ -800,9 +801,8 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_exp"},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_exp.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(f for f in result.files_created if f.name == "my_exp.py")
         assert py_file.exists()
 
         # Verify syntax
@@ -823,9 +823,8 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_tui_exp"},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_tui_exp_tui.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(f for f in result.files_created if f.name == "my_tui_exp_tui.py")
         assert py_file.exists()
 
         content = py_file.read_text()
@@ -846,9 +845,10 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_node_exp", "server_port": 7000},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_node_exp_node.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(
+            f for f in result.files_created if f.name == "my_node_exp_node.py"
+        )
         assert py_file.exists()
 
         content = py_file.read_text()
@@ -874,9 +874,10 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 1
-        yaml_file = result.files_created[0]
-        assert yaml_file.name == "my_wf.workflow.yaml"
+        assert len(result.files_created) == 2  # 1 workflow + 1 skill
+        yaml_file = next(
+            f for f in result.files_created if f.name == "my_wf.workflow.yaml"
+        )
         assert yaml_file.exists()
 
         content = yaml_file.read_text()
@@ -902,9 +903,10 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 1
-        yaml_file = result.files_created[0]
-        assert yaml_file.name == "transfer_wf.workflow.yaml"
+        assert len(result.files_created) == 2  # 1 workflow + 1 skill
+        yaml_file = next(
+            f for f in result.files_created if f.name == "transfer_wf.workflow.yaml"
+        )
         assert yaml_file.exists()
 
         content = yaml_file.read_text()
@@ -988,7 +990,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 7
+        assert len(result.files_created) == 11  # 7 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1011,7 +1013,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 8
+        assert len(result.files_created) == 12  # 8 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1035,7 +1037,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 9
+        assert len(result.files_created) == 13  # 9 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1260,3 +1262,206 @@ class TestTemplateCompleteness:
                         f"Invalid Python syntax in {f.name} "
                         f"(template: {template_id}): {e}"
                     )
+
+
+# --- Skills copying tests ---
+
+
+class TestSkillsCopying:
+    """Test that agent skills are correctly copied into generated projects."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def test_skills_copied_for_module_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Module templates should include the madsci-nodes skill."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_mod", "port": 2000},
+        )
+
+        skill_file = output_dir / ".agents" / "skills" / "madsci-nodes" / "SKILL.md"
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert "madsci-nodes" in content
+
+    def test_skills_copied_for_experiment_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Experiment templates should include the madsci-experiments skill."""
+        engine = registry.get_template("experiment/script")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"experiment_name": "test_exp"},
+        )
+
+        skill_file = (
+            output_dir / ".agents" / "skills" / "madsci-experiments" / "SKILL.md"
+        )
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert "madsci-experiments" in content
+
+    def test_skills_copied_for_lab_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Lab templates should include all 4 skills."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        for skill_name in [
+            "madsci-nodes",
+            "madsci-experiments",
+            "madsci-managers",
+            "madsci-cli",
+        ]:
+            skill_file = output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
+            assert skill_file.exists(), f"Missing skill: {skill_name}"
+
+    def test_skills_dry_run(self, registry: TemplateRegistry, tmp_path: Path) -> None:
+        """Skills should be listed in files_created but not written during dry run."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_mod", "port": 2000},
+            dry_run=True,
+        )
+
+        skill_paths = [f for f in result.files_created if "SKILL.md" in f.name]
+        assert len(skill_paths) == 1
+        # File should NOT exist on disk
+        assert not skill_paths[0].exists()
+
+    def test_skills_included_in_result(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Result should list skill names in skills_included."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        assert sorted(result.skills_included) == sorted(
+            [
+                "madsci-nodes",
+                "madsci-experiments",
+                "madsci-managers",
+                "madsci-cli",
+            ]
+        )
+
+    def test_no_skills_when_empty(self, tmp_path: Path) -> None:
+        """Template with no skills field should copy nothing."""
+        # Create a minimal template with no skills
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        manifest = (
+            'name: "Test"\n'
+            'version: "1.0.0"\n'
+            'description: "Test template"\n'
+            'category: "module"\n'
+            "tags: []\n"
+            "skills: []\n"
+            "parameters: []\n"
+            "files: []\n"
+        )
+        (template_dir / "template.yaml").write_text(manifest)
+
+        engine = TemplateEngine(template_dir)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(output_dir=output_dir, parameters={})
+
+        assert result.skills_included == []
+        skill_dir = output_dir / ".agents" / "skills"
+        assert not skill_dir.exists()
+
+    @pytest.mark.parametrize(
+        "template_id",
+        [
+            "module/basic",
+            "module/device",
+            "module/camera",
+            "module/instrument",
+            "module/liquid_handler",
+            "module/robot_arm",
+            "interface/fake",
+            "interface/real",
+            "interface/sim",
+            "interface/mock",
+            "node/basic",
+            "experiment/script",
+            "experiment/notebook",
+            "experiment/tui",
+            "experiment/node",
+            "workflow/basic",
+            "workflow/multi_step",
+            "workcell/basic",
+            "lab/minimal",
+            "lab/standard",
+            "lab/distributed",
+            "comm/serial",
+            "comm/socket",
+            "comm/rest",
+            "comm/sdk",
+            "comm/modbus",
+        ],
+    )
+    def test_all_templates_declare_skills(
+        self, registry: TemplateRegistry, template_id: str
+    ) -> None:
+        """Every bundled template should have at least one skill declared."""
+        engine = registry.get_template(template_id)
+        assert len(engine.manifest.skills) > 0, (
+            f"Template {template_id} has no skills declared"
+        )
+
+    def test_bundled_skills_match_repo_skills(self) -> None:
+        """Bundled _skills/ content should match .agents/skills/ (via symlinks)."""
+        bundled_skills = (
+            Path(str(importlib.resources.files("madsci.common")))
+            / "bundled_templates"
+            / "_skills"
+        )
+        repo_skills = Path(__file__).resolve().parents[4] / ".agents" / "skills"
+
+        if not repo_skills.exists():
+            pytest.skip("Repo .agents/skills/ not found (installed package test)")
+
+        for skill_name in [
+            "madsci-nodes",
+            "madsci-experiments",
+            "madsci-managers",
+            "madsci-cli",
+        ]:
+            bundled_file = bundled_skills / skill_name / "SKILL.md"
+            repo_file = repo_skills / skill_name / "SKILL.md"
+            assert bundled_file.exists(), f"Missing bundled skill: {skill_name}"
+            assert repo_file.exists(), f"Missing repo skill: {skill_name}"
+            assert bundled_file.read_text() == repo_file.read_text(), (
+                f"Content mismatch for {skill_name}/SKILL.md"
+            )

@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A TCP/UDP socket communication interface"
 category: "comm"
 tags: ["socket", "tcp", "udp", "communication"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

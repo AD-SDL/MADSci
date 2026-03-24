@@ -8,6 +8,17 @@ madsci new list --category module     # Filter by category
 madsci new list --tag device          # Filter by tag
 ```
 
+### Bundled Agent Skills
+
+All templates automatically include relevant **agent skills** in the generated project's `.agents/skills/` directory. These skills provide AI coding agents (Claude Code, etc.) with domain-specific knowledge about MADSci patterns and conventions. See [Agent Skills Reference](agent_skills.md) for details.
+
+| Category | Bundled Skills |
+|----------|---------------|
+| Module, Node, Interface, Comm | `madsci-nodes` |
+| Experiment | `madsci-experiments` |
+| Workflow, Workcell | `madsci-managers` |
+| Lab | `madsci-nodes`, `madsci-experiments`, `madsci-managers`, `madsci-cli` |
+
 ---
 
 ## Module Templates (6)

@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A multi-step workflow with sequential node actions"
 category: "workflow"
 tags: ["multi-step", "sequential", "workflow"]
+skills: ["madsci-managers"]
 
 author: "MADSci Team"
 license: "MIT"

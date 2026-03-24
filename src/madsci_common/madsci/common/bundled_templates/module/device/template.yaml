@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A standard device module with lifecycle actions (initialize, shutdown, status) and resource management"
 category: "module"
 tags: ["device", "lifecycle", "resources"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

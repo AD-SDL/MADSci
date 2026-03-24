@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A REST API client interface for HTTP-based instrument communication"
 category: "comm"
 tags: ["rest", "http", "api", "communication"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A minimal MADSci node module with a single example action"
 category: "module"
 tags: ["basic", "starter", "minimal"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

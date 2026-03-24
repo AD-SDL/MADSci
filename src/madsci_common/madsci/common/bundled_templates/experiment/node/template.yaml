@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A REST API server experiment using ExperimentNode modality"
 category: "experiment"
 tags: ["node", "server", "rest", "api"]
+skills: ["madsci-experiments"]
 
 author: "MADSci Team"
 license: "MIT"
