@@ -874,7 +874,7 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 2  # 1 workflow + 1 skill
+        assert len(result.files_created) == 3  # 1 workflow + 2 skills
         yaml_file = next(
             f for f in result.files_created if f.name == "my_wf.workflow.yaml"
         )
@@ -903,7 +903,7 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 2  # 1 workflow + 1 skill
+        assert len(result.files_created) == 3  # 1 workflow + 2 skills
         yaml_file = next(
             f for f in result.files_created if f.name == "transfer_wf.workflow.yaml"
         )

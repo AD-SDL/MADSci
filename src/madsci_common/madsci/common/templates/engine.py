@@ -185,7 +185,7 @@ class TemplateEngine:
         # Walk up from template_dir looking for _skills/ sibling
         current = self.template_dir
         for _ in range(5):
-            candidate = current.parent / "_skills"
+            candidate = current / "_skills"
             if candidate.is_dir():
                 return candidate
             current = current.parent
