@@ -874,7 +874,7 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 3  # 1 workflow + 2 skills
+        assert len(result.files_created) == 4  # 1 workflow + 3 skills
         yaml_file = next(
             f for f in result.files_created if f.name == "my_wf.workflow.yaml"
         )
@@ -903,7 +903,7 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 3  # 1 workflow + 2 skills
+        assert len(result.files_created) == 4  # 1 workflow + 3 skills
         yaml_file = next(
             f for f in result.files_created if f.name == "transfer_wf.workflow.yaml"
         )
@@ -1440,6 +1440,29 @@ class TestSkillsCopying:
             f"Template {template_id} has no skills declared"
         )
 
+    def test_resolve_skills_dir_importlib_fallback(self, tmp_path: Path) -> None:
+        """_resolve_skills_dir falls back to importlib.resources for isolated templates."""
+        # Create a template in an isolated directory with no _skills/ ancestor
+        template_dir = tmp_path / "isolated" / "deep" / "template"
+        template_dir.mkdir(parents=True)
+        (template_dir / "template.yaml").write_text(
+            'name: "Test"\n'
+            'version: "1.0.0"\n'
+            'description: "Test"\n'
+            'category: "module"\n'
+            "tags: []\n"
+            'skills: ["madsci-nodes"]\n'
+            "parameters: []\n"
+            "files: []\n"
+        )
+
+        engine = TemplateEngine(template_dir)
+        skills_dir = engine._resolve_skills_dir()
+
+        assert skills_dir is not None
+        assert skills_dir.is_dir()
+        assert (skills_dir / "madsci-nodes" / "SKILL.md").exists()
+
     def test_bundled_skills_match_repo_skills(self) -> None:
         """Bundled _skills/ content should match .agents/skills/ (via symlinks)."""
         bundled_skills = (
@@ -1447,8 +1470,17 @@ class TestSkillsCopying:
             / "bundled_templates"
             / "_skills"
         )
-        repo_skills = Path(__file__).resolve().parents[4] / ".agents" / "skills"
 
+        # Walk up from this file to find the repo root via .git/
+        repo_root = Path(__file__).resolve()
+        while repo_root != repo_root.parent:
+            if (repo_root / ".git").is_dir():
+                break
+            repo_root = repo_root.parent
+        else:
+            pytest.skip("Could not find repo root (.git directory)")
+
+        repo_skills = repo_root / ".agents" / "skills"
         if not repo_skills.exists():
             pytest.skip("Repo .agents/skills/ not found (installed package test)")
 

@@ -3,7 +3,7 @@ version: "1.0.0"
 description: "A basic workcell configuration"
 category: "workcell"
 tags: ["basic", "starter"]
-skills: ["madsci-managers", "madsci-cli"]
+skills: ["madsci-nodes", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"

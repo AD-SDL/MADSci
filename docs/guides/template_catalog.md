@@ -16,7 +16,7 @@ All templates automatically include relevant **agent skills** in the generated p
 |----------|---------------|
 | Module, Node, Interface, Comm | `madsci-nodes` |
 | Experiment | `madsci-experiments` |
-| Workflow, Workcell | `madsci-managers` |
+| Workflow, Workcell | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
 | Lab | `madsci-nodes`, `madsci-experiments`, `madsci-managers`, `madsci-cli` |
 
 ---

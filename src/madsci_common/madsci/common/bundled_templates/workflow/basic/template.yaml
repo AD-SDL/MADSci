@@ -3,7 +3,7 @@ version: "1.0.0"
 description: "A simple single-step workflow"
 category: "workflow"
 tags: ["basic", "simple", "starter"]
-skills: ["madsci-managers", "madsci-cli"]
+skills: ["madsci-nodes", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"

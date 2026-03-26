@@ -98,7 +98,7 @@ The skills included depend on the template category:
 |-------------------|----------------|
 | Module, Node, Interface, Comm | `madsci-nodes` |
 | Experiment | `madsci-experiments` |
-| Workflow, Workcell | `madsci-managers` |
+| Workflow, Workcell | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
 | Lab | All 4 skills |
 
 The skill files are output to `.agents/skills/{skill-name}/SKILL.md` in the generated project directory. No additional configuration is needed.
