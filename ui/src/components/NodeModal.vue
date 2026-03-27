@@ -94,7 +94,7 @@
                           <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
                         </template>
                         <template v-else>
-                          <v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"/>
+                          <v-text-field @update:modelValue="set_text(action)" height="20px" v-model="item.value"/>
                         </template>
                       </td>
                     </tr>
@@ -124,7 +124,7 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.description }}</td>
                       <td>
-                        <v-text-field @vue:updated="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                        <v-text-field @update:modelValue="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
                         <datalist id="locations">
                         <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
                         </datalist>
