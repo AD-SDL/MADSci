@@ -144,11 +144,11 @@
                   </template>
                 </v-data-table>
                 <v-btn @click="send_wf(action); isActive.value = false">Send Action</v-btn>
-                <v-btn @click="copy = !copy; set_text(action)">
-                  <p v-if="(copy == false) ">Show Copyable Workflow Step</p>
+                <v-btn @click="copyVisible[action.name] = !copyVisible[action.name]; set_text(action)">
+                  <p v-if="!copyVisible[action.name]">Show Copyable Workflow Step</p>
                   <p v-else>Hide copyable workflow step</p>
                 </v-btn>
-                <div v-if="copy">
+                <div v-if="copyVisible[action.name]">
                   <vue-json-pretty :data="json_text" :deep="2" :showLength="true" />
                   Copy YAML Step to Clipboard: <v-icon hover @click=copyAction(text)>
                     mdi-clipboard-plus-outline
@@ -187,7 +187,7 @@ const arg_headers = [
   { title: 'Description', key: 'description' },
   { title: "Value", minWidth: "200px"}
 ]
-const copy = ref(false)
+const copyVisible = ref<Record<string, boolean>>({})
 const file_headers = [
   { title: 'Name', key: 'name' },
   { title: 'Required', key: 'required' },
