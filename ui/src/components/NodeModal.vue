@@ -177,7 +177,6 @@ import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
-import { json } from 'stream/consumers';
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
@@ -256,10 +255,7 @@ function set_text(action: any) {
     "checks": null,
     "comment": "Test"
   }
-  text.value = "- name : ".concat(action.name).concat("\n\t").concat(
-    "node : ").concat(props.modal_title).concat("\n\t").concat(
-      "action : ").concat(action.name).concat("\n\t").concat(
-        "args : \n\t\t").concat(cleanArgs(input_args)).concat("locations : \n\t\t").concat(cleanArgs(input_locations)).concat("checks : null \n\tcomment: a comment! \n\t")
+  text.value = yaml.dump([json_text.value], { indent: 2, flowLevel: -1 })
 }
 async function send_wf(action: any) {
   var wf: any = {}
@@ -360,23 +356,6 @@ async function send_wf(action: any) {
     body: formData
   });
 
-}
-function cleanArgs(args: any) {
-  var test: string = ""
-  args.forEach((arg: any) => {
-    var precursor = ""
-    if (test !== "") {
-      precursor = "\t"
-    }
-
-    if (arg.value) {
-      test = test.concat((precursor.concat(arg.name.concat(" : ").concat(arg.value).concat("\n\t"))));
-    } else {
-      test = test.concat((precursor.concat(arg.name.concat(" : ").concat(arg.default).concat("\n\t"))));
-    }
-  }
-  )
-  return test
 }
 function copyAction(test: any) {
   navigator.clipboard.writeText(test)
