@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A serial port communication interface using pySerial patterns"
 category: "comm"
 tags: ["serial", "rs232", "communication"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

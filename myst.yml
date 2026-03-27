@@ -62,6 +62,7 @@ project:
         - file: docs/guides/workflow_development.md
         - file: docs/guides/observability.md
         - file: docs/guides/troubleshooting.md
+        - file: docs/guides/agent_skills.md
 
     - title: Equipment Integrator Guide
       children:

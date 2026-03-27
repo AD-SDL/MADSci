@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A robot arm module with pick, place, move, and home actions for material handling"
 category: "module"
 tags: ["robot-arm", "material-handling", "automation"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

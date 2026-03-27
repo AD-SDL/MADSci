@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A standard lab configuration with all managers and Docker Compose infrastructure"
 category: "lab"
 tags: ["standard", "docker", "full-stack"]
+skills: ["madsci-nodes", "madsci-experiments", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"

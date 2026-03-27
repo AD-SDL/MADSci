@@ -121,6 +121,10 @@ class TemplateManifest(MadsciBaseModel):
         description="Category (module, node, experiment, etc.)"
     )
     tags: list[str] = Field(default_factory=list, description="Search tags")
+    skills: list[str] = Field(
+        default_factory=list,
+        description="Agent skill names to include in generated project",
+    )
 
     # Optional metadata
     author: Optional[str] = Field(default=None, description="Template author")
@@ -162,6 +166,10 @@ class GeneratedProject(MadsciBaseModel):
     )
     hooks_executed: list[str] = Field(
         default_factory=list, description="Hooks that were executed"
+    )
+    skills_included: list[str] = Field(
+        default_factory=list,
+        description="Agent skills copied into the generated project",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc),
