@@ -439,7 +439,12 @@ class RestNodeClient(AbstractNodeClient):
             f"{self.url}/action/{action_name}/{action_id}/result",
             timeout=timeout or self.config.timeout_default,
         )
-        rest_response.raise_for_status()
+        try:
+            rest_response.raise_for_status()
+        except Exception:
+            # Fall back to generic endpoint if typed endpoint fails (e.g. 500
+            # from unpatched nodes returning None for failed typed actions)
+            return self.get_action_result(action_id, timeout=timeout)
 
         # If include_files is False, we can convert directly without fetching files
         if not include_files:
