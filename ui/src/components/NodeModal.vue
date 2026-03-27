@@ -76,7 +76,11 @@
                 <p class="py-1 my-1">{{ action.description }}</p>
                 <h5 v-if="Object.keys(action.args).length > 0">Arguments</h5>
                 <v-data-table v-if="Object.keys(action.args).length > 0" :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
-    return action.args[key];})" hover items-per-page="-1"
+    const arg = action.args[key];
+    if (arg.value === undefined && arg.default !== undefined && arg.default !== null) {
+      arg.value = arg.default;
+    }
+    return arg;})" hover items-per-page="-1"
                   no-data-text="No Arguments" density="compact">
                   <!-- eslint-disable vue/no-parsing-error-->
                   <template v-slot:item="{ item }: { item: any }">
@@ -88,7 +92,7 @@
                       <td>{{ item.description }}</td>
                       <td>
                         <template v-if="item.argument_type === 'bool'">
-                          <v-checkbox v-model="item.value" :true-value="true" :false-value="false" :value="item.value ?? false" hide-details density="compact"/>
+                          <v-checkbox v-model="item.value" :true-value="true" :false-value="false" hide-details density="compact"/>
                         </template>
                         <template v-else-if="['int', 'float'].includes(item.argument_type)">
                           <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
