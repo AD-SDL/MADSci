@@ -7,6 +7,7 @@ import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Union
 
+import requests
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
@@ -441,10 +442,18 @@ class RestNodeClient(AbstractNodeClient):
         )
         try:
             rest_response.raise_for_status()
-        except Exception:
-            # Fall back to generic endpoint if typed endpoint fails (e.g. 500
-            # from unpatched nodes returning None for failed typed actions)
-            return self.get_action_result(action_id, timeout=timeout)
+        except requests.HTTPError:
+            if rest_response.status_code >= 500:
+                # Fall back to generic endpoint if typed endpoint returns a
+                # server error (e.g. unpatched nodes returning None for failed
+                # typed actions)
+                self.logger.warning(
+                    "Typed endpoint returned server error; falling back to generic endpoint",
+                    action_name=action_name,
+                    status_code=rest_response.status_code,
+                )
+                return self.get_action_result(action_id, timeout=timeout)
+            raise
 
         # If include_files is False, we can convert directly without fetching files
         if not include_files:
