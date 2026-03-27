@@ -149,7 +149,7 @@
                   <p v-else>Hide copyable workflow step</p>
                 </v-btn>
                 <div v-if="copy">
-                  <vue-json-pretty :data="json_text" />
+                  <vue-json-pretty :data="json_text" :deep="2" :showLength="true" />
                   Copy YAML Step to Clipboard: <v-icon hover @click=copyAction(text)>
                     mdi-clipboard-plus-outline
                   </v-icon>
