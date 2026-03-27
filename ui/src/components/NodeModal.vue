@@ -94,7 +94,7 @@
                           <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
                         </template>
                         <template v-else>
-                          <v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"/>
+                          <v-text-field @update:modelValue="set_text(action)" height="20px" v-model="item.value"/>
                         </template>
                       </td>
                     </tr>
@@ -124,7 +124,7 @@
                       <td>{{ item.required }}</td>
                       <td>{{ item.description }}</td>
                       <td>
-                        <v-text-field @vue:updated="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                        <v-text-field @update:modelValue="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
                         <datalist id="locations">
                         <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
                         </datalist>
@@ -144,12 +144,12 @@
                   </template>
                 </v-data-table>
                 <v-btn @click="send_wf(action); isActive.value = false">Send Action</v-btn>
-                <v-btn @click="copy = !copy; set_text(action)">
-                  <p v-if="(copy == false) ">Show Copyable Workflow Step</p>
+                <v-btn @click="copyVisible[action.name] = !copyVisible[action.name]; set_text(action)">
+                  <p v-if="!copyVisible[action.name]">Show Copyable Workflow Step</p>
                   <p v-else>Hide copyable workflow step</p>
                 </v-btn>
-                <div v-if="copy">
-                  <vue-json-pretty :data="json_text" />
+                <div v-if="copyVisible[action.name]">
+                  <vue-json-pretty :data="json_text" :deep="2" :showLength="true" />
                   Copy YAML Step to Clipboard: <v-icon hover @click=copyAction(text)>
                     mdi-clipboard-plus-outline
                   </v-icon>
@@ -177,7 +177,6 @@ import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
-import { json } from 'stream/consumers';
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [
   { title: 'Name', key: 'name' },
@@ -187,7 +186,7 @@ const arg_headers = [
   { title: 'Description', key: 'description' },
   { title: "Value", minWidth: "200px"}
 ]
-const copy = ref(false)
+const copyVisible = ref<Record<string, boolean>>({})
 const file_headers = [
   { title: 'Name', key: 'name' },
   { title: 'Required', key: 'required' },
@@ -256,10 +255,7 @@ function set_text(action: any) {
     "checks": null,
     "comment": "Test"
   }
-  text.value = "- name : ".concat(action.name).concat("\n\t").concat(
-    "node : ").concat(props.modal_title).concat("\n\t").concat(
-      "action : ").concat(action.name).concat("\n\t").concat(
-        "args : \n\t\t").concat(cleanArgs(input_args)).concat("locations : \n\t\t").concat(cleanArgs(input_locations)).concat("checks : null \n\tcomment: a comment! \n\t")
+  text.value = yaml.dump([json_text.value], { indent: 2, flowLevel: -1 })
 }
 async function send_wf(action: any) {
   var wf: any = {}
@@ -360,23 +356,6 @@ async function send_wf(action: any) {
     body: formData
   });
 
-}
-function cleanArgs(args: any) {
-  var test: string = ""
-  args.forEach((arg: any) => {
-    var precursor = ""
-    if (test !== "") {
-      precursor = "\t"
-    }
-
-    if (arg.value) {
-      test = test.concat((precursor.concat(arg.name.concat(" : ").concat(arg.value).concat("\n\t"))));
-    } else {
-      test = test.concat((precursor.concat(arg.name.concat(" : ").concat(arg.default).concat("\n\t"))));
-    }
-  }
-  )
-  return test
 }
 function copyAction(test: any) {
   navigator.clipboard.writeText(test)
