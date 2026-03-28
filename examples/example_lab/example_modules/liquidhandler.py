@@ -238,10 +238,35 @@ class LiquidHandlerNode(RestNode):
         NodeRepresentationTemplateDefinition(
             template_name="lh_deck_repr",
             default_values={"deck_type": "standard", "max_plates": 1},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "deck_position": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Deck slot number on the liquid handler",
+                    },
+                    "deck_type": {
+                        "type": "string",
+                        "enum": ["standard", "deep_well", "pcr"],
+                        "description": "Type of deck slot",
+                    },
+                    "max_plates": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Maximum number of plates this slot can hold",
+                    },
+                    "accessible": {
+                        "type": "boolean",
+                        "description": "Whether this deck position is currently accessible",
+                    },
+                },
+                "required": ["deck_position"],
+            },
             required_overrides=["deck_position"],
             tags=["liquid_handler", "deck"],
-            version="1.0.0",
-            description="Liquid handler deck slot representation",
+            version="1.1.0",
+            description="Liquid handler deck slot representation with position and type",
         ),
     ]
 

@@ -132,6 +132,12 @@ class AbstractNode(MadsciClientMixin):
             module_name=module_name,
         )
 
+        # * Populate location template definitions from class variables
+        self.node_info.location_templates = list(self.__class__.location_templates)
+        self.node_info.location_representation_templates = list(
+            self.__class__.location_representation_templates
+        )
+
         # Resolve stable identity from registry if enabled
         self._resolver = None
         self._atexit_registered = False

@@ -370,6 +370,18 @@ class NodeInfo(NodeDefinition):
         description="JSON Schema for the configuration of the node.",
         default_factory=NodeConfig.model_json_schema,
     )
+    location_templates: list["NodeLocationTemplateDefinition"] = Field(
+        title="Location Templates",
+        description="Location template definitions that this node registers.",
+        default_factory=list,
+    )
+    location_representation_templates: list["NodeRepresentationTemplateDefinition"] = (
+        Field(
+            title="Location Representation Templates",
+            description="Location representation template definitions that this node registers.",
+            default_factory=list,
+        )
+    )
 
     @classmethod
     def from_node_def_and_config(

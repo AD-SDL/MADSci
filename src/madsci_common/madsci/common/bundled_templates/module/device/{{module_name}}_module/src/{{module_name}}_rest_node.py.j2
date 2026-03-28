@@ -10,8 +10,9 @@ Template version: {{ template_version }}
 
 import argparse
 import time
-from typing import Any
+from typing import Any, ClassVar
 
+from madsci.common.types.node_types import NodeRepresentationTemplateDefinition
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -38,6 +39,32 @@ class {{ module_name | pascal_case }}Node(RestNode):
     - Initializes device slot resource instances
     - Tracks resource state changes
     """
+
+    # Uncomment and customize to define location representation templates
+    # (registered automatically by template_handler() at startup):
+    #
+    # location_representation_templates: ClassVar[
+    #     list[NodeRepresentationTemplateDefinition]
+    # ] = [
+    #     NodeRepresentationTemplateDefinition(
+    #         template_name="{{ module_name }}_location",
+    #         default_values={"slot_index": 0},
+    #         schema_def={
+    #             "type": "object",
+    #             "properties": {
+    #                 "slot_index": {
+    #                     "type": "integer",
+    #                     "description": "Device slot index for this location",
+    #                 },
+    #             },
+    #             "required": ["slot_index"],
+    #         },
+    #         required_overrides=["slot_index"],
+    #         tags=["{{ module_name }}"],
+    #         version="1.0.0",
+    #         description="Location data for {{ module_name }} access",
+    #     ),
+    # ]
 
     # Hardware interface instance (initialized in startup_handler)
     _interface: Any = None

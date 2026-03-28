@@ -10,8 +10,9 @@ Template version: {{ template_version }}
 
 import argparse
 import time
-from typing import Any
+from typing import Any, ClassVar
 
+from madsci.common.types.node_types import NodeRepresentationTemplateDefinition
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -38,6 +39,35 @@ class {{ module_name | pascal_case }}Node(RestNode):
     - Initializes arm slot resource instances
     - Tracks resource state changes
     """
+
+    # Location representation templates — registered automatically by template_handler()
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="{{ module_name }}_access",
+            default_values={"gripper_config": "standard"},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "Target position coordinates for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "description": "Gripper configuration to use at this location",
+                    },
+                },
+                "required": ["position"],
+            },
+            required_overrides=["position"],
+            tags=["{{ module_name }}", "robot-arm"],
+            version="1.0.0",
+            description="Location representation for {{ module_name }} access points",
+        ),
+    ]
 
     # Hardware interface instance (initialized in startup_handler)
     _interface: Any = None

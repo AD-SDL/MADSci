@@ -284,6 +284,12 @@ Classes
     `config_schema: dict[str, typing.Any] | None`
     :
 
+    `location_representation_templates: list['NodeRepresentationTemplateDefinition']`
+    :
+
+    `location_templates: list['NodeLocationTemplateDefinition']`
+    :
+
     `model_config`
     :
 

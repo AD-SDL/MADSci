@@ -66,6 +66,8 @@ Parameters: Same as module/basic (default name: `my_instrument`).
 
 **Liquid handling module with aspirate, dispense, and transfer actions.**
 
+Includes location representation template boilerplate with JSON Schema definitions for deck slot positions and plate type configuration. See the [Location Templates Guide](integrator/10-location-templates.md) for details on customizing these templates.
+
 ```bash
 madsci new module --template module/liquid_handler --name my_liquid_handler
 ```
@@ -85,6 +87,8 @@ Parameters: Same as module/basic (default name: `my_camera`).
 ### module/robot_arm
 
 **Robot arm module with pick, place, move, and home actions for material handling.**
+
+Includes location representation template boilerplate with JSON Schema definitions for deck access positions, gripper configuration, and payload limits. See the [Location Templates Guide](integrator/10-location-templates.md) for details on customizing these templates.
 
 ```bash
 madsci new module --template module/robot_arm --name my_robot_arm

@@ -5,6 +5,24 @@
         <h2 class="title">Add Location:</h2>
       </v-card-title>
       <v-card-text>
+        <v-btn-toggle v-model="creationMode" mandatory color="primary" class="mb-3" density="compact">
+          <v-btn value="manual">Manual</v-btn>
+          <v-btn value="template">From Template</v-btn>
+        </v-btn-toggle>
+
+        <!-- From Template mode -->
+        <div v-if="creationMode === 'template'">
+          <CreateLocationFromTemplateModal
+            v-model="templateDialogActive"
+          />
+          <v-btn @click="templateDialogActive = true" color="primary" variant="outlined">
+            <v-icon start>mdi-file-document-outline</v-icon>
+            Open Template Creator
+          </v-btn>
+        </div>
+
+        <!-- Manual mode -->
+        <div v-else>
         <h4>Location Name:</h4>
         <v-text-field class="pt-5 mr-2 w-25" height="20px" v-model="location_name"
                           dense>
@@ -60,6 +78,7 @@
                         </v-text-field>
                       </div>
   <v-btn @click="submitLocation(); isActive.value=false">Submit Location</v-btn>
+        </div>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -76,7 +95,10 @@ import { ref } from 'vue';
 import { locations_url, urls } from '@/store';
 
 import { workcell_state } from '../store';
+import CreateLocationFromTemplateModal from './CreateLocationFromTemplateModal.vue';
 
+const creationMode = ref<'manual' | 'template'>('manual')
+const templateDialogActive = ref(false)
 const new_name = ref()
 const base_type = ref()
 const node_to_add = ref()
