@@ -150,12 +150,12 @@ import { ref, computed, watch } from 'vue';
 
 import {
   location_templates,
-  locations_url,
   refreshLocations,
   representation_templates,
   workcell_state,
 } from '../store';
-import { collectFormValues, templateToFormFields } from '../utils/schemaForm';
+import { locationBaseUrl } from '../utils/locationApi';
+import { collectFormValues, templateToFormFields, validateFormValues } from '../utils/schemaForm';
 import SchemaForm from './SchemaForm.vue';
 
 interface CreateLocationFromTemplateModalProps {
@@ -242,20 +242,22 @@ async function submitLocation() {
 
   submitting.value = true;
   try {
-    const baseUrl = locations_url.value?.replace(/locations\/?$/, '') || '';
-    if (!baseUrl) {
-      throw new Error('Location Manager not available');
-    }
+    const baseUrl = locationBaseUrl();
 
-    // Build representation overrides from form values
+    // Build representation overrides from form values (always collected, regardless of UI toggle)
     const overrides: Record<string, Record<string, unknown>> = {};
-    if (showOverrides.value && selectedTemplate.value) {
+    if (selectedTemplate.value) {
       for (const [role, reprTemplateName] of Object.entries(
         selectedTemplate.value.representation_templates || {}
       )) {
         const reprTemplate = resolvedReprTemplates.value[reprTemplateName as string];
         if (reprTemplate && representationOverrides.value[role]) {
           const fields = templateToFormFields(reprTemplate);
+          const fieldErrors = validateFormValues(fields, representationOverrides.value[role]);
+          if (fieldErrors.length > 0) {
+            validationErrors.value = fieldErrors.map(e => `${role}: ${e}`);
+            return;
+          }
           overrides[role] = collectFormValues(fields, representationOverrides.value[role]);
         }
       }

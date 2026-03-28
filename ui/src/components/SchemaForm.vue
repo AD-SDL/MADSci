@@ -106,6 +106,7 @@ const emit = defineEmits<{
 
 const formFields = ref<FormField[]>([]);
 const localValues = ref<Record<string, unknown>>({});
+const isMounted = ref(false);
 
 // Validation rules
 const requiredRule = (v: unknown) => {
@@ -138,7 +139,10 @@ function initializeForm() {
   const defaults = buildDefaultValues(formFields.value);
   // Merge with any existing model values
   localValues.value = { ...defaults, ...(props.modelValue ?? {}) };
-  emitUpdate();
+  // Only emit to parent after first mount, not during initialization
+  if (isMounted.value) {
+    emitUpdate();
+  }
 }
 
 function emitUpdate() {
@@ -148,6 +152,9 @@ function emitUpdate() {
 // Re-initialize when template changes
 watch(() => props.template, initializeForm, { deep: true });
 
-// Initialize on mount
-onMounted(initializeForm);
+// Initialize on mount, then enable emitting for subsequent changes
+onMounted(() => {
+  initializeForm();
+  isMounted.value = true;
+});
 </script>

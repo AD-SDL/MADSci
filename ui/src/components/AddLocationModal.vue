@@ -92,7 +92,8 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 
-import { locations_url, urls } from '@/store';
+import { urls } from '@/store';
+import { locationBaseUrl } from '../utils/locationApi';
 
 import { workcell_state } from '../store';
 import CreateLocationFromTemplateModal from './CreateLocationFromTemplateModal.vue';
@@ -160,10 +161,7 @@ function submitLocation() {
     location["resource_definition"] = resource
     }
 
-    // Use LocationManager API if available, fallback to WorkcellManager
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location') :
-      urls.value.workcell_server_url.concat('location');
+    const api_url = locationBaseUrl() + 'location';
 
     fetch(api_url, {
     method: "POST",

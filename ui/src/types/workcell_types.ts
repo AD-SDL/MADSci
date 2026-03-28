@@ -139,6 +139,30 @@ export interface Location {
    * The ID of an existing Resource associated with the location, if any.
    */
   resource_id?: string | null;
+  /**
+   * Name of the Resource Template to be used for creating a resource associated with this location.
+   */
+  resource_template_name?: string | null;
+  /**
+   * Optional overrides to apply when creating a resource from the template.
+   */
+  resource_template_overrides?: {
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Whether this location can be used as a source or target in transfers.
+   */
+  allow_transfers?: boolean;
+  /**
+   * Name of the LocationTemplate used to create this location (for traceability).
+   */
+  location_template_name?: string | null;
+  /**
+   * Mapping of abstract role names to concrete node instance names (for traceability).
+   */
+  node_bindings?: {
+    [k: string]: string;
+  } | null;
 }
 /**
  * Definition for a MADSci Resource.

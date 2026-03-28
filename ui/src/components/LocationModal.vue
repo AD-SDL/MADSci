@@ -29,12 +29,12 @@
           <v-col>
             <h3 class="mb-2">Representations:</h3>
             <v-card variant="outlined" class="pa-3">
-              <div v-if="Object.keys((location as any).representations || {}).length === 0" class="text-grey">
+              <div v-if="Object.keys(location.representations || {}).length === 0" class="text-grey">
                 No representations defined
               </div>
               <div v-else>
                 <v-card
-                  v-for="(value, nodeName) in ((location as any).representations || {})"
+                  v-for="(value, nodeName) in (location.representations || {})"
                   :key="nodeName"
                   variant="tonal"
                   class="mb-2"
@@ -258,7 +258,7 @@
               <div v-if="get_resource(resources, location) != null">
                 <div class="d-flex justify-space-between align-center mb-2">
                   <v-chip color="success" variant="outlined">
-                    Resource Attached: {{ get_resource(resources, location).resource_id }}
+                    Resource Attached: {{ get_resource(resources, location)!.resource_id }}
                   </v-chip>
                   <v-btn
                     @click="confirmDetachResource"
@@ -272,10 +272,10 @@
                   </v-btn>
                 </div>
 
-                <div v-if="get_resource(resources, location).base_type=='stack'">
-                  <Stack :resource="get_resource(resources, location)"/>
+                <div v-if="get_resource(resources, location)!.base_type=='stack'">
+                  <Stack :resource="get_resource(resources, location)!"/>
                 </div>
-                <div v-else-if="get_resource(resources, location).base_type=='slot'">
+                <div v-else-if="get_resource(resources, location)!.base_type=='slot'">
                   <Slot :resource="get_resource(resources, location)" />
                 </div>
                 <div v-else>
@@ -328,6 +328,21 @@
             </v-card>
           </v-col>
         </v-row>
+
+        <!-- Operation Errors -->
+        <v-alert
+          v-if="operationErrors.length > 0"
+          type="error"
+          variant="outlined"
+          density="compact"
+          class="mt-3"
+          closable
+          @click:close="operationErrors = []"
+        >
+          <ul class="pl-4">
+            <li v-for="(error, idx) in operationErrors" :key="idx">{{ error }}</li>
+          </ul>
+        </v-alert>
       </v-card-text>
 
       <v-card-actions>
@@ -391,13 +406,14 @@
 import { ref } from 'vue';
 
 import {
-  locations_url,
+  location_templates,
   refreshLocations,
   resources,
   urls,
   workcell_state,
 } from '../store';
 import { Location, NodeRepresentationTemplateDefinition } from '../types/workcell_types';
+import { locationApiUrl } from '../utils/locationApi';
 import { collectFormValues, templateToFormFields, type FormField } from '../utils/schemaForm';
 import Resource from './ResourceComponents/Resource.vue';
 import SchemaForm from './SchemaForm.vue';
@@ -428,6 +444,9 @@ const editingRepresentation = ref<string | null>(null)
 const editFormValues = ref<Record<string, unknown>>({})
 const editJsonValue = ref('')
 
+// Operation error display
+const operationErrors = ref<string[]>([])
+
 // Confirmation dialogs
 const deleteConfirmDialog = ref(false)
 const removeRepConfirmDialog = ref(false)
@@ -448,14 +467,52 @@ function resetToggles() {
   removeRepConfirmDialog.value = false
   detachConfirmDialog.value = false
   editingRepresentation.value = null
+  operationErrors.value = []
 }
 
-// Look up the representation template for a given node name
+/**
+ * Look up the correct representation template for a given node name.
+ *
+ * For template-created locations (with location_template_name and node_bindings):
+ *   1. Find the LocationTemplate from the store
+ *   2. Reverse-map node_bindings to find which role this node plays
+ *   3. Look up the repr template name for that role
+ *   4. Match against the node's location_representation_templates
+ *
+ * Falls back to first template for non-template locations or unresolvable cases.
+ */
 function getTemplateForNode(nodeName: string): NodeRepresentationTemplateDefinition | null {
   const nodeInfo = workcell_state.value?.nodes?.[nodeName]?.info
-  const templates = (nodeInfo?.location_representation_templates ?? []) as NodeRepresentationTemplateDefinition[]
-  // Return the first template (most nodes define one)
-  return templates.length > 0 ? templates[0] : null
+  const nodeTemplates = (nodeInfo?.location_representation_templates ?? []) as NodeRepresentationTemplateDefinition[]
+
+  if (nodeTemplates.length === 0) return null
+  if (nodeTemplates.length === 1) return nodeTemplates[0]
+
+  // Try to resolve via location template metadata
+  const loc = props.location
+  const locTemplateName = loc.location_template_name
+  const nodeBindingsMap = loc.node_bindings
+
+  if (locTemplateName && nodeBindingsMap) {
+    const locTemplate = (location_templates.value || []).find(
+      (t: any) => t.template_name === locTemplateName
+    )
+    if (locTemplate) {
+      // Reverse-map: find which role this nodeName is bound to
+      for (const [role, boundNodeName] of Object.entries(nodeBindingsMap)) {
+        if (boundNodeName === nodeName) {
+          const reprTemplateName = locTemplate.representation_templates?.[role]
+          if (reprTemplateName) {
+            const match = nodeTemplates.find(t => t.template_name === reprTemplateName)
+            if (match) return match
+          }
+        }
+      }
+    }
+  }
+
+  // Fallback: return first template
+  return nodeTemplates[0]
 }
 
 // Build display fields for a representation's current data
@@ -552,7 +609,7 @@ async function saveEditRepresentation(nodeName: string) {
       const data = JSON.parse(editJsonValue.value)
       await submit_location_representation_data(nodeName, data)
     } catch {
-      alert('Invalid JSON')
+      operationErrors.value = ['Invalid JSON format in representation value']
       return
     }
   }
@@ -641,9 +698,7 @@ async function get_location(node_name: string): Promise<void>{
 // Submit new/updated representation
 async function submit_location_representation(node_name: string): Promise<void>{
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)).concat("/set_representation/").concat(node_name) :
-      urls.value.workcell_server_url.concat('location/').concat(encodeURIComponent(props.location_name)).concat("/set_representation/").concat(node_name);
+    const api_url = locationApiUrl(props.location_name, `set_representation/${node_name}`);
 
     await fetch(api_url, {
       method: "POST",
@@ -655,18 +710,17 @@ async function submit_location_representation(node_name: string): Promise<void>{
 
     // Refresh locations data
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to submit representation:', error)
-    alert('Failed to submit representation. Please try again.')
+    operationErrors.value = ['Failed to submit representation. Please try again.']
   }
 }
 
 // Submit representation from structured data (template form)
 async function submit_location_representation_data(node_name: string, data: Record<string, unknown>): Promise<void>{
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)).concat("/set_representation/").concat(node_name) :
-      urls.value.workcell_server_url.concat('location/').concat(encodeURIComponent(props.location_name)).concat("/set_representation/").concat(node_name);
+    const api_url = locationApiUrl(props.location_name, `set_representation/${node_name}`);
 
     await fetch(api_url, {
       method: "POST",
@@ -677,9 +731,10 @@ async function submit_location_representation_data(node_name: string, data: Reco
     })
 
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to submit representation:', error)
-    alert('Failed to submit representation. Please try again.')
+    operationErrors.value = ['Failed to submit representation. Please try again.']
   }
 }
 
@@ -693,13 +748,7 @@ function confirmRemoveRepresentation(nodeName: string) {
 async function removeRepresentation(): Promise<void> {
   removing.value = true
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)).concat("/remove_representation/").concat(representationToRemove.value) :
-      null;
-
-    if (!api_url) {
-      throw new Error('LocationManager not available for removing representations')
-    }
+    const api_url = locationApiUrl(props.location_name, `remove_representation/${representationToRemove.value}`);
 
     const response = await fetch(api_url, {
       method: "DELETE",
@@ -715,9 +764,10 @@ async function removeRepresentation(): Promise<void> {
     removeRepConfirmDialog.value = false
     // Refresh locations data
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to remove representation:', error)
-    alert('Failed to remove representation. Please try again.')
+    operationErrors.value = ['Failed to remove representation. Please try again.']
   } finally {
     removing.value = false
   }
@@ -732,13 +782,7 @@ function confirmDelete() {
 async function deleteLocation(): Promise<void> {
   deleting.value = true
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)) :
-      null;
-
-    if (!api_url) {
-      throw new Error('LocationManager not available for deleting locations')
-    }
+    const api_url = locationApiUrl(props.location_name);
 
     const response = await fetch(api_url, {
       method: "DELETE",
@@ -754,9 +798,10 @@ async function deleteLocation(): Promise<void> {
     deleteConfirmDialog.value = false
     // Refresh locations data
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to delete location:', error)
-    alert('Failed to delete location. Please try again.')
+    operationErrors.value = ['Failed to delete location. Please try again.']
   } finally {
     deleting.value = false
   }
@@ -771,13 +816,7 @@ function confirmDetachResource() {
 async function detachResource(): Promise<void> {
   detaching.value = true
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)).concat("/detach_resource") :
-      null;
-
-    if (!api_url) {
-      throw new Error('LocationManager not available for detaching resources')
-    }
+    const api_url = locationApiUrl(props.location_name, 'detach_resource');
 
     const response = await fetch(api_url, {
       method: "DELETE",
@@ -793,9 +832,10 @@ async function detachResource(): Promise<void> {
     detachConfirmDialog.value = false
     // Refresh locations data
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to detach resource:', error)
-    alert('Failed to detach resource. Please try again.')
+    operationErrors.value = ['Failed to detach resource. Please try again.']
   } finally {
     detaching.value = false
   }
@@ -805,16 +845,8 @@ async function detachResource(): Promise<void> {
 async function submit_attach_resource(): Promise<void> {
   attaching.value = true
   try {
-    const api_url = locations_url.value ?
-      locations_url.value.replace('/locations', '/location/').concat(encodeURIComponent(props.location_name)).concat("/attach_resource") :
-      null;
-
-    if (!api_url) {
-      throw new Error('LocationManager not available for attaching resources')
-    }
-
     // Use query parameters instead of request body
-    const url = new URL(api_url)
+    const url = new URL(locationApiUrl(props.location_name, 'attach_resource'))
     url.searchParams.append('resource_id', resource_to_attach.value)
 
     const response = await fetch(url.toString(), {
@@ -831,18 +863,18 @@ async function submit_attach_resource(): Promise<void> {
     resource_to_attach.value = ''
     // Refresh locations data
     await refreshLocations()
+    operationErrors.value = []
   } catch (error) {
     console.error('Failed to attach resource:', error)
-    alert('Failed to attach resource. Please try again.')
+    operationErrors.value = ['Failed to attach resource. Please try again.']
   } finally {
     attaching.value = false
   }
 }
 
-function get_resource(resources: any, location: Location) {
-  if ("resource_id" in location && location.resource_id != null) {
-   var resource = resources.find((element: any) => element.resource_id == location["resource_id"])
-    return resource
+function get_resource(resourceList: Array<{ resource_id: string; base_type?: string; [k: string]: unknown }>, location: Location) {
+  if (location.resource_id != null) {
+    return resourceList.find((element) => element.resource_id === location.resource_id) ?? null
   }
   return null
 }
