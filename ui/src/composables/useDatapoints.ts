@@ -88,6 +88,8 @@ export function useDatapoints() {
     link.setAttribute('download', title)
     document.body.appendChild(link)
     link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   }
 
   async function trydownload(id: string, label: string) {
