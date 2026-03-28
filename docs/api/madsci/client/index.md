@@ -1841,6 +1841,29 @@ Classes
         Optional[Workflow]
             The workflow object if found, otherwise None.
 
+    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run with the same parameters.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        await_completion : bool, optional
+            If True, wait for the workflow to complete, by default True.
+        raise_on_cancelled : bool, optional
+            If True, raise an exception if the workflow is cancelled, by default True.
+        raise_on_failed : bool, optional
+            If True, raise an exception if the workflow fails, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
     `resume_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
         
@@ -2202,6 +2225,29 @@ Classes
         -------
         Optional[Workflow]
             The workflow object if found, otherwise None.
+
+    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run with the same parameters.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        await_completion : bool, optional
+            If True, wait for the workflow to complete, by default True.
+        raise_on_cancelled : bool, optional
+            If True, raise an exception if the workflow is cancelled, by default True.
+        raise_on_failed : bool, optional
+            If True, raise an exception if the workflow fails, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
 
     `resume_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.

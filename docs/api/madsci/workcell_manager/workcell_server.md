@@ -88,6 +88,9 @@ Classes
     `pause_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Pause a running workflow.
 
+    `resubmit_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run with the same parameters.
+
     `resume_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
 

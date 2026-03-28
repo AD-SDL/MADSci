@@ -12,15 +12,34 @@
             :wf_id="modal_text.workflow_id"
             :wf_status="modal_text.status"
             class="ml-2" />
-          <ResetButton
+          <RetryDialog
             :wf_id="modal_text.workflow_id"
             :wf_status="modal_text.status"
+            :steps="modal_text.steps || []"
+            class="ml-2" />
+          <ResubmitButton
+            :wf_id="modal_text.workflow_id"
             class="ml-2" />
         </div>
         <v-sheet class="pa-2 rounded-lg text-md-center text-white" :class="'wf_status_' + process_status(modal_text.status)">{{ process_status(modal_text.status) }}</v-sheet>
       </v-card-title>
       <v-card-text>
-        <Workflow :steps="modal_text.steps" :wf="modal_text" />
+        <v-tabs v-model="tab" align-tabs="center" color="deep-purple-accent-4">
+          <v-tab :value="1">Steps</v-tab>
+          <v-tab :value="2">Results</v-tab>
+          <v-tab :value="3">Details</v-tab>
+        </v-tabs>
+        <v-window v-model="tab">
+          <v-window-item :key="1" :value="1">
+            <WorkflowStepsTab :steps="modal_text.steps" :wf="modal_text" @retry-from-step="retryFromStep" />
+          </v-window-item>
+          <v-window-item :key="2" :value="2">
+            <WorkflowResultsTab :steps="modal_text.steps" :wf="modal_text" />
+          </v-window-item>
+          <v-window-item :key="3" :value="3">
+            <WorkflowDetailsTab :wf="modal_text" />
+          </v-window-item>
+        </v-window>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -31,12 +50,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import CancelButton from './AdminButtons/CancelButton.vue';
-import PauseResumeButton from './AdminButtons/PauseResumeButton.vue';
-import ResetButton from './AdminButtons/ResetButton.vue';
+import { ref } from 'vue'
+import { urls } from '@/store'
+
 const props = defineProps(['modal_title', 'modal_text'])
-const flowdef = ref(false)
+const tab = ref(1)
 
 function process_status(status: any) {
   if (status.completed) {
@@ -57,6 +75,24 @@ function process_status(status: any) {
   else if(status.queued) {
     return "queued"
   }
+}
 
+async function retryFromStep(index: number) {
+  try {
+    const retryUrl = `${urls.value.workcell_server_url}workflow/${props.modal_text.workflow_id}/retry?index=${index}`
+    const response = await fetch(retryUrl, { method: 'POST' })
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    console.log(`Retry from step ${index} successful`)
+  } catch (error) {
+    console.error('Error retrying workflow:', error)
+  }
 }
 </script>
+
+<style scoped>
+.title {
+  margin-right: 30px;
+}
+</style>

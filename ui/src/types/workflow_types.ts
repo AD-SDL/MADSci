@@ -437,6 +437,7 @@ export interface StepDefinition {
  */
 export interface Workflow {
   name: string;
+  workflow_definition_id?: string;
   workflow_metadata?: WorkflowMetadata;
   parameters?: WorkflowParameter[] | null;
   steps?: Step[];

@@ -429,6 +429,55 @@ class WorkcellClient:
 
         return Workflow.model_validate(response.json())
 
+    def resubmit_workflow(
+        self,
+        workflow_id: str,
+        await_completion: bool = True,
+        raise_on_cancelled: bool = True,
+        raise_on_failed: bool = True,
+        prompt_on_error: bool = True,
+        timeout: Optional[float] = None,
+    ) -> Workflow:
+        """
+        Resubmit a workflow as a brand new workflow run with the same parameters.
+
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        await_completion : bool, optional
+            If True, wait for the workflow to complete, by default True.
+        raise_on_cancelled : bool, optional
+            If True, raise an exception if the workflow is cancelled, by default True.
+        raise_on_failed : bool, optional
+            If True, raise an exception if the workflow fails, by default True.
+        prompt_on_error : bool, optional
+            If True, prompt the user for what action to take on workflow errors, by default True.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+        """
+        url = f"{self.workcell_server_url}workflow/{workflow_id}/resubmit"
+        response = self.session.post(
+            url,
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        new_workflow = Workflow.model_validate(response.json())
+        if await_completion:
+            return self.await_workflow(
+                workflow_id=new_workflow.workflow_id,
+                raise_on_cancelled=raise_on_cancelled,
+                raise_on_failed=raise_on_failed,
+                prompt_on_error=prompt_on_error,
+            )
+
+        return new_workflow
+
     def _handle_workflow_error(
         self,
         wf: Workflow,
