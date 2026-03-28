@@ -29,6 +29,10 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
+      {{ snackbarText }}
+    </v-snackbar>
   </div>
 </template>
 
@@ -41,6 +45,9 @@ const props = defineProps<{
 }>()
 
 const confirmDialog = ref(false)
+const snackbar = ref(false)
+const snackbarText = ref('')
+const snackbarColor = ref('success')
 
 async function resubmitWorkflow() {
   try {
@@ -49,10 +56,15 @@ async function resubmitWorkflow() {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    console.log('Resubmit successful')
     confirmDialog.value = false
+    snackbarColor.value = 'success'
+    snackbarText.value = 'Workflow resubmitted successfully'
+    snackbar.value = true
   } catch (error) {
     console.error('Error resubmitting workflow:', error)
+    snackbarColor.value = 'error'
+    snackbarText.value = 'Failed to resubmit workflow'
+    snackbar.value = true
   }
 }
 </script>

@@ -38,21 +38,29 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
+      {{ snackbarText }}
+    </v-snackbar>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue'
 import { urls } from '@/store'
+import type { WorkflowStatus } from '@/types/workflow_types'
 
 const props = defineProps<{
   wf_id: string
-  wf_status: any
+  wf_status: WorkflowStatus
   steps: any[]
 }>()
 
 const dialog = ref(false)
 const selectedStepIndex = ref(0)
+const snackbar = ref(false)
+const snackbarText = ref('')
+const snackbarColor = ref('success')
 
 const canRetry = computed(() => {
   return props.wf_status?.terminal === true
@@ -81,10 +89,15 @@ async function retryWorkflow() {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    console.log('Retry successful')
     dialog.value = false
+    snackbarColor.value = 'success'
+    snackbarText.value = `Retry from step ${selectedStepIndex.value + 1} started`
+    snackbar.value = true
   } catch (error) {
     console.error('Error retrying workflow:', error)
+    snackbarColor.value = 'error'
+    snackbarText.value = 'Failed to retry workflow'
+    snackbar.value = true
   }
 }
 

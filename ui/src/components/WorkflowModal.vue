@@ -46,6 +46,10 @@
         <v-btn flat @click="isActive.value = false" class="primary--text">close</v-btn>
       </v-card-actions>
     </v-card>
+
+    <v-snackbar v-model="snackbar" :color="snackbarColor" :timeout="3000">
+      {{ snackbarText }}
+    </v-snackbar>
   </v-dialog>
 </template>
 
@@ -55,6 +59,9 @@ import { urls } from '@/store'
 
 const props = defineProps(['modal_title', 'modal_text'])
 const tab = ref(1)
+const snackbar = ref(false)
+const snackbarText = ref('')
+const snackbarColor = ref('success')
 
 function process_status(status: any) {
   if (status.completed) {
@@ -84,9 +91,14 @@ async function retryFromStep(index: number) {
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
-    console.log(`Retry from step ${index} successful`)
+    snackbarColor.value = 'success'
+    snackbarText.value = `Retry from step ${index + 1} started`
+    snackbar.value = true
   } catch (error) {
     console.error('Error retrying workflow:', error)
+    snackbarColor.value = 'error'
+    snackbarText.value = 'Failed to retry workflow'
+    snackbar.value = true
   }
 }
 </script>
