@@ -459,6 +459,48 @@ def test_retry_workflow_no_await(
         )
 
 
+def test_resubmit_workflow(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    with patch.object(client, "await_workflow") as mock_await:
+        mock_workflow = Workflow(
+            workflow_id=new_ulid_str(),
+            name="Test Workflow",
+            status=WorkflowStatus(completed=True),
+            steps=[],
+        )
+        mock_await.return_value = mock_workflow
+
+        resubmitted = client.resubmit_workflow(
+            submitted_workflow.workflow_id, await_completion=True
+        )
+
+        assert isinstance(resubmitted, Workflow)
+        # resubmit creates a new workflow, so await_workflow is called with the new ID
+        mock_await.assert_called_once()
+
+
+def test_resubmit_workflow_no_await(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow without waiting for completion."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    resubmitted = client.resubmit_workflow(
+        submitted_workflow.workflow_id, await_completion=False
+    )
+
+    assert isinstance(resubmitted, Workflow)
+    # Resubmit creates a new workflow with a new ID
+    assert resubmitted.workflow_id != submitted_workflow.workflow_id
+    assert resubmitted.name == submitted_workflow.name
+
+
 def test_await_workflow_completed(
     client: WorkcellClient, sample_workflow_instance: Workflow
 ) -> None:
