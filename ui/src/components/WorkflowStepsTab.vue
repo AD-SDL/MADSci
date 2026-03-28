@@ -111,7 +111,6 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { urls } from '@/store'
 import { useDatapoints, data_headers } from '@/composables/useDatapoints'
 
 const props = defineProps(['steps', 'wf'])
