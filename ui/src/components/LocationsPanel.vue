@@ -1,6 +1,7 @@
 <template>
- <LocationModal :location="modal_text" :location_name="modal_title" v-model="modal" />
+ <LocationModal v-if="modal_text" :location="modal_text" :location_name="modal_title" v-model="modal" />
  <AddLocationModal v-model="add_modal" />
+ <CreateLocationFromTemplateModal v-model="create_from_template_modal" />
 
  <!-- Conditional Layout: Tabbed view, stacked view, or responsive grid -->
  <div v-if="tabbedLayout">
@@ -42,7 +43,8 @@
              </tr>
            </template>
          </v-data-table>
-         <v-btn @click="active_add()">Add Location</v-btn>
+         <v-btn @click="active_add()" class="mr-2">Add Location</v-btn>
+        <v-btn @click="create_from_template_modal = true" color="secondary" variant="outlined">Create from Template</v-btn>
          </v-card-text>
        </v-window-item>
      </v-window>
@@ -107,7 +109,8 @@
             </tr>
           </template>
         </v-data-table>
-        <v-btn @click="active_add()">Add Location</v-btn>
+        <v-btn @click="active_add()" class="mr-2">Add Location</v-btn>
+        <v-btn @click="create_from_template_modal = true" color="secondary" variant="outlined">Create from Template</v-btn>
         </v-card-text>
       </v-card>
    </v-col>
@@ -115,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 import { VDataTable } from 'vuetify/components';
 
@@ -126,6 +129,7 @@ import {
 } from '@/store';
 
 import AddLocationModal from './AddLocationModal.vue';
+import CreateLocationFromTemplateModal from './CreateLocationFromTemplateModal.vue';
 import LocationModal from './LocationModal.vue';
 import TransferGraph from './TransferGraph.vue';
 
@@ -141,9 +145,21 @@ const props = withDefaults(defineProps<LocationsPanelProps>(), {
 });
 
 const modal_title = ref()
-const modal_text = ref()
+const modal_location_id = ref<string | null>(null)
 const modal = ref(false)
+
+// Derive the modal location from the store so it stays in sync after refreshes
+const modal_text = computed(() => {
+  if (!modal_location_id.value) return null
+  const locs = locations.value || {}
+  // locations may be keyed by name or ID; search both
+  for (const loc of Object.values(locs) as any[]) {
+    if (loc.location_id === modal_location_id.value) return loc
+  }
+  return null
+})
 const add_modal = ref(false)
+const create_from_template_modal = ref(false)
 const activeTab = ref('graph') // Default to showing the graph tab
 
 const sortBy: VDataTable['sortBy'] = [{ key: 'occupied', order: 'desc' }];
@@ -173,9 +189,9 @@ function occupied_compare(a: string, b: string) {
 }
 
 
-const set_modal = (title: string, value: Object) => {
+const set_modal = (title: string, value: any) => {
   modal_title.value = title
-  modal_text.value = value
+  modal_location_id.value = value?.location_id ?? null
   modal.value = true
 }
 

@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.common.types.node_types import (
+    NodeInfo,
     NodeLocationTemplateDefinition,
     NodeRepresentationTemplateDefinition,
     NodeResourceTemplateDefinition,
@@ -338,6 +339,57 @@ class TestTemplateHandlerErrorLogging:
             ]
             assert len(loc_calls) == 1
             assert loc_calls[0].kwargs["template_name"] == "test_location_template"
+
+
+class TestNodeInfoTemplatePopulation:
+    """Test that NodeInfo is populated with template definitions from the class."""
+
+    def test_node_info_has_location_templates(self, template_node):
+        """NodeInfo.location_templates is populated from the class variable."""
+        assert len(template_node.node_info.location_templates) == 1
+        assert (
+            template_node.node_info.location_templates[0].template_name
+            == "test_location_template"
+        )
+
+    def test_node_info_has_representation_templates(self, template_node):
+        """NodeInfo.location_representation_templates is populated from the class variable."""
+        assert len(template_node.node_info.location_representation_templates) == 1
+        assert (
+            template_node.node_info.location_representation_templates[0].template_name
+            == "test_repr_template"
+        )
+
+    def test_empty_node_has_empty_template_lists(self, empty_template_node):
+        """NodeInfo has empty lists when node declares no templates."""
+        assert empty_template_node.node_info.location_templates == []
+        assert empty_template_node.node_info.location_representation_templates == []
+
+    def test_node_info_template_serialization_roundtrip(self, template_node):
+        """NodeInfo with templates can be serialized and deserialized."""
+        dumped = template_node.node_info.model_dump(mode="json")
+        assert "location_templates" in dumped
+        assert "location_representation_templates" in dumped
+        assert len(dumped["location_templates"]) == 1
+        assert len(dumped["location_representation_templates"]) == 1
+
+        # Round-trip
+        restored = NodeInfo.model_validate(dumped)
+        assert len(restored.location_templates) == 1
+        assert restored.location_templates[0].template_name == "test_location_template"
+        assert len(restored.location_representation_templates) == 1
+        assert (
+            restored.location_representation_templates[0].template_name
+            == "test_repr_template"
+        )
+
+    def test_node_info_templates_are_copies(self, template_node):
+        """NodeInfo template lists are copies, not references to the class variable."""
+        template_node.node_info.location_templates.append(
+            NodeLocationTemplateDefinition(template_name="extra")
+        )
+        # Class variable should not be affected
+        assert len(TemplateTestNode.location_templates) == 1
 
 
 class TestNodeTemplateDefinitionTypes:

@@ -520,8 +520,13 @@ def run_admin_command(self, command: str, **kwargs) -> dict:
     return super().run_admin_command(command, **kwargs)
 ```
 
+## Location Templates
+
+If your instrument interacts with specific locations (e.g., deck slots, sample positions), you can define location representation templates to describe the data your node needs for each location. See [Location Templates](./10-location-templates.md) for details.
+
 ## What's Next?
 
+- [Location Templates](./10-location-templates.md) - Define location representation templates for your node
 - [Testing Strategies](./06-testing-strategies.md) - Unit, integration, and hardware-in-the-loop testing
 - [Debugging](./07-debugging.md) - Common issues and troubleshooting techniques
 - [Tutorial: First Workcell](../../tutorials/04-first-workcell.md) - Connect your node to a workcell

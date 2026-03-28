@@ -32,9 +32,25 @@
             {{ tag }}
           </v-chip>
         </td>
+        <td>
+          <v-btn
+            size="small"
+            color="primary"
+            variant="outlined"
+            @click.stop="createFromTemplate(item.template_name)"
+          >
+            <v-icon start>mdi-plus</v-icon>
+            Create Location
+          </v-btn>
+        </td>
       </tr>
     </template>
   </v-data-table>
+
+  <CreateLocationFromTemplateModal
+    v-model="createDialog"
+    :preselected-template="preselectedTemplateName"
+  />
 
   <v-dialog v-model="detailDialog" max-width="800">
     <v-card>
@@ -55,6 +71,15 @@ import { ref } from 'vue';
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import { location_templates } from '@/store';
+import CreateLocationFromTemplateModal from './CreateLocationFromTemplateModal.vue';
+
+const createDialog = ref(false);
+const preselectedTemplateName = ref('');
+
+function createFromTemplate(templateName: string) {
+  preselectedTemplateName.value = templateName;
+  createDialog.value = true;
+}
 
 const headers = [
   { title: 'Name', key: 'template_name' },
@@ -63,6 +88,7 @@ const headers = [
   { title: 'Resource Template', key: 'resource_template_name' },
   { title: 'Allow Transfers', key: 'default_allow_transfers' },
   { title: 'Tags', key: 'tags', sortable: false },
+  { title: 'Actions', key: 'actions', sortable: false },
 ];
 
 const detailDialog = ref(false);

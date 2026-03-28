@@ -293,6 +293,39 @@ See the [Observability Guide](../../docs/guides/observability.md) for detailed s
 - [Main README](../../README.md) - MADSci overview and installation
 - [Logging Guide](../../docs/guides/logging.md) - Structured logging and context management
 
+## Location Templates
+
+The example lab demonstrates the **location template system** for declarative location management.
+
+### Node-Defined Representation Templates
+
+Both `RobotArmNode` and `LiquidHandlerNode` define `location_representation_templates` with JSON Schema definitions:
+
+- **`robotarm_deck_access`** / **`robotarm_wide_access`** -- defined in `example_modules/robotarm.py`. Specify joint positions, gripper configuration, and payload limits. The `position` field is a required override (varies per physical location).
+- **`lh_deck_repr`** -- defined in `example_modules/liquidhandler.py`. Specifies deck slot number, deck type, and plate capacity. The `deck_position` field is a required override.
+
+These templates are registered with the Location Manager automatically at node startup via `template_handler()`.
+
+### Seed File (`locations.yaml`)
+
+The `locations.yaml` file pre-populates the Location Manager on first startup. It defines:
+
+1. **Representation templates** -- `robotarm_deck_access`, `robotarm_wide_access`, `lh_deck_repr`
+2. **Location templates** -- `lh_accessible_deck_slot` (liquid handler + robot arm access) and `lh_only_deck_slot` (liquid handler only)
+3. **Concrete locations** -- deck slots for `liquidhandler_1` and `liquidhandler_2`, each with node bindings mapping abstract roles (`deck_controller`, `transfer_arm`) to concrete node instances and per-location overrides (deck position, joint angles)
+
+Inline (non-template) locations like `storage_rack` and `platereader_1.plate_carriage` are also supported for locations that do not fit a reusable template pattern.
+
+### Dashboard Integration
+
+Once the lab is running, navigate to the **Locations** tab in the dashboard at [http://localhost:8000](http://localhost:8000). From there you can:
+
+- View all locations with their representations and template lineage
+- Create new locations from registered templates, selecting node bindings and filling in required overrides via schema-aware forms
+- Edit representations on existing locations
+
+See the [Location Templates Guide](../../docs/guides/integrator/10-location-templates.md) for full documentation.
+
 ## Stopping the Lab
 
 When finished with the example lab:

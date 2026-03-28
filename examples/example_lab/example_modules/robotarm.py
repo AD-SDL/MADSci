@@ -84,18 +84,72 @@ class RobotArmNode(RestNode):
         NodeRepresentationTemplateDefinition(
             template_name="robotarm_deck_access",
             default_values={"gripper_config": "standard", "max_payload": 2.0},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 4,
+                        "description": "Joint angles or XYZ(+rotation) for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "enum": ["standard", "wide", "vacuum"],
+                        "description": "Gripper configuration to use at this location",
+                    },
+                    "max_payload": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Maximum payload weight in kg",
+                    },
+                    "approach_height": {
+                        "type": "number",
+                        "description": "Height offset for approach/depart in mm",
+                    },
+                },
+                "required": ["position"],
+            },
             required_overrides=["position"],
             tags=["robot_arm", "deck"],
-            version="1.0.0",
-            description="Robot arm deck access representation",
+            version="1.1.0",
+            description="Robot arm deck access representation with joint positions",
         ),
         NodeRepresentationTemplateDefinition(
             template_name="robotarm_wide_access",
             default_values={"gripper_config": "wide", "max_payload": 10.0},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 4,
+                        "description": "Joint angles or XYZ(+rotation) for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "enum": ["standard", "wide", "vacuum"],
+                        "description": "Gripper configuration for wide access points",
+                    },
+                    "max_payload": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Maximum payload weight in kg",
+                    },
+                    "approach_height": {
+                        "type": "number",
+                        "description": "Height offset for approach/depart in mm",
+                    },
+                },
+                "required": ["position"],
+            },
             required_overrides=["position"],
             tags=["robot_arm", "wide"],
-            version="1.0.0",
-            description="Robot arm wide gripper access representation",
+            version="1.1.0",
+            description="Robot arm wide gripper access representation with joint positions",
         ),
     ]
 
