@@ -45,6 +45,7 @@ from madsci.workcell_manager.workflow_utils import (
     pause_workflow,
     save_workflow_files,
 )
+from pydantic import ValidationError
 from ulid import ULID
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -478,7 +479,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition_id = original_wf.workflow_definition_id
         try:
             wf_def = self.state_handler.get_workflow_definition(workflow_definition_id)
-        except Exception as e:
+        except ValidationError as e:
             raise HTTPException(
                 status_code=404,
                 detail=f"Workflow definition {workflow_definition_id} not found",

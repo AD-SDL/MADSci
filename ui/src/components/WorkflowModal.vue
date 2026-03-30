@@ -55,13 +55,15 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { urls } from '@/store'
+import { useWorkflowActions } from '@/composables/useWorkflowActions'
 
 const props = defineProps(['modal_title', 'modal_text'])
 const tab = ref(1)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+
+const { retryWorkflow } = useWorkflowActions()
 
 function process_status(status: any) {
   if (status.completed) {
@@ -85,21 +87,10 @@ function process_status(status: any) {
 }
 
 async function retryFromStep(index: number) {
-  try {
-    const retryUrl = `${urls.value.workcell_server_url}workflow/${props.modal_text.workflow_id}/retry?index=${index}`
-    const response = await fetch(retryUrl, { method: 'POST' })
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    snackbarColor.value = 'success'
-    snackbarText.value = `Retry from step ${index + 1} started`
-    snackbar.value = true
-  } catch (error) {
-    console.error('Error retrying workflow:', error)
-    snackbarColor.value = 'error'
-    snackbarText.value = 'Failed to retry workflow'
-    snackbar.value = true
-  }
+  const result = await retryWorkflow(props.modal_text.workflow_id, index)
+  snackbarColor.value = result.success ? 'success' : 'error'
+  snackbarText.value = result.message
+  snackbar.value = true
 }
 </script>
 

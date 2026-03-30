@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue'
-import { urls } from '@/store'
+import { useWorkflowActions } from '@/composables/useWorkflowActions'
 import type { WorkflowStatus } from '@/types/workflow_types'
 
 const props = defineProps<{
@@ -61,6 +61,8 @@ const selectedStepIndex = ref(0)
 const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
+
+const { retryWorkflow: retryWorkflowAction } = useWorkflowActions()
 
 const canRetry = computed(() => {
   return props.wf_status?.terminal === true
@@ -83,22 +85,13 @@ watchEffect(() => {
 })
 
 async function retryWorkflow() {
-  try {
-    const retryUrl = `${urls.value.workcell_server_url}workflow/${props.wf_id}/retry?index=${selectedStepIndex.value}`
-    const response = await fetch(retryUrl, { method: 'POST' })
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+  const result = await retryWorkflowAction(props.wf_id, selectedStepIndex.value)
+  if (result.success) {
     dialog.value = false
-    snackbarColor.value = 'success'
-    snackbarText.value = `Retry from step ${selectedStepIndex.value + 1} started`
-    snackbar.value = true
-  } catch (error) {
-    console.error('Error retrying workflow:', error)
-    snackbarColor.value = 'error'
-    snackbarText.value = 'Failed to retry workflow'
-    snackbar.value = true
   }
+  snackbarColor.value = result.success ? 'success' : 'error'
+  snackbarText.value = result.message
+  snackbar.value = true
 }
 
 defineExpose({ openDialog: () => { dialog.value = true } })

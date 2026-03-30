@@ -38,7 +38,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { urls } from '@/store'
+import { useWorkflowActions } from '@/composables/useWorkflowActions'
 
 const props = defineProps<{
   wf_id: string
@@ -49,22 +49,15 @@ const snackbar = ref(false)
 const snackbarText = ref('')
 const snackbarColor = ref('success')
 
+const { resubmitWorkflow: resubmitWorkflowAction } = useWorkflowActions()
+
 async function resubmitWorkflow() {
-  try {
-    const resubmitUrl = `${urls.value.workcell_server_url}workflow/${props.wf_id}/resubmit`
-    const response = await fetch(resubmitUrl, { method: 'POST' })
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
+  const result = await resubmitWorkflowAction(props.wf_id)
+  if (result.success) {
     confirmDialog.value = false
-    snackbarColor.value = 'success'
-    snackbarText.value = 'Workflow resubmitted successfully'
-    snackbar.value = true
-  } catch (error) {
-    console.error('Error resubmitting workflow:', error)
-    snackbarColor.value = 'error'
-    snackbarText.value = 'Failed to resubmit workflow'
-    snackbar.value = true
   }
+  snackbarColor.value = result.success ? 'success' : 'error'
+  snackbarText.value = result.message
+  snackbar.value = true
 }
 </script>
