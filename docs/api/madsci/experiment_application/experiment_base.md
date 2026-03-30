@@ -10,6 +10,19 @@ The key design principle is composition over inheritance: ExperimentBase
 uses MadsciClientMixin for client management rather than inheriting from
 RestNode, making it lighter weight for non-server use cases.
 
+Functions
+---------
+
+`clear_experiment_ownership() ‑> None`
+:   Clear experiment-specific ownership fields from global ownership info.
+
+`set_experiment_ownership(experiment: Experiment) ‑> None`
+:   Set experiment ownership fields on the global ownership info.
+    
+    Called after an experiment run is started so that downstream code
+    (e.g., WorkcellClient.start_workflow) picks up the experiment context
+    via get_current_ownership_info().
+
 Classes
 -------
 

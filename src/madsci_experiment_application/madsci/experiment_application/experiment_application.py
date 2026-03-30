@@ -26,6 +26,7 @@ from madsci.common.context import (
     set_current_madsci_context,
 )
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.ownership import ownership_context
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
 from madsci.common.types.event_types import EventType
@@ -38,6 +39,10 @@ from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
+from madsci.experiment_application.experiment_base import (
+    clear_experiment_ownership,
+    set_experiment_ownership,
+)
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import AnyUrl, Field
 from rich import print
@@ -214,6 +219,8 @@ class ExperimentApplication(RestNode):
             run_name=self.experiment.run_name,
             experiment_name=self.experiment.experiment_design.experiment_name,
         )
+        set_experiment_ownership(self.experiment)
+
         passed_checks = False
         while not passed_checks:
             passed_checks = True
@@ -247,6 +254,8 @@ class ExperimentApplication(RestNode):
             experiment_name=self.experiment.experiment_design.experiment_name,
             status=str(status) if status is not None else None,
         )
+
+        clear_experiment_ownership()
 
     def pause_experiment(self) -> None:
         """Pause the experiment."""
@@ -316,7 +325,7 @@ class ExperimentApplication(RestNode):
         """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
 
-        # Establish experiment context for hierarchical logging
+        # Establish experiment context for hierarchical logging and ownership tracking
         experiment_id = self.experiment.experiment_id if self.experiment else None
         experiment_name = (
             self.experiment.experiment_design.experiment_name
@@ -324,12 +333,27 @@ class ExperimentApplication(RestNode):
             else None
         )
 
-        with event_client_context(
-            name="experiment",
-            experiment_id=experiment_id,
-            experiment_name=experiment_name,
-            run_name=run_name,
-            experiment_type=self.__class__.__name__,
+        # Build ownership overrides from the experiment's ownership info
+        ownership_overrides: dict = {}
+        if experiment_id:
+            ownership_overrides["experiment_id"] = experiment_id
+        if self.experiment and self.experiment.ownership_info:
+            exp_ownership = self.experiment.ownership_info.model_dump(exclude_none=True)
+            # Merge experiment ownership fields (campaign_id, user_id, etc.)
+            # without overriding the experiment_id we just set
+            for key, value in exp_ownership.items():
+                if key not in ownership_overrides:
+                    ownership_overrides[key] = value
+
+        with (
+            ownership_context(**ownership_overrides),
+            event_client_context(
+                name="experiment",
+                experiment_id=experiment_id,
+                experiment_name=experiment_name,
+                run_name=run_name,
+                experiment_type=self.__class__.__name__,
+            ),
         ):
             try:
                 yield
