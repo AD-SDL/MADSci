@@ -524,17 +524,16 @@ class ExperimentBase(MadsciClientMixin):
             else None
         )
 
-        # Build ownership overrides from the experiment's ownership info
+        # Build ownership overrides from the experiment's ownership info,
+        # restricted to experiment-level fields only
         ownership_overrides: dict = {}
         if experiment_id:
             ownership_overrides["experiment_id"] = experiment_id
         if self.experiment and self.experiment.ownership_info:
-            exp_ownership = self.experiment.ownership_info.model_dump(exclude_none=True)
-            # Merge experiment ownership fields (campaign_id, user_id, etc.)
-            # without overriding the experiment_id we just set
-            for key, value in exp_ownership.items():
-                if key not in ownership_overrides:
-                    ownership_overrides[key] = value
+            for field in _EXPERIMENT_OWNERSHIP_FIELDS:
+                value = getattr(self.experiment.ownership_info, field, None)
+                if value is not None and field not in ownership_overrides:
+                    ownership_overrides[field] = value
 
         with (
             ownership_context(**ownership_overrides),

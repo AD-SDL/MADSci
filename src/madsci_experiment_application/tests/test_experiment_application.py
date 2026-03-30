@@ -1048,14 +1048,13 @@ class TestStartEndOwnershipPropagation:
             patch("builtins.print"),
         ):
             experiment_app_with_mocks.start_experiment_run(run_name="global_test")
-
-            assert (
-                global_ownership_info.experiment_id
-                == experiment_app_with_mocks.experiment.experiment_id
-            )
-
-            # Clean up
-            experiment_app_with_mocks.end_experiment()
+            try:
+                assert (
+                    global_ownership_info.experiment_id
+                    == experiment_app_with_mocks.experiment.experiment_id
+                )
+            finally:
+                experiment_app_with_mocks.end_experiment()
 
     def test_end_clears_global_ownership(
         self, experiment_app_with_mocks: TestExperimentApplication
@@ -1066,10 +1065,14 @@ class TestStartEndOwnershipPropagation:
             patch("builtins.print"),
         ):
             experiment_app_with_mocks.start_experiment_run(run_name="cleanup_test")
-            assert global_ownership_info.experiment_id is not None
-
-            experiment_app_with_mocks.end_experiment()
-            assert global_ownership_info.experiment_id is None
+            try:
+                assert global_ownership_info.experiment_id is not None
+                experiment_app_with_mocks.end_experiment()
+                assert global_ownership_info.experiment_id is None
+            finally:
+                # Ensure cleanup even if assertions fail
+                if global_ownership_info.experiment_id is not None:
+                    experiment_app_with_mocks.end_experiment()
 
     def test_start_propagates_campaign_id_to_global(self) -> None:
         """Test that campaign_id from experiment ownership is set on global."""
@@ -1102,12 +1105,13 @@ class TestStartEndOwnershipPropagation:
             app.experiment_client.end_experiment.return_value = mock_experiment
 
             app.start_experiment_run(run_name="campaign_global_test")
-
-            assert global_ownership_info.experiment_id == mock_experiment.experiment_id
-            assert global_ownership_info.campaign_id == campaign_id
-
-            # Clean up
-            app.end_experiment()
+            try:
+                assert (
+                    global_ownership_info.experiment_id == mock_experiment.experiment_id
+                )
+                assert global_ownership_info.campaign_id == campaign_id
+            finally:
+                app.end_experiment()
             assert global_ownership_info.campaign_id is None
 
     def test_get_current_ownership_info_between_start_end(
@@ -1123,19 +1127,18 @@ class TestStartEndOwnershipPropagation:
             patch("builtins.print"),
         ):
             experiment_app_with_mocks.start_experiment_run(run_name="notebook_test")
+            try:
+                # Simulate what WorkcellClient.start_workflow() does
+                ownership = get_current_ownership_info()
+                dumped = ownership.model_dump(exclude_none=True)
 
-            # Simulate what WorkcellClient.start_workflow() does
-            ownership = get_current_ownership_info()
-            dumped = ownership.model_dump(exclude_none=True)
-
-            assert "experiment_id" in dumped
-            assert (
-                dumped["experiment_id"]
-                == experiment_app_with_mocks.experiment.experiment_id
-            )
-
-            # Clean up
-            experiment_app_with_mocks.end_experiment()
+                assert "experiment_id" in dumped
+                assert (
+                    dumped["experiment_id"]
+                    == experiment_app_with_mocks.experiment.experiment_id
+                )
+            finally:
+                experiment_app_with_mocks.end_experiment()
 
 
 class TestClassMethods:
