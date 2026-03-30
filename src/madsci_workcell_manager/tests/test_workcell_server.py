@@ -240,6 +240,41 @@ def test_retry_workflow(test_client: TestClient) -> None:
         assert new_workflow.status.ok is True
 
 
+def test_resubmit_workflow(test_client: TestClient) -> None:
+    """Test resubmitting a workflow creates a new workflow from the same definition."""
+    with test_client as client:
+        workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        definition_id = response1.json()
+        response = client.post(
+            "/workflow",
+            data={"workflow_definition_id": definition_id},
+        )
+        assert response.status_code == 200
+        original_workflow = Workflow.model_validate(response.json())
+
+        # Resubmit
+        response = client.post(f"/workflow/{original_workflow.workflow_id}/resubmit")
+        assert response.status_code == 200
+        new_workflow = Workflow.model_validate(response.json())
+        # Must be a different workflow
+        assert new_workflow.workflow_id != original_workflow.workflow_id
+        # Same name (from the same definition)
+        assert new_workflow.name == original_workflow.name
+        # New workflow should be in ok state
+        assert new_workflow.status.ok is True
+
+
+def test_resubmit_workflow_not_found(test_client: TestClient) -> None:
+    """Test resubmitting a nonexistent workflow returns 404."""
+    with test_client as client:
+        response = client.post("/workflow/nonexistent_id/resubmit")
+        assert response.status_code == 404
+
+
 def test_check_parameter_missing() -> None:
     """Test parameter insertion with missing required parameter."""
     workflow = WorkflowDefinition(

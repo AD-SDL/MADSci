@@ -333,3 +333,7 @@ docs/rest-api/*.html
 
 # MyST build outputs
 _build
+
+# Superpowers plugin
+.superpowers
+docs/superpowers

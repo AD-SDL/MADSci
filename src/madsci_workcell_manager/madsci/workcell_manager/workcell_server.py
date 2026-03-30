@@ -45,6 +45,7 @@ from madsci.workcell_manager.workflow_utils import (
     pause_workflow,
     save_workflow_files,
 )
+from pydantic import ValidationError
 from ulid import ULID
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -462,6 +463,53 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                     detail="Workflow is not in a terminal state, cannot retry",
                 )
         return self.state_handler.get_workflow(workflow_id)
+
+    @post("/workflow/{workflow_id}/resubmit")
+    def resubmit_workflow(self, workflow_id: str) -> Workflow:
+        """Resubmit a workflow as a brand new workflow run with the same parameters."""
+        # Look up the existing workflow
+        original_wf = self.state_handler.get_workflow(workflow_id)
+        if not original_wf:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        # Look up the workflow definition
+        workflow_definition_id = original_wf.workflow_definition_id
+        try:
+            wf_def = self.state_handler.get_workflow_definition(workflow_definition_id)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow definition {workflow_definition_id} not found",
+            ) from e
+
+        # Create a new workflow from the definition, reusing the original parameters
+        workcell = self.state_handler.get_workcell_info()
+        new_wf = create_workflow(
+            workflow_def=wf_def,
+            workcell=workcell,
+            json_inputs=original_wf.parameter_values,
+            file_input_paths=original_wf.file_input_paths,
+            state_handler=self.state_handler,
+            location_client=self.location_client,
+        )
+
+        # Save and enqueue the new workflow
+        with self.state_handler.wc_state_lock():
+            self.state_handler.set_active_workflow(new_wf)
+            self.state_handler.enqueue_workflow(new_wf.workflow_id)
+
+        self.logger.info(
+            "Workflow resubmit successful",
+            event_type=EventType.WORKFLOW_START,
+            workflow_name=new_wf.name,
+            workflow_id=new_wf.workflow_id,
+            original_workflow_id=workflow_id,
+            workflow_definition_id=workflow_definition_id,
+        )
+        return new_wf
 
     @post("/workflow_definition")
     async def submit_workflow_definition(
