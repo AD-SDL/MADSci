@@ -124,7 +124,8 @@ const isTerminal = computed(() => {
 })
 
 function getStepStatusKey(step: any): string {
-  const status = step.status || step.result?.status
+  const resultStatus = step.result?.status
+  const status = (step.status && step.status !== 'not_started') ? step.status : (resultStatus || step.status)
   if (!status) return 'not_started'
   const s = String(status).toLowerCase()
   if (s === 'succeeded') return 'succeeded'
