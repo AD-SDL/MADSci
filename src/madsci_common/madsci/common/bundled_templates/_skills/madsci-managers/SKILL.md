@@ -107,7 +107,8 @@ class MyManager(AbstractManagerBase[MyManagerSettings]):
 ### 3. Client Class
 
 ```python
-from madsci.client.base_client import BaseClient
+from madsci.common.utils import create_http_session
+from pydantic import AnyUrl
 
 class MyManagerClient:
     def __init__(self, server_url: AnyUrl, config=None, event_client=None):

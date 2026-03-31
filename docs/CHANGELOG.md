@@ -36,8 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `FossMigrationSettings` with environment variable support and customizable compose file/service names
   - `FossMigrationStepResult` and `FossMigrationReport` result models for structured migration reporting
 - New `madsci migrate foss` CLI command with `--dry-run`/`--apply` modes, per-step execution (`--step`), `--skip-backup`, `--skip-docker`, URL overrides, and Rich table output
-- Docker Compose migration overlay (`compose.migration.yaml`) for running old containers on alternate ports during migration (MongoDB:27018, PostgreSQL:5433, MinIO:9002)
-- Comprehensive FOSS migration guide (`docs/guides/foss_migration.md`) with prerequisites, quick start, troubleshooting, and data directory reference
+- Docker Compose migration overlay (`compose.migration.yaml`) for running old containers on alternate ports during migration (MongoDB:27018, PostgreSQL:5433, Redis:6380, MinIO:9002)
+- Automated Location Manager data migration from v0.7.x Redis to FerretDB document database as part of the FOSS migration pipeline — auto-discovers manager IDs, reads location data (resource attachments, node representations) from old Redis, and writes to FerretDB via `LocationMigrator`
+- Comprehensive FOSS migration guide (`docs/guides/foss_migration.md`) with prerequisites, quick start, Location Manager migration, troubleshooting, and data directory reference
 - FOSS migration test suites: CLI tests (129 lines) and tool unit tests (536 lines)
 
 ### Changed
@@ -112,6 +113,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Template Import Fixes
 - Fixed `RestNodeConfig` import in all 6 module templates (was importing from `madsci.node_module` which does not export it; now imports from `madsci.common.types.node_types`)
 - Fixed `SquidServer`/`SquidSettings` imports in all 3 lab templates (classes do not exist; replaced with `LabManager` from `madsci.squid.lab_server` and `LabManagerSettings` from `madsci.common.types.lab_types`)
+
+#### FOSS Migration Location Data Loss
+- Fixed FOSS migration tool silently skipping Location Manager data stored in Redis, treating it as ephemeral; v0.7.x Location Manager stores primary location data (resource attachments, node representations, transfer state) in Redis, which is now automatically migrated to the document database during `madsci migrate foss --apply`
+
+#### Documentation URL Fixes
+- Fixed broken GitHub Pages documentation URLs in CLI output and generated project files
 
 #### CLI Scaffolding Fixes (`madsci new`)
 - Fixed `--template` argument being ignored in `madsci new module` (template selection prompt was always shown even when `--template` was explicitly provided)
