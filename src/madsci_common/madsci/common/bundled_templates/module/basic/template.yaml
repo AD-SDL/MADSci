@@ -16,7 +16,7 @@ parameters:
     description: "Module name (lowercase, underscores allowed)"
     required: true
     pattern: "^[a-z][a-z0-9_]*$"
-    default: "my_module"
+    default: "my_device"
 
   - name: module_description
     type: string

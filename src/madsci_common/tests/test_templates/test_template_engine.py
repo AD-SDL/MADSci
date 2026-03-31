@@ -301,7 +301,7 @@ class TestTemplateEngine:
         """Test getting default parameter values."""
         defaults = basic_engine.get_default_values()
         assert "module_name" in defaults
-        assert defaults["module_name"] == "my_module"
+        assert defaults["module_name"] == "my_device"
         assert "port" in defaults
         assert defaults["port"] == 2000
 
@@ -1294,7 +1294,16 @@ class TestSkillsCopying:
             parameters={"module_name": "test_mod", "port": 2000},
         )
 
-        skill_file = output_dir / ".agents" / "skills" / "madsci-nodes" / "SKILL.md"
+        # Skills should be placed inside the project root (test_mod_module/),
+        # not at the top-level output_dir
+        skill_file = (
+            output_dir
+            / "test_mod_module"
+            / ".agents"
+            / "skills"
+            / "madsci-nodes"
+            / "SKILL.md"
+        )
         assert skill_file.exists()
         content = skill_file.read_text()
         assert "madsci-nodes" in content
@@ -1332,13 +1341,16 @@ class TestSkillsCopying:
             parameters={"lab_name": "test_lab"},
         )
 
+        # Skills should be placed inside the project root (test_lab/)
         for skill_name in [
             "madsci-nodes",
             "madsci-experiments",
             "madsci-managers",
             "madsci-cli",
         ]:
-            skill_file = output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
+            skill_file = (
+                output_dir / "test_lab" / ".agents" / "skills" / skill_name / "SKILL.md"
+            )
             assert skill_file.exists(), f"Missing skill: {skill_name}"
 
     def test_skills_dry_run(self, registry: TemplateRegistry, tmp_path: Path) -> None:

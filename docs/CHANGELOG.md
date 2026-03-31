@@ -113,6 +113,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `RestNodeConfig` import in all 6 module templates (was importing from `madsci.node_module` which does not export it; now imports from `madsci.common.types.node_types`)
 - Fixed `SquidServer`/`SquidSettings` imports in all 3 lab templates (classes do not exist; replaced with `LabManager` from `madsci.squid.lab_server` and `LabManagerSettings` from `madsci.common.types.lab_types`)
 
+#### CLI Scaffolding Fixes (`madsci new`)
+- Fixed `--template` argument being ignored in `madsci new module` (template selection prompt was always shown even when `--template` was explicitly provided)
+- Fixed default module name `my_module` creating a `my_module_module` directory; default changed to `my_device`
+- Fixed agent skills being placed in the current working directory instead of inside the generated project directory (e.g., `my_device_module/.agents/` instead of `./.agents/`)
+- Fixed next-steps output using hardcoded fallback names (e.g., `your_module_module`) instead of the actual names entered during interactive prompts; `generate_from_template` now returns the `GeneratedProject` result
+- Fixed documentation link in `madsci new module` pointing to non-existent URL
+
 ### Removed
 - `workcell_manager.compose.yaml` (redundant compose file)
 - MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)

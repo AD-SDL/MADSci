@@ -209,13 +209,15 @@ class TemplateEngine:
 
     def _copy_skills(
         self,
-        output_dir: Path,
+        project_root: Path,
         dry_run: bool,
     ) -> tuple[list[Path], list[str]]:
         """Copy declared agent skills into the generated project.
 
         Args:
-            output_dir: Directory to write skill files into.
+            project_root: Root directory of the generated project (may be a
+                subdirectory of output_dir when the template nests all files
+                under a common prefix such as ``{{module_name}}_module/``).
             dry_run: If True, track paths but don't write files.
 
         Returns:
@@ -237,7 +239,7 @@ class TemplateEngine:
             if not skill_source.is_file():
                 logger.warning("Skill not found, skipping: skill_name=%s", skill_name)
                 continue
-            skill_dest = output_dir / ".agents" / "skills" / skill_name / "SKILL.md"
+            skill_dest = project_root / ".agents" / "skills" / skill_name / "SKILL.md"
             if not dry_run:
                 skill_dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(skill_source, skill_dest)
@@ -355,7 +357,7 @@ class TemplateEngine:
 
         return defaults
 
-    def render(  # noqa: C901, PLR0912
+    def render(  # noqa: C901, PLR0912, PLR0915
         self,
         output_dir: Path,
         parameters: dict[str, Any],
@@ -446,8 +448,19 @@ class TemplateEngine:
 
             files_created.append(dest_full)
 
+        # Determine the project root for placing skills.  If all rendered
+        # destinations share a common directory prefix (e.g. "my_device_module/"),
+        # use that as the project root; otherwise fall back to output_dir.
+        project_root = output_dir
+        if files_created:
+            rel_parts = [f.relative_to(output_dir).parts for f in files_created]
+            if rel_parts and all(len(p) > 1 for p in rel_parts):
+                first_dir = rel_parts[0][0]
+                if all(p[0] == first_dir for p in rel_parts):
+                    project_root = output_dir / first_dir
+
         # Copy agent skills
-        skill_files, skills_included = self._copy_skills(output_dir, dry_run)
+        skill_files, skills_included = self._copy_skills(project_root, dry_run)
         files_created.extend(skill_files)
 
         # Run post-generation hooks
