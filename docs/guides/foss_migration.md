@@ -64,13 +64,16 @@ madsci migrate foss --apply
 This will:
 1. Check prerequisites (CLI tools on PATH)
 2. Create a pre-migration backup of old data directories
-3. Start old MongoDB and PostgreSQL containers on alternate ports
-4. Migrate document databases (`mongodump` / `mongorestore`)
-5. Migrate PostgreSQL data (`pg_dump` / `pg_restore`)
-6. Copy Redis data files to Valkey directory
-7. Copy MinIO objects to SeaweedFS (if any)
-8. Verify data in the new FOSS stack
-9. Stop old containers
+3. Start old MongoDB, PostgreSQL, and Redis containers on alternate ports
+4. Start new FOSS infrastructure (FerretDB, Valkey, SeaweedFS)
+5. Migrate document databases (`mongodump` / `mongorestore`)
+6. Migrate PostgreSQL data (`pg_dump` / `pg_restore`)
+7. Migrate Location Manager data from old Redis to document database
+8. Copy MinIO objects to SeaweedFS (if any)
+9. Verify data in the new FOSS stack
+10. Stop old containers
+
+> **Important**: Step 7 migrates Location Manager data (locations, resource attachments, node representations) that was stored in Redis in v0.7.x. This data is **not** ephemeral — it is the primary location store. The migration reads from old Redis (port 6380) and writes to FerretDB via the Location Manager migration tool.
 
 ### Options
 
@@ -122,16 +125,17 @@ docker compose -f compose.infra.yaml up -d
 
 ### 2. Start Old Containers
 
-Use the migration overlay to start old MongoDB and PostgreSQL on alternate ports:
+Use the migration overlay to start old MongoDB, PostgreSQL, and Redis on alternate ports:
 
 ```bash
 docker compose -f compose.infra.yaml -f compose.migration.yaml up -d \
-  madsci_old_mongodb madsci_old_postgres
+  madsci_old_mongodb madsci_old_postgres madsci_old_redis
 ```
 
 This starts:
 - Old MongoDB on port **27018** (avoids conflict with FerretDB on 27017)
 - Old PostgreSQL on port **5433** (avoids conflict with FerretDB's PostgreSQL on 5432 and Resource Manager's PostgreSQL on 5434)
+- Old Redis on port **6380** (avoids conflict with Valkey on 6379)
 
 ### 3. Migrate Document Databases
 
@@ -160,21 +164,44 @@ PGPASSWORD=madsci pg_restore -h localhost -p 5434 -U madsci -d resources \
   --clean --if-exists /tmp/pg_dump.dump
 ```
 
-### 5. Migrate Redis to Valkey
+### 5. Migrate Location Manager Data (Redis → Document Database)
 
-> **Note**: The automated `madsci migrate foss` tool **skips** Redis/Valkey migration because MADSci's Redis data is ephemeral (workcell state, location caches) and is repopulated automatically by the managers on startup. The manual file copy below is only needed if you have persistent Redis data you want to preserve.
+In v0.7.x, the Location Manager stores all location data (resource attachments, node representations, transfer state) in Redis. In v0.8.0+, this data is stored in the document database (FerretDB). This step performs an application-level migration.
 
-Copy the data files:
+> **Note**: Direct file copy from Redis to Valkey is not possible because Redis 7.4+ uses RDB format v12, which is incompatible with Valkey 8 (RDB v11). This step reads from old Redis via the Python client and writes to FerretDB.
+
+First, find your Location Manager ID:
 
 ```bash
-# Copy RDB snapshot
-cp .madsci/redis/dump.rdb .madsci/valkey/dump.rdb
-
-# Copy AOF directory (if used)
-cp -r .madsci/redis/appendonlydir/ .madsci/valkey/appendonlydir/
+# From old Redis (port 6380)
+redis-cli -p 6380 KEYS 'madsci:location_manager:*:locations'
+# Output: madsci:location_manager:<MANAGER_ID>:locations
 ```
 
-> **Note**: Direct file copy only works if your Redis RDB format is compatible with Valkey. If your Redis was version 7.4+ (RDB format v12), Valkey 8 may not be able to load it. In that case, you can skip this step — Valkey will start fresh with an empty dataset. See [Valkey RDB Incompatibility](#valkey-rdb-format-incompatibility) in Troubleshooting.
+Then run the migration tool:
+
+```bash
+python -m madsci.location_manager.location_migration \
+  --redis-host localhost --redis-port 6380 \
+  --document-db-url "mongodb://madsci:madsci@localhost:27017/" \
+  --database madsci_locations \
+  --manager-id <MANAGER_ID>
+```
+
+Verify the migration:
+
+```bash
+python -c "
+from pymongo import MongoClient
+client = MongoClient('mongodb://madsci:madsci@localhost:27017/')
+db = client['madsci_locations']
+count = db['locations'].count_documents({})
+print(f'Migrated {count} locations')
+client.close()
+"
+```
+
+> **Note**: Other Redis data (workcell state, caches) is ephemeral and will be repopulated automatically by managers on startup. Only Location Manager data requires explicit migration.
 
 ### 6. Migrate MinIO to SeaweedFS
 
@@ -307,15 +334,15 @@ If you see `schema "documentdb_api" does not exist` or `extension "documentdb" d
 
 ### Valkey RDB Format Incompatibility
 
-Redis RDB format version 12 (from Redis 7.4+) is not compatible with Valkey 8. If you see errors like `Can't handle RDB format version 12`, the direct file copy won't work. In this case:
+Redis RDB format version 12 (from Redis 7.4+) is not compatible with Valkey 8. Direct file copy from `.madsci/redis/` to `.madsci/valkey/` will not work.
 
-1. Clear the Valkey data directory:
-   ```bash
-   rm -rf .madsci/valkey/*
-   ```
-2. Restart Valkey — it will start fresh with an empty dataset.
+The automated migration tool handles this by performing an application-level migration of Location Manager data (the only non-ephemeral Redis data) directly from old Redis to FerretDB. Other Redis data (workcell state, caches) is ephemeral and repopulated by managers on startup.
 
-Since Valkey is used for transient state (caching, pub/sub) in MADSci, losing this data is generally safe. Persistent state is stored in the document and relational databases.
+If you see `Can't handle RDB format version 12` errors in Valkey logs, clear the data directory:
+```bash
+rm -rf .madsci/valkey/*
+```
+Restart Valkey — it will start fresh. This is safe because all persistent data has been migrated to the document database.
 
 ### Migration Hangs on "Start Old Containers"
 

@@ -1,10 +1,10 @@
 # Docker Compose overlay for FOSS stack migration.
-# Starts old MongoDB, PostgreSQL, and MinIO containers on alternate ports so
-# data can be migrated to the new FOSS stack (FerretDB, Valkey, SeaweedFS).
+# Starts old MongoDB, PostgreSQL, Redis, and MinIO containers on alternate ports
+# so data can be migrated to the new FOSS stack (FerretDB, Valkey, SeaweedFS).
 #
 # Usage:
 #   docker compose -f compose.infra.yaml -f compose.migration.yaml up -d \
-#     madsci_old_mongodb madsci_old_postgres madsci_old_minio
+#     madsci_old_mongodb madsci_old_postgres madsci_old_redis madsci_old_minio
 #
 # See docs/guides/foss_migration.md for the full migration guide.
 
@@ -32,6 +32,16 @@ services:
       # Uses a separate copy so the live .madsci/postgresql/data path is free
       # for the new FOSS PostgreSQL + FerretDB stack.
       - ${REPO_PATH:-../..}/.madsci/postgresql_old/data:/var/lib/postgresql/data
+
+  madsci_old_redis:
+    container_name: madsci_old_redis
+    image: redis:${OLD_REDIS_VERSION:-7.4}
+    restart: "no"
+    ports:
+      - "${OLD_REDIS_PORT:-6380}:6379"
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/redis:/data
+    command: redis-server --appendonly yes
 
   madsci_old_minio:
     container_name: madsci_old_minio

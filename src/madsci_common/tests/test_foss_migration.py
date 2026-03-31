@@ -298,16 +298,29 @@ class TestCommandBuilding:
 
 
 class TestRedisToValkey:
-    """Tests for Redis-to-Valkey skip behaviour."""
+    """Tests for Redis-to-Valkey Location Manager migration behaviour."""
 
-    def test_always_skips(self) -> None:
+    def test_skips_when_redis_unreachable(self) -> None:
+        """When old Redis is not reachable, the step succeeds with a skip message."""
         tool = FossMigrationTool(
             settings=FossMigrationSettings(enable_registry_resolution=False)
         )
         result = tool.migrate_redis_to_valkey()
         assert result.success is True
-        assert "skipped" in result.message.lower()
-        assert "ephemeral" in result.message.lower()
+        assert "skipping" in result.message.lower()
+
+    def test_skips_when_no_redis_data_dir(self, tmp_path: Path) -> None:
+        """When no .madsci/redis directory exists, the step succeeds with a skip message."""
+        # Point to a tmp .madsci dir with no redis subdirectory
+        madsci_dir = tmp_path / ".madsci"
+        madsci_dir.mkdir()
+        tool = FossMigrationTool(
+            settings=FossMigrationSettings(enable_registry_resolution=False)
+        )
+        tool._madsci_dir = madsci_dir
+        result = tool.migrate_redis_to_valkey()
+        assert result.success is True
+        assert "no old redis data" in result.message.lower()
 
 
 # ---------------------------------------------------------------------------

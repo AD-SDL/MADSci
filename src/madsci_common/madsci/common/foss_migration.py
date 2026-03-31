@@ -162,6 +162,29 @@ class FossMigrationSettings(
         json_schema_extra={"secret": True},
     )
 
+    old_redis_host: str = Field(
+        default="localhost",
+        title="Old Redis Host",
+        description="Redis host for the old (source) cache",
+    )
+    old_redis_port: int = Field(
+        default=6380,
+        title="Old Redis Port",
+        description="Redis port for the old (source) cache (alternate port to avoid conflict with Valkey)",
+    )
+    old_redis_password: Optional[str] = Field(
+        default=None,
+        title="Old Redis Password",
+        description="Redis password for the old (source) cache",
+        json_schema_extra={"secret": True},
+    )
+
+    location_database_name: str = Field(
+        default="madsci_locations",
+        title="Location Database Name",
+        description="Document database name for the Location Manager in the new FOSS stack",
+    )
+
     backup_dir: Path = Field(
         default=Path(".madsci/backups/foss_migration"),
         title="Backup Directory",
@@ -188,6 +211,7 @@ class FossMigrationSettings(
         default_factory=lambda: [
             "madsci_old_mongodb",
             "madsci_old_postgres",
+            "madsci_old_redis",
             "madsci_old_minio",
         ],
         title="Old Container Services",
@@ -285,8 +309,9 @@ class FossMigrationTool:
 
         Returns a dict mapping component name to whether data was found.
         """
-        # Note: Redis is detected for informational purposes but not
-        # migrated — its data is ephemeral and repopulated by managers.
+        # Note: Redis data is detected to support Location Manager migration.
+        # Most Redis data is ephemeral, but v0.7.x Location Manager stores
+        # primary location data in Redis that must be migrated.
         return {
             "mongodb": self._resolve_data_path("mongodb").exists(),
             "postgresql": self._resolve_data_path("postgresql", "data").exists(),
@@ -448,6 +473,20 @@ class FossMigrationTool:
             ):
                 self.logger.warning(
                     "Old MongoDB did not respond to ping within timeout; continuing anyway"
+                )
+            # Wait for old Redis to accept connections (needed for Location Manager migration)
+            if self._resolve_data_path("redis").exists() and not self._wait_for_service(
+                lambda: self._check_redis_connection(
+                    self.settings.old_redis_host,
+                    self.settings.old_redis_port,
+                    self.settings.old_redis_password,
+                ),
+                timeout=15,
+                interval=2,
+            ):
+                self.logger.warning(
+                    "Old Redis did not respond to ping within timeout; "
+                    "Location Manager data migration may be skipped"
                 )
             return FossMigrationStepResult(
                 step="start_old_containers",
@@ -804,23 +843,207 @@ class FossMigrationTool:
             )
 
     # ------------------------------------------------------------------
-    # Redis -> Valkey  (skipped — data is ephemeral)
+    # Redis -> Valkey  (Location Manager data migration)
     # ------------------------------------------------------------------
 
-    def migrate_redis_to_valkey(self) -> FossMigrationStepResult:
-        """Report that Redis data migration is not needed.
+    def _check_redis_connection(
+        self, host: str, port: int, password: Optional[str] = None
+    ) -> bool:
+        """Return True if a Redis connection succeeds."""
+        try:
+            import redis as redis_lib  # noqa: PLC0415
 
-        Redis/Valkey data in MADSci is ephemeral (workcell state, location
-        caches) and is repopulated automatically by the managers on startup.
-        Additionally, Redis 7.4 uses RDB format v12 which is incompatible
-        with Valkey 8 (forked from Redis 7.2, RDB v11), so file-level or
-        DUMP/RESTORE migration is not possible.
+            client = redis_lib.Redis(
+                host=host, port=port, password=password, socket_timeout=2
+            )
+            client.ping()
+            client.close()
+            return True
+        except Exception:
+            return False
+
+    def _discover_location_manager_ids(
+        self, host: str, port: int, password: Optional[str] = None
+    ) -> list[str]:
+        """Discover Location Manager IDs from old Redis keys.
+
+        Scans for keys matching ``madsci:location_manager:*:locations`` and
+        extracts the manager ID from the key pattern.
         """
-        return FossMigrationStepResult(
-            step="migrate_redis_to_valkey",
-            success=True,
-            message="Skipped — Redis/Valkey data is ephemeral and will be repopulated by managers",
-        )
+        import redis as redis_lib  # noqa: PLC0415
+
+        client = redis_lib.Redis(host=host, port=port, password=password)
+        try:
+            keys = client.keys("madsci:location_manager:*:locations")
+            manager_ids = []
+            for key in keys:
+                # Key format: madsci:location_manager:{manager_id}:locations
+                key_str = key.decode() if isinstance(key, bytes) else key
+                parts = key_str.split(":")
+                if len(parts) >= 4:
+                    manager_ids.append(parts[2])
+            return manager_ids
+        finally:
+            client.close()
+
+    def migrate_redis_to_valkey(self) -> FossMigrationStepResult:
+        """Migrate Location Manager data from old Redis to the new document database.
+
+        Most Redis/Valkey data in MADSci is ephemeral (workcell state) and is
+        repopulated automatically by managers on startup.  However, the v0.7.x
+        Location Manager stores its **primary location data** in Redis —
+        including resource attachments and node representations — which must be
+        migrated to the document database used by v0.8.0+.
+
+        Redis 7.4 uses RDB format v12, incompatible with Valkey 8 (RDB v11),
+        so file-level migration is not possible.  Instead, this step performs
+        an application-level migration: read from old Redis via the Python
+        client, write to FerretDB via the LocationMigrator.
+        """
+        t0 = time.monotonic()
+        host = self.settings.old_redis_host
+        port = self.settings.old_redis_port
+        password = self.settings.old_redis_password
+
+        # Quick checks: skip if no data or Redis unreachable
+        skip_reason = self._check_redis_skip_reason(host, port, password)
+        if skip_reason is not None:
+            return skip_reason
+
+        return self._run_location_migration(host, port, password, t0)
+
+    def _check_redis_skip_reason(
+        self,
+        host: str,
+        port: int,
+        password: Optional[str],
+    ) -> Optional[FossMigrationStepResult]:
+        """Return a skip result if Redis migration should be skipped, else None."""
+        t0 = time.monotonic()
+
+        if not self._resolve_data_path("redis").exists():
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=True,
+                message="No old Redis data directory found; skipping",
+                duration_seconds=time.monotonic() - t0,
+            )
+
+        if not self._wait_for_service(
+            lambda: self._check_redis_connection(host, port, password),
+            timeout=15,
+            interval=2,
+        ):
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=True,
+                message=(
+                    f"Old Redis not reachable at {host}:{port}; "
+                    "skipping Location Manager migration (ephemeral data will be repopulated)"
+                ),
+                duration_seconds=time.monotonic() - t0,
+                details={
+                    "note": "If you have v0.7.x location data to migrate, start old Redis and re-run this step"
+                },
+            )
+
+        return None
+
+    def _run_location_migration(
+        self,
+        host: str,
+        port: int,
+        password: Optional[str],
+        t0: float,
+    ) -> FossMigrationStepResult:
+        """Discover Location Manager IDs and migrate their data."""
+        try:
+            manager_ids = self._discover_location_manager_ids(host, port, password)
+        except Exception as exc:
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=False,
+                message="Failed to discover Location Manager IDs from old Redis",
+                duration_seconds=time.monotonic() - t0,
+                error=str(exc),
+            )
+
+        if not manager_ids:
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=True,
+                message="No Location Manager data found in old Redis; skipping",
+                duration_seconds=time.monotonic() - t0,
+            )
+
+        try:
+            from madsci.common.db_handlers import (  # noqa: PLC0415
+                PyCacheHandler,
+                PyDocumentStorageHandler,
+            )
+            from madsci.location_manager.location_migration import (  # noqa: PLC0415
+                LocationMigrator,
+            )
+
+            cache_handler = PyCacheHandler.from_settings(
+                host=host, port=port, password=password
+            )
+            document_handler = PyDocumentStorageHandler.from_url(
+                str(self.settings.new_document_db_url),
+                self.settings.location_database_name,
+            )
+
+            total_migrated = 0
+            total_skipped = 0
+            all_errors: list[str] = []
+
+            for manager_id in manager_ids:
+                migrator = LocationMigrator(
+                    cache_handler=cache_handler,
+                    document_handler=document_handler,
+                    manager_id=manager_id,
+                )
+                result = migrator.migrate_from_redis()
+                total_migrated += result.migrated
+                total_skipped += result.skipped
+                all_errors.extend(result.errors)
+
+            cache_handler.close()
+
+            success = len(all_errors) == 0
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=success,
+                message=(
+                    f"Migrated {total_migrated} locations from Redis to document database ({total_skipped} skipped)"
+                    if success
+                    else f"Location migration partially failed: {total_migrated} migrated, {len(all_errors)} errors"
+                ),
+                duration_seconds=time.monotonic() - t0,
+                error="; ".join(all_errors) if all_errors else None,
+                details={
+                    "manager_ids": manager_ids,
+                    "migrated": total_migrated,
+                    "skipped": total_skipped,
+                },
+            )
+
+        except ImportError as exc:
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=False,
+                message="Location Manager migration dependencies not available",
+                duration_seconds=time.monotonic() - t0,
+                error=f"Required packages not installed: {exc}",
+            )
+        except Exception as exc:
+            return FossMigrationStepResult(
+                step="migrate_redis_to_valkey",
+                success=False,
+                message="Location Manager migration failed",
+                duration_seconds=time.monotonic() - t0,
+                error=str(exc),
+            )
 
     # ------------------------------------------------------------------
     # MinIO -> SeaweedFS  (S3 SDK copy)
