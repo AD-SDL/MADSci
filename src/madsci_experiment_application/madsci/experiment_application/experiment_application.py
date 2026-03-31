@@ -11,7 +11,7 @@
     - For interactive terminal: Use ExperimentTUI
     - For server mode: Use ExperimentNode
 
-    See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for details.
+    See https://ad-sdl.github.io/MADSci/running-experiments for details.
 """
 
 import time
@@ -142,7 +142,7 @@ class ExperimentApplication(RestNode):
             "ExperimentApplication is deprecated and will be removed in v0.8.0. "
             "Use ExperimentScript (for scripts), ExperimentNotebook (for notebooks), "
             "ExperimentTUI (for interactive TUI), or ExperimentNode (for server mode) instead. "
-            "See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for migration guide.",
+            "See https://ad-sdl.github.io/MADSci/running-experiments for migration guide.",
             DeprecationWarning,
             stacklevel=2,
         )
