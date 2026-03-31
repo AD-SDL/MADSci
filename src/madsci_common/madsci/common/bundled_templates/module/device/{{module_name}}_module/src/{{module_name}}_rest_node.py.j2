@@ -116,22 +116,22 @@ class {{ module_name | pascal_case }}Node(RestNode):
             ),
             required_overrides=["resource_name"],
             tags=["{{ module_name }}", "slot", "device"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize device slot resource instance
-        slot_resource_name = f"{{ module_name }}_slot_{self.node_definition.node_name}"
+        slot_resource_name = f"{{ module_name }}_slot_{self.node_info.node_name}"
         self.device_slot = self.resource_client.create_resource_from_template(
             template_name="{{ module_name }}_slot",
             resource_name=slot_resource_name,
             add_to_database=True,
         )
-        self.logger.log(
+        self.event_client.info(
             f"Initialized device slot resource from template: {self.device_slot.resource_id}"
         )
 
-        self.logger.log("{{ module_name | pascal_case }} device node initialized!")
+        self.event_client.info("{{ module_name | pascal_case }} device node initialized!")
 
     def shutdown_handler(self) -> None:
         """Clean shutdown of the device node.
@@ -139,7 +139,7 @@ class {{ module_name | pascal_case }}Node(RestNode):
         This method is called when the node is being shut down or restarted.
         It safely shuts down the device and closes connections.
         """
-        self.logger.log("Shutting down {{ module_name }} device node")
+        self.event_client.info("Shutting down {{ module_name }} device node")
         if self._interface:
             self._interface.shutdown()
             self._interface.disconnect()
@@ -198,10 +198,10 @@ class {{ module_name | pascal_case }}Node(RestNode):
         Returns:
             str: Confirmation message.
         """
-        self.logger.log("Resetting {{ module_name }} device...")
+        self.event_client.info("Resetting {{ module_name }} device...")
         self._interface.shutdown()
         self._interface.initialize()
-        self.logger.log("{{ module_name | pascal_case }} device reset complete")
+        self.event_client.info("{{ module_name | pascal_case }} device reset complete")
         return "Device reset successfully"
 
 

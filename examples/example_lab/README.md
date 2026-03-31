@@ -9,10 +9,11 @@ Currently, this lab uses simulated example modules for purely fake devices. For 
 The example lab simulates a real laboratory environment with:
 
 ### Infrastructure Services
-- **MongoDB** (Port 27017): Event and experiment data storage
-- **PostgreSQL** (Port 5432): Resource and inventory management
-- **Valkey** (Port 6379): Real-time state management and task queuing (Redis-compatible cache)
-- **MinIO** (Port 9000/9001): Object storage for data files
+- **FerretDB** (Port 27017): Document database for event and experiment data (MongoDB-compatible, backed by PostgreSQL)
+- **PostgreSQL** (Port 5432): FerretDB backend database
+- **PostgreSQL** (Port 5434): Resource Manager relational database
+- **Valkey** (Port 6379): Real-time state management and caching
+- **SeaweedFS** (Port 8333/9333): S3-compatible object storage for data files
 
 ### Core Managers
 - **Lab Manager** (Port 8000): Central dashboard and lab coordination
@@ -43,7 +44,7 @@ Before starting the example lab, ensure you have:
    - Consult the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) for configuration and setup recommendations
 
 2. **Network Requirements**:
-   - Ports 2000-2004, 5432, 6379, 8000-8006, 9000-9001, and 27017 available
+   - Ports 2000-2004, 5432, 5434, 6379, 8000-8006, 8333, 9333, and 27017 available
    - Internet access for pulling Docker images
 
 3. **System Requirements**:
@@ -207,7 +208,7 @@ curl -X POST http://localhost:2000/actions/prepare \
   -d '{"parameters": {}}'
 
 # Query node capabilities
-curl http://localhost:2000/definition
+curl http://localhost:2000/info
 ```
 
 ## Troubleshooting
@@ -221,7 +222,7 @@ docker --version
 docker compose --version
 
 # Verify port availability
-netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|6379|27017|9000|9001)'
+netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|5434|6379|27017|8333|9333)'
 
 # Check Docker resources
 docker system df
@@ -236,7 +237,7 @@ docker compose up
 
 # Check database logs
 docker compose logs postgres
-docker compose logs mongodb
+docker compose logs madsci_ferretdb
 docker compose logs madsci_valkey
 ```
 

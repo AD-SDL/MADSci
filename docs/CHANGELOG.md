@@ -5,9 +5,30 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-03-31
 
 ### Added
+
+#### Node Location Template System (PR #228, #258)
+- `template_handler()` lifecycle method on `AbstractNode` for declarative registration of resource templates, location representation templates, and location templates at node startup
+- `location_representation_templates` and `location_templates` class variables on `AbstractNode` for declarative template definitions
+- `NodeInfo.location_templates` field exposing a node's registered location templates through its info endpoint
+- Location Templates panel on the Squid Dashboard with schema-aware forms for creating locations from templates
+- Resource Templates panel on the Squid Dashboard Resources tab
+- Database auto-initialization for document database collections not yet tracked by the migration system
+
+#### Agent Skills (PR #242)
+- Four bundled agent skills (`madsci-cli`, `madsci-nodes`, `madsci-managers`, `madsci-experiments`) providing AI coding agents with MADSci domain knowledge
+- Skills are automatically copied into generated projects via `madsci new` and `madsci init`
+
+#### Dashboard Workflow and Node Modal Redesign (PR #259)
+- Redesigned workflow modal with tabbed layout (Overview, Steps, Results tabs) and step indicators
+- Workflow retry and resubmit UX with confirmation dialogs and snackbar notifications
+- Redesigned node modal with tabbed layout (Overview, Info, Actions tabs)
+- `resubmit_workflow` endpoint on workcell manager and corresponding client method
+
+#### Experiment Ownership Propagation (PR #260)
+- Experiment ownership context (experiment_id, campaign_id, user) is now automatically propagated to workflows started within `manage_experiment()`
 
 #### FOSS Infrastructure Migration (Issue #212)
 - New FOSS migration tool (`madsci.common.foss_migration`) for automated data migration from proprietary infrastructure (MongoDB, Redis, MinIO) to FOSS alternatives (FerretDB, Valkey, SeaweedFS)
@@ -20,6 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FOSS migration test suites: CLI tests (129 lines) and tool unit tests (536 lines)
 
 ### Changed
+
+#### Location Manager Dual-Handler Architecture (PR #228)
+- Location Manager migrated from Redis-only to dual-handler architecture (document database + cache)
+- Location data persisted in document database with cache-backed fast reads
+
+#### Dashboard UX Improvements (PRs #255, #257)
+- Copyable workflow step output now uses `js-yaml` for YAML formatting with scoped toggle per action
+- JSON renderer for workflow steps has a depth limit to prevent browser freezes on deeply nested data
+- Action argument values in the node modal are now initialized from their declared defaults
 
 #### Default Infrastructure: FOSS Alternatives
 - **MongoDB → FerretDB v2**: Default document database switched to FerretDB (MongoDB wire protocol, backed by PostgreSQL with DocumentDB extension); Python `pymongo` client unchanged
@@ -67,6 +97,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Manager READMEs updated with FerretDB/Valkey/SeaweedFS references and new handler names
 - Tutorials updated with new service names, ports, and compose configuration
 - `madsci_common` README updated with new backup tool class names
+
+### Fixed
+
+#### Dashboard and UI Fixes (PRs #255, #256, #257, #259)
+- Fixed dashboard freeze caused by `@vue:updated` event handler creating infinite update loops; replaced with `@update:modelValue`
+- Typed action endpoints now return a failed `ActionResult` instead of HTTP 500 when actions raise exceptions
+- Action argument checkbox and input values in the node modal now correctly initialized from their declared defaults
+- Workflow steps that error before execution now show failed status instead of remaining pending
+
+#### Experiment Ownership (PR #260)
+- Restricted ownership context overrides to experiment-level fields only (`experiment_id`, `campaign_id`, `user`), preventing unintended overwrites of workflow-level ownership
 
 ### Removed
 - `workcell_manager.compose.yaml` (redundant compose file)
