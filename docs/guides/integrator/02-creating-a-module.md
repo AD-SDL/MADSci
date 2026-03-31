@@ -84,7 +84,7 @@ Centralized type definitions:
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from madsci.node_module import RestNodeConfig
+from madsci.common.types.node_types import RestNodeConfig
 
 
 class MyInstrumentNodeConfig(RestNodeConfig):

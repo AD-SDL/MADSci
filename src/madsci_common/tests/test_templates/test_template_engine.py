@@ -5,10 +5,22 @@ the registry discovers templates, and generated code is valid.
 """
 
 import ast
+import importlib
 import importlib.resources
+import json
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
 from madsci.common.templates.engine import (
     TemplateEngine,
     TemplateValidationError,
@@ -23,6 +35,68 @@ from madsci.common.templates.registry import (
 from madsci.common.types.template_types import (
     TemplateCategory,
 )
+
+# --- Shared parametrize data ---
+
+# All templates with render parameters, used by multiple parametrized tests.
+TEMPLATE_RENDER_PARAMS: list[tuple[str, dict]] = [
+    ("module/basic", {"module_name": "test_gen", "port": 2000}),
+    ("module/device", {"module_name": "test_gen", "port": 2000}),
+    ("module/camera", {"module_name": "test_gen", "port": 2000}),
+    ("module/instrument", {"module_name": "test_gen", "port": 2000}),
+    ("module/liquid_handler", {"module_name": "test_gen", "port": 2000}),
+    ("module/robot_arm", {"module_name": "test_gen", "port": 2000}),
+    ("interface/fake", {"module_name": "test_gen"}),
+    ("interface/real", {"module_name": "test_gen"}),
+    ("interface/sim", {"module_name": "test_gen"}),
+    ("interface/mock", {"module_name": "test_gen"}),
+    ("node/basic", {"node_name": "test_gen", "port": 2000}),
+    ("experiment/script", {"experiment_name": "test_gen"}),
+    ("experiment/tui", {"experiment_name": "test_gen"}),
+    ("experiment/node", {"experiment_name": "test_gen", "server_port": 6000}),
+    (
+        "workflow/basic",
+        {"workflow_name": "test_gen", "node_name": "n1", "action_name": "a1"},
+    ),
+    (
+        "workflow/multi_step",
+        {
+            "workflow_name": "test_gen",
+            "node_1_name": "n1",
+            "node_1_action": "a1",
+            "node_2_name": "n2",
+            "node_2_action": "a2",
+        },
+    ),
+    ("lab/minimal", {"lab_name": "test_gen"}),
+    ("lab/standard", {"lab_name": "test_gen"}),
+    ("lab/distributed", {"lab_name": "test_gen"}),
+    ("workcell/basic", {"workcell_name": "test_gen"}),
+    ("comm/serial", {"interface_name": "test_gen"}),
+    ("comm/socket", {"interface_name": "test_gen"}),
+    ("comm/rest", {"interface_name": "test_gen"}),
+    ("comm/sdk", {"interface_name": "test_gen"}),
+    ("comm/modbus", {"interface_name": "test_gen"}),
+]
+
+# Deprecated patterns that must not appear in generated Python code.
+# Add new entries when APIs are removed or renamed.
+DEPRECATED_PYTHON_PATTERNS: list[tuple[str, str]] = [
+    ("ActionHandler", "Use @action decorator instead"),
+    ("self.node_definition", "Use self.node_info instead"),
+    ("NodeDefinition", "Use NodeConfig instead"),
+    ("load_definition(", "Definition files were removed in v0.7.0"),
+    ("load_or_create_definition(", "Definition files were removed in v0.7.0"),
+    ("SquidServer", "Use LabManager from madsci.squid.lab_server instead"),
+    (
+        "SquidSettings",
+        "Use LabManagerSettings from madsci.common.types.lab_types instead",
+    ),
+    ("create_minio_client", "Use create_object_storage_client instead"),
+    ("PyMongoHandler", "Use PyDocumentStorageHandler instead"),
+    ("InMemoryMongoHandler", "Use InMemoryDocumentStorageHandler instead"),
+]
+
 
 # --- Filter tests ---
 
@@ -1152,48 +1226,7 @@ class TestTemplateCompleteness:
             f"Default values for {template_id} failed validation: {errors}"
         )
 
-    @pytest.mark.parametrize(
-        "template_id,params",
-        [
-            ("module/basic", {"module_name": "test_gen", "port": 2000}),
-            ("module/device", {"module_name": "test_gen", "port": 2000}),
-            ("module/camera", {"module_name": "test_gen", "port": 2000}),
-            ("module/instrument", {"module_name": "test_gen", "port": 2000}),
-            ("module/liquid_handler", {"module_name": "test_gen", "port": 2000}),
-            ("module/robot_arm", {"module_name": "test_gen", "port": 2000}),
-            ("interface/fake", {"module_name": "test_gen"}),
-            ("interface/real", {"module_name": "test_gen"}),
-            ("interface/sim", {"module_name": "test_gen"}),
-            ("interface/mock", {"module_name": "test_gen"}),
-            ("node/basic", {"node_name": "test_gen", "port": 2000}),
-            ("experiment/script", {"experiment_name": "test_gen"}),
-            ("experiment/tui", {"experiment_name": "test_gen"}),
-            ("experiment/node", {"experiment_name": "test_gen", "server_port": 6000}),
-            (
-                "workflow/basic",
-                {"workflow_name": "test_gen", "node_name": "n1", "action_name": "a1"},
-            ),
-            (
-                "workflow/multi_step",
-                {
-                    "workflow_name": "test_gen",
-                    "node_1_name": "n1",
-                    "node_1_action": "a1",
-                    "node_2_name": "n2",
-                    "node_2_action": "a2",
-                },
-            ),
-            ("lab/minimal", {"lab_name": "test_gen"}),
-            ("lab/standard", {"lab_name": "test_gen"}),
-            ("lab/distributed", {"lab_name": "test_gen"}),
-            ("workcell/basic", {"workcell_name": "test_gen"}),
-            ("comm/serial", {"interface_name": "test_gen"}),
-            ("comm/socket", {"interface_name": "test_gen"}),
-            ("comm/rest", {"interface_name": "test_gen"}),
-            ("comm/sdk", {"interface_name": "test_gen"}),
-            ("comm/modbus", {"interface_name": "test_gen"}),
-        ],
-    )
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
     def test_template_renders_successfully(
         self,
         registry: TemplateRegistry,
@@ -1211,33 +1244,7 @@ class TestTemplateCompleteness:
         for f in result.files_created:
             assert f.exists(), f"File not created: {f}"
 
-    @pytest.mark.parametrize(
-        "template_id,params",
-        [
-            ("module/basic", {"module_name": "syntax_test", "port": 2000}),
-            ("module/device", {"module_name": "syntax_test", "port": 2000}),
-            ("module/camera", {"module_name": "syntax_test", "port": 2000}),
-            ("module/instrument", {"module_name": "syntax_test", "port": 2000}),
-            ("module/liquid_handler", {"module_name": "syntax_test", "port": 2000}),
-            ("module/robot_arm", {"module_name": "syntax_test", "port": 2000}),
-            ("interface/fake", {"module_name": "syntax_test"}),
-            ("interface/real", {"module_name": "syntax_test"}),
-            ("interface/sim", {"module_name": "syntax_test"}),
-            ("interface/mock", {"module_name": "syntax_test"}),
-            ("node/basic", {"node_name": "syntax_test", "port": 2000}),
-            ("experiment/script", {"experiment_name": "syntax_test"}),
-            ("experiment/tui", {"experiment_name": "syntax_test"}),
-            (
-                "experiment/node",
-                {"experiment_name": "syntax_test", "server_port": 6000},
-            ),
-            ("comm/serial", {"interface_name": "syntax_test"}),
-            ("comm/socket", {"interface_name": "syntax_test"}),
-            ("comm/rest", {"interface_name": "syntax_test"}),
-            ("comm/sdk", {"interface_name": "syntax_test"}),
-            ("comm/modbus", {"interface_name": "syntax_test"}),
-        ],
-    )
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
     def test_generated_python_syntax(
         self,
         registry: TemplateRegistry,
@@ -1497,3 +1504,119 @@ class TestSkillsCopying:
             assert bundled_file.read_text() == repo_file.read_text(), (
                 f"Content mismatch for {skill_name}/SKILL.md"
             )
+
+
+# --- Generated code quality tests ---
+
+
+class TestGeneratedCodeQuality:
+    """Cross-cutting quality checks on rendered template output.
+
+    These tests complement the syntax-level checks in TestTemplateCompleteness
+    by validating that generated code uses current APIs, produces parseable
+    config files, and avoids deprecated patterns.
+    """
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_generated_madsci_imports(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that all 'from madsci.* import X' resolve to real names.
+
+        This catches bugs like importing a removed name (e.g., ActionHandler)
+        that ast.parse() alone would not detect.
+        """
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            if f.suffix != ".py":
+                continue
+            tree = ast.parse(f.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                if not node.module or not node.module.startswith("madsci."):
+                    continue
+                try:
+                    mod = importlib.import_module(node.module)
+                except ModuleNotFoundError:
+                    pytest.fail(
+                        f"Cannot import module '{node.module}' "
+                        f"in {f.name} (template: {template_id})"
+                    )
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    assert hasattr(mod, alias.name), (
+                        f"Cannot import name '{alias.name}' from '{node.module}' "
+                        f"in {f.name} (template: {template_id})"
+                    )
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_generated_config_file_syntax(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that generated YAML, TOML, and JSON files are parseable."""
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            content = f.read_text()
+            if not content.strip():
+                continue
+            try:
+                if f.suffix in (".yaml", ".yml"):
+                    yaml.safe_load(content)
+                elif f.suffix == ".toml" and tomllib is not None:
+                    tomllib.loads(content)
+                elif f.suffix == ".json":
+                    json.loads(content)
+            except Exception as e:
+                pytest.fail(
+                    f"Invalid {f.suffix} in {f.name} (template: {template_id}): {e}"
+                )
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_no_deprecated_patterns(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that generated Python code does not use deprecated APIs.
+
+        Patterns are maintained in DEPRECATED_PYTHON_PATTERNS at the top of
+        this module. Add a new entry when an API is removed or renamed.
+        """
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            if f.suffix != ".py":
+                continue
+            content = f.read_text()
+            for pattern, reason in DEPRECATED_PYTHON_PATTERNS:
+                assert pattern not in content, (
+                    f"Deprecated pattern '{pattern}' found in {f.name} "
+                    f"(template: {template_id}). {reason}"
+                )

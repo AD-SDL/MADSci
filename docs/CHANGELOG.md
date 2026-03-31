@@ -109,6 +109,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Experiment Ownership (PR #260)
 - Restricted ownership context overrides to experiment-level fields only (`experiment_id`, `campaign_id`, `user`), preventing unintended overwrites of workflow-level ownership
 
+#### Template Import Fixes
+- Fixed `RestNodeConfig` import in all 6 module templates (was importing from `madsci.node_module` which does not export it; now imports from `madsci.common.types.node_types`)
+- Fixed `SquidServer`/`SquidSettings` imports in all 3 lab templates (classes do not exist; replaced with `LabManager` from `madsci.squid.lab_server` and `LabManagerSettings` from `madsci.common.types.lab_types`)
+
 ### Removed
 - `workcell_manager.compose.yaml` (redundant compose file)
 - MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)
