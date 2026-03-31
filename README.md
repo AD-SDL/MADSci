@@ -121,7 +121,7 @@
 | src/madsci\_common/madsci/common/types/manager\_types.py                                           |       55 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/migration\_types.py                                         |       59 |        1 |     98% |       143 |
 | src/madsci\_common/madsci/common/types/mongodb\_migration\_types.py                                |      214 |      116 |     46% |85, 106, 130-131, 151, 160, 166, 192, 198, 201-204, 207, 219-228, 249-263, 267-272, 294-298, 304-320, 324-334, 339-349, 353-360, 364, 368, 372, 386-442, 459-491 |
-| src/madsci\_common/madsci/common/types/node\_types.py                                              |      183 |        6 |     97% |448, 527, 541, 550, 562, 592 |
+| src/madsci\_common/madsci/common/types/node\_types.py                                              |      183 |        8 |     96% |448, 527, 535, 541, 550, 558, 562, 592 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                         |       37 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/registry\_types.py                                          |       41 |        1 |     98% |        86 |
 | src/madsci\_common/madsci/common/types/resource\_types/\_\_init\_\_.py                             |      296 |       46 |     84% |119, 163, 240, 250, 271, 276, 280, 284, 325, 338, 344, 366, 370, 404, 426, 430, 478-482, 512, 555, 560-561, 572-588, 591-600, 607-609, 640, 655, 684-687, 724-727, 764, 769, 779, 783 |
@@ -181,7 +181,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                         |      277 |       79 |     71% |79, 85, 143-202, 229-230, 272, 284-288, 312-313, 324, 334-337, 345-356, 388-392, 410-415, 432-436, 452, 454, 460, 489-490, 494-503, 528-529, 566-567, 582, 593, 630-640, 647-648 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                          |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                          |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                          | **22671** | **7306** | **68%** |           |
+| **TOTAL**                                                                                          | **22671** | **7308** | **68%** |           |
 
 
 ## Setup coverage badge
