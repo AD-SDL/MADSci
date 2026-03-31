@@ -6,6 +6,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.ownership import get_current_ownership_info, global_ownership_info
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.condition_types import (
     NoResourceInLocationCondition,
     ResourceChildFieldCheckCondition,
@@ -902,6 +904,241 @@ class TestExperimentManagement:
             experiment_id=experiment_app_with_mocks.experiment.experiment_id,
             status=ExperimentStatus.FAILED,
         )
+
+
+class TestExperimentOwnershipPropagation:
+    """Test that ownership context is properly set within manage_experiment."""
+
+    def test_manage_experiment_sets_ownership_context(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that manage_experiment establishes ownership_context with experiment_id."""
+        captured_ownership = None
+
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+            experiment_app_with_mocks.manage_experiment(run_name="ownership_test"),
+        ):
+            captured_ownership = get_current_ownership_info()
+
+        assert captured_ownership is not None
+        assert (
+            captured_ownership.experiment_id
+            == experiment_app_with_mocks.experiment.experiment_id
+        )
+
+    def test_manage_experiment_propagates_campaign_id(
+        self,
+    ) -> None:
+        """Test that manage_experiment propagates campaign_id from experiment ownership."""
+        campaign_id = new_ulid_str()
+
+        mock_experiment = Experiment(
+            run_name="campaign_test",
+            experiment_design=ExperimentDesign(
+                experiment_name="Campaign_Test",
+                resource_conditions=[],
+            ),
+            ownership_info=OwnershipInfo(campaign_id=campaign_id),
+            status=ExperimentStatus.IN_PROGRESS,
+        )
+        # Capture the actual experiment_id assigned by the model
+        experiment_id = mock_experiment.experiment_id
+
+        with mock_all_clients():
+            app = TestExperimentApplication(
+                node_config=ExperimentApplicationConfig(
+                    enable_registry_resolution=False
+                ),
+                experiment_design=ExperimentDesign(
+                    experiment_name="Campaign_Test",
+                    resource_conditions=[],
+                ),
+            )
+            app.event_client = Mock()
+            app.logger = app.event_client
+            app.experiment_client = Mock()
+            app.experiment_client.start_experiment.return_value = mock_experiment
+            app.experiment_client.end_experiment.return_value = mock_experiment
+            app.workcell_client = Mock()
+
+            captured_ownership = None
+            with (
+                patch("builtins.input", return_value="n"),
+                patch("builtins.print"),
+                app.manage_experiment(run_name="campaign_test"),
+            ):
+                captured_ownership = get_current_ownership_info()
+
+            assert captured_ownership is not None
+            assert captured_ownership.experiment_id == experiment_id
+            assert captured_ownership.campaign_id == campaign_id
+
+    def test_ownership_context_cleared_after_manage_experiment(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that ownership context is restored after manage_experiment exits."""
+        ownership_before = get_current_ownership_info()
+
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+            experiment_app_with_mocks.manage_experiment(run_name="cleanup_test"),
+        ):
+            pass
+
+        ownership_after = get_current_ownership_info()
+        assert ownership_after.experiment_id == ownership_before.experiment_id
+
+    def test_ownership_context_cleared_on_exception(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that ownership context is restored even when an exception occurs."""
+        ownership_before = get_current_ownership_info()
+
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+            pytest.raises(ValueError),
+            experiment_app_with_mocks.manage_experiment(run_name="exception_test"),
+        ):
+            raise ValueError("Test error")
+
+        ownership_after = get_current_ownership_info()
+        assert ownership_after.experiment_id == ownership_before.experiment_id
+
+    def test_ownership_visible_to_get_current_ownership_info(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that downstream code calling get_current_ownership_info gets experiment data.
+
+        This simulates the pattern used by WorkcellClient.start_workflow(),
+        which calls get_current_ownership_info() to attach ownership to workflows.
+        """
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+            experiment_app_with_mocks.manage_experiment(run_name="downstream_test"),
+        ):
+            # Simulate what WorkcellClient.start_workflow() does
+            ownership = get_current_ownership_info()
+            dumped = ownership.model_dump(exclude_none=True)
+
+            assert "experiment_id" in dumped
+            assert (
+                dumped["experiment_id"]
+                == experiment_app_with_mocks.experiment.experiment_id
+            )
+
+
+class TestStartEndOwnershipPropagation:
+    """Test that ownership context is properly set with the manual start/end pattern.
+
+    This covers the ExperimentNotebook pattern where start() and end()
+    are called in separate notebook cells without manage_experiment().
+    """
+
+    def test_start_sets_global_ownership(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that start_experiment_run sets experiment_id on global ownership."""
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+        ):
+            experiment_app_with_mocks.start_experiment_run(run_name="global_test")
+            try:
+                assert (
+                    global_ownership_info.experiment_id
+                    == experiment_app_with_mocks.experiment.experiment_id
+                )
+            finally:
+                experiment_app_with_mocks.end_experiment()
+
+    def test_end_clears_global_ownership(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that end_experiment clears experiment_id from global ownership."""
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+        ):
+            experiment_app_with_mocks.start_experiment_run(run_name="cleanup_test")
+            try:
+                assert global_ownership_info.experiment_id is not None
+                experiment_app_with_mocks.end_experiment()
+                assert global_ownership_info.experiment_id is None
+            finally:
+                # Ensure cleanup even if assertions fail
+                if global_ownership_info.experiment_id is not None:
+                    experiment_app_with_mocks.end_experiment()
+
+    def test_start_propagates_campaign_id_to_global(self) -> None:
+        """Test that campaign_id from experiment ownership is set on global."""
+        campaign_id = new_ulid_str()
+
+        mock_experiment = Experiment(
+            run_name="campaign_global_test",
+            experiment_design=ExperimentDesign(
+                experiment_name="Campaign_Global_Test",
+                resource_conditions=[],
+            ),
+            ownership_info=OwnershipInfo(campaign_id=campaign_id),
+            status=ExperimentStatus.IN_PROGRESS,
+        )
+
+        with mock_all_clients():
+            app = TestExperimentApplication(
+                node_config=ExperimentApplicationConfig(
+                    enable_registry_resolution=False
+                ),
+                experiment_design=ExperimentDesign(
+                    experiment_name="Campaign_Global_Test",
+                    resource_conditions=[],
+                ),
+            )
+            app.event_client = Mock()
+            app.logger = app.event_client
+            app.experiment_client = Mock()
+            app.experiment_client.start_experiment.return_value = mock_experiment
+            app.experiment_client.end_experiment.return_value = mock_experiment
+
+            app.start_experiment_run(run_name="campaign_global_test")
+            try:
+                assert (
+                    global_ownership_info.experiment_id == mock_experiment.experiment_id
+                )
+                assert global_ownership_info.campaign_id == campaign_id
+            finally:
+                app.end_experiment()
+            assert global_ownership_info.campaign_id is None
+
+    def test_get_current_ownership_info_between_start_end(
+        self, experiment_app_with_mocks: TestExperimentApplication
+    ) -> None:
+        """Test that get_current_ownership_info returns experiment data between start/end.
+
+        This simulates the notebook pattern where WorkcellClient.start_workflow()
+        is called between start() and end() without manage_experiment().
+        """
+        with (
+            patch("builtins.input", return_value="n"),
+            patch("builtins.print"),
+        ):
+            experiment_app_with_mocks.start_experiment_run(run_name="notebook_test")
+            try:
+                # Simulate what WorkcellClient.start_workflow() does
+                ownership = get_current_ownership_info()
+                dumped = ownership.model_dump(exclude_none=True)
+
+                assert "experiment_id" in dumped
+                assert (
+                    dumped["experiment_id"]
+                    == experiment_app_with_mocks.experiment.experiment_id
+                )
+            finally:
+                experiment_app_with_mocks.end_experiment()
 
 
 class TestClassMethods:
