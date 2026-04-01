@@ -211,6 +211,7 @@ class TemplateEngine:
         self,
         project_root: Path,
         dry_run: bool,
+        parameters: dict[str, Any] | None = None,
     ) -> tuple[list[Path], list[str]]:
         """Copy declared agent skills into the generated project.
 
@@ -219,6 +220,10 @@ class TemplateEngine:
                 subdirectory of output_dir when the template nests all files
                 under a common prefix such as ``{{module_name}}_module/``).
             dry_run: If True, track paths but don't write files.
+            parameters: Rendered template parameters. When ``include_agent_config``
+                is present, skills are copied to the selected destinations
+                (``.claude/skills/`` and/or ``.agents/skills/``). Otherwise
+                defaults to ``.agents/skills/`` for backward compatibility.
 
         Returns:
             Tuple of (files_created, skills_included).
@@ -234,21 +239,36 @@ class TemplateEngine:
             logger.warning("Skills directory not found, skipping skill copying")
             return files_created, skills_included
 
+        # Determine destination prefixes based on agent config selection.
+        agent_config = (parameters or {}).get("include_agent_config")
+        if agent_config is not None:
+            destinations = []
+            if "agents" in agent_config:
+                destinations.append(".agents")
+            if "claude" in agent_config:
+                destinations.append(".claude")
+        else:
+            # Default for templates without include_agent_config
+            destinations = [".agents"]
+
         for skill_name in self.manifest.skills:
             skill_source = skills_dir / skill_name / "SKILL.md"
             if not skill_source.is_file():
                 logger.warning("Skill not found, skipping: skill_name=%s", skill_name)
                 continue
-            skill_dest = project_root / ".agents" / "skills" / skill_name / "SKILL.md"
-            if not dry_run:
-                skill_dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(skill_source, skill_dest)
-                logger.debug(
-                    "Copied skill: skill_name=%s dest=%s",
-                    skill_name,
-                    str(skill_dest),
+            for dest_prefix in destinations:
+                skill_dest = (
+                    project_root / dest_prefix / "skills" / skill_name / "SKILL.md"
                 )
-            files_created.append(skill_dest)
+                if not dry_run:
+                    skill_dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(skill_source, skill_dest)
+                    logger.debug(
+                        "Copied skill: skill_name=%s dest=%s",
+                        skill_name,
+                        str(skill_dest),
+                    )
+                files_created.append(skill_dest)
             skills_included.append(skill_name)
 
         return files_created, skills_included
@@ -413,8 +433,11 @@ class TemplateEngine:
             dest_path_template = self._jinja_env.from_string(file_spec.destination)
             dest_path = dest_path_template.render(**values)
 
-            # Full paths
+            # Full paths — use the *rendered* source_path for security
+            # checks, but keep the original on-disk path for file access
+            # since the filesystem still has {{variable}} placeholders.
             source_full = self.template_dir / source_path
+            source_on_disk = self.template_dir / original_source_path
             dest_full = output_dir / dest_path
 
             # Prevent path traversal: rendered source must stay inside template_dir
@@ -434,15 +457,16 @@ class TemplateEngine:
                 dest_full.parent.mkdir(parents=True, exist_ok=True)
 
                 # Render and write
-                if source_full.suffix == ".j2":
+                if source_on_disk.suffix == ".j2":
                     # Jinja2 template - use original_source_path since the
                     # file on disk has {{variable}} placeholders in its name
                     template = self._jinja_env.get_template(original_source_path)
                     content = template.render(**values)
                     dest_full.write_text(content)
                 else:
-                    # Static file - copy as-is
-                    shutil.copy2(source_full, dest_full)
+                    # Static file - copy as-is using the on-disk path
+                    # (which retains {{variable}} directory names)
+                    shutil.copy2(source_on_disk, dest_full)
 
                 logger.debug("Created file: dest_path=%s", str(dest_full))
 
@@ -460,7 +484,9 @@ class TemplateEngine:
                     project_root = output_dir / first_dir
 
         # Copy agent skills
-        skill_files, skills_included = self._copy_skills(project_root, dry_run)
+        skill_files, skills_included = self._copy_skills(
+            project_root, dry_run, parameters=values
+        )
         files_created.extend(skill_files)
 
         # Run post-generation hooks

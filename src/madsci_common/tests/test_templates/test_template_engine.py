@@ -77,6 +77,27 @@ TEMPLATE_RENDER_PARAMS: list[tuple[str, dict]] = [
     ("comm/rest", {"interface_name": "test_gen"}),
     ("comm/sdk", {"interface_name": "test_gen"}),
     ("comm/modbus", {"interface_name": "test_gen"}),
+    ("addon/docs", {"module_name": "test_gen"}),
+    ("addon/drivers", {"module_name": "test_gen"}),
+    ("addon/notebooks", {"module_name": "test_gen", "port": 2000}),
+    ("addon/gitignore", {"module_name": "test_gen"}),
+    ("addon/compose", {"module_name": "test_gen", "port": 2000}),
+    (
+        "addon/dev_tools",
+        {"module_name": "test_gen", "port": 2000, "include_dockerfile": True},
+    ),
+    (
+        "addon/agent_config",
+        {"module_name": "test_gen", "include_agent_config": ["claude", "agents"]},
+    ),
+    (
+        "addon/all",
+        {
+            "module_name": "test_gen",
+            "port": 2000,
+            "include_agent_config": ["claude", "agents"],
+        },
+    ),
 ]
 
 # Deprecated patterns that must not appear in generated Python code.
@@ -1366,9 +1387,12 @@ class TestSkillsCopying:
         )
 
         skill_paths = [f for f in result.files_created if "SKILL.md" in f.name]
-        assert len(skill_paths) == 1
-        # File should NOT exist on disk
-        assert not skill_paths[0].exists()
+        # Default include_agent_config selects both "claude" and "agents",
+        # so the skill is copied to both .claude/skills/ and .agents/skills/.
+        assert len(skill_paths) == 2
+        # Files should NOT exist on disk
+        for path in skill_paths:
+            assert not path.exists()
 
     def test_skills_included_in_result(
         self, registry: TemplateRegistry, tmp_path: Path
@@ -1632,3 +1656,159 @@ class TestGeneratedCodeQuality:
                     f"Deprecated pattern '{pattern}' found in {f.name} "
                     f"(template: {template_id}). {reason}"
                 )
+
+
+class TestExpandedModuleTemplates:
+    """Tests for the expanded module template files (docs, notebooks, etc.)."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def test_module_renders_all_new_files(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Module template should produce all new scaffolding files."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": True,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        # Always-included files
+        assert any("docs/README.md" in p for p in rel_paths)
+        assert any("docs/private/.gitkeep" in p for p in rel_paths)
+        assert any("drivers/__init__.py" in p for p in rel_paths)
+        assert any("drivers/private/.gitkeep" in p for p in rel_paths)
+        assert any("interface_testing.ipynb" in p for p in rel_paths)
+        assert any("node_testing.ipynb" in p for p in rel_paths)
+        assert any(".gitignore" in p for p in rel_paths)
+        assert any("docker-compose.yaml" in p for p in rel_paths)
+
+        # Conditional dev tooling
+        assert any(".pre-commit-config.yaml" in p for p in rel_paths)
+        assert any("ruff.toml" in p for p in rel_paths)
+        assert any("justfile" in p for p in rel_paths)
+
+        # Conditional agent config
+        assert any("CLAUDE.md" in p for p in rel_paths)
+        assert any("AGENTS.md" in p for p in rel_paths)
+
+    def test_dev_tooling_excluded_when_disabled(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Dev tooling files should be excluded when include_dev_tooling=False."""
+        engine = registry.get_template("module/device")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": False,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        assert ".pre-commit-config.yaml" not in file_names
+        assert "ruff.toml" not in file_names
+        assert "justfile" not in file_names
+
+    def test_agent_config_claude_only(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Only CLAUDE.md and .claude/skills/ when agent config is ['claude']."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_agent_config": ["claude"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        assert "CLAUDE.md" in file_names
+        assert "AGENTS.md" not in file_names
+        assert any(".claude/skills/" in p for p in rel_paths)
+        assert not any(".agents/skills/" in p for p in rel_paths)
+
+    def test_rendered_notebooks_are_valid_json(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Rendered .ipynb files should be valid JSON with correct structure."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_nb", "port": 2000},
+        )
+
+        notebook_files = [f for f in result.files_created if f.suffix == ".ipynb"]
+        assert len(notebook_files) == 2
+
+        for f in notebook_files:
+            content = f.read_text()
+            data = json.loads(content)
+            assert "cells" in data, f"{f.name} missing 'cells'"
+            assert "metadata" in data, f"{f.name} missing 'metadata'"
+            assert data["nbformat"] == 4, f"{f.name} has wrong nbformat"
+
+    def test_skills_dual_destination(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Skills should be copied to both .claude/ and .agents/ when both selected."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_sk",
+                "port": 2000,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".claude/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+        assert any(".agents/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+
+    def test_skills_backward_compat_no_agent_config(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Templates without include_agent_config should still copy to .agents/."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".agents/skills/" in p for p in rel_paths)
+        assert not any(".claude/skills/" in p for p in rel_paths)

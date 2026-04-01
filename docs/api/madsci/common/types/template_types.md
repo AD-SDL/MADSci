@@ -125,6 +125,9 @@ Classes
 
     ### Class variables
 
+    `ADDON`
+    :
+
     `COMM`
     :
 

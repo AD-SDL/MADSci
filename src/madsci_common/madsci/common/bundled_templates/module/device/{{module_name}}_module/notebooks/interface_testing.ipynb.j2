@@ -1,0 +1,112 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "# {{ module_name | pascal_case }} Interface Testing\n",
+    "\n",
+    "This notebook is for testing the `{{ module_name | pascal_case }}Interface` directly,\n",
+    "without the REST node server. Useful for development and debugging."
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Setup\n",
+    "\n",
+    "Import the interface and create an instance.\n",
+    "Using the fake interface by default — switch to the real interface when ready."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# Use the fake interface for testing without hardware\n",
+    "from {{ module_name }}_fake_interface import {{ module_name | pascal_case }}FakeInterface\n",
+    "\n",
+    "interface = {{ module_name | pascal_case }}FakeInterface()\n",
+    "\n",
+    "# To use the real interface instead, uncomment:\n",
+    "# from {{ module_name }}_interface import {{ module_name | pascal_case }}Interface\n",
+    "# interface = {{ module_name | pascal_case }}Interface()"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Connect"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "interface.connect()\n",
+    "print(f\"Connected: {interface.is_connected}\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Test Actions\n",
+    "\n",
+    "Run interface methods and inspect results."
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# TODO: Call your interface methods here\n",
+    "# Example:\n",
+    "# result = interface.your_method()\n",
+    "# print(result)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "metadata": {},
+   "source": [
+    "## Cleanup"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "interface.disconnect()\n",
+    "print(f\"Connected: {interface.is_connected}\")"
+   ]
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "name": "python",
+   "version": "3.10.0"
+  },
+  "madsci": {
+   "module_name": "{{ module_name }}",
+   "template_version": "{{ template_version }}"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
