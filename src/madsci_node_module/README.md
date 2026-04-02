@@ -1268,9 +1268,9 @@ def get_multiple_files(self) -> list[Path]:
 **Working examples**: See [example_lab/](../../examples/example_lab/) for a complete working laboratory with multiple integrated nodes.
 
 
-## Development Standards
-In order to be considered an Official MADSci module in good standing, a module must:
-- Have each action exposed by the Node tested on the device and performing as documented
-- Pass the pre-commit check in the MADSci repository
-- Have a Docker image that succesfully builds and runs
-- Contain no extraneous files unused by the code.
+## Development Steps
+In order to ensure a MADSci module is up to standard and will run reliably, developers shoulde :
+1. Document expected behavior for each action action exposed by the Node, and then test it on the device to ensure it behaves as documented
+2. Ensure that the module folder contains no extraneous files unused by the code.
+3. Ensure that the code passes the pre-commit check in the MADSci repository
+4. If possible, construct a module Docker image that succesfully builds and runs.
