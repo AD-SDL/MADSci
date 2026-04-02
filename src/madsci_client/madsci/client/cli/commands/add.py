@@ -13,8 +13,8 @@ from rich.console import Console
 console = Console()
 
 
-def detect_module_name(target_dir: Path) -> str | None:
-    """Detect module_name from pyproject.toml in target_dir."""
+def _load_pyproject(target_dir: Path) -> dict[str, Any] | None:
+    """Load and parse pyproject.toml from *target_dir*, returning None on failure."""
     pyproject = target_dir / "pyproject.toml"
     if not pyproject.exists():
         return None
@@ -26,17 +26,32 @@ def detect_module_name(target_dir: Path) -> str | None:
                 import tomllib
             except ModuleNotFoundError:
                 import tomli as tomllib  # type: ignore[no-redef]
-        data = tomllib.loads(pyproject.read_text())
-        name = data.get("project", {}).get("name", "")
-        for suffix in ["-module", "_module"]:
-            name = name.removesuffix(suffix)
-        return name.replace("-", "_") or None
+        return tomllib.loads(pyproject.read_text())
     except Exception:
         return None
 
 
-def _resolve_context(ctx: click.Context) -> tuple[Path, str]:
-    """Resolve target directory and module name from context."""
+def detect_module_name(target_dir: Path) -> str | None:
+    """Detect module_name from pyproject.toml in target_dir."""
+    data = _load_pyproject(target_dir)
+    if data is None:
+        return None
+    name = data.get("project", {}).get("name", "")
+    for suffix in ["-module", "_module", "-node", "_node"]:
+        name = name.removesuffix(suffix)
+    return name.replace("-", "_") or None
+
+
+def detect_module_description(target_dir: Path) -> str | None:
+    """Detect module description from pyproject.toml in target_dir."""
+    data = _load_pyproject(target_dir)
+    if data is None:
+        return None
+    return data.get("project", {}).get("description") or None
+
+
+def _resolve_context(ctx: click.Context) -> tuple[Path, str, str]:
+    """Resolve target directory, module name, and description from context."""
     target_dir = Path(ctx.obj["directory"]).resolve()
     name = ctx.obj.get("name")
     if not name:
@@ -47,7 +62,10 @@ def _resolve_context(ctx: click.Context) -> tuple[Path, str]:
                 "Could not auto-detect module name. Use --name to specify it."
             )
         name = click.prompt("Module name (could not auto-detect)")
-    return target_dir, name
+    description = ctx.obj.get("description")
+    if not description:
+        description = detect_module_description(target_dir) or "A MADSci node module"
+    return target_dir, name, description
 
 
 def _load_addon_engine(template_id: str) -> Any:
@@ -62,13 +80,18 @@ def _load_addon_engine(template_id: str) -> Any:
         raise SystemExit(1) from exc
 
 
-def _handle_conflicts(
+def _detect_conflicts(
     dry_result: Any,
     on_conflict: str,
 ) -> tuple[list[Path], list[tuple[Path, Path]]]:
-    """Identify and handle file conflicts. Returns (skipped, backed_up)."""
+    """Identify file conflicts without modifying the filesystem.
+
+    Returns (skipped, will_backup) where will_backup contains
+    (original, planned_backup_path) pairs. Actual backup copies
+    are deferred to ``_execute_backups``.
+    """
     skipped: list[Path] = []
-    backed_up: list[tuple[Path, Path]] = []
+    will_backup: list[tuple[Path, Path]] = []
     for file_path in dry_result.files_created:
         if not file_path.exists():
             continue
@@ -76,9 +99,14 @@ def _handle_conflicts(
             skipped.append(file_path)
         elif on_conflict == "backup":
             backup_path = file_path.with_suffix(file_path.suffix + ".bak")
-            shutil.copy2(file_path, backup_path)
-            backed_up.append((file_path, backup_path))
-    return skipped, backed_up
+            will_backup.append((file_path, backup_path))
+    return skipped, will_backup
+
+
+def _execute_backups(will_backup: list[tuple[Path, Path]]) -> None:
+    """Create backup copies for conflicting files (called after confirmation)."""
+    for original, backup_path in will_backup:
+        shutil.copy2(original, backup_path)
 
 
 def _preview_and_confirm(
@@ -135,26 +163,34 @@ def _render_addon(
         console.print(f"[red]Template error: {exc}[/red]")
         raise SystemExit(1) from exc
 
-    # Handle conflicts
-    skipped, backed_up = _handle_conflicts(dry_result, on_conflict)
-
-    if on_conflict == "skip" and skipped:
-        skip_rel = {str(f.relative_to(target_dir)) for f in skipped}
-        engine.manifest.files = [
-            f for f in engine.manifest.files if f.destination not in skip_rel
-        ]
+    # Detect conflicts (no filesystem changes yet)
+    skipped, will_backup = _detect_conflicts(dry_result, on_conflict)
 
     # Interactive preview
     if (
         not no_interactive
         and dry_result.files_created
-        and not _preview_and_confirm(dry_result, target_dir, skipped, backed_up)
+        and not _preview_and_confirm(dry_result, target_dir, skipped, will_backup)
     ):
         console.print("[yellow]Cancelled.[/yellow]")
         return
 
-    # Render
-    result = engine.render(output_dir=target_dir, parameters=parameters)
+    # Now that the user has confirmed, create backup copies
+    _execute_backups(will_backup)
+
+    # Filter skipped files without permanently mutating the engine manifest
+    original_files = engine.manifest.files
+    try:
+        if on_conflict == "skip" and skipped:
+            skip_rel = {str(f.relative_to(target_dir)) for f in skipped}
+            engine.manifest.files = [
+                f for f in original_files if f.destination not in skip_rel
+            ]
+
+        # Render
+        result = engine.render(output_dir=target_dir, parameters=parameters)
+    finally:
+        engine.manifest.files = original_files
 
     # Summary
     created_count = len(result.files_created) - len(skipped)
@@ -165,6 +201,10 @@ def _render_addon(
 
 @click.group()
 @click.option("--name", "-n", help="Module name (auto-detected from pyproject.toml).")
+@click.option(
+    "--description",
+    help="Module description (auto-detected from pyproject.toml).",
+)
 @click.option(
     "--dir",
     "-d",
@@ -184,14 +224,15 @@ def _render_addon(
 def add(
     ctx: click.Context,
     name: str | None,
+    description: str | None,
     directory: str,
     on_conflict: str,
     no_interactive: bool,
 ) -> None:
     """Add components to an existing module project.
 
-    Auto-detects module_name from pyproject.toml in the target directory.
-    Use --name to override.
+    Auto-detects module_name and description from pyproject.toml in the
+    target directory. Use --name / --description to override.
 
     Examples:
 
@@ -205,6 +246,7 @@ def add(
     """
     ctx.ensure_object(dict)
     ctx.obj["name"] = name
+    ctx.obj["description"] = description
     ctx.obj["directory"] = directory
     ctx.obj["on_conflict"] = on_conflict
     ctx.obj["no_interactive"] = no_interactive
@@ -214,11 +256,11 @@ def add(
 @click.pass_context
 def docs(ctx: click.Context) -> None:
     """Add documentation directories (docs/, docs/private/)."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, description = _resolve_context(ctx)
     _render_addon(
         "addon/docs",
         target_dir,
-        {"module_name": name, "module_description": "A MADSci node module"},
+        {"module_name": name, "module_description": description},
         ctx.obj["on_conflict"],
         ctx.obj["no_interactive"],
     )
@@ -228,7 +270,7 @@ def docs(ctx: click.Context) -> None:
 @click.pass_context
 def drivers(ctx: click.Context) -> None:
     """Add instrument driver directories (src/drivers/, src/drivers/private/)."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, _description = _resolve_context(ctx)
     _render_addon(
         "addon/drivers",
         target_dir,
@@ -243,7 +285,7 @@ def drivers(ctx: click.Context) -> None:
 @click.pass_context
 def notebooks(ctx: click.Context, port: int) -> None:
     """Add testing notebooks (interface_testing.ipynb, node_testing.ipynb)."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, _description = _resolve_context(ctx)
     _render_addon(
         "addon/notebooks",
         target_dir,
@@ -257,7 +299,7 @@ def notebooks(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def gitignore(ctx: click.Context) -> None:
     """Add Python .gitignore with MADSci-specific entries."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, _description = _resolve_context(ctx)
     _render_addon(
         "addon/gitignore",
         target_dir,
@@ -272,7 +314,7 @@ def gitignore(ctx: click.Context) -> None:
 @click.pass_context
 def compose(ctx: click.Context, port: int) -> None:
     """Add Docker Compose file for building and running the node."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, _description = _resolve_context(ctx)
     _render_addon(
         "addon/compose",
         target_dir,
@@ -287,7 +329,7 @@ def compose(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def dev_tools(ctx: click.Context, port: int) -> None:
     """Add developer tooling (pre-commit, ruff config, justfile)."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, _description = _resolve_context(ctx)
     _render_addon(
         "addon/dev_tools",
         target_dir,
@@ -310,13 +352,13 @@ def dev_tools(ctx: click.Context, port: int) -> None:
 @click.pass_context
 def agent_config(ctx: click.Context, tools: tuple[str, ...]) -> None:
     """Add agentic coding configuration (CLAUDE.md, AGENTS.md, skills)."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, description = _resolve_context(ctx)
     _render_addon(
         "addon/agent_config",
         target_dir,
         {
             "module_name": name,
-            "module_description": "A MADSci node module",
+            "module_description": description,
             "include_agent_config": list(tools),
         },
         ctx.obj["on_conflict"],
@@ -338,13 +380,13 @@ def agent_config(ctx: click.Context, tools: tuple[str, ...]) -> None:
 @click.pass_context
 def add_all(ctx: click.Context, port: int, tools: tuple[str, ...]) -> None:
     """Add all available components to an existing module project."""
-    target_dir, name = _resolve_context(ctx)
+    target_dir, name, description = _resolve_context(ctx)
     _render_addon(
         "addon/all",
         target_dir,
         {
             "module_name": name,
-            "module_description": "A MADSci node module",
+            "module_description": description,
             "port": port,
             "include_dockerfile": True,
             "include_dev_tooling": True,

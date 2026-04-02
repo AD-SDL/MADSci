@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from madsci.client.cli import madsci
-from madsci.client.cli.commands.add import detect_module_name
+from madsci.client.cli.commands.add import detect_module_description, detect_module_name
 
 
 class TestAddCommandHelp:
@@ -105,3 +105,46 @@ class TestDetectModuleName:
 
         name = detect_module_name(tmp_path)
         assert name == "platereader"
+
+    def test_detect_strips_node_suffix(self, tmp_path: Path) -> None:
+        """Should strip -node and _node suffixes."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "platereader-node"\n')
+
+        name = detect_module_name(tmp_path)
+        assert name == "platereader"
+
+    def test_detect_strips_underscore_node(self, tmp_path: Path) -> None:
+        """Should strip _node suffix."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "platereader_node"\n')
+
+        name = detect_module_name(tmp_path)
+        assert name == "platereader"
+
+
+class TestDetectModuleDescription:
+    """Tests for the auto-detection of module description from pyproject.toml."""
+
+    def test_detect_description(self, tmp_path: Path) -> None:
+        """Should extract description from pyproject.toml."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text(
+            '[project]\nname = "my_robot"\ndescription = "A robot arm controller"\n'
+        )
+
+        desc = detect_module_description(tmp_path)
+        assert desc == "A robot arm controller"
+
+    def test_detect_no_description(self, tmp_path: Path) -> None:
+        """Should return None when no description field."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "my_robot"\n')
+
+        desc = detect_module_description(tmp_path)
+        assert desc is None
+
+    def test_detect_no_pyproject(self, tmp_path: Path) -> None:
+        """Should return None when no pyproject.toml exists."""
+        desc = detect_module_description(tmp_path)
+        assert desc is None
