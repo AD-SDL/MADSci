@@ -99,48 +99,48 @@ files:
     destination: "{{module_name}}_module/Dockerfile"
     condition: "{{ include_dockerfile }}"
 
-  - source: "{{module_name}}_module/.gitignore"
+  - source: ".gitignore"
     destination: "{{module_name}}_module/.gitignore"
 
-  - source: "{{module_name}}_module/docs/README.md.j2"
+  - source: "docs/README.md.j2"
     destination: "{{module_name}}_module/docs/README.md"
 
-  - source: "{{module_name}}_module/docs/private/.gitkeep"
+  - source: "docs/private/.gitkeep"
     destination: "{{module_name}}_module/docs/private/.gitkeep"
 
-  - source: "{{module_name}}_module/src/drivers/__init__.py.j2"
+  - source: "src/drivers/__init__.py.j2"
     destination: "{{module_name}}_module/src/drivers/__init__.py"
 
-  - source: "{{module_name}}_module/src/drivers/private/.gitkeep"
+  - source: "src/drivers/private/.gitkeep"
     destination: "{{module_name}}_module/src/drivers/private/.gitkeep"
 
-  - source: "{{module_name}}_module/notebooks/interface_testing.ipynb.j2"
+  - source: "notebooks/interface_testing.ipynb.j2"
     destination: "{{module_name}}_module/notebooks/interface_testing.ipynb"
 
-  - source: "{{module_name}}_module/notebooks/node_testing.ipynb.j2"
+  - source: "notebooks/node_testing.ipynb.j2"
     destination: "{{module_name}}_module/notebooks/node_testing.ipynb"
 
-  - source: "{{module_name}}_module/docker-compose.yaml.j2"
+  - source: "docker-compose.yaml.j2"
     destination: "{{module_name}}_module/docker-compose.yaml"
     condition: "{{ include_dockerfile }}"
 
-  - source: "{{module_name}}_module/.pre-commit-config.yaml.j2"
+  - source: ".pre-commit-config.yaml.j2"
     destination: "{{module_name}}_module/.pre-commit-config.yaml"
     condition: "{{ include_dev_tooling }}"
 
-  - source: "{{module_name}}_module/ruff.toml.j2"
+  - source: "ruff.toml.j2"
     destination: "{{module_name}}_module/ruff.toml"
     condition: "{{ include_dev_tooling }}"
 
-  - source: "{{module_name}}_module/justfile.j2"
+  - source: "justfile.j2"
     destination: "{{module_name}}_module/justfile"
     condition: "{{ include_dev_tooling }}"
 
-  - source: "{{module_name}}_module/CLAUDE.md.j2"
+  - source: "CLAUDE.md.j2"
     destination: "{{module_name}}_module/CLAUDE.md"
     condition: "{{ 'claude' in include_agent_config }}"
 
-  - source: "{{module_name}}_module/AGENTS.md.j2"
+  - source: "AGENTS.md.j2"
     destination: "{{module_name}}_module/AGENTS.md"
     condition: "{{ 'agents' in include_agent_config }}"
 

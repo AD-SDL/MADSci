@@ -369,6 +369,119 @@ class TestTemplateEngine:
         assert any("number" in e.lower() for e in errors)
 
 
+# --- Shared directory resolution tests ---
+
+
+class TestSharedDirectoryResolution:
+    """Test the _shared/ directory fallback mechanism."""
+
+    def _make_template(
+        self,
+        tmp_path: Path,
+        files_yaml: str,
+        *,
+        shared_files: dict[str, str] | None = None,
+    ) -> TemplateEngine:
+        """Create a minimal template with optional _shared/ directory."""
+        template_dir = tmp_path / "bundled" / "category" / "my_template"
+        template_dir.mkdir(parents=True)
+        manifest = (
+            "name: Test Template\nversion: '1.0.0'\ndescription: test\n"
+            "category: module\nparameters: []\nfiles:\n" + files_yaml
+        )
+        (template_dir / "template.yaml").write_text(manifest)
+
+        if shared_files:
+            shared_dir = tmp_path / "bundled" / "_shared"
+            for rel_path, content in shared_files.items():
+                full = shared_dir / rel_path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+
+        return TemplateEngine(template_dir)
+
+    def test_shared_file_found_via_fallback(self, tmp_path: Path) -> None:
+        """A source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "shared content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={})
+        assert (output / "shared.txt").exists()
+        assert (output / "shared.txt").read_text() == "shared content"
+        assert len(result.files_created) == 1
+
+    def test_shared_jinja_template_found_via_fallback(self, tmp_path: Path) -> None:
+        """A .j2 source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "greeting.txt.j2"\n    destination: "greeting.txt"\n',
+            shared_files={"greeting.txt.j2": "Hello {{ name }}!"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={"name": "World"})
+        assert (output / "greeting.txt").read_text() == "Hello World!"
+        assert len(result.files_created) == 1
+
+    def test_local_file_takes_precedence_over_shared(self, tmp_path: Path) -> None:
+        """When a file exists in both template_dir and _shared/, template_dir wins."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "config.txt"\n    destination: "config.txt"\n',
+            shared_files={"config.txt": "from shared"},
+        )
+        # Also create the file in the template directory
+        (engine.template_dir / "config.txt").write_text("from local")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "config.txt").read_text() == "from local"
+
+    def test_local_file_renders_without_shared(self, tmp_path: Path) -> None:
+        """Engine renders local files correctly regardless of _shared/ presence."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "local.txt"\n    destination: "local.txt"\n',
+        )
+        # Create the file in the template directory
+        (engine.template_dir / "local.txt").write_text("local only")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "local.txt").read_text() == "local only"
+
+    def test_shared_dir_with_subdirectory(self, tmp_path: Path) -> None:
+        """Shared files in subdirectories are resolved correctly."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "docs/README.md"\n    destination: "docs/README.md"\n',
+            shared_files={"docs/README.md": "# Documentation"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "docs" / "README.md").read_text() == "# Documentation"
+
+    def test_dry_run_with_shared_files(self, tmp_path: Path) -> None:
+        """Dry run reports shared files without creating them."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={}, dry_run=True)
+        assert len(result.files_created) == 1
+        assert not (output / "shared.txt").exists()
+
+
 # --- Template rendering tests ---
 
 

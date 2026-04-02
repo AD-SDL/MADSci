@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import shutil
-import sys
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from madsci.common.templates.engine import TemplateEngine
+    from madsci.common.types.template_types import GeneratedProject
 
 import click
 from rich.console import Console
@@ -19,32 +22,37 @@ def _load_pyproject(target_dir: Path) -> dict[str, Any] | None:
     if not pyproject.exists():
         return None
     try:
-        if sys.version_info >= (3, 11):
-            import tomllib
-        else:
-            try:
-                import tomllib
-            except ModuleNotFoundError:
-                import tomli as tomllib  # type: ignore[no-redef]
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib  # type: ignore[no-redef]
+    try:
         return tomllib.loads(pyproject.read_text())
-    except Exception:
+    except (OSError, tomllib.TOMLDecodeError):
         return None
 
 
-def detect_module_name(target_dir: Path) -> str | None:
+def detect_module_name(
+    target_dir: Path, data: dict[str, Any] | None = None
+) -> str | None:
     """Detect module_name from pyproject.toml in target_dir."""
-    data = _load_pyproject(target_dir)
+    if data is None:
+        data = _load_pyproject(target_dir)
     if data is None:
         return None
     name = data.get("project", {}).get("name", "")
     for suffix in ["-module", "_module", "-node", "_node"]:
-        name = name.removesuffix(suffix)
+        if name.endswith(suffix):
+            name = name.removesuffix(suffix)
+            break
     return name.replace("-", "_") or None
 
 
-def detect_module_description(target_dir: Path) -> str | None:
+def detect_module_description(
+    target_dir: Path, data: dict[str, Any] | None = None
+) -> str | None:
     """Detect module description from pyproject.toml in target_dir."""
-    data = _load_pyproject(target_dir)
+    if data is None:
+        data = _load_pyproject(target_dir)
     if data is None:
         return None
     return data.get("project", {}).get("description") or None
@@ -53,9 +61,10 @@ def detect_module_description(target_dir: Path) -> str | None:
 def _resolve_context(ctx: click.Context) -> tuple[Path, str, str]:
     """Resolve target directory, module name, and description from context."""
     target_dir = Path(ctx.obj["directory"]).resolve()
+    pyproject_data = _load_pyproject(target_dir)
     name = ctx.obj.get("name")
     if not name:
-        name = detect_module_name(target_dir)
+        name = detect_module_name(target_dir, data=pyproject_data)
     if not name:
         if ctx.obj.get("no_interactive"):
             raise click.UsageError(
@@ -64,11 +73,14 @@ def _resolve_context(ctx: click.Context) -> tuple[Path, str, str]:
         name = click.prompt("Module name (could not auto-detect)")
     description = ctx.obj.get("description")
     if not description:
-        description = detect_module_description(target_dir) or "A MADSci node module"
+        description = (
+            detect_module_description(target_dir, data=pyproject_data)
+            or "A MADSci node module"
+        )
     return target_dir, name, description
 
 
-def _load_addon_engine(template_id: str) -> Any:
+def _load_addon_engine(template_id: str) -> TemplateEngine:
     """Load and return a template engine for the given addon template."""
     from madsci.common.templates.registry import TemplateNotFoundError, TemplateRegistry
 
@@ -81,17 +93,18 @@ def _load_addon_engine(template_id: str) -> Any:
 
 
 def _detect_conflicts(
-    dry_result: Any,
+    dry_result: GeneratedProject,
     on_conflict: str,
-) -> tuple[list[Path], list[tuple[Path, Path]]]:
+) -> tuple[list[Path], list[tuple[Path, Path]], list[Path]]:
     """Identify file conflicts without modifying the filesystem.
 
-    Returns (skipped, will_backup) where will_backup contains
+    Returns (skipped, will_backup, will_overwrite) where will_backup contains
     (original, planned_backup_path) pairs. Actual backup copies
     are deferred to ``_execute_backups``.
     """
     skipped: list[Path] = []
     will_backup: list[tuple[Path, Path]] = []
+    will_overwrite: list[Path] = []
     for file_path in dry_result.files_created:
         if not file_path.exists():
             continue
@@ -100,7 +113,9 @@ def _detect_conflicts(
         elif on_conflict == "backup":
             backup_path = file_path.with_suffix(file_path.suffix + ".bak")
             will_backup.append((file_path, backup_path))
-    return skipped, will_backup
+        elif on_conflict == "overwrite":
+            will_overwrite.append(file_path)
+    return skipped, will_backup, will_overwrite
 
 
 def _execute_backups(will_backup: list[tuple[Path, Path]]) -> None:
@@ -110,17 +125,26 @@ def _execute_backups(will_backup: list[tuple[Path, Path]]) -> None:
 
 
 def _preview_and_confirm(
-    dry_result: Any,
+    dry_result: GeneratedProject,
     target_dir: Path,
     skipped: list[Path],
     backed_up: list[tuple[Path, Path]],
+    will_overwrite: list[Path],
 ) -> bool:
     """Show preview and ask for confirmation. Returns False if cancelled."""
-    will_create = [f for f in dry_result.files_created if f not in skipped]
+    will_create = [
+        f
+        for f in dry_result.files_created
+        if f not in skipped and f not in will_overwrite
+    ]
     if will_create:
         console.print("\n[bold]Files to create:[/bold]")
         for f in will_create:
             console.print(f"  [green]+[/green] {f.relative_to(target_dir)}")
+    if will_overwrite:
+        console.print("\n[bold]Files to overwrite:[/bold]")
+        for f in will_overwrite:
+            console.print(f"  [red]![/red] {f.relative_to(target_dir)}")
     if skipped:
         console.print("\n[bold]Files to skip (already exist):[/bold]")
         for f in skipped:
@@ -164,13 +188,15 @@ def _render_addon(
         raise SystemExit(1) from exc
 
     # Detect conflicts (no filesystem changes yet)
-    skipped, will_backup = _detect_conflicts(dry_result, on_conflict)
+    skipped, will_backup, will_overwrite = _detect_conflicts(dry_result, on_conflict)
 
     # Interactive preview
     if (
         not no_interactive
         and dry_result.files_created
-        and not _preview_and_confirm(dry_result, target_dir, skipped, will_backup)
+        and not _preview_and_confirm(
+            dry_result, target_dir, skipped, will_backup, will_overwrite
+        )
     ):
         console.print("[yellow]Cancelled.[/yellow]")
         return
@@ -193,7 +219,7 @@ def _render_addon(
         engine.manifest.files = original_files
 
     # Summary
-    created_count = len(result.files_created) - len(skipped)
+    created_count = len(result.files_created)
     console.print(f"\n[green]Added {created_count} file(s)[/green]")
     if skipped:
         console.print(f"[yellow]Skipped {len(skipped)} existing file(s)[/yellow]")

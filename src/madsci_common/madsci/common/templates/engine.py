@@ -130,6 +130,7 @@ class TemplateEngine:
         self.template_dir = template_dir
         self._sandboxed = sandboxed
         self.manifest = self._load_manifest()
+        self._shared_dir = self._resolve_shared_dir()
         self._jinja_env = self._create_jinja_env()
 
     def _load_manifest(self) -> TemplateManifest:
@@ -153,8 +154,11 @@ class TemplateEngine:
         Returns:
             Configured Jinja2 environment.
         """
+        loader_paths = [str(self.template_dir)]
+        if self._shared_dir:
+            loader_paths.append(str(self._shared_dir))
         env_kwargs = {
-            "loader": FileSystemLoader(str(self.template_dir)),
+            "loader": FileSystemLoader(loader_paths),
             "undefined": StrictUndefined,
             "keep_trailing_newline": True,
             "trim_blocks": True,
@@ -172,6 +176,57 @@ class TemplateEngine:
         # Note: "upper" and "lower" are Jinja2 built-in filters.
 
         return env
+
+    def _resolve_shared_dir(self) -> Path | None:
+        """Resolve the _shared/ directory containing common template files.
+
+        Walks up from the template directory to find _shared/ in bundled_templates,
+        falling back to importlib.resources for installed packages.
+
+        Returns:
+            Path to _shared/ directory, or None if not found.
+        """
+        current = self.template_dir
+        for _ in range(5):
+            candidate = current / "_shared"
+            if candidate.is_dir():
+                return candidate
+            current = current.parent
+
+        # Fallback: use importlib.resources
+        try:
+            resource = (
+                importlib.resources.files("madsci.common")
+                / "bundled_templates"
+                / "_shared"
+            )
+            path = Path(str(resource))
+            if path.is_dir():
+                return path
+        except (TypeError, FileNotFoundError):
+            pass
+
+        return None
+
+    def _resolve_source_path(self, original_source_path: str) -> Path:
+        """Resolve a source path with fallback to the _shared/ directory.
+
+        Checks the template directory first, then the shared directory.
+
+        Args:
+            original_source_path: The source path from the template manifest.
+
+        Returns:
+            Resolved path to the source file.
+        """
+        local = self.template_dir / original_source_path
+        if local.exists():
+            return local
+        if self._shared_dir:
+            shared = self._shared_dir / original_source_path
+            if shared.exists():
+                return shared
+        return local  # Return local path (will fail naturally if missing)
 
     def _resolve_skills_dir(self) -> Path | None:
         """Resolve the _skills/ directory containing bundled agent skills.
@@ -433,15 +488,18 @@ class TemplateEngine:
             dest_path_template = self._jinja_env.from_string(file_spec.destination)
             dest_path = dest_path_template.render(**values)
 
-            # Full paths — use the *rendered* source_path for security
-            # checks, but keep the original on-disk path for file access
-            # since the filesystem still has {{variable}} placeholders.
-            source_full = self.template_dir / source_path
-            source_on_disk = self.template_dir / original_source_path
+            # Resolve the actual source file on disk, checking the template
+            # directory first then falling back to _shared/.
+            source_on_disk = self._resolve_source_path(original_source_path)
             dest_full = output_dir / dest_path
 
-            # Prevent path traversal: rendered source must stay inside template_dir
-            if not source_full.resolve().is_relative_to(self.template_dir.resolve()):
+            # Prevent path traversal: source must stay inside template_dir
+            # or the _shared directory.
+            source_resolved = source_on_disk.resolve()
+            allowed = source_resolved.is_relative_to(self.template_dir.resolve())
+            if not allowed and self._shared_dir:
+                allowed = source_resolved.is_relative_to(self._shared_dir.resolve())
+            if not allowed:
                 raise TemplateValidationError(
                     [f"Path traversal detected in source: {source_path}"]
                 )
@@ -459,13 +517,13 @@ class TemplateEngine:
                 # Render and write
                 if source_on_disk.suffix == ".j2":
                     # Jinja2 template - use original_source_path since the
-                    # file on disk has {{variable}} placeholders in its name
+                    # file on disk has {{variable}} placeholders in its name.
+                    # FileSystemLoader searches both template_dir and _shared/.
                     template = self._jinja_env.get_template(original_source_path)
                     content = template.render(**values)
                     dest_full.write_text(content)
                 else:
-                    # Static file - copy as-is using the on-disk path
-                    # (which retains {{variable}} directory names)
+                    # Static file - copy as-is using the resolved on-disk path
                     shutil.copy2(source_on_disk, dest_full)
 
                 logger.debug("Created file: dest_path=%s", str(dest_full))

@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 from click.testing import CliRunner
 from madsci.client.cli import madsci
-from madsci.client.cli.commands.add import detect_module_description, detect_module_name
+from madsci.client.cli.commands.add import (
+    _detect_conflicts,
+    _execute_backups,
+    detect_module_description,
+    detect_module_name,
+)
+from madsci.common.types.template_types import GeneratedProject
 
 
 class TestAddCommandHelp:
@@ -122,6 +128,14 @@ class TestDetectModuleName:
         name = detect_module_name(tmp_path)
         assert name == "platereader"
 
+    def test_detect_strips_only_first_matching_suffix(self, tmp_path: Path) -> None:
+        """Should only strip the first matching suffix, not chain-strip."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "my_module_node"\n')
+
+        name = detect_module_name(tmp_path)
+        assert name == "my_module"
+
 
 class TestDetectModuleDescription:
     """Tests for the auto-detection of module description from pyproject.toml."""
@@ -148,3 +162,111 @@ class TestDetectModuleDescription:
         """Should return None when no pyproject.toml exists."""
         desc = detect_module_description(tmp_path)
         assert desc is None
+
+
+class TestDetectConflicts:
+    """Tests for the _detect_conflicts function."""
+
+    @staticmethod
+    def _make_dry_result(tmp_path: Path, filenames: list[str]) -> GeneratedProject:
+        """Create a GeneratedProject with the given filenames."""
+        return GeneratedProject(
+            template_name="test",
+            template_version="1.0.0",
+            output_directory=tmp_path,
+            files_created=[tmp_path / f for f in filenames],
+        )
+
+    def test_no_conflicts_when_files_dont_exist(self, tmp_path: Path) -> None:
+        """Non-existing files produce no conflicts."""
+        dry_result = self._make_dry_result(tmp_path, ["new_file.txt"])
+        skipped, will_backup, will_overwrite = _detect_conflicts(dry_result, "skip")
+        assert skipped == []
+        assert will_backup == []
+        assert will_overwrite == []
+
+    def test_skip_conflict(self, tmp_path: Path) -> None:
+        """Existing files are added to skipped when on_conflict='skip'."""
+        existing = tmp_path / "existing.txt"
+        existing.write_text("content")
+        dry_result = self._make_dry_result(tmp_path, ["existing.txt", "new.txt"])
+
+        skipped, will_backup, will_overwrite = _detect_conflicts(dry_result, "skip")
+        assert skipped == [existing]
+        assert will_backup == []
+        assert will_overwrite == []
+
+    def test_backup_conflict(self, tmp_path: Path) -> None:
+        """Existing files get backup paths when on_conflict='backup'."""
+        existing = tmp_path / "existing.txt"
+        existing.write_text("content")
+        dry_result = self._make_dry_result(tmp_path, ["existing.txt"])
+
+        skipped, will_backup, will_overwrite = _detect_conflicts(dry_result, "backup")
+        assert skipped == []
+        assert len(will_backup) == 1
+        assert will_backup[0][0] == existing
+        assert will_backup[0][1] == existing.with_suffix(".txt.bak")
+        assert will_overwrite == []
+
+    def test_overwrite_conflict(self, tmp_path: Path) -> None:
+        """Existing files are listed as overwrite targets when on_conflict='overwrite'."""
+        existing = tmp_path / "existing.txt"
+        existing.write_text("content")
+        dry_result = self._make_dry_result(tmp_path, ["existing.txt"])
+
+        skipped, will_backup, will_overwrite = _detect_conflicts(
+            dry_result, "overwrite"
+        )
+        assert skipped == []
+        assert will_backup == []
+        assert will_overwrite == [existing]
+
+
+class TestExecuteBackups:
+    """Tests for the _execute_backups function."""
+
+    def test_creates_backup_copies(self, tmp_path: Path) -> None:
+        """Backup files are created with original content preserved."""
+        original = tmp_path / "file.txt"
+        original.write_text("original content")
+        backup = tmp_path / "file.txt.bak"
+
+        _execute_backups([(original, backup)])
+        assert backup.exists()
+        assert backup.read_text() == "original content"
+
+    def test_creates_multiple_backups(self, tmp_path: Path) -> None:
+        """Multiple backups are created correctly."""
+        file_a = tmp_path / "a.txt"
+        file_a.write_text("content a")
+        file_b = tmp_path / "b.txt"
+        file_b.write_text("content b")
+
+        _execute_backups(
+            [
+                (file_a, tmp_path / "a.txt.bak"),
+                (file_b, tmp_path / "b.txt.bak"),
+            ]
+        )
+        assert (tmp_path / "a.txt.bak").read_text() == "content a"
+        assert (tmp_path / "b.txt.bak").read_text() == "content b"
+
+
+class TestRenderAddonEndToEnd:
+    """End-to-end tests for addon rendering via CLI."""
+
+    def test_addon_gitignore_renders(self, tmp_path: Path) -> None:
+        """The gitignore addon should create a .gitignore file."""
+        pyproject = tmp_path / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test_device_module"\n')
+
+        runner = CliRunner()
+        result = runner.invoke(
+            madsci,
+            ["add", "--dir", str(tmp_path), "--no-interactive", "gitignore"],
+        )
+
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / ".gitignore").exists()
+        assert "Added" in result.output
