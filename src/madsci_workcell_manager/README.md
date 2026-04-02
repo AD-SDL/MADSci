@@ -669,7 +669,7 @@ for node_name, node_url in nodes.items():
     except Exception as e:
         print(f"{node_name}: FAILED - {e}")
 ```
-If connecting nodes running bare metal to managers running in docker, the hostname for the bare metal nodes should be "host.docker.internal", rather than "localhost"
+When connecting to nodes running bare metal on the same host as managers running in docker containers, you may need to specify the hostname for the bare metal nodes as `host.docker.internal`, rather than `localhost` or `127.0.0.1`. This is due to quirks of some docker supervisor's bridge router setups failing to correctly redirect local traffic to the host machine, even when `network_mode: host` is used.
 
 #### Workflow Debugging
 ```python
