@@ -669,6 +669,7 @@ for node_name, node_url in nodes.items():
     except Exception as e:
         print(f"{node_name}: FAILED - {e}")
 ```
+If connecting nodes running bare metal to managers running in docker, the hostname for the bare metal nodes should be "host.docker.internal", rather than "localhost"
 
 #### Workflow Debugging
 ```python
