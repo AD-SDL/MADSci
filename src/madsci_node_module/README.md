@@ -1269,7 +1269,7 @@ def get_multiple_files(self) -> list[Path]:
 
 
 ## Development Steps
-In order to ensure a MADSci module is up to standard and will run reliably, developers shoulde :
+In order to ensure a MADSci module is up to standard and will run reliably, developers should:
 1. Document expected behavior for each action action exposed by the Node, and then test it on the device to ensure it behaves as documented
 2. Ensure that the module folder contains no extraneous files unused by the code.
 3. Ensure that the code passes the pre-commit check in the MADSci repository
