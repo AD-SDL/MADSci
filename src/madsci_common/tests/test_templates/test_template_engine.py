@@ -77,6 +77,27 @@ TEMPLATE_RENDER_PARAMS: list[tuple[str, dict]] = [
     ("comm/rest", {"interface_name": "test_gen"}),
     ("comm/sdk", {"interface_name": "test_gen"}),
     ("comm/modbus", {"interface_name": "test_gen"}),
+    ("addon/docs", {"module_name": "test_gen"}),
+    ("addon/drivers", {"module_name": "test_gen"}),
+    ("addon/notebooks", {"module_name": "test_gen", "port": 2000}),
+    ("addon/gitignore", {"module_name": "test_gen"}),
+    ("addon/compose", {"module_name": "test_gen", "port": 2000}),
+    (
+        "addon/dev_tools",
+        {"module_name": "test_gen", "port": 2000, "include_dockerfile": True},
+    ),
+    (
+        "addon/agent_config",
+        {"module_name": "test_gen", "include_agent_config": ["claude", "agents"]},
+    ),
+    (
+        "addon/all",
+        {
+            "module_name": "test_gen",
+            "port": 2000,
+            "include_agent_config": ["claude", "agents"],
+        },
+    ),
 ]
 
 # Deprecated patterns that must not appear in generated Python code.
@@ -346,6 +367,119 @@ class TestTemplateEngine:
             {"module_name": "test", "port": "not_a_number"}
         )
         assert any("number" in e.lower() for e in errors)
+
+
+# --- Shared directory resolution tests ---
+
+
+class TestSharedDirectoryResolution:
+    """Test the _shared/ directory fallback mechanism."""
+
+    def _make_template(
+        self,
+        tmp_path: Path,
+        files_yaml: str,
+        *,
+        shared_files: dict[str, str] | None = None,
+    ) -> TemplateEngine:
+        """Create a minimal template with optional _shared/ directory."""
+        template_dir = tmp_path / "bundled" / "category" / "my_template"
+        template_dir.mkdir(parents=True)
+        manifest = (
+            "name: Test Template\nversion: '1.0.0'\ndescription: test\n"
+            "category: module\nparameters: []\nfiles:\n" + files_yaml
+        )
+        (template_dir / "template.yaml").write_text(manifest)
+
+        if shared_files:
+            shared_dir = tmp_path / "bundled" / "_shared"
+            for rel_path, content in shared_files.items():
+                full = shared_dir / rel_path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+
+        return TemplateEngine(template_dir)
+
+    def test_shared_file_found_via_fallback(self, tmp_path: Path) -> None:
+        """A source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "shared content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={})
+        assert (output / "shared.txt").exists()
+        assert (output / "shared.txt").read_text() == "shared content"
+        assert len(result.files_created) == 1
+
+    def test_shared_jinja_template_found_via_fallback(self, tmp_path: Path) -> None:
+        """A .j2 source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "greeting.txt.j2"\n    destination: "greeting.txt"\n',
+            shared_files={"greeting.txt.j2": "Hello {{ name }}!"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={"name": "World"})
+        assert (output / "greeting.txt").read_text() == "Hello World!"
+        assert len(result.files_created) == 1
+
+    def test_local_file_takes_precedence_over_shared(self, tmp_path: Path) -> None:
+        """When a file exists in both template_dir and _shared/, template_dir wins."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "config.txt"\n    destination: "config.txt"\n',
+            shared_files={"config.txt": "from shared"},
+        )
+        # Also create the file in the template directory
+        (engine.template_dir / "config.txt").write_text("from local")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "config.txt").read_text() == "from local"
+
+    def test_local_file_renders_without_shared(self, tmp_path: Path) -> None:
+        """Engine renders local files correctly regardless of _shared/ presence."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "local.txt"\n    destination: "local.txt"\n',
+        )
+        # Create the file in the template directory
+        (engine.template_dir / "local.txt").write_text("local only")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "local.txt").read_text() == "local only"
+
+    def test_shared_dir_with_subdirectory(self, tmp_path: Path) -> None:
+        """Shared files in subdirectories are resolved correctly."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "docs/README.md"\n    destination: "docs/README.md"\n',
+            shared_files={"docs/README.md": "# Documentation"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "docs" / "README.md").read_text() == "# Documentation"
+
+    def test_dry_run_with_shared_files(self, tmp_path: Path) -> None:
+        """Dry run reports shared files without creating them."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={}, dry_run=True)
+        assert len(result.files_created) == 1
+        assert not (output / "shared.txt").exists()
 
 
 # --- Template rendering tests ---
@@ -1366,9 +1500,12 @@ class TestSkillsCopying:
         )
 
         skill_paths = [f for f in result.files_created if "SKILL.md" in f.name]
-        assert len(skill_paths) == 1
-        # File should NOT exist on disk
-        assert not skill_paths[0].exists()
+        # Default include_agent_config selects both "claude" and "agents",
+        # so the skill is copied to both .claude/skills/ and .agents/skills/.
+        assert len(skill_paths) == 2
+        # Files should NOT exist on disk
+        for path in skill_paths:
+            assert not path.exists()
 
     def test_skills_included_in_result(
         self, registry: TemplateRegistry, tmp_path: Path
@@ -1632,3 +1769,159 @@ class TestGeneratedCodeQuality:
                     f"Deprecated pattern '{pattern}' found in {f.name} "
                     f"(template: {template_id}). {reason}"
                 )
+
+
+class TestExpandedModuleTemplates:
+    """Tests for the expanded module template files (docs, notebooks, etc.)."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def test_module_renders_all_new_files(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Module template should produce all new scaffolding files."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": True,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        # Always-included files
+        assert any("docs/README.md" in p for p in rel_paths)
+        assert any("docs/private/.gitkeep" in p for p in rel_paths)
+        assert any("drivers/__init__.py" in p for p in rel_paths)
+        assert any("drivers/private/.gitkeep" in p for p in rel_paths)
+        assert any("interface_testing.ipynb" in p for p in rel_paths)
+        assert any("node_testing.ipynb" in p for p in rel_paths)
+        assert any(".gitignore" in p for p in rel_paths)
+        assert any("docker-compose.yaml" in p for p in rel_paths)
+
+        # Conditional dev tooling
+        assert any(".pre-commit-config.yaml" in p for p in rel_paths)
+        assert any("ruff.toml" in p for p in rel_paths)
+        assert any("justfile" in p for p in rel_paths)
+
+        # Conditional agent config
+        assert any("CLAUDE.md" in p for p in rel_paths)
+        assert any("AGENTS.md" in p for p in rel_paths)
+
+    def test_dev_tooling_excluded_when_disabled(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Dev tooling files should be excluded when include_dev_tooling=False."""
+        engine = registry.get_template("module/device")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": False,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        assert ".pre-commit-config.yaml" not in file_names
+        assert "ruff.toml" not in file_names
+        assert "justfile" not in file_names
+
+    def test_agent_config_claude_only(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Only CLAUDE.md and .claude/skills/ when agent config is ['claude']."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_agent_config": ["claude"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        assert "CLAUDE.md" in file_names
+        assert "AGENTS.md" not in file_names
+        assert any(".claude/skills/" in p for p in rel_paths)
+        assert not any(".agents/skills/" in p for p in rel_paths)
+
+    def test_rendered_notebooks_are_valid_json(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Rendered .ipynb files should be valid JSON with correct structure."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_nb", "port": 2000},
+        )
+
+        notebook_files = [f for f in result.files_created if f.suffix == ".ipynb"]
+        assert len(notebook_files) == 2
+
+        for f in notebook_files:
+            content = f.read_text()
+            data = json.loads(content)
+            assert "cells" in data, f"{f.name} missing 'cells'"
+            assert "metadata" in data, f"{f.name} missing 'metadata'"
+            assert data["nbformat"] == 4, f"{f.name} has wrong nbformat"
+
+    def test_skills_dual_destination(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Skills should be copied to both .claude/ and .agents/ when both selected."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_sk",
+                "port": 2000,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".claude/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+        assert any(".agents/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+
+    def test_skills_backward_compat_no_agent_config(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Templates without include_agent_config should still copy to .agents/."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".agents/skills/" in p for p in rel_paths)
+        assert not any(".claude/skills/" in p for p in rel_paths)

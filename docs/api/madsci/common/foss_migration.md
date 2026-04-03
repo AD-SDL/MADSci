@@ -84,6 +84,9 @@ Classes
     `document_db_databases: List[str]`
     :
 
+    `location_database_name: str`
+    :
+
     `migration_compose_files: List[str]`
     :
 
@@ -112,6 +115,15 @@ Classes
     :
 
     `old_postgres_url: str`
+    :
+
+    `old_redis_host: str`
+    :
+
+    `old_redis_password: str | None`
+    :
+
+    `old_redis_port: int`
     :
 
     `seaweedfs_access_key: str`
@@ -203,13 +215,18 @@ Classes
     :   Migrate PostgreSQL data from old instance to new instance.
 
     `migrate_redis_to_valkey(self) ‑> madsci.common.foss_migration.FossMigrationStepResult`
-    :   Report that Redis data migration is not needed.
+    :   Migrate Location Manager data from old Redis to the new document database.
         
-        Redis/Valkey data in MADSci is ephemeral (workcell state, location
-        caches) and is repopulated automatically by the managers on startup.
-        Additionally, Redis 7.4 uses RDB format v12 which is incompatible
-        with Valkey 8 (forked from Redis 7.2, RDB v11), so file-level or
-        DUMP/RESTORE migration is not possible.
+        Most Redis/Valkey data in MADSci is ephemeral (workcell state) and is
+        repopulated automatically by managers on startup.  However, the v0.7.x
+        Location Manager stores its **primary location data** in Redis —
+        including resource attachments and node representations — which must be
+        migrated to the document database used by v0.8.0+.
+        
+        Redis 7.4 uses RDB format v12, incompatible with Valkey 8 (RDB v11),
+        so file-level migration is not possible.  Instead, this step performs
+        an application-level migration: read from old Redis via the Python
+        client, write to FerretDB via the LocationMigrator.
 
     `run_full_migration(self, *, skip_backup: bool = False, skip_docker: bool = False, steps: List[str] | None = None) ‑> madsci.common.foss_migration.FossMigrationReport`
     :   Run the full migration pipeline.

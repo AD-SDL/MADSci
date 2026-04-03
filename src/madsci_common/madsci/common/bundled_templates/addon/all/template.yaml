@@ -1,0 +1,104 @@
+name: "All Addons"
+version: "1.0.0"
+description: "Add all available addon files to an existing module (docs, drivers, notebooks, gitignore, compose, dev tools, agent config)"
+category: "addon"
+tags: ["all", "complete", "full"]
+skills: ["madsci-nodes"]
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+  - name: module_description
+    type: string
+    description: "Human-readable description of the module"
+    required: false
+    default: "A MADSci node module"
+
+  - name: port
+    type: integer
+    description: "Default port number for the node REST API"
+    required: false
+    default: 2000
+    min: 1024
+    max: 65535
+
+  - name: include_dockerfile
+    type: boolean
+    description: "Include Docker-related recipes in justfile"
+    required: false
+    default: true
+
+  - name: include_dev_tooling
+    type: boolean
+    description: "Include developer tooling (pre-commit, ruff config, justfile)"
+    required: false
+    default: true
+
+  - name: include_agent_config
+    type: multi_choice
+    description: "Include agentic coding configuration files"
+    required: false
+    choices:
+      - value: claude
+        label: "Claude Code (CLAUDE.md, .claude/skills/)"
+        default: true
+      - value: agents
+        label: "Agents (AGENTS.md, .agents/skills/)"
+        default: true
+
+files:
+  # docs
+  - source: "docs/README.md.j2"
+    destination: "docs/README.md"
+  - source: "docs/private/.gitkeep"
+    destination: "docs/private/.gitkeep"
+
+  # drivers
+  - source: "src/drivers/__init__.py.j2"
+    destination: "src/drivers/__init__.py"
+  - source: "src/drivers/private/.gitkeep"
+    destination: "src/drivers/private/.gitkeep"
+
+  # notebooks
+  - source: "notebooks/interface_testing.ipynb.j2"
+    destination: "notebooks/interface_testing.ipynb"
+  - source: "notebooks/node_testing.ipynb.j2"
+    destination: "notebooks/node_testing.ipynb"
+
+  # gitignore
+  - source: ".gitignore"
+    destination: ".gitignore"
+
+  # compose
+  - source: "docker-compose.yaml.j2"
+    destination: "docker-compose.yaml"
+    condition: "{{ include_dockerfile }}"
+
+  # dev_tools
+  - source: ".pre-commit-config.yaml.j2"
+    destination: ".pre-commit-config.yaml"
+    condition: "{{ include_dev_tooling }}"
+  - source: "ruff.toml.j2"
+    destination: "ruff.toml"
+    condition: "{{ include_dev_tooling }}"
+  - source: "justfile.j2"
+    destination: "justfile"
+    condition: "{{ include_dev_tooling }}"
+
+  # agent_config
+  - source: "CLAUDE.md.j2"
+    destination: "CLAUDE.md"
+    condition: "{{ 'claude' in include_agent_config }}"
+  - source: "AGENTS.md.j2"
+    destination: "AGENTS.md"
+    condition: "{{ 'agents' in include_agent_config }}"

@@ -50,6 +50,24 @@ parameters:
     required: false
     default: true
 
+  - name: include_dev_tooling
+    type: boolean
+    description: "Include developer tooling (pre-commit, ruff config, justfile)"
+    required: false
+    default: true
+
+  - name: include_agent_config
+    type: multi_choice
+    description: "Include agentic coding configuration files"
+    required: false
+    choices:
+      - value: claude
+        label: "Claude Code (CLAUDE.md, .claude/skills/)"
+        default: true
+      - value: agents
+        label: "Agents (AGENTS.md, .agents/skills/)"
+        default: true
+
 files:
   - source: "{{module_name}}_module/src/{{module_name}}_rest_node.py.j2"
     destination: "{{module_name}}_module/src/{{module_name}}_rest_node.py"
@@ -80,6 +98,51 @@ files:
   - source: "{{module_name}}_module/Dockerfile.j2"
     destination: "{{module_name}}_module/Dockerfile"
     condition: "{{ include_dockerfile }}"
+
+  - source: ".gitignore"
+    destination: "{{module_name}}_module/.gitignore"
+
+  - source: "docs/README.md.j2"
+    destination: "{{module_name}}_module/docs/README.md"
+
+  - source: "docs/private/.gitkeep"
+    destination: "{{module_name}}_module/docs/private/.gitkeep"
+
+  - source: "src/drivers/__init__.py.j2"
+    destination: "{{module_name}}_module/src/drivers/__init__.py"
+
+  - source: "src/drivers/private/.gitkeep"
+    destination: "{{module_name}}_module/src/drivers/private/.gitkeep"
+
+  - source: "notebooks/interface_testing.ipynb.j2"
+    destination: "{{module_name}}_module/notebooks/interface_testing.ipynb"
+
+  - source: "notebooks/node_testing.ipynb.j2"
+    destination: "{{module_name}}_module/notebooks/node_testing.ipynb"
+
+  - source: "docker-compose.yaml.j2"
+    destination: "{{module_name}}_module/docker-compose.yaml"
+    condition: "{{ include_dockerfile }}"
+
+  - source: ".pre-commit-config.yaml.j2"
+    destination: "{{module_name}}_module/.pre-commit-config.yaml"
+    condition: "{{ include_dev_tooling }}"
+
+  - source: "ruff.toml.j2"
+    destination: "{{module_name}}_module/ruff.toml"
+    condition: "{{ include_dev_tooling }}"
+
+  - source: "justfile.j2"
+    destination: "{{module_name}}_module/justfile"
+    condition: "{{ include_dev_tooling }}"
+
+  - source: "CLAUDE.md.j2"
+    destination: "{{module_name}}_module/CLAUDE.md"
+    condition: "{{ 'claude' in include_agent_config }}"
+
+  - source: "AGENTS.md.j2"
+    destination: "{{module_name}}_module/AGENTS.md"
+    condition: "{{ 'agents' in include_agent_config }}"
 
 hooks:
   post_generate:

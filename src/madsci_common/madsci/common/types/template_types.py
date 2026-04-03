@@ -37,6 +37,7 @@ class TemplateCategory(str, Enum):
     WORKCELL = "workcell"
     LAB = "lab"
     COMM = "comm"
+    ADDON = "addon"
 
 
 class ParameterChoice(MadsciBaseModel):
