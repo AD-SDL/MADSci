@@ -5,44 +5,44 @@ allowing managers to use fast in-memory mocks in tests while using real
 database connections in production.
 
 Handler types:
-- MongoHandler: MongoDB database access (PyMongoHandler, InMemoryMongoHandler)
-- RedisHandler: Redis key-value + data structure access (PyRedisHandler, InMemoryRedisHandler)
+- DocumentStorageHandler: MongoDB-compatible document database access (PyDocumentStorageHandler, InMemoryDocumentStorageHandler)
+- CacheHandler: Redis/Valkey-compatible cache access (PyCacheHandler, InMemoryCacheHandler)
 - PostgresHandler: PostgreSQL/SQLite via SQLAlchemy (SQLAlchemyHandler, SQLiteHandler)
-- MinioHandler: Object storage access (RealMinioHandler, InMemoryMinioHandler)
+- ObjectStorageHandler: S3-compatible object storage access (RealObjectStorageHandler, InMemoryObjectStorageHandler)
 """
 
-from madsci.common.db_handlers.minio_handler import (
-    InMemoryMinioHandler,
-    MinioHandler,
-    RealMinioHandler,
+from madsci.common.db_handlers.cache_handler import (
+    CacheHandler,
+    InMemoryCacheHandler,
+    PyCacheHandler,
 )
-from madsci.common.db_handlers.mongo_handler import (
-    InMemoryMongoHandler,
-    MongoHandler,
-    PyMongoHandler,
+from madsci.common.db_handlers.document_storage_handler import (
+    DocumentStorageHandler,
+    InMemoryDocumentStorageHandler,
+    PyDocumentStorageHandler,
+)
+from madsci.common.db_handlers.object_storage_handler import (
+    InMemoryObjectStorageHandler,
+    ObjectStorageHandler,
+    RealObjectStorageHandler,
 )
 from madsci.common.db_handlers.postgres_handler import (
     PostgresHandler,
     SQLAlchemyHandler,
     SQLiteHandler,
 )
-from madsci.common.db_handlers.redis_handler import (
-    InMemoryRedisHandler,
-    PyRedisHandler,
-    RedisHandler,
-)
 
 __all__ = [
-    "InMemoryMinioHandler",
-    "InMemoryMongoHandler",
-    "InMemoryRedisHandler",
-    "MinioHandler",
-    "MongoHandler",
+    "CacheHandler",
+    "DocumentStorageHandler",
+    "InMemoryCacheHandler",
+    "InMemoryDocumentStorageHandler",
+    "InMemoryObjectStorageHandler",
+    "ObjectStorageHandler",
     "PostgresHandler",
-    "PyMongoHandler",
-    "PyRedisHandler",
-    "RealMinioHandler",
-    "RedisHandler",
+    "PyCacheHandler",
+    "PyDocumentStorageHandler",
+    "RealObjectStorageHandler",
     "SQLAlchemyHandler",
     "SQLiteHandler",
 ]

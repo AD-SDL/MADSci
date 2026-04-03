@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from madsci.common.types.base_types import MadsciBaseSettings
-from pydantic import AnyUrl, Field, field_validator
+from pydantic import AliasChoices, AnyUrl, Field, field_validator
 
 
 class BaseBackupSettings(MadsciBaseSettings):
@@ -55,7 +55,7 @@ class PostgreSQLBackupSettings(
         title="Database URL",
         description="PostgreSQL connection URL",
         alias="db_url",
-        default="postgresql://madsci:madsci@localhost:5432/resources",
+        default="postgresql://madsci:madsci@localhost:5432/postgres",
         json_schema_extra={"secret": True},
     )
     backup_format: str = Field(
@@ -65,20 +65,33 @@ class PostgreSQLBackupSettings(
     )
 
 
-class MongoDBBackupSettings(
+class DocumentDBBackupSettings(
     BaseBackupSettings,
-    env_file=(".env", "mongodb_backup.env"),
-    toml_file=("settings.toml", "mongodb_backup.settings.toml"),
-    yaml_file=("settings.yaml", "mongodb_backup.settings.yaml"),
-    json_file=("settings.json", "mongodb_backup.settings.json"),
-    env_prefix="MONGODB_",
+    env_file=(".env", "document_db_backup.env", "mongodb_backup.env"),
+    toml_file=(
+        "settings.toml",
+        "document_db_backup.settings.toml",
+        "mongodb_backup.settings.toml",
+    ),
+    yaml_file=(
+        "settings.yaml",
+        "document_db_backup.settings.yaml",
+        "mongodb_backup.settings.yaml",
+    ),
+    json_file=(
+        "settings.json",
+        "document_db_backup.settings.json",
+        "mongodb_backup.settings.json",
+    ),
+    env_prefix="DOCUMENT_DB_",
 ):
-    """MongoDB-specific backup settings."""
+    """Document database backup settings."""
 
-    mongo_db_url: AnyUrl = Field(
-        title="MongoDB URL",
-        description="MongoDB connection URL",
-        alias="mongo_db_url",  # avoid double prefixing
+    document_db_url: AnyUrl = Field(
+        title="Document Database URL",
+        description="Document database connection URL (FerretDB/MongoDB-compatible)",
+        validation_alias=AliasChoices("document_db_url", "mongo_db_url"),
+        alias="document_db_url",  # avoid double prefixing
         default="mongodb://localhost:27017",
         json_schema_extra={"secret": True},
     )

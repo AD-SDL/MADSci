@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 from madsci.client.location_client import LocationClient
-from madsci.common.types.location_types import Location
+from madsci.common.types.location_types import Location, LocationImportResult
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.utils import new_ulid_str
 
@@ -35,7 +35,7 @@ def sample_location():
     """Create a sample location for testing."""
     return Location(
         location_id=new_ulid_str(),
-        name="Test Location",
+        name="test_location",
         description="A test location",
     )
 
@@ -77,7 +77,7 @@ def test_transfer_method_signatures(location_client):
     # Check get_location_resources signature
     sig = inspect.signature(location_client.get_location_resources)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "timeout" in params
 
 
@@ -179,13 +179,13 @@ def test_get_location_resources_empty_hierarchy(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    test_location_id = new_ulid_str()
-    result = client.get_location_resources(test_location_id)
+    test_location_name = "test_location"
+    result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
     mock_session.get.assert_called_once()
     call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object
     assert isinstance(result, ResourceHierarchy)
@@ -217,13 +217,13 @@ def test_get_location_resources_with_resource(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    test_location_id = new_ulid_str()
-    result = client.get_location_resources(test_location_id)
+    test_location_name = "test_location"
+    result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
     mock_session.get.assert_called_once()
     call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/resources")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object with correct data
     assert isinstance(result, ResourceHierarchy)
@@ -249,9 +249,8 @@ def test_get_location_resources_error_handling(mock_create_session):
     location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
-    test_location_id = new_ulid_str()
     with pytest.raises(requests.exceptions.HTTPError):
-        location_client.get_location_resources(test_location_id)
+        location_client.get_location_resources("nonexistent_location")
 
 
 def test_get_location_resources_return_type_annotation(location_client):
@@ -270,7 +269,7 @@ def test_remove_representation_method_signature(location_client):
     """Test that remove_representation method has correct signature."""
     sig = inspect.signature(location_client.remove_representation)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "node_name" in params
     assert "timeout" in params
 
@@ -349,7 +348,7 @@ def test_detach_resource_method_signature(location_client):
     """Test that detach_resource method has correct signature."""
     sig = inspect.signature(location_client.detach_resource)
     params = list(sig.parameters.keys())
-    assert "location_id" in params
+    assert "location_name" in params
     assert "timeout" in params
 
     # Check return type annotation
@@ -362,9 +361,10 @@ def test_detach_resource_method_request(mock_create_session):
     # Mock successful response
     mock_response = Mock()
     test_location_id = new_ulid_str()
+    test_location_name = "test_location"
     mock_location_data = {
         "location_id": test_location_id,
-        "location_name": "test_location",
+        "location_name": test_location_name,
         "description": "Test location",
         "resource_id": None,
     }
@@ -379,12 +379,12 @@ def test_detach_resource_method_request(mock_create_session):
     client = LocationClient(location_server_url="http://test/")
 
     # Call the method
-    result = client.detach_resource(test_location_id)
+    result = client.detach_resource(test_location_name)
 
     # Verify the request was made correctly
     mock_session.delete.assert_called_once()
     call_args = mock_session.delete.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_id}/detach_resource")
+    assert call_args[0][0].endswith(f"/location/{test_location_name}/detach_resource")
 
     # Verify the result is a Location object
     assert isinstance(result, Location)
@@ -409,6 +409,75 @@ def test_detach_resource_error_handling(mock_create_session):
     location_client = LocationClient("http://localhost:8006")
 
     # Call the method and expect an exception
-    test_location_id = new_ulid_str()
     with pytest.raises(requests.exceptions.HTTPError):
-        location_client.detach_resource(test_location_id)
+        location_client.detach_resource("nonexistent_location")
+
+
+# --- Phase 5: Import/Export client method tests ---
+
+
+@patch("madsci.client.location_client.create_http_session")
+def test_import_locations_calls_import_endpoint(mock_create_session):
+    """Verify import_locations POSTs to /locations/import."""
+    mock_response = Mock()
+    mock_response.json.return_value = {
+        "imported": 2,
+        "skipped": 0,
+        "errors": [],
+        "locations": [],
+    }
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.post.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    locations = [
+        Location(location_name="Loc1", location_id=new_ulid_str()),
+        Location(location_name="Loc2", location_id=new_ulid_str()),
+    ]
+    result = client.import_locations(locations=locations)
+
+    mock_session.post.assert_called_once()
+    call_args = mock_session.post.call_args
+    assert call_args[0][0].endswith("/locations/import")
+    assert isinstance(result, LocationImportResult)
+    assert result.imported == 2
+
+
+def test_export_locations_method_exists(location_client):
+    """Verify export_locations method exists."""
+    assert hasattr(location_client, "export_locations")
+    assert callable(location_client.export_locations)
+
+
+@patch("madsci.client.location_client.create_http_session")
+def test_export_locations_calls_correct_endpoint(mock_create_session):
+    """Verify export_locations GETs /locations/export."""
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_response.json.return_value = [
+        {"location_name": "Loc1", "location_id": test_location_id},
+    ]
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.get.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    result = client.export_locations()
+
+    mock_session.get.assert_called_once()
+    call_args = mock_session.get.call_args
+    assert call_args[0][0].endswith("/locations/export")
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert isinstance(result[0], Location)
+
+
+def test_close_method_exists(location_client):
+    """Verify close method exists and is callable."""
+    assert hasattr(location_client, "close")
+    assert callable(location_client.close)

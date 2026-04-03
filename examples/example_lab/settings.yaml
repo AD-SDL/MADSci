@@ -15,14 +15,14 @@ event_server_url: http://localhost:8001/
 event_manager_name: "Example Event Manager"
 event_manager_description: "Event manager for the example lab"
 event_database_name: madsci_events
-event_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Experiment Manager
 experiment_server_url: http://localhost:8002/
 experiment_manager_name: "Example Experiment Manager"
 experiment_manager_description: "Experiment manager for the example lab"
 experiment_database_name: madsci_experiments
-experiment_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Resource Manager
 resource_server_url: http://localhost:8003/
@@ -82,14 +82,14 @@ data_server_url: http://localhost:8004/
 data_manager_name: "Example Data Manager"
 data_manager_description: "Data manager for the example lab"
 data_database_name: madsci_data
-data_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 
 # Workcell Manager
 workcell_server_url: http://localhost:8005/
 workcell_manager_name: "Example Workcell"
 workcell_manager_description: "An example workcell with liquid handlers, plate reader, and robot arm"
 workcell_database_name: madsci_workcells
-workcell_mongo_db_url: mongodb://localhost:27017/
+# Note: document_db_url is in .env because FerretDB requires authentication.
 # Workcell node URLs (which nodes belong to this workcell and how to reach them).
 workcell_nodes:
   liquidhandler_1: http://localhost:2000/

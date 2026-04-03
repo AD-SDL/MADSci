@@ -7,6 +7,7 @@ Commands are imported lazily to reduce CLI startup time.
 
 Sub-modules
 -----------
+* madsci.client.cli.commands.add
 * madsci.client.cli.commands.backup
 * madsci.client.cli.commands.commands
 * madsci.client.cli.commands.completion

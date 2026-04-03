@@ -145,7 +145,7 @@ self.resource_client.init_template(
     description="Template for {{ module_name }} consumable pool.",
     required_overrides=["resource_name"],
     tags=["{{ module_name }}", "consumable", "pool"],
-    created_by=self.node_definition.node_id,
+    created_by=self.node_info.node_id,
     version="1.0.0",
 )
 ```

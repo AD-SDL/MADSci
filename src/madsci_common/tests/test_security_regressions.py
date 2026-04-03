@@ -488,6 +488,7 @@ class TestTemplatePathTraversal:
         engine.template_dir = template_dir
         engine.manifest = manifest
         engine._sandboxed = False
+        engine._shared_dir = None
         engine._jinja_env = engine._create_jinja_env()
 
         output_dir = tmp_path / "output"

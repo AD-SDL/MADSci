@@ -167,6 +167,27 @@ class LocationClientConfig(MadsciClientConfig):
         env_file_encoding="utf-8",
     )
 
+    startup_retry_max_attempts: int = Field(
+        default=5,
+        ge=1,
+        description="Maximum number of retry attempts for startup init operations (e.g. init_representation_template).",
+    )
+    startup_retry_initial_delay: float = Field(
+        default=1.0,
+        gt=0.0,
+        description="Initial delay in seconds between retries for startup init operations.",
+    )
+    startup_retry_max_delay: float = Field(
+        default=15.0,
+        gt=0.0,
+        description="Maximum delay in seconds between retries for startup init operations.",
+    )
+    startup_retry_backoff_factor: float = Field(
+        default=2.0,
+        ge=1.0,
+        description="Exponential backoff multiplier for startup init retries.",
+    )
+
 
 class WorkcellClientConfig(MadsciClientConfig):
     """

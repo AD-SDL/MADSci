@@ -15,20 +15,20 @@ class TestSettingsExport:
         export = settings.model_dump(mode="json")
 
         assert "server_url" in export
-        assert "redis_host" in export
-        assert export["redis_host"] == "localhost"
+        assert "cache_host" in export
+        assert export["cache_host"] == "localhost"
 
     def test_export_with_custom_values(self) -> None:
         """Test exporting settings with custom values."""
         settings = WorkcellManagerSettings(
-            redis_host="redis.example.com",
-            redis_port=6380,
+            cache_host="redis.example.com",
+            cache_port=6380,
             scheduler_update_interval=10.0,
         )
         export = settings.model_dump(mode="json")
 
-        assert export["redis_host"] == "redis.example.com"
-        assert export["redis_port"] == 6380
+        assert export["cache_host"] == "redis.example.com"
+        assert export["cache_port"] == 6380
         assert export["scheduler_update_interval"] == 10.0
 
     def test_settings_json_schema(self) -> None:
@@ -36,7 +36,7 @@ class TestSettingsExport:
         schema = WorkcellManagerSettings.model_json_schema()
 
         assert "properties" in schema
-        assert "redis_host" in schema["properties"]
+        assert "cache_host" in schema["properties"]
         assert "server_url" in schema["properties"]
 
     def test_custom_settings_export(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -145,8 +145,8 @@ class TestSettingsNonDefaultExport:
         """Test filtering to only non-default values."""
         # Create settings with some custom values
         settings = WorkcellManagerSettings(
-            redis_host="custom-redis.example.com",
-            redis_port=6380,
+            cache_host="custom-redis.example.com",
+            cache_port=6380,
             # scheduler_update_interval uses default
         )
 
@@ -163,10 +163,10 @@ class TestSettingsNonDefaultExport:
             if all_settings.get(k) != defaults.get(k)
         }
 
-        assert "redis_host" in non_defaults
-        assert non_defaults["redis_host"] == "custom-redis.example.com"
-        assert "redis_port" in non_defaults
-        assert non_defaults["redis_port"] == 6380
+        assert "cache_host" in non_defaults
+        assert non_defaults["cache_host"] == "custom-redis.example.com"
+        assert "cache_port" in non_defaults
+        assert non_defaults["cache_port"] == 6380
         # Default values should not be in the filtered output
         assert "scheduler_update_interval" not in non_defaults or non_defaults.get(
             "scheduler_update_interval"

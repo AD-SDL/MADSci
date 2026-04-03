@@ -9,7 +9,10 @@ from unittest.mock import MagicMock, Mock, patch
 import pytest
 from fastapi.testclient import TestClient
 from madsci.client.workcell_client import WorkcellClient
-from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
+from madsci.common.db_handlers import (
+    InMemoryCacheHandler,
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
 from madsci.common.types.parameter_types import ParameterInputJson
@@ -140,8 +143,8 @@ def test_client() -> Generator[TestClient, None, None]:
 
         manager = WorkcellManager(
             settings=custom_settings,
-            redis_handler=InMemoryRedisHandler(),
-            mongo_handler=InMemoryMongoHandler(),
+            cache_handler=InMemoryCacheHandler(),
+            document_handler=InMemoryDocumentStorageHandler(),
             start_engine=False,
         )
         app = manager.create_server()
@@ -454,6 +457,48 @@ def test_retry_workflow_no_await(
         mock_retry.assert_called_once_with(
             submitted_workflow.workflow_id, index=0, await_completion=False
         )
+
+
+def test_resubmit_workflow(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    with patch.object(client, "await_workflow") as mock_await:
+        mock_workflow = Workflow(
+            workflow_id=new_ulid_str(),
+            name="Test Workflow",
+            status=WorkflowStatus(completed=True),
+            steps=[],
+        )
+        mock_await.return_value = mock_workflow
+
+        resubmitted = client.resubmit_workflow(
+            submitted_workflow.workflow_id, await_completion=True
+        )
+
+        assert isinstance(resubmitted, Workflow)
+        # resubmit creates a new workflow, so await_workflow is called with the new ID
+        mock_await.assert_called_once()
+
+
+def test_resubmit_workflow_no_await(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow without waiting for completion."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    resubmitted = client.resubmit_workflow(
+        submitted_workflow.workflow_id, await_completion=False
+    )
+
+    assert isinstance(resubmitted, Workflow)
+    # Resubmit creates a new workflow with a new ID
+    assert resubmitted.workflow_id != submitted_workflow.workflow_id
+    assert resubmitted.name == submitted_workflow.name
 
 
 def test_await_workflow_completed(

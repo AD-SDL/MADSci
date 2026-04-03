@@ -4,8 +4,6 @@ import warnings
 from typing import Optional
 
 from madsci.common.types.location_types import (
-    LocationDefinition,
-    LocationManagerDefinition,
     LocationManagerSettings,
     LocationTransferCapabilities,
 )
@@ -69,40 +67,10 @@ class TestWorkcellSettingsNodes:
 class TestLocationSettingsInline:
     """Test LocationManagerSettings inline data fields."""
 
-    def test_locations_none_by_default(self) -> None:
-        """locations should be None by default."""
-        settings = LocationManagerSettings()
-        assert settings.locations is None
-
     def test_transfer_capabilities_none_by_default(self) -> None:
         """transfer_capabilities should be None by default."""
         settings = LocationManagerSettings()
         assert settings.transfer_capabilities is None
-
-    def test_locations_can_be_set(self) -> None:
-        """Should be able to set locations inline."""
-        loc = LocationDefinition(location_name="test_loc")
-        settings = LocationManagerSettings(locations=[loc])
-        assert settings.locations is not None
-        assert len(settings.locations) == 1
-        assert settings.locations[0].location_name == "test_loc"
-
-    def test_locations_override_logic(self) -> None:
-        """Settings locations should be usable to override definition locations."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            definition = LocationManagerDefinition(
-                name="Test Location Manager",
-                locations=[LocationDefinition(location_name="old_loc")],
-            )
-        settings_locations = [LocationDefinition(location_name="new_loc")]
-
-        # Simulate the override logic
-        if settings_locations is not None:
-            definition.locations = settings_locations
-
-        assert len(definition.locations) == 1
-        assert definition.locations[0].location_name == "new_loc"
 
     def test_transfer_capabilities_can_be_set(self) -> None:
         """Should be able to set transfer_capabilities inline."""

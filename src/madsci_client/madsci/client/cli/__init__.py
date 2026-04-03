@@ -27,6 +27,7 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "registry": ("madsci.client.cli.commands.registry", "registry"),
     "migrate": ("madsci.client.cli.commands.migrate", "migrate"),
     "new": ("madsci.client.cli.commands.new", "new"),
+    "add": ("madsci.client.cli.commands.add", "add"),
     "start": ("madsci.client.cli.commands.start", "start"),
     "stop": ("madsci.client.cli.commands.stop", "stop"),
     "init": ("madsci.client.cli.commands.init", "init"),

@@ -105,13 +105,13 @@ Classes
     `database_name: str`
     :
 
+    `document_db_url: pydantic.networks.AnyUrl`
+    :
+
     `file_storage_path: str | pathlib.Path`
     :
 
     `manager_type: madsci.common.types.manager_types.ManagerType | None`
-    :
-
-    `mongo_db_url: pydantic.networks.AnyUrl`
     :
 
     `server_url: pydantic.networks.AnyUrl`
@@ -241,7 +241,7 @@ Classes
     
     Attributes:
         url: The accessible URL for the object (can be used in frontend).
-        storage_endpoint: The endpoint of the storage service (e.g., 'minio.example.com:9000').
+        storage_endpoint: The endpoint of the storage service (e.g., 'storage.example.com:8333').
         bucket_name: The name of the bucket containing the object.
         object_name: The path/key of the object within the bucket.
         content_type: The MIME type of the stored object.
@@ -331,6 +331,9 @@ Classes
     :
 
     `endpoint: str | None`
+    :
+
+    `public_endpoint: str | None`
     :
 
     `region: str | None`

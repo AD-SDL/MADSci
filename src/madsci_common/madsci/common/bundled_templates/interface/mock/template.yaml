@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A pytest mock-based interface for unit testing"
 category: "interface"
 tags: ["mock", "testing", "pytest"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

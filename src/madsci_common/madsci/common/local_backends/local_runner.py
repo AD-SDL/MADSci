@@ -1,7 +1,7 @@
 """LocalRunner: single-process orchestrator for all MADSci managers.
 
 Starts all 7 managers in one process with in-memory backends, enabling the
-full MADSci stack to run without Docker, Redis, MongoDB, or PostgreSQL.
+full MADSci stack to run without Docker, Valkey, FerretDB, or PostgreSQL.
 
 Usage::
 
@@ -19,10 +19,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 import uvicorn
-from madsci.common.db_handlers.minio_handler import InMemoryMinioHandler
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
+from madsci.common.db_handlers.object_storage_handler import (
+    InMemoryObjectStorageHandler,
+)
 from madsci.common.db_handlers.postgres_handler import SQLiteHandler
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 # Default ports for each manager — matches the standard MADSci port assignments.
 MANAGER_PORTS = {
@@ -59,14 +63,23 @@ class LocalRunner:
         self.scratch_dir.mkdir(parents=True, exist_ok=True)
 
         # Shared in-memory handler abstractions
-        self._redis_handler = InMemoryRedisHandler()
-        self._event_mongo_handler = InMemoryMongoHandler(database_name="events")
-        self._experiment_mongo_handler = InMemoryMongoHandler(
+        self._cache_handler = InMemoryCacheHandler()
+        self._event_document_handler = InMemoryDocumentStorageHandler(
+            database_name="events"
+        )
+        self._experiment_document_handler = InMemoryDocumentStorageHandler(
             database_name="experiments"
         )
-        self._data_mongo_handler = InMemoryMongoHandler(database_name="data")
-        self._workcell_mongo_handler = InMemoryMongoHandler(database_name="workcell")
-        self._minio_handler = InMemoryMinioHandler()
+        self._data_document_handler = InMemoryDocumentStorageHandler(
+            database_name="data"
+        )
+        self._workcell_document_handler = InMemoryDocumentStorageHandler(
+            database_name="workcell"
+        )
+        self._location_document_handler = InMemoryDocumentStorageHandler(
+            database_name="locations"
+        )
+        self._object_storage_handler = InMemoryObjectStorageHandler()
 
         # SQLite handler for the Resource Manager
         sqlite_path = self.scratch_dir / "resources.db"
@@ -128,14 +141,14 @@ class LocalRunner:
         # Lab Manager (8000) — no database needed
         managers["lab"] = LabManager()
 
-        # Event Manager (8001) — in-memory MongoDB handler
+        # Event Manager (8001) — in-memory document storage handler
         managers["event"] = EventManager(
-            mongo_handler=self._event_mongo_handler,
+            document_handler=self._event_document_handler,
         )
 
-        # Experiment Manager (8002) — in-memory MongoDB handler
+        # Experiment Manager (8002) — in-memory document storage handler
         managers["experiment"] = ExperimentManager(
-            mongo_handler=self._experiment_mongo_handler,
+            document_handler=self._experiment_document_handler,
         )
 
         # Resource Manager (8003) — SQLite via PostgresHandler abstraction
@@ -143,22 +156,23 @@ class LocalRunner:
             postgres_handler=self._postgres_handler,
         )
 
-        # Data Manager (8004) — in-memory MongoDB + MinIO handlers
+        # Data Manager (8004) — in-memory document storage + object storage handlers
         managers["data"] = DataManager(
-            mongo_handler=self._data_mongo_handler,
-            minio_handler=self._minio_handler,
+            document_handler=self._data_document_handler,
+            object_storage_handler=self._object_storage_handler,
         )
 
-        # Workcell Manager (8005) — in-memory Redis + MongoDB handlers
+        # Workcell Manager (8005) — in-memory Redis + document storage handlers
         managers["workcell"] = WorkcellManager(
-            redis_handler=self._redis_handler,
-            mongo_handler=self._workcell_mongo_handler,
+            cache_handler=self._cache_handler,
+            document_handler=self._workcell_document_handler,
             start_engine=False,
         )
 
-        # Location Manager (8006) — in-memory Redis handler
+        # Location Manager (8006) — in-memory Redis + document storage handlers
         managers["location"] = LocationManager(
-            redis_handler=self._redis_handler,
+            cache_handler=self._cache_handler,
+            document_handler=self._location_document_handler,
         )
 
         return managers

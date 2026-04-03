@@ -9,10 +9,11 @@ Currently, this lab uses simulated example modules for purely fake devices. For 
 The example lab simulates a real laboratory environment with:
 
 ### Infrastructure Services
-- **MongoDB** (Port 27017): Event and experiment data storage
-- **PostgreSQL** (Port 5432): Resource and inventory management
-- **Redis** (Port 6379): Real-time state management and task queuing
-- **MinIO** (Port 9000/9001): Object storage for data files
+- **FerretDB** (Port 27017): Document database for event and experiment data (MongoDB-compatible, backed by PostgreSQL)
+- **PostgreSQL** (Port 5432): FerretDB backend database
+- **PostgreSQL** (Port 5434): Resource Manager relational database
+- **Valkey** (Port 6379): Real-time state management and caching
+- **SeaweedFS** (Port 8333/9333): S3-compatible object storage for data files
 
 ### Core Managers
 - **Lab Manager** (Port 8000): Central dashboard and lab coordination
@@ -43,7 +44,7 @@ Before starting the example lab, ensure you have:
    - Consult the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) for configuration and setup recommendations
 
 2. **Network Requirements**:
-   - Ports 2000-2004, 5432, 6379, 8000-8006, 9000-9001, and 27017 available
+   - Ports 2000-2004, 5432, 5434, 6379, 8000-8006, 8333, 9333, and 27017 available
    - Internet access for pulling Docker images
 
 3. **System Requirements**:
@@ -207,7 +208,7 @@ curl -X POST http://localhost:2000/actions/prepare \
   -d '{"parameters": {}}'
 
 # Query node capabilities
-curl http://localhost:2000/definition
+curl http://localhost:2000/info
 ```
 
 ## Troubleshooting
@@ -221,7 +222,7 @@ docker --version
 docker compose --version
 
 # Verify port availability
-netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|6379|27017|9000|9001)'
+netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|5434|6379|27017|8333|9333)'
 
 # Check Docker resources
 docker system df
@@ -236,8 +237,8 @@ docker compose up
 
 # Check database logs
 docker compose logs postgres
-docker compose logs mongodb
-docker compose logs redis
+docker compose logs madsci_ferretdb
+docker compose logs madsci_valkey
 ```
 
 #### Node Communication Issues
@@ -292,6 +293,39 @@ See the [Observability Guide](../../docs/guides/observability.md) for detailed s
 - [Configuration.md](../../docs/Configuration.md) - Complete configuration reference
 - [Main README](../../README.md) - MADSci overview and installation
 - [Logging Guide](../../docs/guides/logging.md) - Structured logging and context management
+
+## Location Templates
+
+The example lab demonstrates the **location template system** for declarative location management.
+
+### Node-Defined Representation Templates
+
+Both `RobotArmNode` and `LiquidHandlerNode` define `location_representation_templates` with JSON Schema definitions:
+
+- **`robotarm_deck_access`** / **`robotarm_wide_access`** -- defined in `example_modules/robotarm.py`. Specify joint positions, gripper configuration, and payload limits. The `position` field is a required override (varies per physical location).
+- **`lh_deck_repr`** -- defined in `example_modules/liquidhandler.py`. Specifies deck slot number, deck type, and plate capacity. The `deck_position` field is a required override.
+
+These templates are registered with the Location Manager automatically at node startup via `template_handler()`.
+
+### Seed File (`locations.yaml`)
+
+The `locations.yaml` file pre-populates the Location Manager on first startup. It defines:
+
+1. **Representation templates** -- `robotarm_deck_access`, `robotarm_wide_access`, `lh_deck_repr`
+2. **Location templates** -- `lh_accessible_deck_slot` (liquid handler + robot arm access) and `lh_only_deck_slot` (liquid handler only)
+3. **Concrete locations** -- deck slots for `liquidhandler_1` and `liquidhandler_2`, each with node bindings mapping abstract roles (`deck_controller`, `transfer_arm`) to concrete node instances and per-location overrides (deck position, joint angles)
+
+Inline (non-template) locations like `storage_rack` and `platereader_1.plate_carriage` are also supported for locations that do not fit a reusable template pattern.
+
+### Dashboard Integration
+
+Once the lab is running, navigate to the **Locations** tab in the dashboard at [http://localhost:8000](http://localhost:8000). From there you can:
+
+- View all locations with their representations and template lineage
+- Create new locations from registered templates, selecting node bindings and filling in required overrides via schema-aware forms
+- Edit representations on existing locations
+
+See the [Location Templates Guide](../../docs/guides/integrator/10-location-templates.md) for full documentation.
 
 ## Stopping the Lab
 

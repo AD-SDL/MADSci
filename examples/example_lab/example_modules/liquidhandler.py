@@ -24,13 +24,17 @@ import functools
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
-from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.node_types import (
+    NodeRepresentationTemplateDefinition,
+    NodeResourceTemplateDefinition,
+    RestNodeConfig,
+)
 from madsci.common.types.resource_types import Pool, Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -188,6 +192,84 @@ class LiquidHandlerNode(RestNode):
     # Pydantic model class for configuration validation
     config_model = LiquidHandlerConfig
 
+    # Declarative template definitions — registered automatically by template_handler()
+    resource_templates: ClassVar[list[NodeResourceTemplateDefinition]] = [
+        NodeResourceTemplateDefinition(
+            resource=Slot(
+                resource_name="liquid_handler_deck",
+                resource_class="LiquidHandlerDeck",
+                capacity=1,
+                attributes={
+                    "slot_type": "deck_position",
+                    "accessible": True,
+                    "description": "Liquid handler deck slot for placing plates or labware",
+                },
+            ),
+            template_name="liquid_handler_deck_slot",
+            description="Template for liquid handler deck slot. Represents deck positions where plates or labware can be placed.",
+            required_overrides=["resource_name"],
+            tags=["liquid_handler", "deck", "slot"],
+            version="1.0.0",
+        ),
+        NodeResourceTemplateDefinition(
+            resource=Pool(
+                resource_name="liquid_handler_pipette",
+                resource_class="LiquidHandlerPipette",
+                capacity=1000.0,
+                attributes={
+                    "pipette_type": "8-channel",
+                    "min_volume": 0.5,
+                    "max_volume": 1000.0,
+                    "channels": 8,
+                    "description": "Liquid handler pipette pool for tracking tips and aspirated liquid",
+                },
+            ),
+            template_name="liquid_handler_pipette_pool",
+            description="Template for liquid handler pipette pool. Tracks pipette tips and aspirated liquids.",
+            required_overrides=["resource_name"],
+            tags=["liquid_handler", "pipette", "pool", "consumable"],
+            version="1.0.0",
+        ),
+    ]
+
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="lh_deck_repr",
+            default_values={"deck_type": "standard", "max_plates": 1},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "deck_position": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Deck slot number on the liquid handler",
+                    },
+                    "deck_type": {
+                        "type": "string",
+                        "enum": ["standard", "deep_well", "pcr"],
+                        "description": "Type of deck slot",
+                    },
+                    "max_plates": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Maximum number of plates this slot can hold",
+                    },
+                    "accessible": {
+                        "type": "boolean",
+                        "description": "Whether this deck position is currently accessible",
+                    },
+                },
+                "required": ["deck_position"],
+            },
+            required_overrides=["deck_position"],
+            tags=["liquid_handler", "deck"],
+            version="1.1.0",
+            description="Liquid handler deck slot representation with position and type",
+        ),
+    ]
+
     def __init__(self) -> None:
         """Initialize the liquid handler node with cancel/pause event support."""
         super().__init__()
@@ -226,67 +308,18 @@ class LiquidHandlerNode(RestNode):
 
     def startup_handler(self) -> None:
         """
-        Initialize the liquid handler node and create resource templates.
+        Initialize the liquid handler node and create resource instances.
 
         This method is called when the node starts up or restarts. It performs:
         1. Hardware interface initialization
-        2. Resource template creation for deck slots and pipettes
-        3. Instantiation of specific resources (deck1, deck2, pipette)
-        4. Registration of resources with the resource manager
+        2. Instantiation of specific resources (deck1, deck2, pipette)
+        3. Registration of resources with the resource manager
 
-        Resource Template Pattern:
-        Templates define reusable resource types that can be instantiated multiple
-        times with different names/IDs. This allows labs to easily add new instances
-        of similar equipment (e.g., additional deck positions) without code changes.
+        Resource templates and representation templates are registered
+        automatically by template_handler() before this method is called.
         """
         # Initialize the hardware interface with event logging
         self.liquid_handler = LiquidHandlerInterface(logger=self.logger)
-
-        # Create deck slot template - represents positions where labware can be placed
-        deck_slot = Slot(
-            resource_name="liquid_handler_deck",
-            resource_class="LiquidHandlerDeck",
-            capacity=1,
-            attributes={
-                "slot_type": "deck_position",
-                "accessible": True,
-                "description": "Liquid handler deck slot for placing plates or labware",
-            },
-        )
-
-        self.resource_client.init_template(
-            resource=deck_slot,
-            template_name="liquid_handler_deck_slot",
-            description="Template for liquid handler deck slot. Represents deck positions where plates or labware can be placed.",
-            required_overrides=["resource_name"],
-            tags=["liquid_handler", "deck", "slot"],
-            created_by=self.node_info.node_id,
-            version="1.0.0",
-        )
-
-        # Create pipette template (Pool type for holding tips/liquid)
-        pipette_pool = Pool(
-            resource_name="liquid_handler_pipette",
-            resource_class="LiquidHandlerPipette",
-            capacity=1000.0,
-            attributes={
-                "pipette_type": "8-channel",
-                "min_volume": 0.5,
-                "max_volume": 1000.0,
-                "channels": 8,
-                "description": "Liquid handler pipette pool for tracking tips and aspirated liquid",
-            },
-        )
-
-        self.resource_client.init_template(
-            resource=pipette_pool,
-            template_name="liquid_handler_pipette_pool",
-            description="Template for liquid handler pipette pool. Tracks pipette tips and aspirated liquids.",
-            required_overrides=["resource_name"],
-            tags=["liquid_handler", "pipette", "pool", "consumable"],
-            created_by=self.node_info.node_id,
-            version="1.0.0",
-        )
 
         # Initialize deck 1
         deck1_resource_name = f"liquid_handler_deck1_{self.node_info.node_name}"

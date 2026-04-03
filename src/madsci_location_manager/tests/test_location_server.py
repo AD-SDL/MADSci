@@ -1,14 +1,16 @@
 """Tests for the LocationManager server."""
 
-from unittest.mock import MagicMock, Mock
-
 import pytest
+import yaml
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.types.location_types import (
     CapacityCostConfig,
     Location,
-    LocationDefinition,
+    LocationImportResult,
     LocationManagerHealth,
     LocationManagerSettings,
     LocationTransferCapabilities,
@@ -22,21 +24,33 @@ from madsci.location_manager.location_server import LocationManager
 
 
 @pytest.fixture
-def redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_locations")
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def app(redis_handler):
-    """Create a test app with test settings and in-memory Redis handler."""
+def cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
+    yield handler
+    handler.close()
+
+
+@pytest.fixture
+def app(cache_handler, document_handler):
+    """Create a test app with test settings and in-memory handlers."""
     settings = LocationManagerSettings(
         enable_registry_resolution=False,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=document_handler,
+    )
     return manager.create_server(
         version="0.1.0",
     )
@@ -55,7 +69,7 @@ def sample_location():
     """Create a sample location for testing."""
     return Location(
         location_id=new_ulid_str(),
-        location_name="Test Location",
+        location_name="test_location",
         description="A test location",
     )
 
@@ -72,7 +86,7 @@ def test_health_endpoint(client):
     # Check that required fields are present
     assert isinstance(health.healthy, bool)
     assert isinstance(health.description, str)
-    assert health.redis_connected is not None  # Should be True for test Redis
+    assert health.cache_connected is not None  # Should be True for test cache
     assert isinstance(health.num_locations, int)
     assert health.num_locations >= 0
 
@@ -91,7 +105,7 @@ def test_add_location(client, sample_location):
 
     returned_location = Location.model_validate(response.json())
     assert returned_location.location_id == sample_location.location_id
-    assert returned_location.name == sample_location.name
+    assert returned_location.location_name == sample_location.location_name
 
 
 def test_get_location(client, sample_location):
@@ -100,7 +114,7 @@ def test_get_location(client, sample_location):
     client.post("/location", json=sample_location.model_dump())
 
     # Then get it
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
 
     returned_location = Location.model_validate(response.json())
@@ -119,12 +133,12 @@ def test_delete_location(client, sample_location):
     client.post("/location", json=sample_location.model_dump())
 
     # Then delete it
-    response = client.delete(f"/location/{sample_location.location_id}")
+    response = client.delete(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
     assert "deleted successfully" in response.json()["message"]
 
     # Verify it's gone
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 404
 
 
@@ -142,7 +156,7 @@ def test_set_representations(client, sample_location):
     # Test setting a dictionary representation
     dict_representation = {"key1": "value1", "key2": "value2"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node",
+        f"/location/{sample_location.location_name}/set_representation/test_node",
         json=dict_representation,
     )
     assert response.status_code == 200
@@ -154,7 +168,7 @@ def test_set_representations(client, sample_location):
     # Test setting a string representation
     string_representation = "simple_string_location"
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node_2",
+        f"/location/{sample_location.location_name}/set_representation/test_node_2",
         json=string_representation,
     )
     assert response.status_code == 200
@@ -166,7 +180,7 @@ def test_set_representations(client, sample_location):
     # Test setting a list representation
     list_representation = [1, 2, 3, 4]
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_node_3",
+        f"/location/{sample_location.location_name}/set_representation/test_node_3",
         json=list_representation,
     )
     assert response.status_code == 200
@@ -184,7 +198,7 @@ def test_attach_resource(client, sample_location):
     # Attach a resource
     resource_id = "test_resource_id"
     response = client.post(
-        f"/location/{sample_location.location_id}/attach_resource",
+        f"/location/{sample_location.location_name}/attach_resource",
         params={"resource_id": resource_id},
     )
     assert response.status_code == 200
@@ -214,12 +228,12 @@ def test_multiple_locations(client):
     locations = [
         Location(
             location_id=new_ulid_str(),
-            name="Location 1",
+            name="location_1",
             description="First test location",
         ),
         Location(
             location_id=new_ulid_str(),
-            name="Location 2",
+            name="location_2",
             description="Second test location",
         ),
     ]
@@ -251,7 +265,7 @@ def test_location_state_persistence(client, sample_location):
     # Set representation (dictionary is stored as the representation for test_robot node)
     representation = {"position": [1, 2, 3], "config": "test_config"}
     response = client.post(
-        f"/location/{sample_location.location_id}/set_representation/test_robot",
+        f"/location/{sample_location.location_name}/set_representation/test_robot",
         json=representation,
     )
     assert response.status_code == 200
@@ -259,13 +273,13 @@ def test_location_state_persistence(client, sample_location):
     # Attach a resource
     resource_id = "test_resource_123"
     response = client.post(
-        f"/location/{sample_location.location_id}/attach_resource",
+        f"/location/{sample_location.location_name}/attach_resource",
         params={"resource_id": resource_id},
     )
     assert response.status_code == 200
 
     # Verify all data persists by fetching the location
-    response = client.get(f"/location/{sample_location.location_id}")
+    response = client.get(f"/location/{sample_location.location_name}")
     assert response.status_code == 200
 
     location = Location.model_validate(response.json())
@@ -275,161 +289,11 @@ def test_location_state_persistence(client, sample_location):
     assert location.resource_id == resource_id
 
 
-def test_automatic_location_initialization_from_definition(
-    redis_handler,
-):
-    """Test that locations are automatically initialized from definition."""
-
-    # Create a definition with locations
-    location_def1 = LocationDefinition(
-        location_name="auto_location_1",
-        location_id=new_ulid_str(),
-        description="Automatically initialized location 1",
-        representations={"robot1": [1, 2, 3], "robot2": {"x": 10, "y": 20}},
-    )
-
-    location_def2 = LocationDefinition(
-        location_name="auto_location_2",
-        location_id=new_ulid_str(),
-        description="Automatically initialized location 2",
-        representations={"robot1": [4, 5, 6]},
-    )
-
-    settings = LocationManagerSettings(
-        locations=[location_def1, location_def2],
-    )
-
-    # Create manager with definition (this should trigger automatic initialization)
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-    client = TestClient(manager.create_server())
-
-    # Verify locations were automatically created
-    response = client.get("/locations")
-    assert response.status_code == 200
-
-    returned_locations = [Location.model_validate(loc) for loc in response.json()]
-    assert len(returned_locations) == 2
-
-    # Verify location details
-    location_ids = {loc.location_id for loc in returned_locations}
-    expected_ids = {location_def1.location_id, location_def2.location_id}
-    assert location_ids == expected_ids
-
-    # Verify representations were preserved
-    for location in returned_locations:
-        if location.location_id == location_def1.location_id:
-            assert location.name == "auto_location_1"
-            assert location.representations == {
-                "robot1": [1, 2, 3],
-                "robot2": {"x": 10, "y": 20},
-            }
-        elif location.location_id == location_def2.location_id:
-            assert location.name == "auto_location_2"
-            assert location.representations == {"robot1": [4, 5, 6]}
-
-
-def test_resource_initialization_prevents_duplicates(redis_handler):
-    """Test that resource initialization creates unique resources using templates."""
-
-    # Create a location definition with resource_template_name
-    location_def = LocationDefinition(
-        location_name="location_with_resource",
-        location_id=new_ulid_str(),
-        description="Location with associated resource",
-        resource_template_name="test_slot_template",
-        resource_template_overrides={"resource_class": "test_slot_class"},
-    )
-
-    settings = LocationManagerSettings(
-        locations=[location_def],
-    )
-
-    # Mock the ResourceClient to track calls
-    mock_resource_client = MagicMock()
-    mock_resource = Mock()
-    mock_resource.resource_id = "test_resource_123"
-
-    # Mock create_resource_from_template to return a resource
-    mock_resource_client.create_resource_from_template.return_value = mock_resource
-
-    # Create manager instance
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-    manager.resource_client = mock_resource_client
-
-    # Run initialization to simulate startup behavior
-    manager._initialize_locations()
-
-    # Verify that create_resource_from_template was called
-    assert mock_resource_client.create_resource_from_template.call_count == 1
-
-    # Verify resource was created with correct parameters
-    call_args = mock_resource_client.create_resource_from_template.call_args
-    assert call_args[1]["template_name"] == "test_slot_template"
-    assert (
-        "location_with_resource" in call_args[1]["resource_name"]
-    )  # Should include location name
-    assert call_args[1]["overrides"]["resource_class"] == "test_slot_class"
-    assert call_args[1]["add_to_database"]
-
-    # Verify location was created with correct resource_id
-    client = TestClient(manager.create_server())
-    response = client.get("/locations")
-    assert response.status_code == 200
-
-    locations = [Location.model_validate(loc) for loc in response.json()]
-    assert len(locations) == 1
-    assert locations[0].resource_id == "test_resource_123"
-
-
-def test_resource_initialization_with_matching_existing_resource(
-    redis_handler,
-):
-    """Test that the system creates resources from templates with proper error handling."""
-
-    location_def = LocationDefinition(
-        location_name="location_with_shared_resource",
-        location_id=new_ulid_str(),
-        description="Location sharing a resource",
-        resource_template_name="shared_slot_template",
-        resource_template_overrides={"resource_class": "shared_slot_class"},
-    )
-
-    settings = LocationManagerSettings(
-        locations=[location_def],
-    )
-
-    # Mock ResourceClient
-    mock_resource_client = MagicMock()
-    created_resource = Mock()
-    created_resource.resource_id = "new_resource_456"
-
-    # Mock template creation to succeed
-    mock_resource_client.create_resource_from_template.return_value = created_resource
-
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-    manager.resource_client = mock_resource_client
-
-    # Run initialization
-    manager._initialize_locations()
-
-    # Verify that create_resource_from_template was called
-    assert mock_resource_client.create_resource_from_template.call_count == 1
-
-    # Verify the location was associated with the new resource
-    client = TestClient(manager.create_server())
-    response = client.get("/locations")
-    assert response.status_code == 200
-
-    locations = [Location.model_validate(loc) for loc in response.json()]
-    assert len(locations) == 1
-    assert locations[0].resource_id == "new_resource_456"
-
-
 # Transfer Graph Tests
 
 
 @pytest.fixture
-def transfer_setup(redis_handler):
+def transfer_setup(cache_handler):
     """Create a location manager with transfer capabilities for testing."""
     # Create sample transfer templates with simplified format
     transfer_template1 = TransferStepTemplate(
@@ -453,7 +317,7 @@ def transfer_setup(redis_handler):
     )
 
     # Create locations with representations that match transfer templates
-    location1 = LocationDefinition(
+    location1 = Location(
         location_name="pickup_station",
         location_id=new_ulid_str(),
         description="Pickup station with robot arm and conveyor access",
@@ -463,21 +327,21 @@ def transfer_setup(redis_handler):
         },
     )
 
-    location2 = LocationDefinition(
+    location2 = Location(
         location_name="processing_station",
         location_id=new_ulid_str(),
         description="Processing station with robot arm access",
         representations={"robotarm_1": {"position": [4, 5, 6], "gripper": "open"}},
     )
 
-    location3 = LocationDefinition(
+    location3 = Location(
         location_name="storage_area",
         location_id=new_ulid_str(),
         description="Storage area with conveyor access",
         representations={"conveyor": {"belt_position": 10, "speed": 0.5}},
     )
 
-    location4 = LocationDefinition(
+    location4 = Location(
         location_name="isolated_station",
         location_id=new_ulid_str(),
         description="Isolated station with no transfer connections",
@@ -485,21 +349,26 @@ def transfer_setup(redis_handler):
     )
 
     settings = LocationManagerSettings(
-        locations=[location1, location2, location3, location4],
         transfer_capabilities=transfer_capabilities,
     )
-
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    locations = [location1, location2, location3, location4]
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     return {
         "client": client,
         "manager": manager,
         "locations": {
-            "pickup": location1.location_id,
-            "processing": location2.location_id,
-            "storage": location3.location_id,
-            "isolated": location4.location_id,
+            "pickup": location1,
+            "processing": location2,
+            "storage": location3,
+            "isolated": location4,
         },
     }
 
@@ -518,15 +387,21 @@ def test_transfer_graph_construction(transfer_setup):
 
     expected_edges = {
         (
-            transfer_setup["locations"]["pickup"],
-            transfer_setup["locations"]["processing"],
+            transfer_setup["locations"]["pickup"].location_id,
+            transfer_setup["locations"]["processing"].location_id,
         ),
         (
-            transfer_setup["locations"]["processing"],
-            transfer_setup["locations"]["pickup"],
+            transfer_setup["locations"]["processing"].location_id,
+            transfer_setup["locations"]["pickup"].location_id,
         ),
-        (transfer_setup["locations"]["pickup"], transfer_setup["locations"]["storage"]),
-        (transfer_setup["locations"]["storage"], transfer_setup["locations"]["pickup"]),
+        (
+            transfer_setup["locations"]["pickup"].location_id,
+            transfer_setup["locations"]["storage"].location_id,
+        ),
+        (
+            transfer_setup["locations"]["storage"].location_id,
+            transfer_setup["locations"]["pickup"].location_id,
+        ),
     }
 
     actual_edges = set(graph.keys())
@@ -535,14 +410,17 @@ def test_transfer_graph_construction(transfer_setup):
     # Verify edge costs are set correctly
     pickup_to_processing = graph[
         (
-            transfer_setup["locations"]["pickup"],
-            transfer_setup["locations"]["processing"],
+            transfer_setup["locations"]["pickup"].location_id,
+            transfer_setup["locations"]["processing"].location_id,
         )
     ]
     assert pickup_to_processing.cost == 1.0  # robotarm_1 template cost
 
     pickup_to_storage = graph[
-        (transfer_setup["locations"]["pickup"], transfer_setup["locations"]["storage"])
+        (
+            transfer_setup["locations"]["pickup"].location_id,
+            transfer_setup["locations"]["storage"].location_id,
+        )
     ]
     assert pickup_to_storage.cost == 2.0  # conveyor template cost
 
@@ -553,16 +431,16 @@ def test_can_transfer_between_locations(transfer_setup):
 
     # Get locations from state
     pickup_location = manager.state_handler.get_location(
-        transfer_setup["locations"]["pickup"]
+        transfer_setup["locations"]["pickup"].location_name
     )
     processing_location = manager.state_handler.get_location(
-        transfer_setup["locations"]["processing"]
+        transfer_setup["locations"]["processing"].location_name
     )
     storage_location = manager.state_handler.get_location(
-        transfer_setup["locations"]["storage"]
+        transfer_setup["locations"]["storage"].location_name
     )
     isolated_location = manager.state_handler.get_location(
-        transfer_setup["locations"]["isolated"]
+        transfer_setup["locations"]["isolated"].location_name
     )
 
     # Create transfer templates for testing with simplified format
@@ -616,13 +494,19 @@ def test_shortest_transfer_path_direct(transfer_setup):
 
     # Test direct path between connected locations
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+        transfer_setup["locations"]["pickup"].location_id,
+        transfer_setup["locations"]["processing"].location_id,
     )
 
     assert path is not None
     assert len(path) == 1
-    assert path[0].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[0].target_location_id == transfer_setup["locations"]["processing"]
+    assert (
+        path[0].source_location_id == transfer_setup["locations"]["pickup"].location_id
+    )
+    assert (
+        path[0].target_location_id
+        == transfer_setup["locations"]["processing"].location_id
+    )
     assert path[0].transfer_template.node_name == "robotarm_1"
 
 
@@ -632,7 +516,8 @@ def test_shortest_transfer_path_no_connection(transfer_setup):
 
     # Test path to isolated location (should return None)
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["isolated"]
+        transfer_setup["locations"]["pickup"].location_id,
+        transfer_setup["locations"]["isolated"].location_id,
     )
 
     assert path is None
@@ -644,7 +529,8 @@ def test_shortest_transfer_path_same_location(transfer_setup):
 
     # Test same location (should return empty path)
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["pickup"]
+        transfer_setup["locations"]["pickup"].location_id,
+        transfer_setup["locations"]["pickup"].location_id,
     )
 
     assert path == []
@@ -657,18 +543,27 @@ def test_shortest_transfer_path_multi_hop(transfer_setup):
     # Add another location that creates a longer path
     # This would test processing -> pickup -> storage route
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     )
 
     # Since processing and storage are not directly connected,
     # the path should go through pickup
     assert path is not None
     assert len(path) == 2
-    assert path[0].source_location_id == transfer_setup["locations"]["processing"]
-    assert path[0].target_location_id == transfer_setup["locations"]["pickup"]
-    assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[1].target_location_id == transfer_setup["locations"]["storage"]
+    assert (
+        path[0].source_location_id
+        == transfer_setup["locations"]["processing"].location_id
+    )
+    assert (
+        path[0].target_location_id == transfer_setup["locations"]["pickup"].location_id
+    )
+    assert (
+        path[1].source_location_id == transfer_setup["locations"]["pickup"].location_id
+    )
+    assert (
+        path[1].target_location_id == transfer_setup["locations"]["storage"].location_id
+    )
 
 
 def test_multi_leg_transfer_workflow_step_count(transfer_setup):
@@ -677,7 +572,8 @@ def test_multi_leg_transfer_workflow_step_count(transfer_setup):
 
     # Test direct transfer (1 hop)
     direct_path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+        transfer_setup["locations"]["pickup"].location_id,
+        transfer_setup["locations"]["processing"].location_id,
     )
     assert direct_path is not None
     assert len(direct_path) == 1
@@ -692,8 +588,8 @@ def test_multi_leg_transfer_workflow_step_count(transfer_setup):
 
     # Test multi-hop transfer (2 hops: processing -> pickup -> storage)
     multi_hop_path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     )
     assert multi_hop_path is not None
     assert len(multi_hop_path) == 2
@@ -714,20 +610,29 @@ def test_multi_leg_transfer_workflow_node_ordering(transfer_setup):
     # Get multi-hop transfer path: processing -> pickup -> storage
     # This should use: robotarm_1 (processing->pickup) then conveyor (pickup->storage)
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     )
 
     assert path is not None
     assert len(path) == 2
 
     # Verify path structure matches expected route
-    assert path[0].source_location_id == transfer_setup["locations"]["processing"]
-    assert path[0].target_location_id == transfer_setup["locations"]["pickup"]
+    assert (
+        path[0].source_location_id
+        == transfer_setup["locations"]["processing"].location_id
+    )
+    assert (
+        path[0].target_location_id == transfer_setup["locations"]["pickup"].location_id
+    )
     assert path[0].transfer_template.node_name == "robotarm_1"
 
-    assert path[1].source_location_id == transfer_setup["locations"]["pickup"]
-    assert path[1].target_location_id == transfer_setup["locations"]["storage"]
+    assert (
+        path[1].source_location_id == transfer_setup["locations"]["pickup"].location_id
+    )
+    assert (
+        path[1].target_location_id == transfer_setup["locations"]["storage"].location_id
+    )
     assert path[1].transfer_template.node_name == "conveyor"
 
     # Generate workflow and verify step ordering
@@ -764,8 +669,8 @@ def test_multi_leg_transfer_workflow_parameters_injection(transfer_setup):
 
     # Get multi-hop transfer path
     path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     )
 
     assert path is not None
@@ -808,7 +713,8 @@ def test_workflow_generation_with_various_path_lengths(transfer_setup):
 
     # Test direct transfer (1 hop)
     direct_path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["pickup"], transfer_setup["locations"]["processing"]
+        transfer_setup["locations"]["pickup"].location_id,
+        transfer_setup["locations"]["processing"].location_id,
     )
     assert len(direct_path) == 1
 
@@ -819,8 +725,8 @@ def test_workflow_generation_with_various_path_lengths(transfer_setup):
 
     # Test multi-hop transfer (2 hops)
     multi_hop_path = manager.transfer_planner.find_shortest_transfer_path(
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     )
     assert len(multi_hop_path) == 2
 
@@ -845,13 +751,13 @@ def test_get_transfer_graph_endpoint(transfer_setup):
     assert isinstance(graph_data, dict)
 
     # Verify adjacency list structure
-    pickup_id = transfer_setup["locations"]["pickup"]
+    pickup_id = transfer_setup["locations"]["pickup"].location_id
     assert pickup_id in graph_data
 
     # pickup should connect to both processing and storage
     expected_connections = {
-        transfer_setup["locations"]["processing"],
-        transfer_setup["locations"]["storage"],
+        transfer_setup["locations"]["processing"].location_id,
+        transfer_setup["locations"]["storage"].location_id,
     }
     actual_connections = set(graph_data[pickup_id])
     assert actual_connections == expected_connections
@@ -864,8 +770,8 @@ def test_plan_transfer_endpoint_direct(transfer_setup):
     response = client.post(
         "/transfer/plan",
         params={
-            "source_location_id": transfer_setup["locations"]["pickup"],
-            "target_location_id": transfer_setup["locations"]["processing"],
+            "source_location_id": transfer_setup["locations"]["pickup"].location_id,
+            "target_location_id": transfer_setup["locations"]["processing"].location_id,
         },
     )
 
@@ -888,8 +794,8 @@ def test_plan_transfer_endpoint_multi_hop(transfer_setup):
     response = client.post(
         "/transfer/plan",
         params={
-            "source_location_id": transfer_setup["locations"]["processing"],
-            "target_location_id": transfer_setup["locations"]["storage"],
+            "source_location_id": transfer_setup["locations"]["processing"].location_id,
+            "target_location_id": transfer_setup["locations"]["storage"].location_id,
         },
     )
 
@@ -929,8 +835,8 @@ def test_plan_transfer_endpoint_no_path(transfer_setup):
     response = client.post(
         "/transfer/plan",
         params={
-            "source_location_id": transfer_setup["locations"]["pickup"],
-            "target_location_id": transfer_setup["locations"]["isolated"],
+            "source_location_id": transfer_setup["locations"]["pickup"].location_id,
+            "target_location_id": transfer_setup["locations"]["isolated"].location_id,
         },
     )
 
@@ -948,7 +854,7 @@ def test_plan_transfer_endpoint_invalid_location(transfer_setup):
         "/transfer/plan",
         params={
             "source_location_id": "invalid_location_id",
-            "target_location_id": transfer_setup["locations"]["processing"],
+            "target_location_id": transfer_setup["locations"]["processing"].location_id,
         },
     )
 
@@ -963,7 +869,7 @@ def test_plan_transfer_endpoint_invalid_location(transfer_setup):
     response = client.post(
         "/transfer/plan",
         params={
-            "source_location_id": transfer_setup["locations"]["pickup"],
+            "source_location_id": transfer_setup["locations"]["pickup"].location_id,
             "target_location_id": "invalid_location_id",
         },
     )
@@ -981,7 +887,7 @@ def test_get_location_resources_endpoint(transfer_setup):
     client = transfer_setup["client"]
 
     response = client.get(
-        f"/location/{transfer_setup['locations']['pickup']}/resources"
+        f"/location/{transfer_setup['locations']['pickup'].location_name}/resources"
     )
     assert response.status_code == 200
 
@@ -1005,20 +911,23 @@ def test_get_location_resources_endpoint_invalid_location(transfer_setup):
     assert "not found" in error_data["detail"]
 
 
-def test_transfer_graph_without_transfer_capabilities(redis_handler):
+def test_transfer_graph_without_transfer_capabilities(cache_handler):
     """Test transfer graph behavior when no transfer capabilities are defined."""
     # Create a location manager without transfer capabilities
-    settings = LocationManagerSettings(
-        locations=[
-            LocationDefinition(
-                location_name="location1",
-                location_id=new_ulid_str(),
-                representations={"device": "config"},
-            )
-        ],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    manager.add_location(
+        Location(
+            location_name="location1",
+            location_id=new_ulid_str(),
+            representations={"device": "config"},
+        )
+    )
     client = TestClient(manager.create_server())
 
     # Transfer graph should be empty
@@ -1031,36 +940,43 @@ def test_transfer_graph_without_transfer_capabilities(redis_handler):
     assert response.json() == {}
 
 
-def test_get_location_by_name_endpoint(redis_handler):
-    """Test the get location by name API endpoint."""
-    location_def = LocationDefinition(
-        location_name="test_location_by_name",
+def test_get_location_by_id_query_endpoint(cache_handler):
+    """Test the get location by ID via query parameter API endpoint."""
+    location_def = Location(
+        location_name="test_location_by_id_query",
         location_id=new_ulid_str(),
-        description="A test location for name-based lookup",
+        description="A test location for ID-based query lookup",
     )
 
-    settings = LocationManagerSettings(
-        locations=[location_def],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    manager.add_location(location_def)
     client = TestClient(manager.create_server())
 
-    # Test successful lookup by name using query parameter
-    response = client.get("/location?name=test_location_by_name")
+    # Test successful lookup by ID using query parameter
+    response = client.get("/location", params={"location_id": location_def.location_id})
     assert response.status_code == 200
 
     location_data = response.json()
-    assert location_data["location_name"] == "test_location_by_name"
+    assert location_data["location_name"] == "test_location_by_id_query"
     assert location_data["location_id"] == location_def.location_id
-    assert location_data["description"] == "A test location for name-based lookup"
+    assert location_data["description"] == "A test location for ID-based query lookup"
 
 
-def test_get_location_by_name_endpoint_not_found(redis_handler):
+def test_get_location_by_name_endpoint_not_found(cache_handler):
     """Test the get location by name API endpoint when location doesn't exist."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Test lookup of non-existent location using query parameter
@@ -1073,32 +989,36 @@ def test_get_location_by_name_endpoint_not_found(redis_handler):
 
 
 def test_get_location_by_name_endpoint_multiple_locations(
-    redis_handler,
+    cache_handler,
 ):
     """Test the get location by name API endpoint with multiple locations."""
-    location_def1 = LocationDefinition(
+    location_def1 = Location(
         location_name="robot_station",
         location_id=new_ulid_str(),
         description="Robot workstation",
     )
 
-    location_def2 = LocationDefinition(
+    location_def2 = Location(
         location_name="liquid_station",
         location_id=new_ulid_str(),
         description="Liquid handling station",
     )
 
-    location_def3 = LocationDefinition(
+    location_def3 = Location(
         location_name="storage_rack",
         location_id=new_ulid_str(),
         description="Storage rack",
     )
+    locations = [location_def1, location_def2, location_def3]
+    settings = LocationManagerSettings()
 
-    settings = LocationManagerSettings(
-        locations=[location_def1, location_def2, location_def3],
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
-
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Test lookup of first location using query parameter
@@ -1124,11 +1044,15 @@ def test_get_location_by_name_endpoint_multiple_locations(
     assert response.status_code == 404
 
 
-def test_get_location_query_parameter_validation(redis_handler):
+def test_get_location_query_parameter_validation(cache_handler):
     """Test query parameter validation for the new location endpoint."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Test missing both parameters
@@ -1144,19 +1068,22 @@ def test_get_location_query_parameter_validation(redis_handler):
     assert "exactly one" in error_data["detail"].lower()
 
 
-def test_get_location_by_id_query_parameter(redis_handler):
+def test_get_location_by_id_query_parameter(cache_handler):
     """Test lookup by location_id using query parameter."""
-    location_def = LocationDefinition(
+    location_def = Location(
         location_name="test_location_by_id",
         location_id=new_ulid_str(),
         description="A test location for ID-based lookup via query parameter",
     )
 
-    settings = LocationManagerSettings(
-        locations=[location_def],
-    )
+    settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    manager.add_location(location_def)
     client = TestClient(manager.create_server())
 
     # Test successful lookup by ID using query parameter
@@ -1180,27 +1107,31 @@ def test_get_location_by_id_query_parameter(redis_handler):
 
 
 # Non-transfer location tests
-def test_non_transfer_location_creation(redis_handler):
+def test_non_transfer_location_creation(cache_handler):
     """Test creating locations with allow_transfers=False."""
-    non_transfer_location = LocationDefinition(
+    non_transfer_location = Location(
         location_name="non_transfer_station",
         location_id=new_ulid_str(),
         description="A station that doesn't allow transfers",
         allow_transfers=False,
     )
 
-    transfer_location = LocationDefinition(
+    transfer_location = Location(
         location_name="transfer_station",
         location_id=new_ulid_str(),
         description="A station that allows transfers",
         allow_transfers=True,
     )
+    locations = [non_transfer_location, transfer_location]
+    settings = LocationManagerSettings()
 
-    settings = LocationManagerSettings(
-        locations=[non_transfer_location, transfer_location],
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
     )
-
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Check that locations are created with correct allow_transfers values
@@ -1215,7 +1146,7 @@ def test_non_transfer_location_creation(redis_handler):
     assert location_data["allow_transfers"] is True
 
 
-def test_non_transfer_location_excluded_from_graph(redis_handler):
+def test_non_transfer_location_excluded_from_graph(cache_handler):
     """Test that non-transfer locations are excluded from transfer graph construction."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1231,34 +1162,37 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
     )
 
     # Create locations - some allow transfers, others don't
-    transfer_loc1 = LocationDefinition(
+    transfer_loc1 = Location(
         location_name="transfer_station_1",
         location_id=new_ulid_str(),
         representations={"robot_arm": {"position": [1, 0, 0]}},
         allow_transfers=True,
     )
 
-    transfer_loc2 = LocationDefinition(
+    transfer_loc2 = Location(
         location_name="transfer_station_2",
         location_id=new_ulid_str(),
         representations={"robot_arm": {"position": [2, 0, 0]}},
         allow_transfers=True,
     )
 
-    non_transfer_loc = LocationDefinition(
+    non_transfer_loc = Location(
         location_name="non_transfer_station",
         location_id=new_ulid_str(),
         representations={"robot_arm": {"position": [0, 1, 0]}},
         allow_transfers=False,
     )
-
+    locations = [transfer_loc1, transfer_loc2, non_transfer_loc]
     settings = LocationManagerSettings(
-        locations=[transfer_loc1, transfer_loc2, non_transfer_loc],
         transfer_capabilities=transfer_capabilities,
     )
-
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Check the transfer graph
     transfer_graph = manager.transfer_planner._transfer_graph
 
@@ -1272,7 +1206,7 @@ def test_non_transfer_location_excluded_from_graph(redis_handler):
         assert dst != non_transfer_loc.location_id
 
 
-def test_non_transfer_location_plan_transfer_error(redis_handler):
+def test_non_transfer_location_plan_transfer_error(cache_handler):
     """Test that planning transfers to/from non-transfer locations raises appropriate errors."""
     # Create transfer templates
     robot_template = TransferStepTemplate(
@@ -1287,26 +1221,32 @@ def test_non_transfer_location_plan_transfer_error(redis_handler):
         transfer_templates=[robot_template]
     )
 
-    transfer_loc = LocationDefinition(
+    transfer_loc = Location(
         location_name="transfer_station",
         location_id=new_ulid_str(),
         representations={"robot_arm": {"position": [1, 0, 0]}},
         allow_transfers=True,
     )
 
-    non_transfer_loc = LocationDefinition(
+    non_transfer_loc = Location(
         location_name="non_transfer_station",
         location_id=new_ulid_str(),
         representations={"robot_arm": {"position": [0, 1, 0]}},
         allow_transfers=False,
     )
+    locations = [transfer_loc, non_transfer_loc]
 
     settings = LocationManagerSettings(
-        locations=[transfer_loc, non_transfer_loc],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Test transfer FROM non-transfer location
@@ -1337,9 +1277,9 @@ def test_non_transfer_location_plan_transfer_error(redis_handler):
 
 
 def test_location_definition_allow_transfers_default():
-    """Test that LocationDefinition.allow_transfers defaults to True."""
+    """Test that Location.allow_transfers defaults to True."""
     # Create location without specifying allow_transfers
-    location_def = LocationDefinition(
+    location_def = Location(
         location_name="default_location",
         location_id=new_ulid_str(),
     )
@@ -1347,7 +1287,7 @@ def test_location_definition_allow_transfers_default():
     assert location_def.allow_transfers is True
 
     # Create location explicitly setting allow_transfers=True
-    location_def_true = LocationDefinition(
+    location_def_true = Location(
         location_name="explicit_true_location",
         location_id=new_ulid_str(),
         allow_transfers=True,
@@ -1356,7 +1296,7 @@ def test_location_definition_allow_transfers_default():
     assert location_def_true.allow_transfers is True
 
     # Create location explicitly setting allow_transfers=False
-    location_def_false = LocationDefinition(
+    location_def_false = Location(
         location_name="explicit_false_location",
         location_id=new_ulid_str(),
         allow_transfers=False,
@@ -1398,7 +1338,7 @@ def test_location_allow_transfers_default():
 
 
 @pytest.fixture
-def override_transfer_setup(redis_handler):
+def override_transfer_setup(cache_handler):
     """Create a location manager with override transfer templates for testing."""
     # Create standard transfer templates
     default_robot_template = TransferStepTemplate(
@@ -1455,7 +1395,7 @@ def override_transfer_setup(redis_handler):
     )
 
     # Create locations with representations that support all templates
-    station_a = LocationDefinition(
+    station_a = Location(
         location_name="station_a",
         location_id=new_ulid_str(),
         description="Station A with all device access",
@@ -1467,7 +1407,7 @@ def override_transfer_setup(redis_handler):
         },
     )
 
-    station_b = LocationDefinition(
+    station_b = Location(
         location_name="station_b",
         location_id=new_ulid_str(),
         description="Station B with all device access",
@@ -1479,7 +1419,7 @@ def override_transfer_setup(redis_handler):
         },
     )
 
-    station_c = LocationDefinition(
+    station_c = Location(
         location_name="station_c",
         location_id=new_ulid_str(),
         description="Station C with all device access",
@@ -1491,7 +1431,7 @@ def override_transfer_setup(redis_handler):
         },
     )
 
-    station_d = LocationDefinition(
+    station_d = Location(
         location_name="station_d",
         location_id=new_ulid_str(),
         description="Station D with all device access",
@@ -1503,12 +1443,18 @@ def override_transfer_setup(redis_handler):
         },
     )
 
+    locations = [station_a, station_b, station_c, station_d]
     settings = LocationManagerSettings(
-        locations=[station_a, station_b, station_c, station_d],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     return {
@@ -1621,16 +1567,16 @@ def test_default_templates_when_no_overrides(override_transfer_setup):
     assert edge.transfer_template.node_name != "conveyor_fast"
 
 
-def test_override_templates_with_location_ids(redis_handler):
+def test_override_templates_with_location_ids(cache_handler):
     """Test that override templates work with location IDs instead of names."""
     # Create locations
-    station_x = LocationDefinition(
+    station_x = Location(
         location_name="station_x",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
 
-    station_y = LocationDefinition(
+    station_y = Location(
         location_name="station_y",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [2, 0, 0]}},
@@ -1661,14 +1607,18 @@ def test_override_templates_with_location_ids(redis_handler):
         transfer_templates=[default_template],
         override_transfer_templates=overrides,
     )
-
+    locations = [station_x, station_y]
     settings = LocationManagerSettings(
-        locations=[station_x, station_y],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Check that override is applied based on location ID
     graph = manager.transfer_planner._transfer_graph
     edge_key = (station_x.location_id, station_y.location_id)
@@ -1679,16 +1629,16 @@ def test_override_templates_with_location_ids(redis_handler):
     assert edge.cost == 0.1
 
 
-def test_override_templates_with_mixed_keys(redis_handler):
+def test_override_templates_with_mixed_keys(cache_handler):
     """Test that override templates work with mixed location names and IDs."""
     # Create locations
-    station_1 = LocationDefinition(
+    station_1 = Location(
         location_name="mixed_station_1",
         location_id=new_ulid_str(),
         representations={"device": {"config": "a"}},
     )
 
-    station_2 = LocationDefinition(
+    station_2 = Location(
         location_name="mixed_station_2",
         location_id=new_ulid_str(),
         representations={"device": {"config": "b"}},
@@ -1722,14 +1672,18 @@ def test_override_templates_with_mixed_keys(redis_handler):
         transfer_templates=[default_template],
         override_transfer_templates=overrides,
     )
-
+    locations = [station_1, station_2]
     settings = LocationManagerSettings(
-        locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     graph = manager.transfer_planner._transfer_graph
 
     # Test source override by name (station_1 -> station_2: source override from station_1)
@@ -1771,7 +1725,7 @@ def test_plan_transfer_with_overrides(override_transfer_setup):
     assert step.action in ["special_transfer", "fast_move"]
 
 
-def test_no_override_templates_defined(redis_handler):
+def test_no_override_templates_defined(cache_handler):
     """Test that system works correctly when no override templates are defined."""
     # Create basic transfer capabilities without overrides
     default_template = TransferStepTemplate(
@@ -1785,25 +1739,31 @@ def test_no_override_templates_defined(redis_handler):
         # No override_transfer_templates defined
     )
 
-    station_1 = LocationDefinition(
+    station_1 = Location(
         location_name="basic_station_1",
         location_id=new_ulid_str(),
         representations={"basic_robot": {"position": [0, 0, 0]}},
     )
 
-    station_2 = LocationDefinition(
+    station_2 = Location(
         location_name="basic_station_2",
         location_id=new_ulid_str(),
         representations={"basic_robot": {"position": [1, 0, 0]}},
     )
 
+    locations = [station_1, station_2]
+
     settings = LocationManagerSettings(
-        locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Should work normally with default templates
     graph = manager.transfer_planner._transfer_graph
     assert len(graph) == 2  # Bidirectional edge
@@ -1814,7 +1774,7 @@ def test_no_override_templates_defined(redis_handler):
         assert edge.transfer_template.action == "basic_transfer"
 
 
-def test_empty_override_templates(redis_handler):
+def test_empty_override_templates(cache_handler):
     """Test that system works correctly when override templates are defined but empty."""
     # Create transfer capabilities with empty overrides
     default_template = TransferStepTemplate(
@@ -1830,25 +1790,30 @@ def test_empty_override_templates(redis_handler):
         override_transfer_templates=empty_overrides,
     )
 
-    station_1 = LocationDefinition(
+    station_1 = Location(
         location_name="empty_override_station_1",
         location_id=new_ulid_str(),
         representations={"standard_robot": {"position": [0, 0, 0]}},
     )
 
-    station_2 = LocationDefinition(
+    station_2 = Location(
         location_name="empty_override_station_2",
         location_id=new_ulid_str(),
         representations={"standard_robot": {"position": [1, 0, 0]}},
     )
 
+    locations = [station_1, station_2]
     settings = LocationManagerSettings(
-        locations=[station_1, station_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Should work normally with default templates
     graph = manager.transfer_planner._transfer_graph
     assert len(graph) == 2  # Bidirectional edge
@@ -1875,7 +1840,7 @@ def mock_resource():
     return MockResource
 
 
-def test_capacity_cost_adjustment_disabled(redis_handler):
+def test_capacity_cost_adjustment_disabled(cache_handler):
     """Test that capacity cost adjustments are not applied when disabled."""
     # Create basic setup without capacity config
     template = TransferStepTemplate(
@@ -1889,26 +1854,30 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
         # No capacity_cost_config - defaults to disabled
     )
 
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
-
+    locations = [location_a, location_b]
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
     # Create manager without resource client to test disabled path
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Transfer planner should not have resource client
     assert (
         manager.transfer_planner.resource_client is not None
@@ -1922,7 +1891,7 @@ def test_capacity_cost_adjustment_disabled(redis_handler):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
+def test_capacity_cost_adjustment_enabled_no_resource(cache_handler):
     """Test capacity cost adjustment when enabled but destination has no resource."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -1944,26 +1913,31 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
         capacity_cost_config=capacity_config,
     )
 
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
         # No resource_id attached
     )
 
+    locations = [location_a, location_b]
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Check that costs are not adjusted when no resource attached
     graph = manager.transfer_planner._transfer_graph
     edge_key = (location_a.location_id, location_b.location_id)
@@ -1972,7 +1946,7 @@ def test_capacity_cost_adjustment_enabled_no_resource(redis_handler):
     assert edge.cost == 1.0  # Should be base cost without adjustments
 
 
-def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resource):
+def test_capacity_cost_adjustment_with_mock_resource(cache_handler, mock_resource):
     """Test capacity cost adjustments with various capacity levels."""
     # Create setup with capacity config enabled
     capacity_config = CapacityCostConfig(
@@ -1994,25 +1968,29 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
         capacity_cost_config=capacity_config,
     )
 
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
-
+    locations = [location_a, location_b]
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
-
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     # Test different capacity scenarios by mocking the resource client
     original_get_resource = manager.transfer_planner.resource_client.get_resource
 
@@ -2025,9 +2003,9 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
     )
 
     # Attach a resource to location_b
-    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state = manager.state_handler.get_location(location_b.location_name)
     location_b_state.resource_id = "test_resource_id"
-    manager.state_handler.update_location(location_b.location_id, location_b_state)
+    manager.state_handler.update_location(location_b_state)
 
     # Rebuild graph to test capacity adjustments
     manager.transfer_planner._transfer_graph = (
@@ -2089,7 +2067,7 @@ def test_capacity_cost_adjustment_with_mock_resource(redis_handler, mock_resourc
     manager.transfer_planner.resource_client.get_resource = original_get_resource
 
 
-def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resource):
+def test_capacity_cost_adjustment_with_no_capacity_set(cache_handler, mock_resource):
     """Test that no adjustment is applied when resource has no capacity set."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2110,24 +2088,30 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
         capacity_cost_config=capacity_config,
     )
 
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
+    locations = [location_a, location_b]
 
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
 
     # Mock resource with no capacity set
     def mock_get_resource_no_capacity(resource_id):  # noqa: ARG001
@@ -2138,9 +2122,9 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
     )
 
     # Attach a resource to location_b
-    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state = manager.state_handler.get_location(location_b.location_name)
     location_b_state.resource_id = "test_resource_id"
-    manager.state_handler.update_location(location_b.location_id, location_b_state)
+    manager.state_handler.update_location(location_b_state)
 
     # Rebuild graph to test capacity adjustments
     manager.transfer_planner._transfer_graph = (
@@ -2154,7 +2138,7 @@ def test_capacity_cost_adjustment_with_no_capacity_set(redis_handler, mock_resou
     assert edge.cost == 1.0  # No multiplier when capacity is None
 
 
-def test_capacity_cost_adjustment_resource_client_error(redis_handler):
+def test_capacity_cost_adjustment_resource_client_error(cache_handler):
     """Test that base cost is returned when resource client throws error."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2175,24 +2159,30 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
         capacity_cost_config=capacity_config,
     )
 
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
 
+    locations = [location_a, location_b]
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
 
     # Mock resource client to throw error
     def mock_get_resource_error(resource_id):  # noqa: ARG001
@@ -2201,9 +2191,9 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
     manager.transfer_planner.resource_client.get_resource = mock_get_resource_error
 
     # Attach a resource to location_b
-    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state = manager.state_handler.get_location(location_b.location_name)
     location_b_state.resource_id = "test_resource_id"
-    manager.state_handler.update_location(location_b.location_id, location_b_state)
+    manager.state_handler.update_location(location_b_state)
 
     # Rebuild graph to test capacity adjustments
     manager.transfer_planner._transfer_graph = (
@@ -2217,7 +2207,7 @@ def test_capacity_cost_adjustment_resource_client_error(redis_handler):
     assert edge.cost == 1.0  # Should fallback to base cost on error
 
 
-def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resource):
+def test_transfer_planning_with_capacity_constraints(cache_handler, mock_resource):
     """Test that transfer planning chooses paths with lower capacity utilization."""
     capacity_config = CapacityCostConfig(
         enabled=True,
@@ -2240,30 +2230,35 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
     )
 
     # Create three locations: A -> B (low capacity) or A -> C (high capacity)
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="location_a",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="location_b",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [1, 0, 0]}},
     )
 
-    location_c = LocationDefinition(
+    location_c = Location(
         location_name="location_c",
         location_id=new_ulid_str(),
         representations={"robot": {"position": [2, 0, 0]}},
     )
 
     settings = LocationManagerSettings(
-        locations=[location_a, location_b, location_c],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [location_a, location_b, location_c]:
+        manager.add_location(location)
 
     # Mock different capacity levels for each location
     def mock_get_resource_by_id(resource_id):
@@ -2276,13 +2271,13 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
     manager.transfer_planner.resource_client.get_resource = mock_get_resource_by_id
 
     # Attach resources to locations
-    location_b_state = manager.state_handler.get_location(location_b.location_id)
+    location_b_state = manager.state_handler.get_location(location_b.location_name)
     location_b_state.resource_id = "resource_b"
-    manager.state_handler.update_location(location_b.location_id, location_b_state)
+    manager.state_handler.update_location(location_b_state)
 
-    location_c_state = manager.state_handler.get_location(location_c.location_id)
+    location_c_state = manager.state_handler.get_location(location_c.location_name)
     location_c_state.resource_id = "resource_c"
-    manager.state_handler.update_location(location_c.location_id, location_c_state)
+    manager.state_handler.update_location(location_c_state)
 
     # Rebuild graph to test capacity adjustments
     manager.transfer_planner._transfer_graph = (
@@ -2305,7 +2300,7 @@ def test_transfer_planning_with_capacity_constraints(redis_handler, mock_resourc
 # Additional Arguments in Transfer Templates Tests
 
 
-def test_transfer_template_with_additional_standard_args(redis_handler):
+def test_transfer_template_with_additional_standard_args(cache_handler):
     """Test that transfer templates with additional standard arguments are handled correctly."""
     # Create transfer template with additional standard arguments
     template_with_args = TransferStepTemplate(
@@ -2327,24 +2322,30 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
     )
 
     # Create locations
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="station_alpha",
         location_id=new_ulid_str(),
         representations={"robot_with_args": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="station_beta",
         location_id=new_ulid_str(),
         representations={"robot_with_args": {"position": [1, 0, 0]}},
     )
 
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
+    locations = [location_a, location_b]
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in locations:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify additional arguments are included
@@ -2378,7 +2379,7 @@ def test_transfer_template_with_additional_standard_args(redis_handler):
     assert step.action == "parameterized_transfer"
 
 
-def test_transfer_template_with_additional_location_args(redis_handler):
+def test_transfer_template_with_additional_location_args(cache_handler):
     """Test that transfer templates with additional location arguments are handled correctly."""
     # Create transfer template with additional location arguments
     template_with_locations = TransferStepTemplate(
@@ -2398,24 +2399,29 @@ def test_transfer_template_with_additional_location_args(redis_handler):
     )
 
     # Create locations
-    location_a = LocationDefinition(
+    location_a = Location(
         location_name="start_station",
         location_id=new_ulid_str(),
         representations={"multi_location_robot": {"position": [0, 0, 0]}},
     )
 
-    location_b = LocationDefinition(
+    location_b = Location(
         location_name="end_station",
         location_id=new_ulid_str(),
         representations={"multi_location_robot": {"position": [1, 0, 0]}},
     )
 
     settings = LocationManagerSettings(
-        locations=[location_a, location_b],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [location_a, location_b]:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify additional location arguments are included
@@ -2449,7 +2455,7 @@ def test_transfer_template_with_additional_location_args(redis_handler):
 
 
 def test_transfer_template_with_both_additional_args_types(
-    redis_handler,
+    cache_handler,
 ):
     """Test that transfer templates with both additional standard and location arguments work correctly."""
     # Create transfer template with both types of additional arguments
@@ -2475,24 +2481,29 @@ def test_transfer_template_with_both_additional_args_types(
     )
 
     # Create locations
-    location_x = LocationDefinition(
+    location_x = Location(
         location_name="complex_station_x",
         location_id=new_ulid_str(),
         representations={"comprehensive_robot": {"config": "advanced"}},
     )
 
-    location_y = LocationDefinition(
+    location_y = Location(
         location_name="complex_station_y",
         location_id=new_ulid_str(),
         representations={"comprehensive_robot": {"config": "standard"}},
     )
 
     settings = LocationManagerSettings(
-        locations=[location_x, location_y],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [location_x, location_y]:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Plan a transfer and verify both types of additional arguments are included
@@ -2527,7 +2538,7 @@ def test_transfer_template_with_both_additional_args_types(
     assert step.action == "comprehensive_transfer"
 
 
-def test_override_templates_with_additional_args(redis_handler):
+def test_override_templates_with_additional_args(cache_handler):
     """Test that override templates with additional arguments work correctly."""
     # Create default template with minimal arguments
     default_template = TransferStepTemplate(
@@ -2563,7 +2574,7 @@ def test_override_templates_with_additional_args(redis_handler):
     )
 
     # Create locations
-    enhanced_source = LocationDefinition(
+    enhanced_source = Location(
         location_name="enhanced_source_station",
         location_id=new_ulid_str(),
         representations={
@@ -2572,7 +2583,7 @@ def test_override_templates_with_additional_args(redis_handler):
         },
     )
 
-    normal_destination = LocationDefinition(
+    normal_destination = Location(
         location_name="normal_destination_station",
         location_id=new_ulid_str(),
         representations={
@@ -2581,7 +2592,7 @@ def test_override_templates_with_additional_args(redis_handler):
         },
     )
 
-    regular_source = LocationDefinition(
+    regular_source = Location(
         location_name="regular_source_station",
         location_id=new_ulid_str(),
         representations={
@@ -2591,11 +2602,16 @@ def test_override_templates_with_additional_args(redis_handler):
     )
 
     settings = LocationManagerSettings(
-        locations=[enhanced_source, normal_destination, regular_source],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [enhanced_source, normal_destination, regular_source]:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Test transfer FROM enhanced source (should use override with additional args)
@@ -2644,7 +2660,7 @@ def test_override_templates_with_additional_args(redis_handler):
     assert "checkpoint_location" not in step.locations  # No additional location args
 
 
-def test_multi_step_transfer_with_additional_args(redis_handler):
+def test_multi_step_transfer_with_additional_args(cache_handler):
     """Test that multi-step transfers preserve additional arguments for each step."""
     # Create templates with different additional arguments
     robot_template = TransferStepTemplate(
@@ -2677,7 +2693,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
     )
 
     # Create locations that form a multi-hop path
-    station_a = LocationDefinition(
+    station_a = Location(
         location_name="multi_station_a",
         location_id=new_ulid_str(),
         representations={
@@ -2685,7 +2701,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
         },
     )
 
-    station_b = LocationDefinition(
+    station_b = Location(
         location_name="multi_station_b",
         location_id=new_ulid_str(),
         representations={
@@ -2694,7 +2710,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
         },
     )
 
-    station_c = LocationDefinition(
+    station_c = Location(
         location_name="multi_station_c",
         location_id=new_ulid_str(),
         representations={
@@ -2703,11 +2719,16 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
     )
 
     settings = LocationManagerSettings(
-        locations=[station_a, station_b, station_c],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [station_a, station_b, station_c]:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Plan a multi-step transfer (A -> B -> C)
@@ -2745,7 +2766,7 @@ def test_multi_step_transfer_with_additional_args(redis_handler):
     assert step2.locations["sensor_location"] == "belt_sensor_point"
 
 
-def test_empty_additional_args_default_behavior(redis_handler):
+def test_empty_additional_args_default_behavior(cache_handler):
     """Test that templates without additional arguments work exactly as before."""
     # Create template without any additional arguments (should behave exactly as before)
     traditional_template = TransferStepTemplate(
@@ -2762,24 +2783,29 @@ def test_empty_additional_args_default_behavior(redis_handler):
     )
 
     # Create locations
-    location_1 = LocationDefinition(
+    location_1 = Location(
         location_name="traditional_station_1",
         location_id=new_ulid_str(),
         representations={"traditional_robot": {"position": [0, 0, 0]}},
     )
 
-    location_2 = LocationDefinition(
+    location_2 = Location(
         location_name="traditional_station_2",
         location_id=new_ulid_str(),
         representations={"traditional_robot": {"position": [1, 0, 0]}},
     )
 
     settings = LocationManagerSettings(
-        locations=[location_1, location_2],
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    for location in [location_1, location_2]:
+        manager.add_location(location)
     client = TestClient(manager.create_server())
 
     # Plan a transfer
@@ -2810,7 +2836,7 @@ def test_empty_additional_args_default_behavior(redis_handler):
 # Remove Representation and Detach Resource Tests
 
 
-def test_remove_representation_success(redis_handler):
+def test_remove_representation_success(cache_handler):
     """Test successful removal of a representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2824,7 +2850,11 @@ def test_remove_representation_success(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2832,7 +2862,7 @@ def test_remove_representation_success(redis_handler):
     assert response.status_code == 200
 
     # Remove representation for robot_1
-    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    response = client.delete("/location/test_location/remove_representation/robot_1")
     assert response.status_code == 200
 
     updated_location = Location.model_validate(response.json())
@@ -2842,11 +2872,15 @@ def test_remove_representation_success(redis_handler):
     assert updated_location.representations["robot_2"] == {"position": [1, 1, 1]}
 
 
-def test_remove_representation_location_not_found(redis_handler):
+def test_remove_representation_location_not_found(cache_handler):
     """Test removing representation from non-existent location."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -2857,7 +2891,7 @@ def test_remove_representation_location_not_found(redis_handler):
     assert "not found" in response.json()["detail"]
 
 
-def test_remove_representation_node_not_found(redis_handler):
+def test_remove_representation_node_not_found(cache_handler):
     """Test removing non-existent representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2868,7 +2902,11 @@ def test_remove_representation_node_not_found(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2876,23 +2914,23 @@ def test_remove_representation_node_not_found(redis_handler):
     assert response.status_code == 200
 
     # Try to remove non-existent representation
-    response = client.delete(f"/location/{location_id}/remove_representation/robot_2")
+    response = client.delete("/location/test_location/remove_representation/robot_2")
     assert response.status_code == 404
     assert "Representation for node 'robot_2' not found" in response.json()["detail"]
 
 
-def test_remove_representation_no_representations(redis_handler):
+def test_remove_representation_no_representations(cache_handler):
     """Test removing representation from location with no representations."""
     location_id = new_ulid_str()
-    location = Location(
-        location_id=location_id,
-        location_name="test_location",
-        representations=None,
-    )
+    location = Location(location_id=location_id, location_name="test_location")
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2900,12 +2938,12 @@ def test_remove_representation_no_representations(redis_handler):
     assert response.status_code == 200
 
     # Try to remove representation from location with no representations
-    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    response = client.delete("/location/test_location/remove_representation/robot_1")
     assert response.status_code == 404
     assert "Representation for node 'robot_1' not found" in response.json()["detail"]
 
 
-def test_remove_last_representation(redis_handler):
+def test_remove_last_representation(cache_handler):
     """Test removing the last representation from a location."""
     location_id = new_ulid_str()
     location = Location(
@@ -2916,7 +2954,11 @@ def test_remove_last_representation(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2924,7 +2966,7 @@ def test_remove_last_representation(redis_handler):
     assert response.status_code == 200
 
     # Remove the only representation
-    response = client.delete(f"/location/{location_id}/remove_representation/robot_1")
+    response = client.delete("/location/test_location/remove_representation/robot_1")
     assert response.status_code == 200
 
     updated_location = Location.model_validate(response.json())
@@ -2932,38 +2974,46 @@ def test_remove_last_representation(redis_handler):
     assert updated_location.representations == {}
 
 
-def test_detach_resource_success(redis_handler):
+def test_attach_and_detach_resource_success(cache_handler):
     """Test successful detachment of a resource from a location."""
     location_id = new_ulid_str()
     resource_id = new_ulid_str()
-    location = Location(
-        location_id=location_id,
-        location_name="test_location",
-        resource_id=resource_id,
-    )
+    location = Location(location_id=location_id, location_name="test_location")
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
     response = client.post("/location", json=location.model_dump())
     assert response.status_code == 200
-
+    # Attach a resource to the location
+    response = client.post(
+        f"/location/test_location/attach_resource?resource_id={resource_id}"
+    )
+    assert response.status_code == 200
     # Detach the resource
-    response = client.delete(f"/location/{location_id}/detach_resource")
+    response = client.delete("/location/test_location/detach_resource")
     assert response.status_code == 200
 
     updated_location = Location.model_validate(response.json())
     assert updated_location.resource_id is None
 
 
-def test_detach_resource_location_not_found(redis_handler):
+def test_detach_resource_location_not_found(cache_handler):
     """Test detaching resource from non-existent location."""
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     non_existent_id = new_ulid_str()
@@ -2972,7 +3022,7 @@ def test_detach_resource_location_not_found(redis_handler):
     assert "not found" in response.json()["detail"]
 
 
-def test_detach_resource_no_resource_attached(redis_handler):
+def test_detach_resource_no_resource_attached(cache_handler):
     """Test detaching resource from location with no resource attached."""
     location_id = new_ulid_str()
     location = Location(
@@ -2983,7 +3033,11 @@ def test_detach_resource_no_resource_attached(redis_handler):
 
     settings = LocationManagerSettings()
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -2991,12 +3045,12 @@ def test_detach_resource_no_resource_attached(redis_handler):
     assert response.status_code == 200
 
     # Try to detach resource when none is attached
-    response = client.delete(f"/location/{location_id}/detach_resource")
+    response = client.delete("/location/test_location/detach_resource")
     assert response.status_code == 404
     assert "No resource attached" in response.json()["detail"]
 
 
-def test_remove_representation_rebuilds_transfer_graph(redis_handler):
+def test_remove_representation_rebuilds_transfer_graph(cache_handler):
     """Test that removing representation rebuilds the transfer graph."""
     # Create template with transfer capabilities
     template = TransferStepTemplate(
@@ -3018,7 +3072,11 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
         transfer_capabilities=transfer_capabilities,
     )
 
-    manager = LocationManager(settings=settings, redis_handler=redis_handler)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
     client = TestClient(manager.create_server())
 
     # Add the location first
@@ -3030,11 +3088,186 @@ def test_remove_representation_rebuilds_transfer_graph(redis_handler):
     assert response.status_code == 200
 
     # Remove representation (should rebuild graph)
-    response = client.delete(
-        f"/location/{location_id}/remove_representation/test_robot"
-    )
+    response = client.delete("/location/test_location/remove_representation/test_robot")
     assert response.status_code == 200
 
     # Get transfer graph after removal (verifies graph rebuild was successful)
     response = client.get("/transfer/graph")
     assert response.status_code == 200
+
+
+# --- Phase 4: MongoDB migration tests ---
+
+
+def test_health_reports_document_db_connected(client):
+    """Health endpoint should report document_db_connected: True."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.document_db_connected is True
+
+
+def test_health_reports_cache_connected(client):
+    """Health endpoint should still report cache_connected: True."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.cache_connected is True
+
+
+def test_import_locations_bulk(client):
+    """POST list to /locations/import should create all locations."""
+    locations = [
+        Location(
+            location_name=f"import_loc_{i}", location_id=new_ulid_str()
+        ).model_dump()
+        for i in range(3)
+    ]
+    response = client.post("/locations/import", json=locations)
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 3
+    assert result.skipped == 0
+    assert len(result.errors) == 0
+    assert len(result.locations) == 3
+
+
+def test_import_locations_skip_duplicates(client):
+    """POST with existing names should skip duplicates."""
+    loc = Location(location_name="dup_test", location_id=new_ulid_str())
+    client.post("/location", json=loc.model_dump())
+
+    locations = [
+        Location(location_name="dup_test", location_id=new_ulid_str()).model_dump(),
+        Location(location_name="new_loc", location_id=new_ulid_str()).model_dump(),
+    ]
+    response = client.post("/locations/import", json=locations)
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 1
+    assert result.skipped == 1
+
+
+def test_import_locations_overwrite(client):
+    """POST with overwrite=true should upsert existing locations."""
+    loc = Location(
+        location_name="overwrite_test",
+        location_id=new_ulid_str(),
+        description="original",
+    )
+    client.post("/location", json=loc.model_dump())
+
+    updated_loc = Location(
+        location_name="overwrite_test",
+        location_id=new_ulid_str(),
+        description="updated",
+    )
+    response = client.post(
+        "/locations/import",
+        json=[updated_loc.model_dump()],
+        params={"overwrite": True},
+    )
+    assert response.status_code == 200
+    result = LocationImportResult.model_validate(response.json())
+    assert result.imported == 1
+    assert result.skipped == 0
+
+    # Verify it was actually updated
+    response = client.get("/location/overwrite_test")
+    assert response.status_code == 200
+    fetched = Location.model_validate(response.json())
+    assert fetched.description == "updated"
+
+
+def test_export_locations(client):
+    """GET /locations/export should return all locations."""
+    for i in range(3):
+        loc = Location(location_name=f"export_loc_{i}", location_id=new_ulid_str())
+        client.post("/location", json=loc.model_dump())
+
+    response = client.get("/locations/export")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 3
+
+
+def test_seed_file_loads_on_empty_db(tmp_path, cache_handler):
+    """Seed file should be loaded when MongoDB is empty."""
+    seed_file = tmp_path / "locations.yaml"
+    seed_data = [
+        {"location_name": "seeded_a", "description": "From seed"},
+        {"location_name": "seeded_b", "description": "From seed"},
+    ]
+
+    with seed_file.open("w") as f:
+        yaml.dump(seed_data, f)
+
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file=str(seed_file),
+    )
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_seed"),
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 2
+    names = {loc["location_name"] for loc in locations}
+    assert names == {"seeded_a", "seeded_b"}
+    client.close()
+
+
+def test_seed_file_skipped_when_db_has_locations(tmp_path, cache_handler):
+    """Seed file should be ignored when MongoDB already has data."""
+    seed_file = tmp_path / "locations.yaml"
+
+    with seed_file.open("w") as f:
+        yaml.dump([{"location_name": "should_not_appear"}], f)
+
+    mongo = InMemoryDocumentStorageHandler(database_name="test_seed_skip")
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file=str(seed_file),
+    )
+
+    # Pre-populate MongoDB with a location
+    loc = Location(location_name="existing_loc", location_id=new_ulid_str())
+    mongo.get_collection("locations").insert_one(loc.model_dump(mode="json"))
+
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=mongo,
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    locations = response.json()
+    assert len(locations) == 1
+    assert locations[0]["location_name"] == "existing_loc"
+    client.close()
+
+
+def test_seed_file_missing_no_error(cache_handler):
+    """No error if seed file path doesn't exist."""
+    settings = LocationManagerSettings(
+        enable_registry_resolution=False,
+        seed_locations_file="/nonexistent/path/locations.yaml",
+    )
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_no_seed"),
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/locations")
+    assert response.status_code == 200
+    assert response.json() == []
+    client.close()

@@ -139,6 +139,30 @@ export interface Location {
    * The ID of an existing Resource associated with the location, if any.
    */
   resource_id?: string | null;
+  /**
+   * Name of the Resource Template to be used for creating a resource associated with this location.
+   */
+  resource_template_name?: string | null;
+  /**
+   * Optional overrides to apply when creating a resource from the template.
+   */
+  resource_template_overrides?: {
+    [k: string]: unknown;
+  } | null;
+  /**
+   * Whether this location can be used as a source or target in transfers.
+   */
+  allow_transfers?: boolean;
+  /**
+   * Name of the LocationTemplate used to create this location (for traceability).
+   */
+  location_template_name?: string | null;
+  /**
+   * Mapping of abstract role names to concrete node instance names (for traceability).
+   */
+  node_bindings?: {
+    [k: string]: string;
+  } | null;
 }
 /**
  * Definition for a MADSci Resource.
@@ -1295,7 +1319,85 @@ export interface NodeInfo {
   config_schema?: {
     [k: string]: unknown;
   } | null;
+  /**
+   * Location template definitions that this node registers.
+   */
+  location_templates?: NodeLocationTemplateDefinition[];
+  /**
+   * Location representation template definitions that this node registers.
+   */
+  location_representation_templates?: NodeRepresentationTemplateDefinition[];
   [k: string]: unknown;
+}
+/**
+ * Declarative location template definition for node startup registration.
+ */
+export interface NodeLocationTemplateDefinition {
+  /**
+   * Unique name for the location template.
+   */
+  template_name: string;
+  /**
+   * Mapping of abstract role names to representation template names.
+   */
+  representation_templates?: { [role: string]: string } | null;
+  /**
+   * Name of the ResourceTemplate to use for creating a resource on instantiation.
+   */
+  resource_template_name?: string | null;
+  /**
+   * Default overrides to apply when creating a resource from the template.
+   */
+  resource_template_overrides?: { [k: string]: unknown } | null;
+  /**
+   * Default value for allow_transfers when creating locations from this template.
+   */
+  default_allow_transfers?: boolean;
+  /**
+   * Tags for categorization.
+   */
+  tags?: string[] | null;
+  /**
+   * Semantic version of this template.
+   */
+  version?: string;
+  /**
+   * Human-readable description of this location template.
+   */
+  description?: string | null;
+}
+/**
+ * Declarative location representation template definition for node startup registration.
+ */
+export interface NodeRepresentationTemplateDefinition {
+  /**
+   * Unique name for the representation template.
+   */
+  template_name: string;
+  /**
+   * Default field values for this representation.
+   */
+  default_values?: { [k: string]: unknown };
+  /**
+   * Optional JSON Schema for validating representation data.
+   */
+  schema_def?: { [k: string]: unknown } | null;
+  /**
+   * Fields that must be provided when instantiating from this template.
+   */
+  required_overrides?: string[] | null;
+  /**
+   * Tags for categorization.
+   */
+  tags?: string[] | null;
+  /**
+   * Semantic version of this template.
+   */
+  version?: string;
+  /**
+   * Human-readable description of this representation template.
+   */
+  description?: string | null;
 }
 export interface NodeCapabilities {
   [k: string]: unknown;
@@ -1543,9 +1645,9 @@ export interface WorkcellManagerSettings {
    */
   scheduler?: string;
   /**
-   * The URL for the mongo database.
+   * The URL for the document database.
    */
-  mongo_url?: string | null;
+  document_db_url?: string | null;
   /**
    * Number of times to retry getting an action result
    */
@@ -1612,6 +1714,7 @@ export interface WorkcellStatus {
  */
 export interface Workflow {
   name: string;
+  workflow_definition_id?: string;
   workflow_metadata?: WorkflowMetadata;
   parameters?: WorkflowParameter[] | null;
   steps?: Step[];

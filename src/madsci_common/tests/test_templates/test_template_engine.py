@@ -5,9 +5,22 @@ the registry discovers templates, and generated code is valid.
 """
 
 import ast
+import importlib
+import importlib.resources
+import json
+import sys
 from pathlib import Path
 
 import pytest
+import yaml
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib  # type: ignore[no-redef]
+    except ModuleNotFoundError:
+        tomllib = None  # type: ignore[assignment]
 from madsci.common.templates.engine import (
     TemplateEngine,
     TemplateValidationError,
@@ -22,6 +35,89 @@ from madsci.common.templates.registry import (
 from madsci.common.types.template_types import (
     TemplateCategory,
 )
+
+# --- Shared parametrize data ---
+
+# All templates with render parameters, used by multiple parametrized tests.
+TEMPLATE_RENDER_PARAMS: list[tuple[str, dict]] = [
+    ("module/basic", {"module_name": "test_gen", "port": 2000}),
+    ("module/device", {"module_name": "test_gen", "port": 2000}),
+    ("module/camera", {"module_name": "test_gen", "port": 2000}),
+    ("module/instrument", {"module_name": "test_gen", "port": 2000}),
+    ("module/liquid_handler", {"module_name": "test_gen", "port": 2000}),
+    ("module/robot_arm", {"module_name": "test_gen", "port": 2000}),
+    ("interface/fake", {"module_name": "test_gen"}),
+    ("interface/real", {"module_name": "test_gen"}),
+    ("interface/sim", {"module_name": "test_gen"}),
+    ("interface/mock", {"module_name": "test_gen"}),
+    ("node/basic", {"node_name": "test_gen", "port": 2000}),
+    ("experiment/script", {"experiment_name": "test_gen"}),
+    ("experiment/tui", {"experiment_name": "test_gen"}),
+    ("experiment/node", {"experiment_name": "test_gen", "server_port": 6000}),
+    (
+        "workflow/basic",
+        {"workflow_name": "test_gen", "node_name": "n1", "action_name": "a1"},
+    ),
+    (
+        "workflow/multi_step",
+        {
+            "workflow_name": "test_gen",
+            "node_1_name": "n1",
+            "node_1_action": "a1",
+            "node_2_name": "n2",
+            "node_2_action": "a2",
+        },
+    ),
+    ("lab/minimal", {"lab_name": "test_gen"}),
+    ("lab/standard", {"lab_name": "test_gen"}),
+    ("lab/distributed", {"lab_name": "test_gen"}),
+    ("workcell/basic", {"workcell_name": "test_gen"}),
+    ("comm/serial", {"interface_name": "test_gen"}),
+    ("comm/socket", {"interface_name": "test_gen"}),
+    ("comm/rest", {"interface_name": "test_gen"}),
+    ("comm/sdk", {"interface_name": "test_gen"}),
+    ("comm/modbus", {"interface_name": "test_gen"}),
+    ("addon/docs", {"module_name": "test_gen"}),
+    ("addon/drivers", {"module_name": "test_gen"}),
+    ("addon/notebooks", {"module_name": "test_gen", "port": 2000}),
+    ("addon/gitignore", {"module_name": "test_gen"}),
+    ("addon/compose", {"module_name": "test_gen", "port": 2000}),
+    (
+        "addon/dev_tools",
+        {"module_name": "test_gen", "port": 2000, "include_dockerfile": True},
+    ),
+    (
+        "addon/agent_config",
+        {"module_name": "test_gen", "include_agent_config": ["claude", "agents"]},
+    ),
+    (
+        "addon/all",
+        {
+            "module_name": "test_gen",
+            "port": 2000,
+            "include_agent_config": ["claude", "agents"],
+        },
+    ),
+]
+
+# Deprecated patterns that must not appear in generated Python code.
+# Add new entries when APIs are removed or renamed.
+DEPRECATED_PYTHON_PATTERNS: list[tuple[str, str]] = [
+    ("ActionHandler", "Use @action decorator instead"),
+    ("self.node_definition", "Use self.node_info instead"),
+    ("NodeDefinition", "Use NodeConfig instead"),
+    ("load_definition(", "Definition files were removed in v0.7.0"),
+    ("load_or_create_definition(", "Definition files were removed in v0.7.0"),
+    ("SquidServer", "Use LabManager from madsci.squid.lab_server instead"),
+    (
+        "SquidSettings",
+        "Use LabManagerSettings from madsci.common.types.lab_types instead",
+    ),
+    ("create_minio_client", "Use create_object_storage_client instead"),
+    ("PyMongoHandler", "Use PyDocumentStorageHandler instead"),
+    ("InMemoryMongoHandler", "Use InMemoryDocumentStorageHandler instead"),
+]
+
 
 # --- Filter tests ---
 
@@ -226,7 +322,7 @@ class TestTemplateEngine:
         """Test getting default parameter values."""
         defaults = basic_engine.get_default_values()
         assert "module_name" in defaults
-        assert defaults["module_name"] == "my_module"
+        assert defaults["module_name"] == "my_device"
         assert "port" in defaults
         assert defaults["port"] == 2000
 
@@ -271,6 +367,119 @@ class TestTemplateEngine:
             {"module_name": "test", "port": "not_a_number"}
         )
         assert any("number" in e.lower() for e in errors)
+
+
+# --- Shared directory resolution tests ---
+
+
+class TestSharedDirectoryResolution:
+    """Test the _shared/ directory fallback mechanism."""
+
+    def _make_template(
+        self,
+        tmp_path: Path,
+        files_yaml: str,
+        *,
+        shared_files: dict[str, str] | None = None,
+    ) -> TemplateEngine:
+        """Create a minimal template with optional _shared/ directory."""
+        template_dir = tmp_path / "bundled" / "category" / "my_template"
+        template_dir.mkdir(parents=True)
+        manifest = (
+            "name: Test Template\nversion: '1.0.0'\ndescription: test\n"
+            "category: module\nparameters: []\nfiles:\n" + files_yaml
+        )
+        (template_dir / "template.yaml").write_text(manifest)
+
+        if shared_files:
+            shared_dir = tmp_path / "bundled" / "_shared"
+            for rel_path, content in shared_files.items():
+                full = shared_dir / rel_path
+                full.parent.mkdir(parents=True, exist_ok=True)
+                full.write_text(content)
+
+        return TemplateEngine(template_dir)
+
+    def test_shared_file_found_via_fallback(self, tmp_path: Path) -> None:
+        """A source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "shared content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={})
+        assert (output / "shared.txt").exists()
+        assert (output / "shared.txt").read_text() == "shared content"
+        assert len(result.files_created) == 1
+
+    def test_shared_jinja_template_found_via_fallback(self, tmp_path: Path) -> None:
+        """A .j2 source file not in template_dir is found in _shared/."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "greeting.txt.j2"\n    destination: "greeting.txt"\n',
+            shared_files={"greeting.txt.j2": "Hello {{ name }}!"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={"name": "World"})
+        assert (output / "greeting.txt").read_text() == "Hello World!"
+        assert len(result.files_created) == 1
+
+    def test_local_file_takes_precedence_over_shared(self, tmp_path: Path) -> None:
+        """When a file exists in both template_dir and _shared/, template_dir wins."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "config.txt"\n    destination: "config.txt"\n',
+            shared_files={"config.txt": "from shared"},
+        )
+        # Also create the file in the template directory
+        (engine.template_dir / "config.txt").write_text("from local")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "config.txt").read_text() == "from local"
+
+    def test_local_file_renders_without_shared(self, tmp_path: Path) -> None:
+        """Engine renders local files correctly regardless of _shared/ presence."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "local.txt"\n    destination: "local.txt"\n',
+        )
+        # Create the file in the template directory
+        (engine.template_dir / "local.txt").write_text("local only")
+
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "local.txt").read_text() == "local only"
+
+    def test_shared_dir_with_subdirectory(self, tmp_path: Path) -> None:
+        """Shared files in subdirectories are resolved correctly."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "docs/README.md"\n    destination: "docs/README.md"\n',
+            shared_files={"docs/README.md": "# Documentation"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        engine.render(output_dir=output, parameters={})
+        assert (output / "docs" / "README.md").read_text() == "# Documentation"
+
+    def test_dry_run_with_shared_files(self, tmp_path: Path) -> None:
+        """Dry run reports shared files without creating them."""
+        engine = self._make_template(
+            tmp_path,
+            '  - source: "shared.txt"\n    destination: "shared.txt"\n',
+            shared_files={"shared.txt": "content"},
+        )
+        output = tmp_path / "output"
+        output.mkdir()
+        result = engine.render(output_dir=output, parameters={}, dry_run=True)
+        assert len(result.files_created) == 1
+        assert not (output / "shared.txt").exists()
 
 
 # --- Template rendering tests ---
@@ -800,9 +1009,8 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_exp"},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_exp.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(f for f in result.files_created if f.name == "my_exp.py")
         assert py_file.exists()
 
         # Verify syntax
@@ -823,9 +1031,8 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_tui_exp"},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_tui_exp_tui.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(f for f in result.files_created if f.name == "my_tui_exp_tui.py")
         assert py_file.exists()
 
         content = py_file.read_text()
@@ -846,9 +1053,10 @@ class TestTemplateRendering:
             parameters={"experiment_name": "my_node_exp", "server_port": 7000},
         )
 
-        assert len(result.files_created) == 1
-        py_file = result.files_created[0]
-        assert py_file.name == "my_node_exp_node.py"
+        assert len(result.files_created) == 2  # 1 script + 1 skill
+        py_file = next(
+            f for f in result.files_created if f.name == "my_node_exp_node.py"
+        )
         assert py_file.exists()
 
         content = py_file.read_text()
@@ -874,9 +1082,10 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 1
-        yaml_file = result.files_created[0]
-        assert yaml_file.name == "my_wf.workflow.yaml"
+        assert len(result.files_created) == 4  # 1 workflow + 3 skills
+        yaml_file = next(
+            f for f in result.files_created if f.name == "my_wf.workflow.yaml"
+        )
         assert yaml_file.exists()
 
         content = yaml_file.read_text()
@@ -902,9 +1111,10 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 1
-        yaml_file = result.files_created[0]
-        assert yaml_file.name == "transfer_wf.workflow.yaml"
+        assert len(result.files_created) == 4  # 1 workflow + 3 skills
+        yaml_file = next(
+            f for f in result.files_created if f.name == "transfer_wf.workflow.yaml"
+        )
         assert yaml_file.exists()
 
         content = yaml_file.read_text()
@@ -988,7 +1198,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 7
+        assert len(result.files_created) == 11  # 7 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1011,7 +1221,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 8
+        assert len(result.files_created) == 12  # 8 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1035,7 +1245,7 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 9
+        assert len(result.files_created) == 13  # 9 files + 4 skills
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1150,48 +1360,7 @@ class TestTemplateCompleteness:
             f"Default values for {template_id} failed validation: {errors}"
         )
 
-    @pytest.mark.parametrize(
-        "template_id,params",
-        [
-            ("module/basic", {"module_name": "test_gen", "port": 2000}),
-            ("module/device", {"module_name": "test_gen", "port": 2000}),
-            ("module/camera", {"module_name": "test_gen", "port": 2000}),
-            ("module/instrument", {"module_name": "test_gen", "port": 2000}),
-            ("module/liquid_handler", {"module_name": "test_gen", "port": 2000}),
-            ("module/robot_arm", {"module_name": "test_gen", "port": 2000}),
-            ("interface/fake", {"module_name": "test_gen"}),
-            ("interface/real", {"module_name": "test_gen"}),
-            ("interface/sim", {"module_name": "test_gen"}),
-            ("interface/mock", {"module_name": "test_gen"}),
-            ("node/basic", {"node_name": "test_gen", "port": 2000}),
-            ("experiment/script", {"experiment_name": "test_gen"}),
-            ("experiment/tui", {"experiment_name": "test_gen"}),
-            ("experiment/node", {"experiment_name": "test_gen", "server_port": 6000}),
-            (
-                "workflow/basic",
-                {"workflow_name": "test_gen", "node_name": "n1", "action_name": "a1"},
-            ),
-            (
-                "workflow/multi_step",
-                {
-                    "workflow_name": "test_gen",
-                    "node_1_name": "n1",
-                    "node_1_action": "a1",
-                    "node_2_name": "n2",
-                    "node_2_action": "a2",
-                },
-            ),
-            ("lab/minimal", {"lab_name": "test_gen"}),
-            ("lab/standard", {"lab_name": "test_gen"}),
-            ("lab/distributed", {"lab_name": "test_gen"}),
-            ("workcell/basic", {"workcell_name": "test_gen"}),
-            ("comm/serial", {"interface_name": "test_gen"}),
-            ("comm/socket", {"interface_name": "test_gen"}),
-            ("comm/rest", {"interface_name": "test_gen"}),
-            ("comm/sdk", {"interface_name": "test_gen"}),
-            ("comm/modbus", {"interface_name": "test_gen"}),
-        ],
-    )
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
     def test_template_renders_successfully(
         self,
         registry: TemplateRegistry,
@@ -1209,33 +1378,7 @@ class TestTemplateCompleteness:
         for f in result.files_created:
             assert f.exists(), f"File not created: {f}"
 
-    @pytest.mark.parametrize(
-        "template_id,params",
-        [
-            ("module/basic", {"module_name": "syntax_test", "port": 2000}),
-            ("module/device", {"module_name": "syntax_test", "port": 2000}),
-            ("module/camera", {"module_name": "syntax_test", "port": 2000}),
-            ("module/instrument", {"module_name": "syntax_test", "port": 2000}),
-            ("module/liquid_handler", {"module_name": "syntax_test", "port": 2000}),
-            ("module/robot_arm", {"module_name": "syntax_test", "port": 2000}),
-            ("interface/fake", {"module_name": "syntax_test"}),
-            ("interface/real", {"module_name": "syntax_test"}),
-            ("interface/sim", {"module_name": "syntax_test"}),
-            ("interface/mock", {"module_name": "syntax_test"}),
-            ("node/basic", {"node_name": "syntax_test", "port": 2000}),
-            ("experiment/script", {"experiment_name": "syntax_test"}),
-            ("experiment/tui", {"experiment_name": "syntax_test"}),
-            (
-                "experiment/node",
-                {"experiment_name": "syntax_test", "server_port": 6000},
-            ),
-            ("comm/serial", {"interface_name": "syntax_test"}),
-            ("comm/socket", {"interface_name": "syntax_test"}),
-            ("comm/rest", {"interface_name": "syntax_test"}),
-            ("comm/sdk", {"interface_name": "syntax_test"}),
-            ("comm/modbus", {"interface_name": "syntax_test"}),
-        ],
-    )
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
     def test_generated_python_syntax(
         self,
         registry: TemplateRegistry,
@@ -1260,3 +1403,525 @@ class TestTemplateCompleteness:
                         f"Invalid Python syntax in {f.name} "
                         f"(template: {template_id}): {e}"
                     )
+
+
+# --- Skills copying tests ---
+
+
+class TestSkillsCopying:
+    """Test that agent skills are correctly copied into generated projects."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def test_skills_copied_for_module_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Module templates should include the madsci-nodes skill."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_mod", "port": 2000},
+        )
+
+        # Skills should be placed inside the project root (test_mod_module/),
+        # not at the top-level output_dir
+        skill_file = (
+            output_dir
+            / "test_mod_module"
+            / ".agents"
+            / "skills"
+            / "madsci-nodes"
+            / "SKILL.md"
+        )
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert "madsci-nodes" in content
+
+    def test_skills_copied_for_experiment_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Experiment templates should include the madsci-experiments skill."""
+        engine = registry.get_template("experiment/script")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"experiment_name": "test_exp"},
+        )
+
+        skill_file = (
+            output_dir / ".agents" / "skills" / "madsci-experiments" / "SKILL.md"
+        )
+        assert skill_file.exists()
+        content = skill_file.read_text()
+        assert "madsci-experiments" in content
+
+    def test_skills_copied_for_lab_template(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Lab templates should include all 4 skills."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        # Skills should be placed inside the project root (test_lab/)
+        for skill_name in [
+            "madsci-nodes",
+            "madsci-experiments",
+            "madsci-managers",
+            "madsci-cli",
+        ]:
+            skill_file = (
+                output_dir / "test_lab" / ".agents" / "skills" / skill_name / "SKILL.md"
+            )
+            assert skill_file.exists(), f"Missing skill: {skill_name}"
+
+    def test_skills_dry_run(self, registry: TemplateRegistry, tmp_path: Path) -> None:
+        """Skills should be listed in files_created but not written during dry run."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_mod", "port": 2000},
+            dry_run=True,
+        )
+
+        skill_paths = [f for f in result.files_created if "SKILL.md" in f.name]
+        # Default include_agent_config selects both "claude" and "agents",
+        # so the skill is copied to both .claude/skills/ and .agents/skills/.
+        assert len(skill_paths) == 2
+        # Files should NOT exist on disk
+        for path in skill_paths:
+            assert not path.exists()
+
+    def test_skills_included_in_result(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Result should list skill names in skills_included."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        assert sorted(result.skills_included) == sorted(
+            [
+                "madsci-nodes",
+                "madsci-experiments",
+                "madsci-managers",
+                "madsci-cli",
+            ]
+        )
+
+    def test_no_skills_when_empty(self, tmp_path: Path) -> None:
+        """Template with no skills field should copy nothing."""
+        # Create a minimal template with no skills
+        template_dir = tmp_path / "template"
+        template_dir.mkdir()
+        manifest = (
+            'name: "Test"\n'
+            'version: "1.0.0"\n'
+            'description: "Test template"\n'
+            'category: "module"\n'
+            "tags: []\n"
+            "skills: []\n"
+            "parameters: []\n"
+            "files: []\n"
+        )
+        (template_dir / "template.yaml").write_text(manifest)
+
+        engine = TemplateEngine(template_dir)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(output_dir=output_dir, parameters={})
+
+        assert result.skills_included == []
+        skill_dir = output_dir / ".agents" / "skills"
+        assert not skill_dir.exists()
+
+    @pytest.mark.parametrize(
+        "template_id",
+        [
+            "module/basic",
+            "module/device",
+            "module/camera",
+            "module/instrument",
+            "module/liquid_handler",
+            "module/robot_arm",
+            "interface/fake",
+            "interface/real",
+            "interface/sim",
+            "interface/mock",
+            "node/basic",
+            "experiment/script",
+            "experiment/notebook",
+            "experiment/tui",
+            "experiment/node",
+            "workflow/basic",
+            "workflow/multi_step",
+            "workcell/basic",
+            "lab/minimal",
+            "lab/standard",
+            "lab/distributed",
+            "comm/serial",
+            "comm/socket",
+            "comm/rest",
+            "comm/sdk",
+            "comm/modbus",
+        ],
+    )
+    def test_all_templates_declare_skills(
+        self, registry: TemplateRegistry, template_id: str
+    ) -> None:
+        """Every bundled template should have at least one skill declared."""
+        engine = registry.get_template(template_id)
+        assert len(engine.manifest.skills) > 0, (
+            f"Template {template_id} has no skills declared"
+        )
+
+    def test_resolve_skills_dir_importlib_fallback(self, tmp_path: Path) -> None:
+        """_resolve_skills_dir falls back to importlib.resources for isolated templates."""
+        # Create a template in an isolated directory with no _skills/ ancestor
+        template_dir = tmp_path / "isolated" / "deep" / "template"
+        template_dir.mkdir(parents=True)
+        (template_dir / "template.yaml").write_text(
+            'name: "Test"\n'
+            'version: "1.0.0"\n'
+            'description: "Test"\n'
+            'category: "module"\n'
+            "tags: []\n"
+            'skills: ["madsci-nodes"]\n'
+            "parameters: []\n"
+            "files: []\n"
+        )
+
+        engine = TemplateEngine(template_dir)
+        skills_dir = engine._resolve_skills_dir()
+
+        assert skills_dir is not None
+        assert skills_dir.is_dir()
+        assert (skills_dir / "madsci-nodes" / "SKILL.md").exists()
+
+    def test_bundled_skills_match_repo_skills(self) -> None:
+        """Bundled _skills/ content should match .agents/skills/ (via symlinks)."""
+        bundled_skills = (
+            Path(str(importlib.resources.files("madsci.common")))
+            / "bundled_templates"
+            / "_skills"
+        )
+
+        # Walk up from this file to find the repo root via .git/
+        repo_root = Path(__file__).resolve()
+        while repo_root != repo_root.parent:
+            if (repo_root / ".git").is_dir():
+                break
+            repo_root = repo_root.parent
+        else:
+            pytest.skip("Could not find repo root (.git directory)")
+
+        repo_skills = repo_root / ".agents" / "skills"
+        if not repo_skills.exists():
+            pytest.skip("Repo .agents/skills/ not found (installed package test)")
+
+        for skill_name in [
+            "madsci-nodes",
+            "madsci-experiments",
+            "madsci-managers",
+            "madsci-cli",
+        ]:
+            bundled_file = bundled_skills / skill_name / "SKILL.md"
+            repo_file = repo_skills / skill_name / "SKILL.md"
+            assert bundled_file.exists(), f"Missing bundled skill: {skill_name}"
+            assert repo_file.exists(), f"Missing repo skill: {skill_name}"
+            assert bundled_file.read_text() == repo_file.read_text(), (
+                f"Content mismatch for {skill_name}/SKILL.md"
+            )
+
+
+# --- Generated code quality tests ---
+
+
+class TestGeneratedCodeQuality:
+    """Cross-cutting quality checks on rendered template output.
+
+    These tests complement the syntax-level checks in TestTemplateCompleteness
+    by validating that generated code uses current APIs, produces parseable
+    config files, and avoids deprecated patterns.
+    """
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_generated_madsci_imports(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that all 'from madsci.* import X' resolve to real names.
+
+        This catches bugs like importing a removed name (e.g., ActionHandler)
+        that ast.parse() alone would not detect.
+        """
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            if f.suffix != ".py":
+                continue
+            tree = ast.parse(f.read_text())
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                if not node.module or not node.module.startswith("madsci."):
+                    continue
+                try:
+                    mod = importlib.import_module(node.module)
+                except ModuleNotFoundError:
+                    pytest.fail(
+                        f"Cannot import module '{node.module}' "
+                        f"in {f.name} (template: {template_id})"
+                    )
+                for alias in node.names:
+                    if alias.name == "*":
+                        continue
+                    assert hasattr(mod, alias.name), (
+                        f"Cannot import name '{alias.name}' from '{node.module}' "
+                        f"in {f.name} (template: {template_id})"
+                    )
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_generated_config_file_syntax(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that generated YAML, TOML, and JSON files are parseable."""
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            content = f.read_text()
+            if not content.strip():
+                continue
+            try:
+                if f.suffix in (".yaml", ".yml"):
+                    yaml.safe_load(content)
+                elif f.suffix == ".toml" and tomllib is not None:
+                    tomllib.loads(content)
+                elif f.suffix == ".json":
+                    json.loads(content)
+            except Exception as e:
+                pytest.fail(
+                    f"Invalid {f.suffix} in {f.name} (template: {template_id}): {e}"
+                )
+
+    @pytest.mark.parametrize("template_id,params", TEMPLATE_RENDER_PARAMS)
+    def test_no_deprecated_patterns(
+        self,
+        registry: TemplateRegistry,
+        tmp_path: Path,
+        template_id: str,
+        params: dict,
+    ) -> None:
+        """Verify that generated Python code does not use deprecated APIs.
+
+        Patterns are maintained in DEPRECATED_PYTHON_PATTERNS at the top of
+        this module. Add a new entry when an API is removed or renamed.
+        """
+        engine = registry.get_template(template_id)
+        output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+        output_dir.mkdir()
+        result = engine.render(output_dir=output_dir, parameters=params)
+
+        for f in result.files_created:
+            if f.suffix != ".py":
+                continue
+            content = f.read_text()
+            for pattern, reason in DEPRECATED_PYTHON_PATTERNS:
+                assert pattern not in content, (
+                    f"Deprecated pattern '{pattern}' found in {f.name} "
+                    f"(template: {template_id}). {reason}"
+                )
+
+
+class TestExpandedModuleTemplates:
+    """Tests for the expanded module template files (docs, notebooks, etc.)."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def test_module_renders_all_new_files(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Module template should produce all new scaffolding files."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": True,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        # Always-included files
+        assert any("docs/README.md" in p for p in rel_paths)
+        assert any("docs/private/.gitkeep" in p for p in rel_paths)
+        assert any("drivers/__init__.py" in p for p in rel_paths)
+        assert any("drivers/private/.gitkeep" in p for p in rel_paths)
+        assert any("interface_testing.ipynb" in p for p in rel_paths)
+        assert any("node_testing.ipynb" in p for p in rel_paths)
+        assert any(".gitignore" in p for p in rel_paths)
+        assert any("docker-compose.yaml" in p for p in rel_paths)
+
+        # Conditional dev tooling
+        assert any(".pre-commit-config.yaml" in p for p in rel_paths)
+        assert any("ruff.toml" in p for p in rel_paths)
+        assert any("justfile" in p for p in rel_paths)
+
+        # Conditional agent config
+        assert any("CLAUDE.md" in p for p in rel_paths)
+        assert any("AGENTS.md" in p for p in rel_paths)
+
+    def test_dev_tooling_excluded_when_disabled(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Dev tooling files should be excluded when include_dev_tooling=False."""
+        engine = registry.get_template("module/device")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_dev_tooling": False,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        assert ".pre-commit-config.yaml" not in file_names
+        assert "ruff.toml" not in file_names
+        assert "justfile" not in file_names
+
+    def test_agent_config_claude_only(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Only CLAUDE.md and .claude/skills/ when agent config is ['claude']."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_dev",
+                "port": 2000,
+                "include_agent_config": ["claude"],
+            },
+        )
+
+        file_names = [f.name for f in result.files_created]
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+
+        assert "CLAUDE.md" in file_names
+        assert "AGENTS.md" not in file_names
+        assert any(".claude/skills/" in p for p in rel_paths)
+        assert not any(".agents/skills/" in p for p in rel_paths)
+
+    def test_rendered_notebooks_are_valid_json(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Rendered .ipynb files should be valid JSON with correct structure."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"module_name": "test_nb", "port": 2000},
+        )
+
+        notebook_files = [f for f in result.files_created if f.suffix == ".ipynb"]
+        assert len(notebook_files) == 2
+
+        for f in notebook_files:
+            content = f.read_text()
+            data = json.loads(content)
+            assert "cells" in data, f"{f.name} missing 'cells'"
+            assert "metadata" in data, f"{f.name} missing 'metadata'"
+            assert data["nbformat"] == 4, f"{f.name} has wrong nbformat"
+
+    def test_skills_dual_destination(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Skills should be copied to both .claude/ and .agents/ when both selected."""
+        engine = registry.get_template("module/basic")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={
+                "module_name": "test_sk",
+                "port": 2000,
+                "include_agent_config": ["claude", "agents"],
+            },
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".claude/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+        assert any(".agents/skills/madsci-nodes/SKILL.md" in p for p in rel_paths)
+
+    def test_skills_backward_compat_no_agent_config(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Templates without include_agent_config should still copy to .agents/."""
+        engine = registry.get_template("lab/minimal")
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        result = engine.render(
+            output_dir=output_dir,
+            parameters={"lab_name": "test_lab"},
+        )
+
+        rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
+        assert any(".agents/skills/" in p for p in rel_paths)
+        assert not any(".claude/skills/" in p for p in rel_paths)

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 from madsci.common.types.base_types import (
     REDACTED_PLACEHOLDER,
     prefixed_alias_generator,
@@ -146,9 +147,9 @@ class TestEventManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         """Fields with explicit validation_alias should not be broken by alias_generator."""
-        # mongo_db_url has validation_alias=AliasChoices("mongo_db_url", "EVENT_DB_URL", "db_url")
+        # document_db_url has validation_alias=AliasChoices("document_db_url", "mongo_db_url", "EVENT_DB_URL", "db_url")
         settings = EventManagerSettings(EVENT_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
     def test_env_var_still_works(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("EVENT_SERVER_URL", "http://envtest:8001")
@@ -158,14 +159,14 @@ class TestEventManagerAliases:
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
         settings = EventManagerSettings()
         data = settings.model_dump_safe(by_alias=True)
-        assert data["event_mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert data["event_document_db_url"] == REDACTED_PLACEHOLDER
         # Non-secret fields should not be redacted
         assert data["event_server_url"] != REDACTED_PLACEHOLDER
 
     def test_model_dump_safe_without_alias_redacts_secrets(self) -> None:
         settings = EventManagerSettings()
         data = settings.model_dump_safe()
-        assert data["mongo_db_url"] == REDACTED_PLACEHOLDER
+        assert data["document_db_url"] == REDACTED_PLACEHOLDER
 
 
 class TestWorkcellManagerAliases:
@@ -175,7 +176,7 @@ class TestWorkcellManagerAliases:
         settings = WorkcellManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "workcell_server_url" in data
-        assert "workcell_redis_host" in data
+        assert "workcell_cache_host" in data
 
     def test_explicit_alias_field_preserved(self) -> None:
         """workcells_directory has alias='workcells_directory' which should take precedence."""
@@ -193,8 +194,8 @@ class TestWorkcellManagerAliases:
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
         settings = WorkcellManagerSettings()
         data = settings.model_dump_safe(by_alias=True)
-        assert data["workcell_mongo_db_url"] == REDACTED_PLACEHOLDER
-        assert data["workcell_redis_password"] == REDACTED_PLACEHOLDER
+        assert data["workcell_document_db_url"] == REDACTED_PLACEHOLDER
+        assert data["workcell_cache_password"] == REDACTED_PLACEHOLDER
 
 
 class TestResourceManagerAliases:
@@ -223,7 +224,7 @@ class TestDataManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         settings = DataManagerSettings(DATA_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
 
 class TestExperimentManagerAliases:
@@ -236,7 +237,7 @@ class TestExperimentManagerAliases:
 
     def test_explicit_validation_alias_preserved(self) -> None:
         settings = ExperimentManagerSettings(EXPERIMENT_DB_URL="mongodb://custom:27017")
-        assert "custom:27017" in str(settings.mongo_db_url)
+        assert "custom:27017" in str(settings.document_db_url)
 
 
 class TestLocationManagerAliases:
@@ -246,12 +247,12 @@ class TestLocationManagerAliases:
         settings = LocationManagerSettings()
         data = settings.model_dump(mode="json", by_alias=True)
         assert "location_server_url" in data
-        assert "location_redis_host" in data
+        assert "location_cache_host" in data
 
     def test_model_dump_safe_by_alias_redacts_secrets(self) -> None:
-        settings = LocationManagerSettings(redis_password="secret123")  # noqa: S106
+        settings = LocationManagerSettings(cache_password="secret123")  # noqa: S106
         data = settings.model_dump_safe(by_alias=True)
-        assert data["location_redis_password"] == REDACTED_PLACEHOLDER
+        assert data["location_cache_password"] == REDACTED_PLACEHOLDER
 
 
 class TestLabManagerAliases:
@@ -365,3 +366,50 @@ class TestAllManagersPrefixedDump:
             pytest.fail(
                 f"Unexpected unprefixed key '{key}' in {settings_cls.__name__} dump"
             )
+
+
+class TestBackwardCompatMongoDbUrl:
+    """Tests that the old 'mongo_db_url' parameter name still works for all settings
+    classes that were renamed to 'document_db_url' during the FOSS migration."""
+
+    @pytest.mark.parametrize(
+        "settings_cls",
+        [
+            EventManagerSettings,
+            ExperimentManagerSettings,
+            WorkcellManagerSettings,
+        ],
+    )
+    def test_old_mongo_db_url_kwarg_accepted(self, settings_cls: type) -> None:
+        """The old 'mongo_db_url' keyword argument should populate document_db_url."""
+        settings = settings_cls(mongo_db_url="mongodb://oldhost:27017")
+        assert "oldhost:27017" in str(settings.document_db_url)
+
+    def test_data_manager_old_mongo_db_url_kwarg_accepted(self) -> None:
+        """DataManagerSettings also accepts mongo_db_url via its AliasChoices."""
+        settings = DataManagerSettings(mongo_db_url="mongodb://oldhost:27017")
+        assert "oldhost:27017" in str(settings.document_db_url)
+
+    def test_document_db_backup_old_mongo_db_url_kwarg_accepted(self) -> None:
+        """DocumentDBBackupSettings accepts the old mongo_db_url kwarg."""
+        settings = DocumentDBBackupSettings(mongo_db_url="mongodb://oldhost:27017")
+        assert "oldhost:27017" in str(settings.document_db_url)
+
+    @pytest.mark.parametrize(
+        "settings_cls,env_var",
+        [
+            (EventManagerSettings, "EVENT_DB_URL"),
+            (ExperimentManagerSettings, "EXPERIMENT_DB_URL"),
+            (WorkcellManagerSettings, "WORKCELL_MONGO_URL"),
+        ],
+    )
+    def test_old_env_var_alias_accepted(
+        self,
+        settings_cls: type,
+        env_var: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Old env var aliases in validation_alias AliasChoices should still work."""
+        monkeypatch.setenv(env_var, "mongodb://envold:27017")
+        settings = settings_cls()
+        assert "envold:27017" in str(settings.document_db_url)

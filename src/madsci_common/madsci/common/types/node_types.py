@@ -13,6 +13,7 @@ from madsci.common.types.base_types import (
     MadsciBaseModel,
     MadsciBaseSettings,
 )
+from madsci.common.types.resource_types import ResourceDataModels
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
 from pydantic import (
@@ -369,6 +370,18 @@ class NodeInfo(NodeDefinition):
         description="JSON Schema for the configuration of the node.",
         default_factory=NodeConfig.model_json_schema,
     )
+    location_templates: list["NodeLocationTemplateDefinition"] = Field(
+        title="Location Templates",
+        description="Location template definitions that this node registers.",
+        default_factory=list,
+    )
+    location_representation_templates: list["NodeRepresentationTemplateDefinition"] = (
+        Field(
+            title="Location Representation Templates",
+            description="Location representation template definitions that this node registers.",
+            default_factory=list,
+        )
+    )
 
     @classmethod
     def from_node_def_and_config(
@@ -602,4 +615,120 @@ class NodeSetConfigResponse(MadsciBaseModel):
     success: bool = Field(
         title="Success",
         description="Whether the config was successfully set.",
+    )
+
+
+class NodeResourceTemplateDefinition(MadsciBaseModel):
+    """Declarative resource template definition for node startup registration."""
+
+    resource: ResourceDataModels = Field(
+        title="Resource",
+        description="The resource model to use as the template.",
+    )
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique name for the template.",
+    )
+    description: str = Field(
+        title="Description",
+        description="Description of what this template creates.",
+        default="",
+    )
+    required_overrides: Optional[list[str]] = Field(
+        title="Required Overrides",
+        description="Fields that must be provided when using the template.",
+        default=None,
+    )
+    tags: Optional[list[str]] = Field(
+        title="Tags",
+        description="Tags for categorization.",
+        default=None,
+    )
+    version: str = Field(
+        title="Version",
+        description="Semantic version of this template.",
+        default="1.0.0",
+    )
+
+
+class NodeRepresentationTemplateDefinition(MadsciBaseModel):
+    """Declarative location representation template definition for node startup registration."""
+
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique name for the representation template.",
+    )
+    default_values: dict[str, Any] = Field(
+        title="Default Values",
+        description="Default field values for this representation.",
+        default_factory=dict,
+    )
+    schema_def: Optional[dict[str, Any]] = Field(
+        title="JSON Schema",
+        description="Optional JSON Schema for validating representation data.",
+        default=None,
+    )
+    required_overrides: Optional[list[str]] = Field(
+        title="Required Overrides",
+        description="Fields that must be provided when instantiating from this template.",
+        default=None,
+    )
+    tags: Optional[list[str]] = Field(
+        title="Tags",
+        description="Tags for categorization.",
+        default=None,
+    )
+    version: str = Field(
+        title="Version",
+        description="Semantic version of this template.",
+        default="1.0.0",
+    )
+    description: Optional[str] = Field(
+        title="Description",
+        description="Human-readable description of this representation template.",
+        default=None,
+    )
+
+
+class NodeLocationTemplateDefinition(MadsciBaseModel):
+    """Declarative location template definition for node startup registration."""
+
+    template_name: str = Field(
+        title="Template Name",
+        description="Unique name for the location template.",
+    )
+    representation_templates: Optional[dict[str, str]] = Field(
+        title="Representation Templates",
+        description="Mapping of abstract role names to representation template names.",
+        default=None,
+    )
+    resource_template_name: Optional[str] = Field(
+        title="Resource Template Name",
+        description="Name of the ResourceTemplate to use for creating a resource on instantiation.",
+        default=None,
+    )
+    resource_template_overrides: Optional[dict[str, Any]] = Field(
+        title="Resource Template Overrides",
+        description="Default overrides to apply when creating a resource from the template.",
+        default=None,
+    )
+    default_allow_transfers: bool = Field(
+        title="Default Allow Transfers",
+        description="Default value for allow_transfers when creating locations from this template.",
+        default=True,
+    )
+    tags: Optional[list[str]] = Field(
+        title="Tags",
+        description="Tags for categorization.",
+        default=None,
+    )
+    version: str = Field(
+        title="Version",
+        description="Semantic version of this template.",
+        default="1.0.0",
+    )
+    description: Optional[str] = Field(
+        title="Description",
+        description="Human-readable description of this location template.",
+        default=None,
     )

@@ -11,7 +11,8 @@ types, and tests, use `madsci new module` instead.
 
 import argparse
 
-from madsci.node_module import ActionHandler, ActionRequest, ActionResult, RestNode
+from madsci.node_module.helpers import action
+from madsci.node_module.rest_node_module import RestNode
 
 
 class {{ node_name | pascal_case }}Node(RestNode):
@@ -32,33 +33,19 @@ class {{ node_name | pascal_case }}Node(RestNode):
         Close connections, release hardware, or clean up resources here.
         """
 
-    @ActionHandler(
-        description="Perform an example action",
-    )
-    def example_action(self, action: ActionRequest) -> ActionResult:
+    @action
+    def example_action(self, message: str = "Hello from {{ node_name }}!") -> str:
         """Execute an example action.
 
         Replace this with your actual device operations.
 
         Args:
-            action: The action request with parameters.
+            message: A message to echo back.
 
         Returns:
-            ActionResult indicating success or failure.
+            The message that was received.
         """
-        try:
-            message = action.args.get("message", "Hello from {{ node_name }}!")
-
-            return ActionResult.succeeded(
-                action=action,
-                message=f"Action completed: {message}",
-                data={"result": message},
-            )
-        except Exception as e:
-            return ActionResult.failed(
-                action=action,
-                message=f"Action failed: {e}",
-            )
+        return message
 
 
 def main() -> None:

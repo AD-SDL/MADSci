@@ -113,6 +113,8 @@ Classes
     ### Descendants
 
     * madsci.common.backup_tools.base_backup.BackupInfo
+    * madsci.common.foss_migration.FossMigrationReport
+    * madsci.common.foss_migration.FossMigrationStepResult
     * madsci.common.testing.types.E2ETestCleanup
     * madsci.common.testing.types.E2ETestDefinition
     * madsci.common.testing.types.E2ETestRequirements
@@ -147,10 +149,13 @@ Classes
     * madsci.common.types.experiment_types.ExperimentRegistration
     * madsci.common.types.experiment_types.ExperimentalCampaign
     * madsci.common.types.location_types.CapacityCostConfig
+    * madsci.common.types.location_types.CreateLocationFromTemplateRequest
     * madsci.common.types.location_types.Location
     * madsci.common.types.location_types.LocationArgument
-    * madsci.common.types.location_types.LocationDefinition
+    * madsci.common.types.location_types.LocationImportResult
+    * madsci.common.types.location_types.LocationRepresentationTemplate
     * madsci.common.types.location_types.LocationReservation
+    * madsci.common.types.location_types.LocationTemplate
     * madsci.common.types.location_types.LocationTransferCapabilities
     * madsci.common.types.location_types.TransferGraphEdge
     * madsci.common.types.location_types.TransferStepTemplate
@@ -163,7 +168,10 @@ Classes
     * madsci.common.types.node_types.Node
     * madsci.common.types.node_types.NodeClientCapabilities
     * madsci.common.types.node_types.NodeDefinition
+    * madsci.common.types.node_types.NodeLocationTemplateDefinition
+    * madsci.common.types.node_types.NodeRepresentationTemplateDefinition
     * madsci.common.types.node_types.NodeReservation
+    * madsci.common.types.node_types.NodeResourceTemplateDefinition
     * madsci.common.types.node_types.NodeSetConfigResponse
     * madsci.common.types.node_types.NodeStatus
     * madsci.common.types.parameter_types.WorkflowParameter
@@ -276,15 +284,16 @@ Classes
 
     ### Descendants
 
+    * madsci.common.foss_migration.FossMigrationSettings
     * madsci.common.types.backup_types.BaseBackupSettings
     * madsci.common.types.client_types.MadsciClientConfig
     * madsci.common.types.context_types.MadsciContext
     * madsci.common.types.datapoint_types.ObjectStorageSettings
     * madsci.common.types.docker_types.DockerComposeSettings
+    * madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings
     * madsci.common.types.interface_types.InterfaceSettings
     * madsci.common.types.manager_types.ManagerSettings
     * madsci.common.types.module_types.ModuleSettings
-    * madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings
     * madsci.common.types.node_types.NodeConfig
     * madsci.experiment_application.experiment_base.ExperimentBaseConfig
     * madsci.resource_manager.migration_tool.DatabaseMigrationSettings

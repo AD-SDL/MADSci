@@ -43,6 +43,9 @@ Classes
     `parameters_used: dict[str, typing.Any]`
     :
 
+    `skills_included: list[str]`
+    :
+
     `template_name: str`
     :
 
@@ -121,6 +124,9 @@ Classes
     * enum.Enum
 
     ### Class variables
+
+    `ADDON`
+    :
 
     `COMM`
     :
@@ -299,6 +305,9 @@ Classes
     :
 
     `schema_version: str`
+    :
+
+    `skills: list[str]`
     :
 
     `tags: list[str]`

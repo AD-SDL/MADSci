@@ -10,8 +10,9 @@ Template version: {{ template_version }}
 
 import argparse
 import time
-from typing import Any
+from typing import Any, ClassVar
 
+from madsci.common.types.node_types import NodeRepresentationTemplateDefinition
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -38,6 +39,35 @@ class {{ module_name | pascal_case }}Node(RestNode):
     - Initializes arm slot resource instances
     - Tracks resource state changes
     """
+
+    # Location representation templates — registered automatically by template_handler()
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="{{ module_name }}_access",
+            default_values={"gripper_config": "standard"},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "Target position coordinates for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "description": "Gripper configuration to use at this location",
+                    },
+                },
+                "required": ["position"],
+            },
+            required_overrides=["position"],
+            tags=["{{ module_name }}", "robot-arm"],
+            version="1.0.0",
+            description="Location representation for {{ module_name }} access points",
+        ),
+    ]
 
     # Hardware interface instance (initialized in startup_handler)
     _interface: Any = None
@@ -90,22 +120,22 @@ class {{ module_name | pascal_case }}Node(RestNode):
             ),
             required_overrides=["resource_name"],
             tags=["{{ module_name }}", "slot", "robot-arm"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize arm slot resource instance
-        slot_resource_name = f"{{ module_name }}_slot_{self.node_definition.node_name}"
+        slot_resource_name = f"{{ module_name }}_slot_{self.node_info.node_name}"
         self.arm_slot = self.resource_client.create_resource_from_template(
             template_name="{{ module_name }}_slot",
             resource_name=slot_resource_name,
             add_to_database=True,
         )
-        self.logger.log(
+        self.event_client.info(
             f"Initialized arm slot resource from template: {self.arm_slot.resource_id}"
         )
 
-        self.logger.log("{{ module_name | pascal_case }} robot arm node initialized!")
+        self.event_client.info("{{ module_name | pascal_case }} robot arm node initialized!")
 
     def shutdown_handler(self) -> None:
         """Clean shutdown of the robot arm node.
@@ -113,7 +143,7 @@ class {{ module_name | pascal_case }}Node(RestNode):
         This method is called when the node is being shut down or restarted.
         It safely shuts down the arm and closes connections.
         """
-        self.logger.log("Shutting down {{ module_name }} robot arm node")
+        self.event_client.info("Shutting down {{ module_name }} robot arm node")
         if self._interface:
             self._interface.shutdown()
             self._interface.disconnect()
