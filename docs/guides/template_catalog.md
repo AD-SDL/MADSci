@@ -1,6 +1,6 @@
 # Template Catalog
 
-MADSci includes 26 built-in templates for scaffolding lab components. Browse templates with:
+MADSci includes 25 built-in templates for scaffolding lab components. Browse templates with:
 
 ```bash
 madsci new list                       # Show all templates
@@ -16,7 +16,7 @@ All templates automatically include relevant **agent skills** in the generated p
 |----------|---------------|
 | Module, Node, Interface, Comm | `madsci-nodes` |
 | Experiment | `madsci-experiments` |
-| Workflow, Workcell | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
+| Workflow | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
 | Lab | `madsci-nodes`, `madsci-experiments`, `madsci-managers`, `madsci-cli` |
 
 ---
@@ -274,24 +274,6 @@ madsci new workflow --template workflow/multi_step --name process_pipeline
 
 ---
 
-## Workcell Templates (1)
-
-### workcell/basic
-
-**Basic workcell configuration for coordinating multiple nodes.**
-
-```bash
-madsci new workcell --name my_lab_workcell
-madsci new workcell --nodes liquidhandler,platereader,incubator
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `workcell_name` | string | `my_workcell` | Workcell name |
-| `workcell_description` | string | `A MADSci workcell` | Description |
-
----
-
 ## Lab Templates (3)
 
 ### lab/minimal
@@ -392,7 +374,6 @@ Templates for instrument communication interfaces, used within node modules.
 | Node | 1 | basic |
 | Experiment | 4 | script, notebook, tui, node |
 | Workflow | 2 | basic, multi_step |
-| Workcell | 1 | basic |
 | Lab | 3 | minimal, standard, distributed |
 | Communication | 5 | serial, socket, rest, sdk, modbus |
-| **Total** | **26** | |
+| **Total** | **25** | |

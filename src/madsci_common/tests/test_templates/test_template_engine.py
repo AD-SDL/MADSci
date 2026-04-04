@@ -34,6 +34,7 @@ from madsci.common.templates.registry import (
 )
 from madsci.common.types.template_types import (
     TemplateCategory,
+    TemplateManifest,
 )
 
 # --- Shared parametrize data ---
@@ -71,7 +72,6 @@ TEMPLATE_RENDER_PARAMS: list[tuple[str, dict]] = [
     ("lab/minimal", {"lab_name": "test_gen"}),
     ("lab/standard", {"lab_name": "test_gen"}),
     ("lab/distributed", {"lab_name": "test_gen"}),
-    ("workcell/basic", {"workcell_name": "test_gen"}),
     ("comm/serial", {"interface_name": "test_gen"}),
     ("comm/socket", {"interface_name": "test_gen"}),
     ("comm/rest", {"interface_name": "test_gen"}),
@@ -1257,23 +1257,6 @@ class TestTemplateRendering:
         assert "compose.nodes.yaml" in file_names
         assert "example.workflow.yaml" in file_names
 
-    def test_render_workcell_basic(
-        self, registry: TemplateRegistry, tmp_path: Path
-    ) -> None:
-        """Test rendering of basic workcell template."""
-        engine = registry.get_template("workcell/basic")
-        output_dir = tmp_path / "output"
-        output_dir.mkdir()
-
-        result = engine.render(
-            output_dir=output_dir,
-            parameters={"workcell_name": "my_workcell"},
-        )
-
-        assert len(result.files_created) > 0
-        file_names = [f.name for f in result.files_created]
-        assert any("workcell" in name.lower() for name in file_names)
-
 
 # --- Template completeness tests ---
 
@@ -1305,7 +1288,6 @@ class TestTemplateCompleteness:
             "experiment/node",
             "workflow/basic",
             "workflow/multi_step",
-            "workcell/basic",
             "lab/minimal",
             "lab/standard",
             "lab/distributed",
@@ -1576,7 +1558,6 @@ class TestSkillsCopying:
             "experiment/node",
             "workflow/basic",
             "workflow/multi_step",
-            "workcell/basic",
             "lab/minimal",
             "lab/standard",
             "lab/distributed",
@@ -1925,3 +1906,68 @@ class TestExpandedModuleTemplates:
         rel_paths = [str(f.relative_to(output_dir)) for f in result.files_created]
         assert any(".agents/skills/" in p for p in rel_paths)
         assert not any(".claude/skills/" in p for p in rel_paths)
+
+
+# --- Template target_model validation tests ---
+
+
+class TestTemplateTargetModelValidation:
+    """Test that templates with a target_model field generate output that validates
+    against the declared Pydantic model. This prevents orphaned config formats."""
+
+    @pytest.fixture
+    def registry(self, tmp_path: Path) -> TemplateRegistry:
+        return TemplateRegistry(user_template_dir=tmp_path / "user_templates")
+
+    def _get_templates_with_target_model(
+        self, registry: TemplateRegistry
+    ) -> list[tuple[str, str]]:
+        """Find all templates that declare a target_model."""
+        results = []
+        for template_info in registry.list_templates():
+            engine = registry.get_template(template_info.id)
+            if engine.manifest.target_model:
+                results.append((template_info.id, engine.manifest.target_model))
+        return results
+
+    def test_target_model_field_on_manifest(self, registry: TemplateRegistry) -> None:
+        """Verify that the target_model field is recognized on TemplateManifest."""
+        assert "target_model" in TemplateManifest.model_fields
+
+    def test_all_target_model_templates_produce_valid_output(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """For each template with target_model, render with defaults and validate output.
+
+        This test prevents orphaned config formats by ensuring template output
+        conforms to the declared Pydantic model. If no templates currently declare
+        target_model, the test passes (the infrastructure is ready for when they do).
+        """
+        templates = self._get_templates_with_target_model(registry)
+
+        for template_id, target_model_path in templates:
+            engine = registry.get_template(template_id)
+            output_dir = tmp_path / f"output_{template_id.replace('/', '_')}"
+            output_dir.mkdir(parents=True)
+
+            # Render with default parameters
+            defaults = engine.get_default_values()
+            result = engine.render(output_dir=output_dir, parameters=defaults)
+
+            # Import the target model
+            module_path, _, class_name = target_model_path.rpartition(".")
+            mod = importlib.import_module(module_path)
+            model_class = getattr(mod, class_name)
+
+            # Find generated YAML files and validate against the model
+            yaml_files = [
+                f for f in result.files_created if f.suffix in (".yaml", ".yml")
+            ]
+            assert len(yaml_files) > 0, (
+                f"Template {template_id} declares target_model but generated no YAML files"
+            )
+
+            for yaml_file in yaml_files:
+                data = yaml.safe_load(yaml_file.read_text())
+                # Validate: should not raise
+                model_class.model_validate(data)

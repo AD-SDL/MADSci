@@ -16,7 +16,7 @@ The `madsci` CLI is built on Click with lazy command loading, Rich output format
 | `src/madsci_client/madsci/client/cli/utils/output.py` | Rich console output helpers |
 | `src/madsci_client/madsci/client/cli/tui/app.py` | Textual TUI application |
 | `src/madsci_client/madsci/client/cli/tui/styles/theme.tcss` | TUI CSS theme |
-| `src/madsci_common/madsci/common/bundled_templates/` | 26 template manifests + Jinja2 files |
+| `src/madsci_common/madsci/common/bundled_templates/` | 25 template manifests + Jinja2 files |
 
 ## Architecture
 
@@ -180,7 +180,7 @@ Validate YAML configuration files (workflow, node, manager definitions).
 
 ### `run`
 Execute workflows or experiments.
-- Subcommands: `workflow <path> [--workcell URL] [--parameters JSON] [--no-wait]`, `experiment <path>`
+- Subcommands: `workflow <path> [--parameters JSON] [--no-wait]`, `experiment <path>`
 
 ### `completion`
 Generate shell completion scripts.
@@ -265,7 +265,7 @@ hooks:
       continue_on_error: true
 ```
 
-**Template categories (26 total):**
+**Template categories (25 total):**
 - `lab/`: minimal lab scaffold
 - `module/`: device, compute modules (full packages with tests, Dockerfile)
 - `node/`: basic node, rest node
@@ -274,6 +274,28 @@ hooks:
 - `workflow/`: basic workflow
 
 **Jinja2 filters:** `pascal_case` (converts `my_module` -> `MyModule`)
+
+### Template-Model Alignment
+
+Every template that generates YAML/JSON configuration must produce output that validates against a specific Pydantic model. Templates declare their target model via the `target_model` field in `template.yaml`:
+
+```yaml
+# In template.yaml
+target_model: "madsci.common.types.workflow_types.WorkflowDefinition"
+```
+
+| Template Category | Output Type | Target Pydantic Model |
+|---|---|---|
+| lab/* | settings.yaml | MadsciContext / ManagerSettings subclasses (no single target_model — shared file) |
+| workflow/* | *.workflow.yaml | `WorkflowDefinition` |
+| node/* | Python code | Uses `RestNodeConfig` in generated code |
+| module/* | Python package | Uses `RestNodeConfig`, domain-specific models |
+| experiment/* | Python code | Uses `ExperimentDesign` in generated code |
+
+When creating new templates for config files:
+1. Identify the Pydantic model first
+2. Build the template to match its schema
+3. Set `target_model` in `template.yaml` so tests validate output automatically
 
 ## Start/Stop Lifecycle
 

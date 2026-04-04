@@ -35,16 +35,6 @@ python -m madsci.squid.lab_server
 
 ### Lab Manager Setup
 
-Create a lab definition file:
-
-```yaml
-# lab.yaml
-name: My_Lab
-description: My MADSci-powered laboratory
-manager_type: lab_manager
-manager_id: 01JVDFED2K18FVF0E7JM7SX09F  # Generate with ulid
-```
-
 Run the lab manager:
 
 ```bash
@@ -96,14 +86,6 @@ For dashboard development, see [ui/README.md](../../ui/README.md).
 
 ## Configuration
 
-### Lab Definition
-```yaml
-name: Production_Lab
-description: Production MADSci Laboratory
-manager_type: lab_manager
-manager_id: 01JVDFED2K18FVF0E7JM7SX09F
-```
-
 ### Environment Variables
 
 **Lab Manager Settings** (LAB_ prefix):
@@ -111,8 +93,6 @@ manager_id: 01JVDFED2K18FVF0E7JM7SX09F
 # Core Lab Manager Configuration
 LAB_SERVER_URL=http://localhost:8000              # Lab manager server URL
 LAB_DASHBOARD_FILES_PATH=./ui/dist                # Path to dashboard static files (set to None to disable)
-LAB_MANAGER_DEFINITION=lab.manager.yaml           # Path to lab definition file
-
 # Additional settings inherited from ManagerSettings:
 LAB_VERBOSE=false                                 # Enable verbose logging
 LAB_LOG_LEVEL=INFO                               # Logging level
@@ -178,16 +158,6 @@ The Lab Manager provides REST endpoints for lab coordination:
   },
   "total_managers": 6,
   "healthy_managers": 5
-}
-```
-
-**`GET /definition`** - Lab definition and metadata
-```json
-{
-  "name": "Example_Lab_Manager",
-  "description": "A simple example of a lab manager definition",
-  "manager_id": "01JVDFED2K18FVF0E7JM7SX09F",
-  "manager_type": "lab_manager"
 }
 ```
 

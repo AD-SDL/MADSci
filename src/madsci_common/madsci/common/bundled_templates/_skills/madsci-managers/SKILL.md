@@ -255,6 +255,15 @@ handler = InMemoryObjectStorageHandler()
 
 **Used by:** Data manager (optional, for file storage)
 
+## Deprecated: Manager Definition Types
+
+All `*ManagerDefinition` classes (e.g., `ManagerDefinition`, `LabManagerDefinition`, `WorkcellManagerDefinition`) are **deprecated as of v0.7.0** and will be removed. They emit `MadsciDeprecationWarning` on instantiation.
+
+- **Use `ManagerSettings` subclasses** for all configuration (e.g., `EventManagerSettings`, `WorkcellManagerSettings`)
+- **Use `WorkcellInfo`** for workcell runtime state (not `WorkcellManagerDefinition`)
+- Definition files (`*.manager.yaml`) are replaced by `settings.yaml` + environment variables
+- Run `madsci migrate` to convert legacy definition files
+
 ## Manager-Specific Notes
 
 ### Event Manager (8001)

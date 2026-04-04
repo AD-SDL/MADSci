@@ -1,8 +1,8 @@
 # Tutorial 04: Workflow Creation
 # Tests workflow and workcell scaffolding commands
 
-name: "Tutorial 04 - Workflow & Workcell"
-description: "Test workflow, workcell, and lab creation from templates"
+name: "Tutorial 04 - Workflow & Node"
+description: "Test workflow and node creation from templates"
 version: "1.0"
 tags:
   - tutorial
@@ -48,25 +48,6 @@ steps:
         expected: 0
       - type: file_exists
         path: "./test_tutorial_04/test_multi.workflow.yaml"
-
-  - name: "Create workcell"
-    command: "madsci new workcell --name test_wc --no-interactive ./test_tutorial_04"
-    timeout: 30.0
-    validations:
-      - type: exit_code
-        expected: 0
-      - type: file_exists
-        path: "./test_tutorial_04/test_wc.workcell.yaml"
-      - type: file_exists
-        path: "./test_tutorial_04/.env.example"
-
-  - name: "Validate workcell YAML"
-    command: "python -c \"import yaml; d=yaml.safe_load(open('./test_tutorial_04/test_wc.workcell.yaml')); assert 'name' in d or True; print('Workcell valid')\""
-    validations:
-      - type: exit_code
-        expected: 0
-      - type: output_contains
-        pattern: "Workcell valid"
 
   - name: "Create node"
     command: "madsci new node --name test_node --no-interactive ./test_tutorial_04"

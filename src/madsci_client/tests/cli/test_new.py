@@ -55,14 +55,6 @@ class TestNewCommand:
         assert result.exit_code == 0
         assert "Create a new workflow" in result.output
 
-    def test_new_workcell_help(self) -> None:
-        """Test that new workcell command shows help."""
-        runner = CliRunner()
-        result = runner.invoke(madsci, ["new", "workcell", "--help"])
-
-        assert result.exit_code == 0
-        assert "Create a new workcell" in result.output
-
     def test_new_lab_help(self) -> None:
         """Test that new lab command shows help."""
         runner = CliRunner()
