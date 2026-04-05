@@ -1,6 +1,7 @@
 """MADSci CLI logs command.
 
-View and aggregate logs from MADSci services.
+View and aggregate logs from MADSci services, using the shared utility layer
+for timestamp formatting, level colouring, and output rendering.
 """
 
 from __future__ import annotations
@@ -12,19 +13,16 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import click
+from madsci.client.cli.utils.formatting import format_timestamp
+from madsci.client.cli.utils.output import (
+    OutputFormat,
+    determine_output_format,
+    get_console,
+    output_result,
+)
 
 # Default Event Manager URL
 DEFAULT_EVENT_MANAGER_URL = "http://localhost:8001/"
-
-# Log level colors
-LEVEL_COLORS = {
-    "DEBUG": "dim",
-    "INFO": "blue",
-    "WARNING": "yellow",
-    "WARN": "yellow",
-    "ERROR": "red",
-    "CRITICAL": "bold red",
-}
 
 # Log level priority for filtering
 LEVEL_PRIORITY = {
@@ -34,6 +32,16 @@ LEVEL_PRIORITY = {
     "WARN": 2,
     "ERROR": 3,
     "CRITICAL": 4,
+}
+
+# Map log levels to status-like keys so format_status_colored can colour them
+_LEVEL_STATUS_MAP = {
+    "DEBUG": "pending",  # dim
+    "INFO": "running",  # blue
+    "WARNING": "unhealthy",  # yellow
+    "WARN": "unhealthy",  # yellow
+    "ERROR": "failed",  # red
+    "CRITICAL": "failed",  # red
 }
 
 
@@ -61,38 +69,38 @@ def format_log_entry(
     show_timestamps: bool = True,
     no_color: bool = False,
 ) -> Any:
-    """Format a log entry for display."""
+    """Format a log entry for display using shared formatting utilities."""
     from rich.text import Text
 
     text = Text()
 
+    # Timestamp - use shared format_timestamp helper
     if show_timestamps:
         timestamp = entry.get("timestamp", entry.get("logged_at", ""))
         if timestamp:
-            if isinstance(timestamp, str):
-                try:
-                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    timestamp_str = dt.strftime("%H:%M:%S.%f")[:-3]
-                except ValueError:
-                    timestamp_str = timestamp[:12]
-            else:
-                timestamp_str = str(timestamp)[:12]
-
+            timestamp_str = format_timestamp(timestamp, short=True)
             if not no_color:
                 text.append(timestamp_str, style="dim")
             else:
                 text.append(timestamp_str)
             text.append("  ")
 
+    # Level - use shared format_status_colored via level->status mapping
     level = entry.get("level", entry.get("log_level", "INFO")).upper()
     level_str = f"{level:8}"
     if not no_color:
-        level_style = LEVEL_COLORS.get(level, "")
-        text.append(level_str, style=level_style)
+        status_key = _LEVEL_STATUS_MAP.get(level, "unknown")
+        # Extract the Rich markup colour from format_status_colored
+        # We need just the colour name, so use get_status_style directly
+        from madsci.client.cli.utils.formatting import get_status_style
+
+        _, colour = get_status_style(status_key)
+        text.append(level_str, style=colour)
     else:
         text.append(level_str)
     text.append("  ")
 
+    # Source
     source = entry.get("source", entry.get("service", entry.get("name", "")))
     if source:
         source_str = f"{source[:12]:12}"
@@ -102,6 +110,7 @@ def format_log_entry(
             text.append(source_str)
         text.append("  ")
 
+    # Message
     message = entry.get("message", entry.get("msg", str(entry)))
     text.append(str(message))
 
@@ -224,7 +233,7 @@ def filter_logs(
     help="Output as JSON.",
 )
 @click.pass_context
-def logs(  # noqa: C901, PLR0912
+def logs(  # noqa: C901, PLR0912, PLR0915
     ctx: click.Context,
     services: tuple[str, ...],
     follow: bool,
@@ -246,12 +255,19 @@ def logs(  # noqa: C901, PLR0912
         madsci logs --level error            Only show errors
         madsci logs --grep "workflow"        Filter by pattern
         madsci logs workcell_manager         Logs from specific service
+        madsci --yaml logs                   Output as YAML
     """
-    from madsci.client.cli.utils.output import get_console
     from rich.panel import Panel
 
     console = get_console(ctx)
     no_color = ctx.obj.get("no_color", False)
+
+    # Merge local --json flag into ctx.obj so determine_output_format sees it
+    if as_json:
+        ctx.ensure_object(dict)
+        ctx.obj["json"] = True
+
+    fmt = determine_output_format(ctx)
 
     since_dt = None
     if since:
@@ -278,8 +294,14 @@ def logs(  # noqa: C901, PLR0912
     )
 
     if not log_entries:
-        if as_json or ctx.obj.get("json"):
-            console.print_json(json.dumps({"logs": [], "message": "No logs available"}))
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            payload = {"logs": [], "message": "No logs available"}
+            if fmt == OutputFormat.JSON:
+                console.print_json(json.dumps(payload))
+            else:
+                output_result(console, payload, format="yaml")
+        elif fmt == OutputFormat.QUIET:
+            console.print("No logs available")
         else:
             console.print(
                 Panel(
@@ -304,10 +326,21 @@ def logs(  # noqa: C901, PLR0912
 
     log_entries = filter_logs(log_entries, level=level, grep=grep)
 
-    if as_json or ctx.obj.get("json"):
+    # --- Structured output modes ---
+    if fmt == OutputFormat.JSON:
         console.print_json(json.dumps({"logs": log_entries}))
         return
+    if fmt == OutputFormat.YAML:
+        output_result(console, {"logs": log_entries}, format="yaml")
+        return
+    if fmt == OutputFormat.QUIET:
+        for entry in log_entries:
+            lvl = entry.get("level", entry.get("log_level", "INFO")).upper()
+            msg = entry.get("message", entry.get("msg", ""))
+            console.print(f"{lvl}: {msg}")
+        return
 
+    # --- Follow mode ---
     if follow:
         seen_ids: set[str] = set()
         for entry in log_entries:
@@ -340,6 +373,7 @@ def logs(  # noqa: C901, PLR0912
             console.print("\n[dim]Stopped following logs.[/dim]")
             return
 
+    # --- Default table output ---
     for entry in log_entries:
         console.print(format_log_entry(entry, timestamps, no_color))
 
