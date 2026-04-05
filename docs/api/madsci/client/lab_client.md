@@ -21,12 +21,6 @@ Classes
 
     ### Methods
 
-    `get_definition(self, timeout: float | None = None) ‑> madsci.common.types.lab_types.LabManagerDefinition`
-    :   Get the definition of the lab.
-        
-        Args:
-            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
-
     `get_lab_context(self, timeout: float | None = None) ‑> madsci.common.types.context_types.MadsciContext`
     :   Get the lab context.
         

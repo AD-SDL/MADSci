@@ -4,14 +4,17 @@
 # Template version: {{ template_version }}
 
 name: {{ workflow_name }}
-description: "{{ workflow_description }}"
+
+metadata:
+  description: "{{ workflow_description }}"
+  version: "1.0.0"
 
 # Workflow parameters (passed in when starting the workflow)
 parameters:
-  - name: message
-    type: string
-    description: "Message to pass to the action"
-    default: "Hello from {{ workflow_name }}!"
+  json_inputs:
+    - key: message
+      description: "Message to pass to the action"
+      default: "Hello from {{ workflow_name }}!"
 
 # Workflow steps
 steps:
@@ -21,11 +24,3 @@ steps:
     action: {{ action_name }}
     args:
       message: "${{ '{' }}parameters.message{{ '}' }}"
-
-# Metadata
-metadata:
-  author: "MADSci User"
-  version: "1.0.0"
-  tags:
-    - generated
-    - basic

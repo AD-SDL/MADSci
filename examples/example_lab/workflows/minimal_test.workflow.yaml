@@ -2,7 +2,7 @@ name: Minimal Test Workflow
 
 metadata:
   author: MADSci Test
-  info: Minimal workflow for testing
+  description: Minimal workflow for testing
   version: 1.0
 
 parameters:

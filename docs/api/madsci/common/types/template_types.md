@@ -146,9 +146,6 @@ Classes
     `NODE`
     :
 
-    `WORKCELL`
-    :
-
     `WORKFLOW`
     :
 
@@ -311,6 +308,9 @@ Classes
     :
 
     `tags: list[str]`
+    :
+
+    `target_model: str | None`
     :
 
     `version: str`

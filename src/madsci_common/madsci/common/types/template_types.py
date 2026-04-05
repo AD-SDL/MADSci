@@ -34,7 +34,6 @@ class TemplateCategory(str, Enum):
     NODE = "node"
     EXPERIMENT = "experiment"
     WORKFLOW = "workflow"
-    WORKCELL = "workcell"
     LAB = "lab"
     COMM = "comm"
     ADDON = "addon"
@@ -150,6 +149,16 @@ class TemplateManifest(MadsciBaseModel):
     # Post-generation hooks
     hooks: Optional[dict[str, list[TemplateHook]]] = Field(
         default=None, description="Lifecycle hooks (post_generate, etc.)"
+    )
+
+    # Model validation for generated config files
+    target_model: Optional[str] = Field(
+        default=None,
+        description=(
+            "Dotted import path to the Pydantic model that template YAML/JSON output "
+            "should validate against (e.g., 'madsci.common.types.workflow_types.WorkflowDefinition'). "
+            "Used for automated validation of generated config files."
+        ),
     )
 
 

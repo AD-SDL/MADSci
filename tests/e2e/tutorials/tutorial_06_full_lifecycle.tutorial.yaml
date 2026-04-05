@@ -80,15 +80,6 @@ steps:
       - type: file_exists
         path: "./test_tutorial_06/test_device_wf.workflow.yaml"
 
-  - name: "Create workcell"
-    command: "madsci new workcell --name test_wc --no-interactive ./test_tutorial_06"
-    timeout: 30.0
-    validations:
-      - type: exit_code
-        expected: 0
-      - type: file_exists
-        path: "./test_tutorial_06/test_wc.workcell.yaml"
-
   - name: "List all templates"
     command: "madsci new list"
     timeout: 15.0

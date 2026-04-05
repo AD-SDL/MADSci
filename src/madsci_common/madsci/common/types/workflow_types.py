@@ -1,7 +1,7 @@
 """Types for MADSci Worfklow running."""
 
 from datetime import datetime, timedelta
-from typing import Any, Optional, Union
+from typing import Any, ClassVar, Optional, Union
 
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.action_types import ActionStatus
@@ -124,7 +124,10 @@ class WorkflowMetadata(MadsciBaseModel, extra="allow"):
 
     author: Optional[str] = None
     """Who wrote this workflow definition"""
-    description: Optional[str] = None
+    description: Optional[str] = Field(
+        default=None,
+        alias=AliasChoices("description", "info"),
+    )
     """Description of the workflow definition"""
     version: Union[float, str] = ""
     """Version of the workflow definition"""
@@ -139,7 +142,10 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_definition_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow definition"""
-    definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
+    definition_metadata: WorkflowMetadata = Field(
+        default_factory=WorkflowMetadata,
+        alias=AliasChoices("definition_metadata", "metadata"),
+    )
     """Information about the flow"""
     parameters: Union[WorkflowParameters, list[ParameterTypes]] = Field(
         default_factory=WorkflowParameters,
@@ -151,6 +157,73 @@ class WorkflowDefinition(MadsciBaseModel):
 
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
+
+    @model_validator(mode="before")
+    @classmethod
+    def promote_root_description(cls, data: Any) -> Any:
+        """Move root-level 'description' into definition_metadata/metadata."""
+        if isinstance(data, dict) and "description" in data:
+            # Shallow copy to avoid mutating the caller's dict
+            data = {**data}
+            # Determine the metadata key used in this data
+            metadata_key = "metadata" if "metadata" in data else "definition_metadata"
+            metadata = data.get(metadata_key)
+            if metadata is None:
+                data[metadata_key] = {"description": data.pop("description")}
+            elif isinstance(metadata, dict) and "description" not in metadata:
+                data[metadata_key] = {
+                    **metadata,
+                    "description": data.pop("description"),
+                }
+            else:
+                # Drop root description if metadata already has one
+                data.pop("description")
+        return data
+
+    # Map user-friendly type names to canonical parameter_type values
+    _SIMPLIFIED_TYPE_MAP: ClassVar[dict[str, str]] = {
+        "file": "file_input",
+        "file_input": "file_input",
+        "input_file": "file_input",
+    }
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def coerce_simplified_parameters(cls, v: Any) -> Any:
+        """Convert simplified parameter dicts to canonical parameter format.
+
+        Accepts a user-friendly list format where each item has ``name``,
+        ``type``, ``default``, and ``description`` keys, and converts them
+        to the canonical format with ``key`` and ``parameter_type`` fields.
+
+        The ``type`` field is mapped to ``parameter_type``:
+        - ``"file"`` / ``"file_input"`` / ``"input_file"`` -> ``"file_input"``
+        - All other values (including omitted) -> ``"json_input"``
+        """
+        if isinstance(v, list):
+            coerced = []
+            for item in v:
+                if (
+                    isinstance(item, dict)
+                    and "name" in item
+                    and "parameter_type" not in item
+                ):
+                    user_type = str(item.get("type", "")).lower().strip()
+                    parameter_type = cls._SIMPLIFIED_TYPE_MAP.get(
+                        user_type, "json_input"
+                    )
+                    coerced.append(
+                        {
+                            "key": item["name"],
+                            "parameter_type": parameter_type,
+                            "default": item.get("default"),
+                            "description": item.get("description"),
+                        }
+                    )
+                else:
+                    coerced.append(item)
+            return coerced
+        return v
 
     @field_validator("steps", mode="after")
     @classmethod

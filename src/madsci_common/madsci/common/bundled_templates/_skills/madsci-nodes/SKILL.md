@@ -73,6 +73,14 @@ Config is discovered via walk-up file search (see CLAUDE.md). Override with envi
 node = MyNode(node_config=RestNodeConfig(node_url="http://0.0.0.0:3000"))
 ```
 
+### Deprecated: NodeDefinition
+
+`NodeDefinition` is **deprecated as of v0.7.0**. Node identity now comes from `NodeConfig`/`RestNodeConfig` plus the ID Registry.
+
+- Do not use `NodeDefinition` or `*.node.yaml` definition files in new code
+- Use `NodeConfig` or `RestNodeConfig` (both are `MadsciBaseSettings` subclasses)
+- Run `madsci migrate` to convert legacy `*.node.yaml` files
+
 ## The @action Decorator
 
 Register methods as node actions. Discovered automatically at init.
