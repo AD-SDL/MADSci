@@ -212,11 +212,19 @@ def _validate_settings_file(file_path: Path) -> list[ValidationResult]:
             continue
 
         try:
-            with warnings.catch_warnings():
+            import tempfile
+
+            with (
+                tempfile.TemporaryDirectory() as empty_dir,
+                warnings.catch_warnings(),
+            ):
                 warnings.simplefilter("ignore")
-                # model_validate does Pydantic validation without triggering
-                # pydantic-settings env/file discovery side effects
-                model_class.model_validate(yaml_data)
+                # Construct with _settings_dir pointing to an empty directory
+                # to prevent walk-up file discovery from finding and merging
+                # unrelated config files. Env vars still supplement validation,
+                # which is correct: in production, settings come from both
+                # YAML and environment.
+                model_class(_settings_dir=empty_dir, **yaml_data)
             result.valid = True
         except Exception as exc:
             result.errors.append(f"{label}: {exc}")

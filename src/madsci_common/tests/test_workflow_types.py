@@ -265,6 +265,29 @@ class TestWorkflowYAMLCompatibility:
         )
         assert wf.definition_metadata.description == "Meta desc"
 
+    def test_promote_root_description_does_not_mutate_input(self):
+        """The before-validator must not modify the caller's dict."""
+        data = {
+            "name": "Test",
+            "description": "Root desc",
+            "steps": [],
+        }
+        original_data = dict(data)
+        WorkflowDefinition.model_validate(data)
+        assert data == original_data, "Input dict was mutated by model_validate"
+
+    def test_promote_root_description_does_not_mutate_metadata_dict(self):
+        """The before-validator must not modify the caller's metadata dict."""
+        metadata = {"author": "Alice"}
+        data = {
+            "name": "Test",
+            "description": "Root desc",
+            "metadata": metadata,
+            "steps": [],
+        }
+        WorkflowDefinition.model_validate(data)
+        assert "description" not in metadata, "Caller's metadata dict was mutated"
+
     def test_simplified_parameter_format(self):
         """Simplified [{name, type, default}] parameters should be coerced."""
         wf = WorkflowDefinition.model_validate(
@@ -287,6 +310,34 @@ class TestWorkflowYAMLCompatibility:
         assert param.default == "hello"
         assert param.description == "A message"
         assert param.parameter_type == "json_input"
+
+    def test_simplified_parameter_type_file_maps_to_file_input(self):
+        """Simplified parameter with type='file' should become a file_input."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [
+                    {"name": "protocol", "type": "file", "description": "Protocol file"}
+                ],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.file_inputs) == 1
+        assert wf.parameters.file_inputs[0].key == "protocol"
+        assert wf.parameters.file_inputs[0].parameter_type == "file_input"
+
+    def test_simplified_parameter_unknown_type_defaults_to_json_input(self):
+        """Simplified parameter with an unrecognized type should default to json_input."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [{"name": "count", "type": "integer", "default": 5}],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.json_inputs) == 1
+        assert wf.parameters.json_inputs[0].key == "count"
+        assert wf.parameters.json_inputs[0].parameter_type == "json_input"
 
     def test_simplified_parameters_mixed_with_typed(self):
         """Simplified params can coexist with properly typed params."""
