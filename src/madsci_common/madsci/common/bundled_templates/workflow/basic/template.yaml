@@ -9,9 +9,7 @@ author: "MADSci Team"
 license: "MIT"
 min_madsci_version: "0.6.0"
 schema_version: "1.0"
-# NOTE: target_model is not set because the template generates a simplified
-# parameter format (name/type/default) that doesn't match WorkflowDefinition's
-# discriminated union ParameterTypes. This should be reconciled in a future PR.
+target_model: "madsci.common.types.workflow_types.WorkflowDefinition"
 
 parameters:
   - name: workflow_name

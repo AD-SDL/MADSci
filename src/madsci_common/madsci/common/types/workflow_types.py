@@ -124,7 +124,10 @@ class WorkflowMetadata(MadsciBaseModel, extra="allow"):
 
     author: Optional[str] = None
     """Who wrote this workflow definition"""
-    description: Optional[str] = None
+    description: Optional[str] = Field(
+        default=None,
+        alias=AliasChoices("description", "info"),
+    )
     """Description of the workflow definition"""
     version: Union[float, str] = ""
     """Version of the workflow definition"""
@@ -139,7 +142,10 @@ class WorkflowDefinition(MadsciBaseModel):
     """Name of the workflow"""
     workflow_definition_id: str = Field(default_factory=new_ulid_str)
     """ID of the workflow definition"""
-    definition_metadata: WorkflowMetadata = Field(default_factory=WorkflowMetadata)
+    definition_metadata: WorkflowMetadata = Field(
+        default_factory=WorkflowMetadata,
+        alias=AliasChoices("definition_metadata", "metadata"),
+    )
     """Information about the flow"""
     parameters: Union[WorkflowParameters, list[ParameterTypes]] = Field(
         default_factory=WorkflowParameters,
@@ -151,6 +157,52 @@ class WorkflowDefinition(MadsciBaseModel):
 
     steps: list[StepDefinition] = Field(default_factory=list)
     """User Submitted Steps of the flow"""
+
+    @model_validator(mode="before")
+    @classmethod
+    def promote_root_description(cls, data: Any) -> Any:
+        """Move root-level 'description' into definition_metadata/metadata."""
+        if isinstance(data, dict) and "description" in data:
+            # Determine the metadata key used in this data
+            metadata_key = "metadata" if "metadata" in data else "definition_metadata"
+            metadata = data.setdefault(metadata_key, {})
+            if isinstance(metadata, dict) and "description" not in metadata:
+                metadata["description"] = data.pop("description")
+            else:
+                # Drop root description if metadata already has one
+                data.pop("description")
+        return data
+
+    @field_validator("parameters", mode="before")
+    @classmethod
+    def coerce_simplified_parameters(cls, v: Any) -> Any:
+        """Convert simplified parameter dicts to ParameterInputJson format.
+
+        Accepts a user-friendly list format where each item has ``name``,
+        ``type``, ``default``, and ``description`` keys, and converts them
+        to the canonical ``ParameterInputJson`` format with ``key`` and
+        ``parameter_type`` fields.
+        """
+        if isinstance(v, list):
+            coerced = []
+            for item in v:
+                if (
+                    isinstance(item, dict)
+                    and "name" in item
+                    and "parameter_type" not in item
+                ):
+                    coerced.append(
+                        {
+                            "key": item["name"],
+                            "parameter_type": "json_input",
+                            "default": item.get("default"),
+                            "description": item.get("description"),
+                        }
+                    )
+                else:
+                    coerced.append(item)
+            return coerced
+        return v
 
     @field_validator("steps", mode="after")
     @classmethod
