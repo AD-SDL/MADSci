@@ -164,6 +164,12 @@ class AliasedGroup(click.Group):
     is_flag=True,
     help="Output in JSON format (where applicable).",
 )
+@click.option(
+    "--yaml",
+    "yaml_output",
+    is_flag=True,
+    help="Output in YAML format (where applicable).",
+)
 @click.version_option(version=__version__, prog_name="madsci")
 @click.pass_context
 def madsci(
@@ -173,6 +179,7 @@ def madsci(
     quiet: bool,
     no_color: bool,
     json_output: bool,
+    yaml_output: bool,
 ) -> None:
     """MADSci - Modular Autonomous Discovery for Science.
 
@@ -200,6 +207,7 @@ def madsci(
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output
+    ctx.obj["yaml"] = yaml_output
     ctx.obj["no_color"] = no_color
 
     # Create console with appropriate settings
