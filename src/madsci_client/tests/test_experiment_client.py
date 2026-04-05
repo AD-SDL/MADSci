@@ -82,7 +82,7 @@ class TestExperimentClientInit:
 class TestExperimentClientGetExperiment:
     """Test ExperimentClient get_experiment method."""
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiment_success(self, mock_create_session, experiment):
         """Test successful get_experiment call."""
         mock_response = Mock()
@@ -90,20 +90,22 @@ class TestExperimentClientGetExperiment:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.get_experiment(experiment.experiment_id)
 
-        mock_session.get.assert_called_once_with(
-            f"http://localhost:8002/experiment/{experiment.experiment_id}", timeout=10.0
+        mock_session.request.assert_called_once_with(
+            "GET",
+            f"http://localhost:8002/experiment/{experiment.experiment_id}",
+            timeout=10.0,
         )
         assert isinstance(result, Experiment)
         assert result.run_name == experiment.run_name
         assert result.status == experiment.status
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiment_with_ulid(self, mock_create_session, experiment):
         """Test get_experiment with ULID object."""
         mock_response = Mock()
@@ -111,19 +113,19 @@ class TestExperimentClientGetExperiment:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         ulid_obj = ULID.from_str(experiment.experiment_id)
         result = client.get_experiment(ulid_obj)
 
-        mock_session.get.assert_called_once_with(
-            f"http://localhost:8002/experiment/{ulid_obj}", timeout=10.0
+        mock_session.request.assert_called_once_with(
+            "GET", f"http://localhost:8002/experiment/{ulid_obj}", timeout=10.0
         )
         assert isinstance(result, Experiment)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiment_http_error(self, mock_create_session):
         """Test get_experiment with HTTP error."""
         mock_response = Mock()
@@ -131,7 +133,7 @@ class TestExperimentClientGetExperiment:
         mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -143,7 +145,7 @@ class TestExperimentClientGetExperiment:
 class TestExperimentClientGetExperiments:
     """Test ExperimentClient get_experiments method."""
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiments_success(self, mock_create_session, experiment):
         """Test successful get_experiments call."""
         mock_response = Mock()
@@ -152,13 +154,14 @@ class TestExperimentClientGetExperiments:
         mock_response.json.return_value = experiments_data
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.get_experiments(number=5)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8002/experiments",
             params={"number": 5},
             timeout=10.0,
@@ -167,7 +170,7 @@ class TestExperimentClientGetExperiments:
         assert len(result) == 2
         assert all(isinstance(exp, Experiment) for exp in result)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiments_default_number(self, mock_create_session, experiment):
         """Test get_experiments with default number parameter."""
         mock_response = Mock()
@@ -175,13 +178,14 @@ class TestExperimentClientGetExperiments:
         mock_response.json.return_value = [experiment.model_dump()]
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.get_experiments()
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8002/experiments",
             params={"number": 10},
             timeout=10.0,
@@ -189,7 +193,7 @@ class TestExperimentClientGetExperiments:
         assert isinstance(result, list)
         assert len(result) == 1
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_experiments_http_error(self, mock_create_session):
         """Test get_experiments with HTTP error."""
         mock_response = Mock()
@@ -199,7 +203,7 @@ class TestExperimentClientGetExperiments:
         )
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -211,7 +215,7 @@ class TestExperimentClientGetExperiments:
 class TestExperimentClientStartExperiment:
     """Test ExperimentClient start_experiment method."""
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_start_experiment_success(
         self, mock_create_session, experiment_design, experiment
     ):
@@ -221,7 +225,7 @@ class TestExperimentClientStartExperiment:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -230,9 +234,10 @@ class TestExperimentClientStartExperiment:
         )
 
         # Verify the request was made correctly
-        mock_session.post.assert_called_once()
-        call_args = mock_session.post.call_args
-        assert call_args[0][0] == "http://localhost:8002/experiment"
+        mock_session.request.assert_called_once()
+        call_args = mock_session.request.call_args
+        assert call_args[0][0] == "POST"
+        assert call_args[0][1] == "http://localhost:8002/experiment"
 
         # Check the JSON payload
         json_data = call_args[1]["json"]
@@ -245,7 +250,7 @@ class TestExperimentClientStartExperiment:
         assert isinstance(result, Experiment)
         assert result.run_name == experiment.run_name
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_start_experiment_minimal(
         self, mock_create_session, experiment_design, experiment
     ):
@@ -255,20 +260,20 @@ class TestExperimentClientStartExperiment:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.start_experiment(experiment_design)
 
-        mock_session.post.assert_called_once()
-        call_args = mock_session.post.call_args
+        mock_session.request.assert_called_once()
+        call_args = mock_session.request.call_args
         json_data = call_args[1]["json"]
         assert json_data["run_name"] is None
         assert json_data["run_description"] is None
         assert isinstance(result, Experiment)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_start_experiment_http_error(self, mock_create_session, experiment_design):
         """Test start_experiment with HTTP error."""
         mock_response = Mock()
@@ -278,7 +283,7 @@ class TestExperimentClientStartExperiment:
         )
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -290,7 +295,7 @@ class TestExperimentClientStartExperiment:
 class TestExperimentClientLifecycleMethods:
     """Test ExperimentClient lifecycle methods (end, continue, pause, cancel)."""
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_end_experiment_success(self, mock_create_session, experiment):
         """Test successful end_experiment call."""
         mock_response = Mock()
@@ -300,7 +305,7 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = ended_experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -308,7 +313,8 @@ class TestExperimentClientLifecycleMethods:
             experiment.experiment_id, ExperimentStatus.COMPLETED
         )
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{experiment.experiment_id}/end",
             params={"status": ExperimentStatus.COMPLETED},
             timeout=10.0,
@@ -316,7 +322,7 @@ class TestExperimentClientLifecycleMethods:
         assert isinstance(result, Experiment)
         assert result.status == ExperimentStatus.COMPLETED
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_end_experiment_without_status(self, mock_create_session, experiment):
         """Test end_experiment without status parameter."""
         mock_response = Mock()
@@ -324,20 +330,21 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.end_experiment(experiment.experiment_id)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{experiment.experiment_id}/end",
             params={"status": None},
             timeout=10.0,
         )
         assert isinstance(result, Experiment)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_continue_experiment_success(self, mock_create_session, experiment):
         """Test successful continue_experiment call."""
         mock_response = Mock()
@@ -345,19 +352,20 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.continue_experiment(experiment.experiment_id)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{experiment.experiment_id}/continue",
             timeout=10.0,
         )
         assert isinstance(result, Experiment)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_pause_experiment_success(self, mock_create_session, experiment):
         """Test successful pause_experiment call."""
         mock_response = Mock()
@@ -367,20 +375,21 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = paused_experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.pause_experiment(experiment.experiment_id)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{experiment.experiment_id}/pause",
             timeout=10.0,
         )
         assert isinstance(result, Experiment)
         assert result.status == ExperimentStatus.PAUSED
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_cancel_experiment_success(self, mock_create_session, experiment):
         """Test successful cancel_experiment call."""
         mock_response = Mock()
@@ -390,20 +399,21 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = cancelled_experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.cancel_experiment(experiment.experiment_id)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{experiment.experiment_id}/cancel",
             timeout=10.0,
         )
         assert isinstance(result, Experiment)
         assert result.status == ExperimentStatus.CANCELLED
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_lifecycle_methods_with_ulid(self, mock_create_session, experiment):
         """Test lifecycle methods work with ULID objects."""
         mock_response = Mock()
@@ -411,7 +421,7 @@ class TestExperimentClientLifecycleMethods:
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -420,13 +430,14 @@ class TestExperimentClientLifecycleMethods:
         # Test with pause_experiment as representative
         result = client.pause_experiment(ulid_obj)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:8002/experiment/{ulid_obj}/pause",
             timeout=10.0,
         )
         assert isinstance(result, Experiment)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_lifecycle_methods_http_error(self, mock_create_session, experiment):
         """Test lifecycle methods with HTTP error."""
         mock_response = Mock()
@@ -434,7 +445,7 @@ class TestExperimentClientLifecycleMethods:
         mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -455,7 +466,7 @@ class TestExperimentClientLifecycleMethods:
 class TestExperimentClientCampaignMethods:
     """Test ExperimentClient campaign methods."""
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_register_campaign_success(self, mock_create_session, campaign):
         """Test successful register_campaign call."""
         mock_response = Mock()
@@ -463,13 +474,14 @@ class TestExperimentClientCampaignMethods:
         mock_response.json.return_value = campaign.model_dump()
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.register_campaign(campaign)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             "http://localhost:8002/campaign",
             json=campaign.model_dump(mode="json"),
             timeout=10.0,
@@ -477,7 +489,7 @@ class TestExperimentClientCampaignMethods:
         # Note: This method returns response.json() directly, not a validated model
         assert result == campaign.model_dump()
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_register_campaign_http_error(self, mock_create_session, campaign):
         """Test register_campaign with HTTP error."""
         mock_response = Mock()
@@ -487,7 +499,7 @@ class TestExperimentClientCampaignMethods:
         )
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
@@ -495,7 +507,7 @@ class TestExperimentClientCampaignMethods:
         with pytest.raises(requests.HTTPError):
             client.register_campaign(campaign)
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_campaign_success(self, mock_create_session, campaign):
         """Test successful get_campaign call."""
         mock_response = Mock()
@@ -503,20 +515,21 @@ class TestExperimentClientCampaignMethods:
         mock_response.json.return_value = campaign.model_dump()
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
         result = client.get_campaign(campaign.campaign_id)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             f"http://localhost:8002/campaign/{campaign.campaign_id}",
             timeout=10.0,
         )
         # Note: This method returns response.json() directly, not a validated model
         assert result == campaign.model_dump()
 
-    @patch("madsci.client.experiment_client.create_http_session")
+    @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_campaign_http_error(self, mock_create_session):
         """Test get_campaign with HTTP error."""
         mock_response = Mock()
@@ -524,7 +537,7 @@ class TestExperimentClientCampaignMethods:
         mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")

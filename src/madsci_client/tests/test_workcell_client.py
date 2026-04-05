@@ -157,30 +157,21 @@ def test_client() -> Generator[TestClient, None, None]:
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
 
-    def add_ok_property(resp: Response) -> Response:
-        if not hasattr(resp, "ok"):
-            resp.ok = resp.status_code < 400
+    method_map = {
+        "GET": test_client.get,
+        "POST": test_client.post,
+        "PUT": test_client.put,
+        "DELETE": test_client.delete,
+        "PATCH": test_client.patch,
+    }
+
+    def request_via_test_client(method: str, url: str, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        handler = method_map.get(method.upper(), test_client.get)
+        resp = handler(url, **kwargs)
+        if not hasattr(resp, "is_success"):
+            resp.is_success = resp.status_code < 400
         return resp
-
-    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.post(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.get(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.delete(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.put(*args, **kwargs)
-        return add_ok_property(resp)
 
     # Create a mock event client to prevent connection attempts
     mock_event_client = Mock()
@@ -190,11 +181,8 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
         workcell_server_url="http://testserver", event_client=mock_event_client
     )
 
-    # Mock session to use the test client
-    workcell_client.session.get = get_no_timeout
-    workcell_client.session.post = post_no_timeout
-    workcell_client.session.delete = delete_no_timeout
-    workcell_client.session.put = put_no_timeout
+    # Patch the httpx client's request method to use the test client
+    workcell_client._client.request = request_via_test_client
 
     yield workcell_client
 

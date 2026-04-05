@@ -1,14 +1,19 @@
 """Client for performing workcell actions"""
 
+from __future__ import annotations
+
 import json
 import time
 from pathlib import Path
 from typing import Any, Optional, Union
 
+import httpx
 from madsci.client.event_client import EventClient
+from madsci.client.http import DualModeClientMixin
 from madsci.client.workflow_display import DisplayMode, WorkflowDisplay
 from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.exceptions import WorkflowFailedError
+from madsci.common.http_client import create_httpx_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.client_types import WorkcellClientConfig
@@ -19,7 +24,6 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
-from madsci.common.utils import create_http_session
 from madsci.common.workflows import (
     check_parameters_lists,
 )
@@ -27,7 +31,7 @@ from pydantic import AnyUrl
 from ulid import ULID
 
 
-class WorkcellClient:
+class WorkcellClient(DualModeClientMixin):
     """A client for interacting with the Workcell Manager to perform various actions."""
 
     workcell_server_url: Optional[AnyUrl]
@@ -75,9 +79,19 @@ class WorkcellClient:
             )
         self.working_directory = Path(working_directory).expanduser()
 
-        # Setup HTTP session with standardized configuration
+        # Setup httpx client with standardized configuration
         self.config = config if config is not None else WorkcellClientConfig()
-        self.session = create_http_session(config=self.config)
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
+
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
+
+    # ------------------------------------------------------------------
+    # Sync methods
+    # ------------------------------------------------------------------
 
     def query_workflow(
         self, workflow_id: str, timeout: Optional[float] = None
@@ -98,9 +112,11 @@ class WorkcellClient:
             The workflow object if found, otherwise None.
         """
         url = f"{self.workcell_server_url}workflow/{workflow_id}"
-        response = self.session.get(url, timeout=timeout or self.config.timeout_default)
+        response = self._request(
+            "GET", url, timeout=timeout or self.config.timeout_default
+        )
 
-        if not response.ok and response.content:
+        if not response.is_success and response.content:
             self.logger.error(
                 "Error querying workflow",
                 event_type=EventType.LOG_ERROR,
@@ -129,8 +145,10 @@ class WorkcellClient:
             The workflow definition object.
         """
         url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
-        response = self.session.get(url, timeout=timeout or self.config.timeout_default)
-        if not response.ok and response.content:
+        response = self._request(
+            "GET", url, timeout=timeout or self.config.timeout_default
+        )
+        if not response.is_success and response.content:
             self.logger.error(
                 "Error querying workflow definition",
                 event_type=EventType.LOG_ERROR,
@@ -168,13 +186,14 @@ class WorkcellClient:
             get_current_ownership_info()
         )
         url = f"{self.workcell_server_url}workflow_definition"
-        response = self.session.post(
+        response = self._request(
+            "POST",
             url,
             json=workflow_definition.model_dump(mode="json"),
             timeout=timeout or self.config.timeout_default,
         )
 
-        if not response.ok and response.content:
+        if not response.is_success and response.content:
             self.logger.error(
                 "Error submitting workflow definition",
                 event_type=EventType.LOG_ERROR,
@@ -254,14 +273,15 @@ class WorkcellClient:
             )
             for file, path in files.items()
         }
-        response = self.session.post(
+        response = self._request(
+            "POST",
             url,
             data=data,
             files=files,
             timeout=timeout or self.config.timeout_data_operations,
         )
 
-        if not response.ok and response.content:
+        if not response.is_success and response.content:
             self.logger.error(
                 "Error submitting workflow",
                 event_type=EventType.LOG_ERROR,
@@ -410,7 +430,8 @@ class WorkcellClient:
             The response from the Workcell Manager.
         """
         url = f"{self.workcell_server_url}workflow/{workflow_id}/retry"
-        response = self.session.post(
+        response = self._request(
+            "POST",
             url,
             params={
                 "workflow_id": workflow_id,
@@ -462,7 +483,8 @@ class WorkcellClient:
             The new workflow object.
         """
         url = f"{self.workcell_server_url}workflow/{workflow_id}/resubmit"
-        response = self.session.post(
+        response = self._request(
+            "POST",
             url,
             timeout=timeout or self.config.timeout_default,
         )
@@ -625,7 +647,8 @@ class WorkcellClient:
         dict[str, Node]
             A dictionary of node names and their details.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}nodes",
             timeout=timeout or self.config.timeout_default,
         )
@@ -647,7 +670,8 @@ class WorkcellClient:
         Node
             The node details.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}node/{node_name}",
             timeout=timeout or self.config.timeout_default,
         )
@@ -682,7 +706,8 @@ class WorkcellClient:
         Node
             The added node details.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.workcell_server_url}node",
             params={
                 "node_name": node_name,
@@ -710,7 +735,8 @@ class WorkcellClient:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}workflows/active",
             timeout=timeout or self.config.timeout_long_operations,
         )
@@ -742,7 +768,8 @@ class WorkcellClient:
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}workflows/archived",
             params={"number": number},
             timeout=timeout or self.config.timeout_long_operations,
@@ -771,7 +798,8 @@ class WorkcellClient:
         list[Workflow]
             A list of queued workflows.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}workflows/queue",
             timeout=timeout or self.config.timeout_default,
         )
@@ -792,7 +820,8 @@ class WorkcellClient:
         WorkcellState
             The current state of the workcell.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.workcell_server_url}state",
             timeout=timeout or self.config.timeout_default,
         )
@@ -817,7 +846,8 @@ class WorkcellClient:
         Workflow
             The paused workflow object.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/pause",
             timeout=timeout or self.config.timeout_default,
         )
@@ -842,7 +872,8 @@ class WorkcellClient:
         Workflow
             The resumed workflow object.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/resume",
             timeout=timeout or self.config.timeout_default,
         )
@@ -867,7 +898,165 @@ class WorkcellClient:
         Workflow
             The cancelled workflow object.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
+            f"{self.workcell_server_url}workflow/{workflow_id}/cancel",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    # ------------------------------------------------------------------
+    # Async methods
+    # ------------------------------------------------------------------
+
+    async def async_query_workflow(
+        self, workflow_id: str, timeout: Optional[float] = None
+    ) -> Optional[Workflow]:
+        """Check the status of a workflow using its ID asynchronously."""
+        url = f"{self.workcell_server_url}workflow/{workflow_id}"
+        response = await self._async_request(
+            "GET", url, timeout=timeout or self.config.timeout_default
+        )
+        if not response.is_success and response.content:
+            self.logger.error(
+                "Error querying workflow",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
+            )
+        response.raise_for_status()
+        return Workflow(**response.json())
+
+    async def async_get_workflow_definition(
+        self, workflow_definition_id: str, timeout: Optional[float] = None
+    ) -> WorkflowDefinition:
+        """Get the definition of a workflow asynchronously."""
+        url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
+        response = await self._async_request(
+            "GET", url, timeout=timeout or self.config.timeout_default
+        )
+        if not response.is_success and response.content:
+            self.logger.error(
+                "Error querying workflow definition",
+                event_type=EventType.LOG_ERROR,
+                response_content=response.content.decode(),
+            )
+        response.raise_for_status()
+        return WorkflowDefinition.model_validate(response.json())
+
+    async def async_get_nodes(self, timeout: Optional[float] = None) -> dict[str, Node]:
+        """Get all nodes in the workcell asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}nodes",
+            timeout=timeout or self.config.timeout_default,
+        )
+        return response.json()
+
+    async def async_get_node(
+        self, node_name: str, timeout: Optional[float] = None
+    ) -> Node:
+        """Get details of a specific node asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}node/{node_name}",
+            timeout=timeout or self.config.timeout_default,
+        )
+        return response.json()
+
+    async def async_get_active_workflows(
+        self, timeout: Optional[float] = None
+    ) -> dict[str, Workflow]:
+        """Get all active workflows asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}workflows/active",
+            timeout=timeout or self.config.timeout_long_operations,
+        )
+        response.raise_for_status()
+        workflow_dict = response.json()
+        if not isinstance(workflow_dict, dict):
+            raise ValueError(
+                f"Expected a dictionary of workflows, but got {type(workflow_dict)}."
+            )
+        return {
+            key: Workflow.model_validate(value) for key, value in workflow_dict.items()
+        }
+
+    async def async_get_archived_workflows(
+        self, number: int = 20, timeout: Optional[float] = None
+    ) -> dict[str, Workflow]:
+        """Get archived workflows asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}workflows/archived",
+            params={"number": number},
+            timeout=timeout or self.config.timeout_long_operations,
+        )
+        response.raise_for_status()
+        workflow_dict = response.json()
+        if not isinstance(workflow_dict, dict):
+            raise ValueError(
+                f"Expected a dictionary of workflows, but got {type(workflow_dict)}."
+            )
+        return {
+            key: Workflow.model_validate(value) for key, value in workflow_dict.items()
+        }
+
+    async def async_get_workflow_queue(
+        self, timeout: Optional[float] = None
+    ) -> list[Workflow]:
+        """Get the workflow queue asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}workflows/queue",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [Workflow.model_validate(wf) for wf in response.json()]
+
+    async def async_get_workcell_state(
+        self, timeout: Optional[float] = None
+    ) -> WorkcellState:
+        """Get the full state of the workcell asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.workcell_server_url}state",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return WorkcellState.model_validate(response.json())
+
+    async def async_pause_workflow(
+        self, workflow_id: str, timeout: Optional[float] = None
+    ) -> Workflow:
+        """Pause a workflow asynchronously."""
+        response = await self._async_request(
+            "POST",
+            f"{self.workcell_server_url}workflow/{workflow_id}/pause",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    async def async_resume_workflow(
+        self, workflow_id: str, timeout: Optional[float] = None
+    ) -> Workflow:
+        """Resume a paused workflow asynchronously."""
+        response = await self._async_request(
+            "POST",
+            f"{self.workcell_server_url}workflow/{workflow_id}/resume",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    async def async_cancel_workflow(
+        self, workflow_id: str, timeout: Optional[float] = None
+    ) -> Workflow:
+        """Cancel a workflow asynchronously."""
+        response = await self._async_request(
+            "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/cancel",
             timeout=timeout or self.config.timeout_default,
         )

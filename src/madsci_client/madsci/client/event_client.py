@@ -18,13 +18,14 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Optional, Union
 
-import requests
+import httpx
 from madsci.client.structlog_config import (
     AnsiStrippingFormatter,
     create_instance_logger,
     get_log_level_value,
 )
 from madsci.common.context import get_current_madsci_context
+from madsci.common.http_client import create_httpx_client
 from madsci.common.otel import (
     OtelBootstrapConfig,
     configure_otel,
@@ -37,7 +38,7 @@ from madsci.common.types.event_types import (
     EventLogLevel,
     EventType,
 )
-from madsci.common.utils import create_http_session, threaded_task
+from madsci.common.utils import threaded_task
 from pydantic import BaseModel, ValidationError
 
 
@@ -141,8 +142,9 @@ class EventClient:
             or get_current_madsci_context().event_server_url
         )
 
-        # Create HTTP session for requests to event server
-        self.session = create_http_session(config=self.config)
+        # Create httpx client for requests to event server
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
 
         self._otel_runtime = None
         self._otel_event_counter = None
@@ -153,6 +155,20 @@ class EventClient:
 
         # Log startup information
         self._log_startup_info()
+
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
+
+    def _ensure_async_client(self) -> httpx.AsyncClient:
+        """Lazily create the async HTTP client on first use."""
+        if self._async_client is None:
+            self._async_client = create_httpx_client(
+                config=self.config,
+                async_mode=True,
+            )
+        return self._async_client
 
     def _setup_otel(self) -> None:
         try:
@@ -363,10 +379,14 @@ class EventClient:
                     handler.close()
                     self.logger.removeHandler(handler)
 
-        # Close HTTP session
-        if hasattr(self, "session") and self.session:
+        # Close HTTP clients
+        if hasattr(self, "_client") and self._client:
             with contextlib.suppress(Exception):
-                self.session.close()
+                self._client.close()
+        if hasattr(self, "_async_client") and self._async_client:
+            with contextlib.suppress(Exception):
+                self._async_client.close()  # type: ignore[unused-coroutine]
+            self._async_client = None
 
     def __enter__(self) -> "EventClient":
         """Context manager entry."""
@@ -715,11 +735,11 @@ class EventClient:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.event_server:
-            response = self.session.get(
+            response = self._client.get(
                 str(self.event_server) + f"event/{event_id}",
                 timeout=timeout or self.config.timeout_default,
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             return Event.model_validate(response.json())
         events = self.get_log()
@@ -742,12 +762,12 @@ class EventClient:
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            response = self.session.get(
+            response = self._client.get(
                 str(self.event_server) + "events",
                 timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
@@ -774,12 +794,12 @@ class EventClient:
         """
         events = OrderedDict()
         if self.event_server:
-            response = self.session.post(
+            response = self._client.post(
                 str(self.event_server) + "events/query",
                 timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
@@ -901,12 +921,12 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
+            response = self._client.get(
                 str(self.event_server) + "utilization/periods",
                 params=params,
                 timeout=self.config.timeout_data_operations,
             )
-            if not response.ok:
+            if not response.is_success:
                 self.logger.error(
                     "Error getting utilization periods",
                     extra={"http_status_code": response.status_code},
@@ -921,7 +941,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             self.logger.error(
                 "Error getting utilization periods",
                 exc_info=True,
@@ -970,13 +990,13 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
+            response = self._client.get(
                 str(self.event_server) + "utilization/sessions",
                 params=params,
                 timeout=self.config.timeout_long_operations,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
 
             # Handle CSV response - check if content type contains 'text/csv'
@@ -987,7 +1007,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             return None
 
     def get_user_utilization_report(
@@ -1030,13 +1050,13 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
+            response = self._client.get(
                 str(self.event_server) + "utilization/users",
                 params=params,
                 timeout=self.config.timeout_long_operations,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 self.logger.error(
                     "Error getting user utilization report",
                     extra={"http_status_code": response.status_code},
@@ -1051,7 +1071,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             self.logger.error(
                 "Error getting user utilization report",
                 exc_info=True,
@@ -1078,14 +1098,14 @@ class EventClient:
             if self._otel_runtime and self._otel_runtime.enabled:
                 with contextlib.suppress(Exception):
                     inject_headers(headers)
-            response = self.session.post(
+            response = self._client.post(
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
                 headers=headers,
                 timeout=self.config.timeout_default,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
 
             elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -1137,3 +1157,87 @@ class EventClient:
             event_type=event_type,
             event_data=event_data,
         )
+
+    # ==================== Async Methods ====================
+
+    async def async_get_event(
+        self, event_id: str, timeout: Optional[float] = None
+    ) -> Optional[Event]:
+        """
+        Get a specific event by ID asynchronously.
+
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        if self.event_server:
+            client = self._ensure_async_client()
+            response = await client.get(
+                str(self.event_server) + f"event/{event_id}",
+                timeout=timeout or self.config.timeout_default,
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            return Event.model_validate(response.json())
+        events = self.get_log()
+        return events.get(event_id, None)
+
+    async def async_get_events(
+        self, number: int = 100, level: int = -1, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for a certain number of recent events asynchronously.
+
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        if level == -1:
+            level = int(self.logger.getEffectiveLevel())
+        events = OrderedDict()
+        if self.event_server:
+            client = self._ensure_async_client()
+            response = await client.get(
+                str(self.event_server) + "events",
+                timeout=timeout or self.config.timeout_default,
+                params={"number": number, "level": level},
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            for key, value in response.json().items():
+                events[key] = Event.model_validate(value)
+            return dict(events)
+        events = self.get_log()
+        selected_events = {}
+        for event in reversed(list(events.values())):
+            selected_events[event.event_id] = event
+            if len(selected_events) >= number:
+                break
+        return selected_events
+
+    async def async_query_events(
+        self, selector: dict, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for events based on a selector asynchronously.
+
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        events = OrderedDict()
+        if self.event_server:
+            client = self._ensure_async_client()
+            response = await client.post(
+                str(self.event_server) + "events/query",
+                timeout=timeout or self.config.timeout_default,
+                params={"selector": selector},
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            for key, value in response.json().items():
+                events[key] = Event.model_validate(value)
+            return dict(events)
+        self.logger.warning("No event server configured. Cannot query events.")
+        return {}

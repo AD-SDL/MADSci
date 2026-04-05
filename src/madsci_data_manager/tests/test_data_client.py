@@ -55,28 +55,26 @@ def test_client(document_handler) -> TestClient:
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[DataClient, None, None]:
     """Fixture for DataClient patched to use TestClient"""
-    with patch("madsci.client.data_client.create_http_session") as mock_create_session:
+    with patch("madsci.client.data_client.create_httpx_client") as mock_create_client:
+        method_map = {
+            "GET": test_client.get,
+            "POST": test_client.post,
+            "PUT": test_client.put,
+            "DELETE": test_client.delete,
+        }
 
-        def add_ok_property(resp: Any) -> Any:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
+        def request_via_test_client(method: str, url: str, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            handler = method_map.get(method.upper(), test_client.get)
+            resp = handler(url, **kwargs)
+            if not hasattr(resp, "is_success"):
+                resp.is_success = resp.status_code < 400
             return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
-
-        # Create a mock session that routes to TestClient
-        mock_session = type("MockSession", (), {})()
-        mock_session.post = post_no_timeout
-        mock_session.get = get_no_timeout
-        mock_create_session.return_value = mock_session
+        # Create a mock client that routes to TestClient
+        mock_client = type("MockClient", (), {})()
+        mock_client.request = request_via_test_client
+        mock_create_client.return_value = mock_client
 
         yield DataClient(data_server_url="http://testserver")
 

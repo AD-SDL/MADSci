@@ -47,7 +47,7 @@ def rest_node_client() -> RestNodeClient:
     return RestNodeClient(url="http://localhost:2000")
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_status(mock_create_session: MagicMock) -> None:
     """Test the get_status method."""
     mock_response = MagicMock()
@@ -56,7 +56,7 @@ def test_get_status(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -66,10 +66,12 @@ def test_get_status(mock_create_session: MagicMock) -> None:
     assert isinstance(status, NodeStatus)
     assert status.ready is True
     assert status.locked is False
-    mock_session.get.assert_called_once_with("http://localhost:2000/status", timeout=10)
+    mock_session.request.assert_called_once_with(
+        "GET", "http://localhost:2000/status", timeout=10
+    )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_info(mock_create_session: MagicMock) -> None:
     """Test the get_info method."""
     mock_response = MagicMock()
@@ -80,7 +82,7 @@ def test_get_info(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -90,10 +92,12 @@ def test_get_info(mock_create_session: MagicMock) -> None:
     assert isinstance(info, NodeInfo)
     assert info.node_name == "Test Node"
     assert info.module_name == "test_module"
-    mock_session.get.assert_called_once_with("http://localhost:2000/info", timeout=10)
+    mock_session.request.assert_called_once_with(
+        "GET", "http://localhost:2000/info", timeout=10
+    )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_no_await(mock_create_session: MagicMock) -> None:
     """Test the send_action method without awaiting."""
     action_id = new_ulid_str()
@@ -113,7 +117,7 @@ def test_send_action_no_await(mock_create_session: MagicMock) -> None:
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
+    mock_session.request.side_effect = [create_response, start_response]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -127,22 +131,22 @@ def test_send_action_no_await(mock_create_session: MagicMock) -> None:
     assert result.action_id == action_id
 
     # Verify the calls: create_action then start_action
-    assert mock_session.post.call_count == 2
+    assert mock_session.request.call_count == 2
 
     # First call: create action
-    create_call = mock_session.post.call_args_list[0]
-    assert create_call[0][0] == "http://localhost:2000/action/test_action"
+    create_call = mock_session.request.call_args_list[0]
+    assert create_call[0][1] == "http://localhost:2000/action/test_action"
     assert "json" in create_call[1]
 
     # Second call: start action
-    start_call = mock_session.post.call_args_list[1]
+    start_call = mock_session.request.call_args_list[1]
     assert (
-        start_call[0][0]
+        start_call[0][1]
         == f"http://localhost:2000/action/test_action/{action_id}/start"
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_await(mock_create_session: MagicMock) -> None:
     """Test the send_action method with awaiting."""
     action_id = new_ulid_str()
@@ -181,8 +185,9 @@ def test_send_action_await(mock_create_session: MagicMock) -> None:
     result_data_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
-    mock_session.get.side_effect = [
+    mock_session.request.side_effect = [
+        create_response,
+        start_response,
         running_response,
         completed_response,
         result_data_response,
@@ -199,22 +204,19 @@ def test_send_action_await(mock_create_session: MagicMock) -> None:
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == action_id
 
-    # Verify the calls
-    assert mock_session.post.call_count == 2  # create + start
-    assert (
-        mock_session.get.call_count == 3
-    )  # status check + completed status + result data
+    # Verify the calls: create + start + running status + completed status + result
+    assert mock_session.request.call_count == 5
 
     # Verify status endpoint was called
     status_calls = [
         call
-        for call in mock_session.get.call_args_list
-        if "/action/test_action/" in call[0][0]
+        for call in mock_session.request.call_args_list
+        if "/action/test_action/" in call[0][1]
     ]
     assert len(status_calls) >= 2
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_result(mock_create_session: MagicMock) -> None:
     """Test the get_action_result method."""
     action_id = new_ulid_str()
@@ -226,7 +228,7 @@ def test_get_action_result(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -236,13 +238,14 @@ def test_get_action_result(mock_create_session: MagicMock) -> None:
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == action_id
-    mock_session.get.assert_called_once_with(
+    mock_session.request.assert_called_once_with(
+        "GET",
         f"http://localhost:2000/action/{action_id}/result",
         timeout=10,
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_set_config(mock_create_session: MagicMock) -> None:
     """Test the set_config method."""
     mock_response = MagicMock()
@@ -253,7 +256,7 @@ def test_set_config(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -263,12 +266,12 @@ def test_set_config(mock_create_session: MagicMock) -> None:
     response = client.set_config(new_config)
     assert isinstance(response, NodeSetConfigResponse)
     assert response.success is True
-    mock_session.post.assert_called_once_with(
-        "http://localhost:2000/config", json=new_config, timeout=60
+    mock_session.request.assert_called_once_with(
+        "POST", "http://localhost:2000/config", json=new_config, timeout=60
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_admin_command(mock_create_session: MagicMock) -> None:
     """Test the send_admin_command method."""
     mock_response = MagicMock()
@@ -279,7 +282,7 @@ def test_send_admin_command(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -288,12 +291,12 @@ def test_send_admin_command(mock_create_session: MagicMock) -> None:
     response = client.send_admin_command("lock")
     assert isinstance(response, AdminCommandResponse)
     assert response.success is True
-    mock_session.post.assert_called_once_with(
-        "http://localhost:2000/admin/lock", timeout=10
+    mock_session.request.assert_called_once_with(
+        "POST", "http://localhost:2000/admin/lock", timeout=10
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_log(mock_create_session: MagicMock) -> None:
     """Test the get_log method."""
     mock_response = MagicMock()
@@ -308,7 +311,7 @@ def test_get_log(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -321,10 +324,12 @@ def test_get_log(mock_create_session: MagicMock) -> None:
     assert log["event1"]["event_data"]["message"] == "Test log entry 1"
     assert log["event2"]["event_type"] == "ERROR"
     assert log["event2"]["event_data"]["message"] == "Test log entry 2"
-    mock_session.get.assert_called_once_with("http://localhost:2000/log", timeout=10)
+    mock_session.request.assert_called_once_with(
+        "GET", "http://localhost:2000/log", timeout=10
+    )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_state(mock_create_session: MagicMock) -> None:
     """Test the get_state method."""
     mock_response = MagicMock()
@@ -333,7 +338,7 @@ def test_get_state(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -343,10 +348,12 @@ def test_get_state(mock_create_session: MagicMock) -> None:
     assert isinstance(state, dict)
     assert state["key1"] == "value1"
     assert state["key2"] == "value2"
-    mock_session.get.assert_called_once_with("http://localhost:2000/state", timeout=10)
+    mock_session.request.assert_called_once_with(
+        "GET", "http://localhost:2000/state", timeout=10
+    )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_history(mock_create_session: MagicMock) -> None:
     """Test the get_action_history method."""
     mock_response = MagicMock()
@@ -367,7 +374,7 @@ def test_get_action_history(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -381,12 +388,12 @@ def test_get_action_history(mock_create_session: MagicMock) -> None:
     assert action_history[action1_id][2]["status"] == "SUCCEEDED"
     assert len(action_history[action2_id]) == 2
     assert action_history[action2_id][1]["status"] == "FAILED"
-    mock_session.get.assert_called_once_with(
-        "http://localhost:2000/action", params={"action_id": None}, timeout=10
+    mock_session.request.assert_called_once_with(
+        "GET", "http://localhost:2000/action", params={"action_id": None}, timeout=10
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_history_with_action_id(mock_create_session: MagicMock) -> None:
     """Test the get_action_history method with a specified action_id."""
     mock_response = MagicMock()
@@ -402,7 +409,7 @@ def test_get_action_history_with_action_id(mock_create_session: MagicMock) -> No
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -415,8 +422,11 @@ def test_get_action_history_with_action_id(mock_create_session: MagicMock) -> No
     assert len(action_history[action_id]) == 3
     assert action_history[action_id][0]["status"] == "NOT_STARTED"
     assert action_history[action_id][2]["status"] == "SUCCEEDED"
-    mock_session.get.assert_called_once_with(
-        "http://localhost:2000/action", params={"action_id": action_id}, timeout=10
+    mock_session.request.assert_called_once_with(
+        "GET",
+        "http://localhost:2000/action",
+        params={"action_id": action_id},
+        timeout=10,
     )
 
 
@@ -429,7 +439,7 @@ def test_get_resources_not_implemented(rest_node_client: RestNodeClient) -> None
         rest_node_client.get_resources()
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_http_error(mock_create_session: MagicMock) -> None:
     """Test send_action method with HTTP error during create_action."""
     mock_response = MagicMock()
@@ -440,7 +450,7 @@ def test_send_action_http_error(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.side_effect = http_error
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -452,7 +462,7 @@ def test_send_action_http_error(mock_create_session: MagicMock) -> None:
         client.send_action(action_request, await_result=False)
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_files(mock_create_session: MagicMock) -> None:
     """Test send_action method with file uploads."""
     action_id = new_ulid_str()
@@ -480,7 +490,7 @@ def test_send_action_with_files(mock_create_session: MagicMock) -> None:
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [
+    mock_session.request.side_effect = [
         create_response,
         upload_response1,
         upload_response2,
@@ -513,15 +523,15 @@ def test_send_action_with_files(mock_create_session: MagicMock) -> None:
         assert result.action_id == action_id
 
         # Verify the sequence of calls: create + 2 file uploads + start
-        assert mock_session.post.call_count == 4
+        assert mock_session.request.call_count == 4
 
         # First call: create action
-        create_call = mock_session.post.call_args_list[0]
-        assert create_call[0][0] == "http://localhost:2000/action/test_action"
+        create_call = mock_session.request.call_args_list[0]
+        assert create_call[0][1] == "http://localhost:2000/action/test_action"
 
         # File upload calls
-        upload_calls = mock_session.post.call_args_list[1:3]
-        upload_urls = [call[0][0] for call in upload_calls]
+        upload_calls = mock_session.request.call_args_list[1:3]
+        upload_urls = [call[0][1] for call in upload_calls]
         assert (
             f"http://localhost:2000/action/test_action/{action_id}/upload/file1"
             in upload_urls
@@ -532,9 +542,9 @@ def test_send_action_with_files(mock_create_session: MagicMock) -> None:
         )
 
         # Start action call
-        start_call = mock_session.post.call_args_list[3]
+        start_call = mock_session.request.call_args_list[3]
         assert (
-            start_call[0][0]
+            start_call[0][1]
             == f"http://localhost:2000/action/test_action/{action_id}/start"
         )
 
@@ -544,7 +554,7 @@ def test_send_action_with_files(mock_create_session: MagicMock) -> None:
         Path(temp_file2_path).unlink(missing_ok=True)
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_file_response(mock_create_session: MagicMock) -> None:
     """Test send_action method."""
     action_id = new_ulid_str()
@@ -564,7 +574,7 @@ def test_send_action_file_response(mock_create_session: MagicMock) -> None:
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
+    mock_session.request.side_effect = [create_response, start_response]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -580,7 +590,7 @@ def test_send_action_file_response(mock_create_session: MagicMock) -> None:
 
 
 @patch("madsci.client.node.rest_node_client.EventClient")
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_await_action_result_timeout(
     mock_create_session: MagicMock,
     mock_event_client: MagicMock,  # noqa: ARG001 Need to patch event client to avoid real calls
@@ -596,7 +606,7 @@ def test_await_action_result_timeout(
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -608,7 +618,7 @@ def test_await_action_result_timeout(
 
 
 @patch("madsci.client.node.rest_node_client.EventClient")
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_await_action_result_exponential_backoff(
     mock_create_session: MagicMock,
     mock_event_client: MagicMock,  # noqa: ARG001 Need to patch event client to avoid real calls
@@ -664,7 +674,7 @@ def test_await_action_result_exponential_backoff(
             f"Test expected only 4 GET calls. URL: {args[0] if args else 'unknown'}"
         )
 
-    mock_session.get.side_effect = mock_get
+    mock_session.request.side_effect = mock_get
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -700,14 +710,14 @@ def test_await_action_result_exponential_backoff(
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_http_error_handling(mock_create_session: MagicMock) -> None:
     """Test HTTP error handling in various methods."""
     mock_response = MagicMock()
     mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -758,7 +768,7 @@ def test_url_protocols():
     assert "https" in RestNodeClient.url_protocols
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_create_action(mock_create_session: MagicMock) -> None:
     """Test create_action method."""
     action_id = new_ulid_str()
@@ -768,7 +778,7 @@ def test_create_action(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -780,14 +790,15 @@ def test_create_action(mock_create_session: MagicMock) -> None:
     result_action_id = client._create_action(action_request)
 
     assert result_action_id == action_id
-    mock_session.post.assert_called_once_with(
+    mock_session.request.assert_called_once_with(
+        "POST",
         "http://localhost:2000/action/test_action",
         json={"args": {"param": "value"}},
         timeout=60,
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_upload_action_files(mock_create_session: MagicMock) -> None:
     """Test upload_action_files method."""
     action_id = new_ulid_str()
@@ -796,7 +807,7 @@ def test_upload_action_files(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -812,9 +823,10 @@ def test_upload_action_files(mock_create_session: MagicMock) -> None:
             "test_action", action_id, {"input_file": temp_file_path}
         )
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             f"http://localhost:2000/action/test_action/{action_id}/upload/input_file",
-            files={"file": mock_session.post.call_args[1]["files"]["file"]},
+            files={"file": mock_session.request.call_args[1]["files"]["file"]},
             timeout=60,
         )
 
@@ -822,7 +834,7 @@ def test_upload_action_files(mock_create_session: MagicMock) -> None:
         Path(temp_file_path).unlink(missing_ok=True)
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_start_action(mock_create_session: MagicMock) -> None:
     """Test start_action method."""
     action_id = new_ulid_str()
@@ -834,7 +846,7 @@ def test_start_action(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -845,13 +857,14 @@ def test_start_action(mock_create_session: MagicMock) -> None:
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.RUNNING
     assert result.action_id == action_id
-    mock_session.post.assert_called_once_with(
+    mock_session.request.assert_called_once_with(
+        "POST",
         f"http://localhost:2000/action/test_action/{action_id}/start",
         timeout=60,
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_status(mock_create_session: MagicMock) -> None:
     """Test get_action_status method."""
     action_id = new_ulid_str()
@@ -861,7 +874,7 @@ def test_get_action_status(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -871,13 +884,14 @@ def test_get_action_status(mock_create_session: MagicMock) -> None:
 
     assert isinstance(result, ActionStatus)
     assert result == ActionStatus.RUNNING
-    mock_session.get.assert_called_once_with(
+    mock_session.request.assert_called_once_with(
+        "GET",
         f"http://localhost:2000/action/{action_id}/status",
         timeout=10,
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_result_data(mock_create_session: MagicMock) -> None:
     """Test get_action_result_data method."""
     action_id = new_ulid_str()
@@ -889,7 +903,7 @@ def test_get_action_result_data(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -900,13 +914,14 @@ def test_get_action_result_data(mock_create_session: MagicMock) -> None:
     assert isinstance(result, ActionResult)
     assert result.status == ActionStatus.SUCCEEDED
     assert result.action_id == action_id
-    mock_session.get.assert_called_once_with(
+    mock_session.request.assert_called_once_with(
+        "GET",
         f"http://localhost:2000/action/test_action/{action_id}/result",
         timeout=10,
     )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_get_action_files_zip(mock_create_session: MagicMock) -> None:
     """Test get_action_files_zip method."""
     action_id = new_ulid_str()
@@ -916,7 +931,7 @@ def test_get_action_files_zip(mock_create_session: MagicMock) -> None:
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -928,13 +943,14 @@ def test_get_action_files_zip(mock_create_session: MagicMock) -> None:
         result = client._get_action_files_zip(action_id)
 
         assert result == Path("/tmp/test_files.zip")  # noqa: S108
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             f"http://localhost:2000/action/{action_id}/download",
             timeout=60,
         )
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_upload_action_files_list_support(mock_create_session: MagicMock) -> None:
     """Test the _upload_action_files method with list[Path] support."""
     mock_response = MagicMock()
@@ -942,7 +958,7 @@ def test_upload_action_files_list_support(mock_create_session: MagicMock) -> Non
     mock_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -961,17 +977,17 @@ def test_upload_action_files_list_support(mock_create_session: MagicMock) -> Non
         )
 
         # Verify single file upload call
-        assert mock_session.post.called
-        call_args = mock_session.post.call_args
+        assert mock_session.request.called
+        call_args = mock_session.request.call_args
         assert (
-            call_args[0][0]
+            call_args[0][1]
             == "http://localhost:2000/action/test_action/test_id/upload/single_file"
         )
         assert call_args[1]["timeout"] == 60
         assert "file" in call_args[1]["files"]
 
         # Reset mock for list upload test
-        mock_session.post.reset_mock()
+        mock_session.request.reset_mock()
 
         # Test list file upload
         client._upload_action_files(
@@ -980,13 +996,13 @@ def test_upload_action_files_list_support(mock_create_session: MagicMock) -> Non
 
         # Verify list file upload call
         # The exact files parameter structure depends on implementation
-        assert mock_session.post.called
-        call_args = mock_session.post.call_args
+        assert mock_session.request.called
+        call_args = mock_session.request.call_args
         assert call_args[1]["timeout"] == 60
         assert "file_list" in str(call_args)  # files parameter should contain file_list
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_list_files(mock_create_session: MagicMock) -> None:
     """Test sending an action with list[Path] files."""
     # Create temporary test files
@@ -1019,7 +1035,7 @@ def test_send_action_with_list_files(mock_create_session: MagicMock) -> None:
         start_response.raise_for_status.return_value = None
 
         mock_session = MagicMock()
-        mock_session.post.side_effect = [
+        mock_session.request.side_effect = [
             create_response,
             upload_response,
             start_response,
@@ -1044,10 +1060,10 @@ def test_send_action_with_list_files(mock_create_session: MagicMock) -> None:
         assert result.status == ActionStatus.SUCCEEDED
 
         # Verify all three calls were made
-        assert mock_session.post.call_count == 3
+        assert mock_session.request.call_count == 3
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_var_args(mock_create_session: MagicMock) -> None:
     """Test sending an action request with variable arguments (*args)."""
     action_id = new_ulid_str()
@@ -1069,7 +1085,7 @@ def test_send_action_with_var_args(mock_create_session: MagicMock) -> None:
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
+    mock_session.request.side_effect = [create_response, start_response]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -1091,15 +1107,15 @@ def test_send_action_with_var_args(mock_create_session: MagicMock) -> None:
     assert result.json_result["var_args"] == ["arg1", "arg2", 123]
 
     # Verify the calls
-    assert mock_session.post.call_count == 2
+    assert mock_session.request.call_count == 2
 
     # Check that var_args was included in the request payload
-    create_call_kwargs = mock_session.post.call_args_list[0][1]
+    create_call_kwargs = mock_session.request.call_args_list[0][1]
     request_data = create_call_kwargs["json"]
     assert request_data["var_args"] == ["arg1", "arg2", 123]
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_var_kwargs(mock_create_session: MagicMock) -> None:
     """Test sending an action request with variable keyword arguments (**kwargs)."""
     action_id = new_ulid_str()
@@ -1122,7 +1138,7 @@ def test_send_action_with_var_kwargs(mock_create_session: MagicMock) -> None:
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
+    mock_session.request.side_effect = [create_response, start_response]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -1144,15 +1160,15 @@ def test_send_action_with_var_kwargs(mock_create_session: MagicMock) -> None:
     assert result.json_result["var_kwargs"] == {"extra1": "value1", "extra2": 42}
 
     # Verify the calls
-    assert mock_session.post.call_count == 2
+    assert mock_session.request.call_count == 2
 
     # Check that var_kwargs was included in the request payload
-    create_call_kwargs = mock_session.post.call_args_list[0][1]
+    create_call_kwargs = mock_session.request.call_args_list[0][1]
     request_data = create_call_kwargs["json"]
     assert request_data["var_kwargs"] == {"extra1": "value1", "extra2": 42}
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_var_args_and_kwargs(mock_create_session: MagicMock) -> None:
     """Test sending an action request with both *args and **kwargs."""
     action_id = new_ulid_str()
@@ -1178,7 +1194,7 @@ def test_send_action_with_var_args_and_kwargs(mock_create_session: MagicMock) ->
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, start_response]
+    mock_session.request.side_effect = [create_response, start_response]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -1202,16 +1218,16 @@ def test_send_action_with_var_args_and_kwargs(mock_create_session: MagicMock) ->
     assert result.json_result["var_kwargs"] == {"extra1": "value1"}
 
     # Verify the calls
-    assert mock_session.post.call_count == 2
+    assert mock_session.request.call_count == 2
 
     # Check that both var_args and var_kwargs were included in the request payload
-    create_call_kwargs = mock_session.post.call_args_list[0][1]
+    create_call_kwargs = mock_session.request.call_args_list[0][1]
     request_data = create_call_kwargs["json"]
     assert request_data["var_args"] == ["arg1", "arg2"]
     assert request_data["var_kwargs"] == {"extra1": "value1"}
 
 
-@patch("madsci.client.node.rest_node_client.create_http_session")
+@patch("madsci.client.node.rest_node_client.create_httpx_client")
 def test_send_action_with_files_and_var_kwargs(mock_create_session: MagicMock) -> None:
     """Test sending an action request that combines file uploads with **kwargs."""
     action_id = new_ulid_str()
@@ -1245,7 +1261,11 @@ def test_send_action_with_files_and_var_kwargs(mock_create_session: MagicMock) -
     start_response.raise_for_status.return_value = None
 
     mock_session = MagicMock()
-    mock_session.post.side_effect = [create_response, upload_response, start_response]
+    mock_session.request.side_effect = [
+        create_response,
+        upload_response,
+        start_response,
+    ]
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -1271,10 +1291,10 @@ def test_send_action_with_files_and_var_kwargs(mock_create_session: MagicMock) -
     }
 
     # Verify all three calls were made (create, upload, start)
-    assert mock_session.post.call_count == 3
+    assert mock_session.request.call_count == 3
 
     # Check that var_kwargs was included in the create request payload
-    create_call_kwargs = mock_session.post.call_args_list[0][1]
+    create_call_kwargs = mock_session.request.call_args_list[0][1]
     request_data = create_call_kwargs["json"]
     assert request_data["var_kwargs"] == {"processing_mode": "fast", "quality": "high"}
 

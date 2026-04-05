@@ -7,9 +7,11 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Any, ClassVar, Optional, Union
 
-import requests
+import httpx
 from madsci.client.event_client import EventClient
+from madsci.client.http import DualModeClientMixin
 from madsci.common.context import get_current_madsci_context, get_event_client
+from madsci.common.http_client import create_httpx_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import ResourceClientConfig
 from madsci.common.types.event_types import EventType
@@ -32,7 +34,7 @@ from madsci.common.types.resource_types.server_types import (
     TemplateGetQuery,
     TemplateUpdateBody,
 )
-from madsci.common.utils import create_http_session, new_ulid_str
+from madsci.common.utils import new_ulid_str
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 
@@ -203,7 +205,7 @@ class ResourceWrapper:
         return self._client
 
 
-class ResourceClient:
+class ResourceClient(DualModeClientMixin):
     """REST client for interacting with a MADSci Resource Manager."""
 
     local_resources: dict[str, ResourceDataModels]
@@ -229,16 +231,17 @@ class ResourceClient:
             else get_current_madsci_context().resource_server_url
         )
 
-        # Store config and create session
+        # Store config and create httpx client
         self.config = config if config is not None else ResourceClientConfig()
-        self.session = create_http_session(config=self.config)
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
 
         _configured_url = self.resource_server_url
         if self.resource_server_url is not None:
             start_time = time.time()
             while time.time() - start_time < 20:
                 try:
-                    self.session.get(
+                    self._client.get(
                         f"{self.resource_server_url}definition",
                         timeout=self.config.timeout_default,
                     )
@@ -272,6 +275,11 @@ class ResourceClient:
                 )
         self._client_id = new_ulid_str()
 
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
+
     def _wrap_resource(
         self, resource: Optional["ResourceDataModels"]
     ) -> Optional[ResourceWrapper]:
@@ -300,7 +308,8 @@ class ResourceClient:
             Resource: The added resource as returned by the server.
         """
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/add",
                 json=resource.model_dump(mode="json"),
                 timeout=timeout or self.config.timeout_default,
@@ -332,7 +341,8 @@ class ResourceClient:
             event_type=EventType.LOG_WARNING,
         )
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/init",
                 json=resource_definition.model_dump(mode="json"),
                 timeout=timeout or self.config.timeout_default,
@@ -368,7 +378,8 @@ class ResourceClient:
         resource = self._unwrap(resource)
 
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/add_or_update",
                 json=resource.model_dump(mode="json"),
                 timeout=timeout or self.config.timeout_default,
@@ -398,7 +409,8 @@ class ResourceClient:
         resource = self._unwrap(resource)
 
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/update",
                 json=resource.model_dump(mode="json"),
                 timeout=timeout or self.config.timeout_default,
@@ -433,7 +445,8 @@ class ResourceClient:
         """
         resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}resource/{resource_id}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -493,7 +506,8 @@ class ResourceClient:
                 unique=unique,
                 multiple=multiple,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/query",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -536,7 +550,8 @@ class ResourceClient:
         if isinstance(resource, Resource):
             resource = resource.resource_id
         if self.resource_server_url:
-            response = self.session.delete(
+            response = self._request(
+                "DELETE",
                 f"{self.resource_server_url}resource/{resource}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -589,7 +604,8 @@ class ResourceClient:
                 end_date=end_date,
                 limit=limit,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}history/query",
                 json=query,
                 timeout=timeout or self.config.timeout_default,
@@ -618,7 +634,8 @@ class ResourceClient:
         """
         resource_id = resource if isinstance(resource, str) else resource.resource_id
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}history/{resource_id}/restore",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -665,7 +682,8 @@ class ResourceClient:
                 child=child if isinstance(child, Resource) else None,
                 child_id=child.resource_id if isinstance(child, Resource) else child,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/push",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -701,7 +719,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/pop",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -749,7 +768,8 @@ class ResourceClient:
                 key=key,
                 child=child,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/child/set",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -789,7 +809,8 @@ class ResourceClient:
             payload = RemoveChildBody(
                 key=key,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/child/remove",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -826,7 +847,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity",
                 params={"quantity": quantity},
                 timeout=timeout or self.config.timeout_default,
@@ -862,7 +884,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/change_by",
                 params={"amount": amount},
                 timeout=timeout or self.config.timeout_default,
@@ -899,7 +922,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/increase",
                 params={"amount": amount},
                 timeout=timeout or self.config.timeout_default,
@@ -936,7 +960,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/decrease",
                 params={"amount": amount},
                 timeout=timeout or self.config.timeout_default,
@@ -973,7 +998,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/capacity",
                 params={"capacity": capacity},
                 timeout=timeout or self.config.timeout_default,
@@ -1006,7 +1032,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.delete(
+            response = self._request(
+                "DELETE",
                 f"{self.resource_server_url}resource/{resource_id}/capacity",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1038,7 +1065,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/empty",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1074,7 +1102,8 @@ class ResourceClient:
             resource_id = (
                 resource.resource_id if isinstance(resource, Resource) else resource
             )
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/fill",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1227,7 +1256,8 @@ class ResourceClient:
                 created_by=created_by,
                 version=version,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}template/create",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -1267,7 +1297,8 @@ class ResourceClient:
         """
 
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}template/{template_name}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1311,14 +1342,16 @@ class ResourceClient:
                     tags=tags,
                     created_by=created_by,
                 ).model_dump(mode="json")
-                response = self.session.post(
+                response = self._request(
+                    "POST",
                     f"{self.resource_server_url}templates/query",
                     json=payload,
                     timeout=timeout or self.config.timeout_default,
                 )
             else:
                 # Use query_all endpoint for no filtering
-                response = self.session.get(
+                response = self._request(
+                    "GET",
                     f"{self.resource_server_url}templates/query_all",
                     timeout=timeout or self.config.timeout_default,
                 )
@@ -1359,7 +1392,8 @@ class ResourceClient:
             Optional[dict[str, Any]]: Template metadata if found, None otherwise.
         """
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}template/{template_name}/info",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1399,7 +1433,8 @@ class ResourceClient:
         """
         if self.resource_server_url:
             payload = TemplateUpdateBody(updates=updates).model_dump(mode="json")
-            response = self.session.put(
+            response = self._request(
+                "PUT",
                 f"{self.resource_server_url}template/{template_name}",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -1433,7 +1468,8 @@ class ResourceClient:
             bool: True if template was deleted, False if not found.
         """
         if self.resource_server_url:
-            response = self.session.delete(
+            response = self._request(
+                "DELETE",
                 f"{self.resource_server_url}template/{template_name}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1484,7 +1520,8 @@ class ResourceClient:
                 overrides=overrides,
                 add_to_database=add_to_database,
             ).model_dump(mode="json")
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
                 timeout=timeout or self.config.timeout_default,
@@ -1535,7 +1572,8 @@ class ResourceClient:
             dict[str, list[str]]: Dictionary mapping base_type to template names.
         """
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}templates/categories",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1576,7 +1614,8 @@ class ResourceClient:
         )
 
         if self.resource_server_url:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.resource_server_url}resource/{resource_id}/lock",
                 params={
                     "lock_duration": lock_duration,
@@ -1670,7 +1709,8 @@ class ResourceClient:
 
         if self.resource_server_url:
             try:
-                response = self.session.delete(
+                response = self._request(
+                    "DELETE",
                     f"{self.resource_server_url}resource/{resource_id}/unlock",
                     params={"client_id": self._client_id} if self._client_id else {},
                     timeout=timeout or self.config.timeout_default,
@@ -1689,7 +1729,7 @@ class ResourceClient:
                     )
                     return self._wrap_resource(unlocked_resource)
 
-            except requests.HTTPError as e:
+            except httpx.HTTPStatusError as e:
                 if e.response.status_code == 403:
                     self.logger.warning(
                         "Access denied releasing lock",
@@ -1771,7 +1811,8 @@ class ResourceClient:
         )
 
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}resource/{resource_id}/check_lock",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -2000,10 +2041,11 @@ class ResourceClient:
 
         Raises:
             ValueError: If resource not found.
-            requests.HTTPError: If server request fails.
+            httpx.HTTPStatusError: If server request fails.
         """
         if self.resource_server_url:
-            response = self.session.get(
+            response = self._request(
+                "GET",
                 f"{self.resource_server_url}resource/{resource_id}/hierarchy",
                 timeout=timeout or self.config.timeout_default,
             )
