@@ -88,6 +88,9 @@ class RetryTransport(httpx.BaseTransport):
             if response.status_code not in self._status_forcelist:
                 return response
 
+            # Close the previous failed response before overwriting.
+            if last_response is not None:
+                last_response.close()
             last_response = response
 
             if attempt < self._retries:
@@ -175,6 +178,9 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
             if response.status_code not in self._status_forcelist:
                 return response
 
+            # Close the previous failed response before overwriting.
+            if last_response is not None:
+                await last_response.aclose()
             last_response = response
 
             if attempt < self._retries:
