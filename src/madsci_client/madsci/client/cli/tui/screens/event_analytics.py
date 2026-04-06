@@ -8,7 +8,7 @@ and the last 10 events for quick operational overview.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import ServiceURLMixin
+from madsci.client.cli.tui.mixins import ServiceURLMixin, preserve_cursor
 from madsci.client.cli.tui.widgets import ActionBar, ActionDef
 from madsci.client.cli.utils.formatting import format_timestamp, truncate
 from textual.app import ComposeResult
@@ -76,7 +76,6 @@ class EventAnalyticsScreen(ServiceURLMixin, Screen):
     async def _refresh_utilization(self) -> None:
         """Refresh the utilization summary table."""
         util_table = self.query_one("#utilization-table", DataTable)
-        util_table.clear()
         self._utilization_data.clear()
 
         try:
@@ -101,26 +100,29 @@ class EventAnalyticsScreen(ServiceURLMixin, Screen):
         except Exception:  # noqa: S110
             pass
 
-        if self._utilization_data:
-            for period_data in self._utilization_data:
-                period = str(period_data.get("period", "-"))
-                events = str(
-                    period_data.get("events", period_data.get("event_count", "-"))
-                )
-                users = str(
-                    period_data.get("users", period_data.get("user_count", "-"))
-                )
-                sessions = str(
-                    period_data.get("sessions", period_data.get("session_count", "-"))
-                )
-                util_table.add_row(period, events, users, sessions)
-        else:
-            util_table.add_row("[dim]No utilization data[/dim]", "-", "-", "-")
+        with preserve_cursor(util_table):
+            util_table.clear()
+            if self._utilization_data:
+                for period_data in self._utilization_data:
+                    period = str(period_data.get("period", "-"))
+                    events = str(
+                        period_data.get("events", period_data.get("event_count", "-"))
+                    )
+                    users = str(
+                        period_data.get("users", period_data.get("user_count", "-"))
+                    )
+                    sessions = str(
+                        period_data.get(
+                            "sessions", period_data.get("session_count", "-")
+                        )
+                    )
+                    util_table.add_row(period, events, users, sessions)
+            else:
+                util_table.add_row("[dim]No utilization data[/dim]", "-", "-", "-")
 
     async def _refresh_recent_events(self) -> None:
         """Refresh the recent events table."""
         events_table = self.query_one("#recent-events-table", DataTable)
-        events_table.clear()
         self._recent_events.clear()
 
         try:
@@ -140,23 +142,31 @@ class EventAnalyticsScreen(ServiceURLMixin, Screen):
         except Exception:  # noqa: S110
             pass
 
-        if self._recent_events:
-            for event_data in self._recent_events:
-                timestamp = event_data.get("timestamp") or event_data.get(
-                    "event_timestamp"
-                )
-                ts_str = format_timestamp(timestamp, short=True) if timestamp else "-"
+        with preserve_cursor(events_table):
+            events_table.clear()
+            if self._recent_events:
+                for event_data in self._recent_events:
+                    timestamp = event_data.get("timestamp") or event_data.get(
+                        "event_timestamp"
+                    )
+                    ts_str = (
+                        format_timestamp(timestamp, short=True) if timestamp else "-"
+                    )
 
-                level = str(event_data.get("level", event_data.get("event_level", "-")))
-                source = str(
-                    event_data.get("source", event_data.get("event_source", "-"))
-                )
-                message = event_data.get("message", event_data.get("event_message", ""))
-                msg_str = truncate(str(message), 60) if message else "-"
+                    level = str(
+                        event_data.get("level", event_data.get("event_level", "-"))
+                    )
+                    source = str(
+                        event_data.get("source", event_data.get("event_source", "-"))
+                    )
+                    message = event_data.get(
+                        "message", event_data.get("event_message", "")
+                    )
+                    msg_str = truncate(str(message), 60) if message else "-"
 
-                events_table.add_row(ts_str, level, source, msg_str)
-        else:
-            events_table.add_row("[dim]No recent events[/dim]", "-", "-", "-")
+                    events_table.add_row(ts_str, level, source, msg_str)
+            else:
+                events_table.add_row("[dim]No recent events[/dim]", "-", "-", "-")
 
     async def action_refresh(self) -> None:
         """Refresh analytics data."""

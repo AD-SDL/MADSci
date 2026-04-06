@@ -8,7 +8,11 @@ lock/unlock, and tree visualization.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.screens.resource_tree import ResourceTreeScreen
 from madsci.client.cli.tui.widgets import (
     ActionBar,
@@ -311,7 +315,6 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     def _populate_table(self) -> None:
         """Populate the resources table with filtered data."""
         table = self.query_one("#resources-table", DataTable)
-        table.clear()
 
         filtered = [
             res_id
@@ -324,27 +327,36 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for res_id in filtered:
-            res = self.resources_data[res_id]
-            name = res.get("resource_name", "Unknown")
-            short_id = res_id[:12] if res_id else "-"
-            base_type = res.get("base_type", "unknown")
-            quantity = (
-                str(res.get("quantity", "-"))
-                if res.get("quantity") is not None
-                else "-"
-            )
-            capacity = (
-                str(res.get("capacity", "-"))
-                if res.get("capacity") is not None
-                else "-"
-            )
-            parent = str(res.get("parent_id", ""))[:12] if res.get("parent_id") else "-"
-            lock = ""  # Lock status requires a separate API call
-            table.add_row(name, short_id, base_type, quantity, capacity, parent, lock)
+        with preserve_cursor(table):
+            table.clear()
 
-        if not filtered:
-            table.add_row("[dim]No resources found[/dim]", "-", "-", "-", "-", "-", "")
+            for res_id in filtered:
+                res = self.resources_data[res_id]
+                name = res.get("resource_name", "Unknown")
+                short_id = res_id[:12] if res_id else "-"
+                base_type = res.get("base_type", "unknown")
+                quantity = (
+                    str(res.get("quantity", "-"))
+                    if res.get("quantity") is not None
+                    else "-"
+                )
+                capacity = (
+                    str(res.get("capacity", "-"))
+                    if res.get("capacity") is not None
+                    else "-"
+                )
+                parent = (
+                    str(res.get("parent_id", ""))[:12] if res.get("parent_id") else "-"
+                )
+                lock = ""  # Lock status requires a separate API call
+                table.add_row(
+                    name, short_id, base_type, quantity, capacity, parent, lock
+                )
+
+            if not filtered:
+                table.add_row(
+                    "[dim]No resources found[/dim]", "-", "-", "-", "-", "-", ""
+                )
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """Handle filter changes from the FilterBar.

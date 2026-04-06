@@ -8,7 +8,11 @@ and step detail inspection.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
 from madsci.client.cli.tui.widgets import (
     ActionBar,
@@ -321,7 +325,6 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     async def _refresh_active_workflows(self) -> None:
         """Refresh the active/queued workflows table."""
         table = self.query_one("#workflows-table", DataTable)
-        table.clear()
 
         active = await self._fetch_workflows("/workflows/active")
         queued = await self._fetch_workflows("/workflows/queue")
@@ -352,23 +355,24 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for wf_id in filtered:
-            _add_workflow_row(table, self.workflows_data[wf_id])
+        with preserve_cursor(table):
+            table.clear()
+            for wf_id in filtered:
+                _add_workflow_row(table, self.workflows_data[wf_id])
 
-        if not filtered:
-            table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No active workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
-            )
+            if not filtered:
+                table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No active workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     async def _refresh_archived_workflows(self) -> None:
         """Refresh the archived workflows table."""
         archived_table = self.query_one("#archived-table", DataTable)
-        archived_table.clear()
 
         archived = await self._fetch_workflows("/workflows/archived?number=20")
         rows = self._normalize_workflow_response(archived)
@@ -392,18 +396,20 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for wf_id in filtered:
-            _add_workflow_row(archived_table, self.workflows_data[wf_id])
+        with preserve_cursor(archived_table):
+            archived_table.clear()
+            for wf_id in filtered:
+                _add_workflow_row(archived_table, self.workflows_data[wf_id])
 
-        if not filtered:
-            archived_table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No archived workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
-            )
+            if not filtered:
+                archived_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No archived workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     @staticmethod
     def _normalize_workflow_response(data: dict | list) -> list[tuple[str, dict]]:
@@ -447,7 +453,6 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Re-populate both tables using current search and filter values."""
         # Active workflows table
         active_table = self.query_one("#workflows-table", DataTable)
-        active_table.clear()
         filtered_active = [
             wf_id
             for wf_id in self._active_ids
@@ -458,21 +463,22 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 self._current_filters,
             )
         ]
-        for wf_id in filtered_active:
-            _add_workflow_row(active_table, self.workflows_data[wf_id])
-        if not filtered_active:
-            active_table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No active workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
-            )
+        with preserve_cursor(active_table):
+            active_table.clear()
+            for wf_id in filtered_active:
+                _add_workflow_row(active_table, self.workflows_data[wf_id])
+            if not filtered_active:
+                active_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No active workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
         # Archived workflows table
         archived_table = self.query_one("#archived-table", DataTable)
-        archived_table.clear()
         filtered_archived = [
             wf_id
             for wf_id in self._archived_ids
@@ -483,17 +489,19 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 self._current_filters,
             )
         ]
-        for wf_id in filtered_archived:
-            _add_workflow_row(archived_table, self.workflows_data[wf_id])
-        if not filtered_archived:
-            archived_table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No archived workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
-            )
+        with preserve_cursor(archived_table):
+            archived_table.clear()
+            for wf_id in filtered_archived:
+                _add_workflow_row(archived_table, self.workflows_data[wf_id])
+            if not filtered_archived:
+                archived_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No archived workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the workflows or steps table."""
@@ -563,27 +571,29 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             data: Workflow data dictionary.
         """
         steps_table = self.query_one("#steps-table", DataTable)
-        steps_table.clear()
 
         steps = data.get("steps", [])
-        if not steps:
-            steps_table.add_row("-", "[dim]No steps[/dim]", "-", "-", "-")
-            return
+        with preserve_cursor(steps_table):
+            steps_table.clear()
 
-        for i, step in enumerate(steps):
-            step_name = step.get("name") or step.get("action") or f"Step {i + 1}"
-            action = step.get("action") or "-"
-            node = step.get("node") or "-"
-            status = step.get("status", "unknown")
-            if isinstance(status, str):
-                status_display = format_status_colored(status.lower())
-            else:
-                status_display = format_status_colored(
-                    _get_workflow_status_name(status)
-                    if isinstance(status, dict)
-                    else "unknown"
-                )
-            steps_table.add_row(str(i + 1), step_name, action, node, status_display)
+            if not steps:
+                steps_table.add_row("-", "[dim]No steps[/dim]", "-", "-", "-")
+                return
+
+            for i, step in enumerate(steps):
+                step_name = step.get("name") or step.get("action") or f"Step {i + 1}"
+                action = step.get("action") or "-"
+                node = step.get("node") or "-"
+                status = step.get("status", "unknown")
+                if isinstance(status, str):
+                    status_display = format_status_colored(status.lower())
+                else:
+                    status_display = format_status_colored(
+                        _get_workflow_status_name(status)
+                        if isinstance(status, dict)
+                        else "unknown"
+                    )
+                steps_table.add_row(str(i + 1), step_name, action, node, status_display)
 
     def _update_detail_panel(self, workflow_id: str, data: dict) -> None:
         """Update the detail panel with workflow data.

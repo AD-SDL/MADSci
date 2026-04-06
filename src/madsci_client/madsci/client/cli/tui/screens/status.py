@@ -6,7 +6,11 @@ Provides detailed service status with health information.
 import socket
 from typing import Any, ClassVar
 
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
 from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
 from madsci.client.cli.utils.service_health import check_all_services_async
@@ -98,44 +102,46 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     async def _refresh_managers(self) -> None:
         """Refresh manager service statuses."""
         table = self.query_one("#managers-table", DataTable)
-        table.clear()
 
         service_urls = getattr(self.app, "service_urls", {})
         results = await check_all_services_async(service_urls)
 
-        for name, result in results.items():
-            status = (
-                "healthy"
-                if result.is_available
-                else (
-                    "unhealthy"
-                    if result.error and "HTTP" in (result.error or "")
-                    else "offline"
+        with preserve_cursor(table):
+            table.clear()
+
+            for name, result in results.items():
+                status = (
+                    "healthy"
+                    if result.is_available
+                    else (
+                        "unhealthy"
+                        if result.error and "HTTP" in (result.error or "")
+                        else "offline"
+                    )
                 )
-            )
-            self.service_status[name] = {
-                "status": status,
-                "url": result.url,
-                "version": result.version,
-                "error": result.error,
-            }
+                self.service_status[name] = {
+                    "status": status,
+                    "url": result.url,
+                    "version": result.version,
+                    "error": result.error,
+                }
 
-            icon = format_status_icon(status)
-            state = format_status_colored(status)
+                icon = format_status_icon(status)
+                state = format_status_colored(status)
 
-            table.add_row(
-                icon,
-                name,
-                result.url,
-                state,
-                result.version or "-",
-            )
+                table.add_row(
+                    icon,
+                    name,
+                    result.url,
+                    state,
+                    result.version or "-",
+                )
 
     async def _refresh_infrastructure(self) -> None:
         """Refresh infrastructure service statuses."""
         table = self.query_one("#infra-table", DataTable)
-        table.clear()
 
+        infra_rows: list[tuple[str, str, str, str, str]] = []
         for name, (host, port) in INFRASTRUCTURE_SERVICES.items():
             # Check if port is reachable
             try:
@@ -148,7 +154,12 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 status = "disconnected"
 
             icon = format_status_icon(status)
-            table.add_row(icon, name, host, str(port), status)
+            infra_rows.append((icon, name, host, str(port), status))
+
+        with preserve_cursor(table):
+            table.clear()
+            for row in infra_rows:
+                table.add_row(*row)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the table."""

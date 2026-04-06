@@ -9,7 +9,11 @@ import json
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.widgets import (
     ActionBar,
     ActionDef,
@@ -337,7 +341,6 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     def _populate_table(self) -> None:
         """Populate the data table with filtered datapoints."""
         table = self.query_one("#data-table", DataTable)
-        table.clear()
 
         filtered = [
             dp_id
@@ -350,24 +353,27 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for dp_id in filtered:
-            dp = self.datapoints_data[dp_id]
-            short_id = dp_id[:12] if dp_id else "-"
-            label = dp.get("label", "-") or "-"
-            data_type = _get_data_type(dp)
-            timestamp = dp.get("data_timestamp")
-            ts_str = format_timestamp(timestamp, short=True) if timestamp else "-"
-            preview = _get_preview(dp)
-            table.add_row(short_id, label, data_type, ts_str, preview)
+        with preserve_cursor(table):
+            table.clear()
 
-        if not filtered:
-            table.add_row(
-                "-",
-                "[dim]No datapoints found[/dim]",
-                "-",
-                "-",
-                "-",
-            )
+            for dp_id in filtered:
+                dp = self.datapoints_data[dp_id]
+                short_id = dp_id[:12] if dp_id else "-"
+                label = dp.get("label", "-") or "-"
+                data_type = _get_data_type(dp)
+                timestamp = dp.get("data_timestamp")
+                ts_str = format_timestamp(timestamp, short=True) if timestamp else "-"
+                preview = _get_preview(dp)
+                table.add_row(short_id, label, data_type, ts_str, preview)
+
+            if not filtered:
+                table.add_row(
+                    "-",
+                    "[dim]No datapoints found[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """Handle filter changes from the FilterBar.

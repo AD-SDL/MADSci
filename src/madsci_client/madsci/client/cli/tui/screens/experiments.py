@@ -8,7 +8,11 @@ continue, and cancel operations.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.widgets import (
     ActionBar,
     ActionDef,
@@ -319,7 +323,6 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     def _populate_table(self) -> None:
         """Populate the experiments table with filtered data."""
         table = self.query_one("#experiments-table", DataTable)
-        table.clear()
 
         filtered = [
             exp_id
@@ -332,27 +335,30 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for exp_id in filtered:
-            exp = self.experiments_data[exp_id]
-            status = _get_experiment_status(exp)
-            icon = format_status_icon(status)
-            name = exp.get("experiment_name", "Unknown")
-            short_id = exp_id[:12] if exp_id else "-"
-            run_name = exp.get("run_name", "-") or "-"
-            started = exp.get("started_at")
-            started_str = format_timestamp(started, short=True) if started else "-"
-            duration_str = _calculate_duration(exp)
-            table.add_row(icon, name, short_id, run_name, started_str, duration_str)
+        with preserve_cursor(table):
+            table.clear()
 
-        if not filtered:
-            table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No experiments found[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
-            )
+            for exp_id in filtered:
+                exp = self.experiments_data[exp_id]
+                status = _get_experiment_status(exp)
+                icon = format_status_icon(status)
+                name = exp.get("experiment_name", "Unknown")
+                short_id = exp_id[:12] if exp_id else "-"
+                run_name = exp.get("run_name", "-") or "-"
+                started = exp.get("started_at")
+                started_str = format_timestamp(started, short=True) if started else "-"
+                duration_str = _calculate_duration(exp)
+                table.add_row(icon, name, short_id, run_name, started_str, duration_str)
+
+            if not filtered:
+                table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No experiments found[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """Handle filter changes from the FilterBar.

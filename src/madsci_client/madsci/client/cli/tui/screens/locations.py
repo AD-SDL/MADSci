@@ -7,7 +7,11 @@ selected locations, and an action to view the transfer adjacency graph.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.screens.transfer_graph import TransferGraphScreen
 from madsci.client.cli.tui.widgets import (
     ActionBar,
@@ -235,7 +239,6 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     def _populate_table(self) -> None:
         """Populate the locations table with filtered data."""
         table = self.query_one("#locations-table", DataTable)
-        table.clear()
 
         filtered = [
             loc_id
@@ -247,21 +250,24 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         ]
 
-        for loc_id in filtered:
-            loc = self.locations_data[loc_id]
-            name = loc.get("location_name", "Unknown")
-            short_id = loc_id[:12] if loc_id else "-"
-            template = loc.get("location_template_name", "-") or "-"
-            resource = loc.get("resource_id", "")
-            resource_display = resource[:12] if resource else "None"
-            transfers = "Yes" if loc.get("allow_transfers", True) else "No"
-            reservation = "Reserved" if loc.get("reservation") else "-"
-            table.add_row(
-                name, short_id, template, resource_display, transfers, reservation
-            )
+        with preserve_cursor(table):
+            table.clear()
 
-        if not filtered:
-            table.add_row("[dim]No locations found[/dim]", "-", "-", "-", "-", "-")
+            for loc_id in filtered:
+                loc = self.locations_data[loc_id]
+                name = loc.get("location_name", "Unknown")
+                short_id = loc_id[:12] if loc_id else "-"
+                template = loc.get("location_template_name", "-") or "-"
+                resource = loc.get("resource_id", "")
+                resource_display = resource[:12] if resource else "None"
+                transfers = "Yes" if loc.get("allow_transfers", True) else "No"
+                reservation = "Reserved" if loc.get("reservation") else "-"
+                table.add_row(
+                    name, short_id, template, resource_display, transfers, reservation
+                )
+
+            if not filtered:
+                table.add_row("[dim]No locations found[/dim]", "-", "-", "-", "-", "-")
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """Handle filter changes from the FilterBar.

@@ -7,6 +7,7 @@ Location Manager as a DataTable.
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.mixins import preserve_cursor
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container
@@ -52,7 +53,6 @@ class TransferGraphScreen(Screen):
     async def _refresh_graph(self) -> None:
         """Fetch and display the transfer adjacency graph."""
         table = self.query_one("#graph-table", DataTable)
-        table.clear()
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
@@ -60,23 +60,31 @@ class TransferGraphScreen(Screen):
                 )
                 if response.status_code == 200:
                     graph = response.json()
-                    if isinstance(graph, dict):
-                        for source, targets in graph.items():
-                            if isinstance(targets, list):
-                                targets_str = (
-                                    ", ".join(str(t) for t in targets)
-                                    if targets
-                                    else "[dim]none[/dim]"
-                                )
-                            else:
-                                targets_str = str(targets)
-                            table.add_row(source, targets_str)
-                    if not graph:
-                        table.add_row("[dim]No transfer edges found[/dim]", "")
+                    with preserve_cursor(table):
+                        table.clear()
+                        if isinstance(graph, dict):
+                            for source, targets in graph.items():
+                                if isinstance(targets, list):
+                                    targets_str = (
+                                        ", ".join(str(t) for t in targets)
+                                        if targets
+                                        else "[dim]none[/dim]"
+                                    )
+                                else:
+                                    targets_str = str(targets)
+                                table.add_row(source, targets_str)
+                        if not graph:
+                            table.add_row("[dim]No transfer edges found[/dim]", "")
                 else:
-                    table.add_row(f"[dim]Error: HTTP {response.status_code}[/dim]", "")
+                    with preserve_cursor(table):
+                        table.clear()
+                        table.add_row(
+                            f"[dim]Error: HTTP {response.status_code}[/dim]", ""
+                        )
         except Exception:
-            table.add_row("[dim]Error loading graph[/dim]", "")
+            with preserve_cursor(table):
+                table.clear()
+                table.add_row("[dim]Error loading graph[/dim]", "")
 
     def action_go_back(self) -> None:
         """Go back to the locations screen."""

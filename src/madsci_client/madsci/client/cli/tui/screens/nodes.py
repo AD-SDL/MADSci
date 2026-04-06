@@ -8,7 +8,11 @@ Workcell Manager and communicating with nodes directly.
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.mixins import (
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.widgets import (
     ActionBar,
     ActionDef,
@@ -340,7 +344,6 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     async def refresh_data(self) -> None:
         """Refresh node data from workcell manager."""
         table = self.query_one("#nodes-table", DataTable)
-        table.clear()
 
         try:
             workcell_url = self.get_service_url("workcell_manager")
@@ -350,21 +353,25 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                     nodes = response.json()
                     if isinstance(nodes, dict):
                         self.nodes_data = nodes
-                        for name, node_data in nodes.items():
-                            self._add_node_row(table, name, node_data)
+                        with preserve_cursor(table):
+                            table.clear()
+                            for name, node_data in nodes.items():
+                                self._add_node_row(table, name, node_data)
                     return
         except Exception:  # noqa: S110
             pass
 
         # If we can't reach the workcell manager, show a message
         if not self.nodes_data:
-            table.add_row(
-                format_status_icon("unknown"),
-                "[dim]No nodes available[/dim]",
-                "[dim]Workcell Manager not reachable[/dim]",
-                "-",
-                "[dim]unknown[/dim]",
-            )
+            with preserve_cursor(table):
+                table.clear()
+                table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No nodes available[/dim]",
+                    "[dim]Workcell Manager not reachable[/dim]",
+                    "-",
+                    "[dim]unknown[/dim]",
+                )
 
     def _add_node_row(self, table: DataTable, name: str, node_data: dict) -> None:
         """Add a node row to the table.
