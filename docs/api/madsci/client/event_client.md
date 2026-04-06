@@ -46,6 +46,11 @@ Classes
     `config: madsci.common.types.event_types.EventClientConfig`
     :
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
 
     `alert(self, event: madsci.common.types.event_types.Event | str, **kwargs: Any) ‑> None`
@@ -54,6 +59,28 @@ Classes
         Args:
             event: The event or message to log
             **kwargs: Additional structured data
+
+    `async_get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
+    :   Get a specific event by ID asynchronously.
+        
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_events(self, number: int = 100, level: int = -1, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for a certain number of recent events asynchronously.
+        
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for events based on a selector asynchronously.
+        
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
     `bind(self, **context: Any) ‑> madsci.client.event_client.EventClient`
     :   Create a new client with additional bound context.

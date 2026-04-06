@@ -2,8 +2,9 @@ Module madsci.client.cli.tui.screens.nodes
 ==========================================
 Node management screen for MADSci TUI.
 
-Provides node discovery, status monitoring, and action display
-by querying the Workcell Manager.
+Provides node discovery, status monitoring, admin command actions,
+enhanced detail display, and action execution by querying the
+Workcell Manager and communicating with nodes directly.
 
 Classes
 -------
@@ -57,6 +58,8 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.AutoRefreshMixin
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -76,14 +79,26 @@ Classes
 
     ### Methods
 
+    `action_execute_action(self) ‑> None`
+    :   Open the action executor screen for the selected node.
+
     `action_go_back(self) ‑> None`
     :   Go back to the previous screen.
+
+    `action_pause_node(self) ‑> None`
+    :   Pause the selected node.
 
     `action_refresh(self) ‑> None`
     :   Refresh node data.
 
-    `action_toggle_auto_refresh(self) ‑> None`
-    :   Toggle auto-refresh on/off.
+    `action_reset_node(self) ‑> None`
+    :   Reset the selected node (clear errors).
+
+    `action_resume_node(self) ‑> None`
+    :   Resume the selected node.
+
+    `action_toggle_lock_node(self) ‑> None`
+    :   Toggle lock/unlock on the selected node.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.

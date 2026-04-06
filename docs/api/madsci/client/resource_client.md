@@ -15,9 +15,13 @@ Classes
         event_client: Optional EventClient for logging. If not provided, creates a new one.
         config: Client configuration for retry and timeout settings. If not provided, uses default ResourceClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `local_resources: dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `local_resources: dict[str, typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]]`
     :
 
     `local_templates: ClassVar[dict[str, dict]]`
@@ -25,6 +29,11 @@ Classes
 
     `resource_server_url: pydantic.networks.AnyUrl | None`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
@@ -59,6 +68,185 @@ Classes
         
         Returns:
             Resource: The added resource as returned by the server.
+
+    `async_acquire_lock(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], lock_duration: float = 300.0, client_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Acquire a lock on a resource asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            lock_duration: Lock duration in seconds (default 5 minutes).
+            client_id: Client identifier (auto-generated if not provided).
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The locked resource, or None if lock acquisition failed.
+
+    `async_add_resource(self, resource: madsci.common.types.resource_types.Resource, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource`
+    :   Add a resource to the server asynchronously.
+        
+        Args:
+            resource: The resource to add.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Resource: The added resource as returned by the server.
+
+    `async_change_quantity_by(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], amount: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Change the quantity of a resource by a given amount asynchronously.
+        
+        Args:
+            resource: The resource or its ID.
+            amount: The quantity to change by.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource.
+
+    `async_create_resource_from_template(self, template_name: str, resource_name: str, overrides: dict[str, typing.Any] | None = None, add_to_database: bool = True, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Create a resource from a template asynchronously.
+        
+        Args:
+            template_name: Name of the template to use.
+            resource_name: Name for the new resource.
+            overrides: Values to override template defaults.
+            add_to_database: Whether to add the resource to the database.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The created resource.
+
+    `async_get_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Retrieve a resource from the server asynchronously.
+        
+        Args:
+            resource: The resource object or ID to retrieve.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The retrieved resource.
+
+    `async_get_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Get a template by name asynchronously.
+        
+        Args:
+            template_name: Name of the template to retrieve.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The template resource if found, None otherwise.
+
+    `async_is_locked(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> tuple[bool, str | None]`
+    :   Check if a resource is currently locked asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            tuple[bool, Optional[str]]: (is_locked, locked_by)
+
+    `async_query_all_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    :   Query all resource templates asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            list[ResourceDataModels]: List of template resources.
+
+    `async_query_history(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, version: int | None = None, change_type: str | None = None, removed: bool | None = None, start_date: datetime.datetime | None = None, end_date: datetime.datetime | None = None, limit: int | None = 100, timeout: float | None = None) ‑> list[dict[str, typing.Any]]`
+    :   Retrieve the history of a resource with flexible filters asynchronously.
+        
+        Args:
+            resource: The resource or resource ID to query history for.
+            version: Filter by specific version number.
+            change_type: Filter by change type.
+            removed: Filter by removed status.
+            start_date: Filter by start date.
+            end_date: Filter by end date.
+            limit: Maximum number of history entries to return.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            list[dict[str, Any]]: History entries matching the query.
+
+    `async_query_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, resource_name: str | None = None, parent_id: str | None = None, resource_class: str | None = None, base_type: str | None = None, unique: bool | None = False, multiple: bool | None = False, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    :   Query for one or more resources matching specific properties asynchronously.
+        
+        Args:
+            resource: The (ID of) the resource to retrieve.
+            resource_name: The name of the resource to retrieve.
+            parent_id: The ID of the parent resource.
+            resource_class: The class of the resource.
+            base_type: The base type of the resource.
+            unique: Whether to require a unique resource or not.
+            multiple: Whether to return multiple resources or just the first.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Resource or list of Resources matching the query.
+
+    `async_query_resource_hierarchy(self, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
+    :   Query the hierarchical relationships of a resource asynchronously.
+        
+        Args:
+            resource_id: The ID of the resource to query hierarchy for.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+
+    `async_release_lock(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], client_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Release a lock on a resource asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            client_id: Client identifier.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The unlocked resource, or None if release failed.
+
+    `async_remove_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Remove a resource asynchronously by moving it to the history table.
+        
+        Args:
+            resource: The resource or resource ID to remove.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The removed resource.
+
+    `async_restore_deleted_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Restore a deleted resource from the history table asynchronously.
+        
+        Args:
+            resource: The resource or resource ID to restore.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The restored resource.
+
+    `async_set_quantity(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], quantity: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Set the quantity of a resource asynchronously.
+        
+        Args:
+            resource: The resource or its ID.
+            quantity: The quantity to set.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource.
+
+    `async_update_resource(self, resource: typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Update a resource on the server asynchronously.
+        
+        Args:
+            resource: The resource to update.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource as returned by the server.
 
     `change_quantity_by(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], amount: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Change the quantity of a resource by a given amount.
@@ -310,7 +498,7 @@ Classes
         
         Raises:
             ValueError: If resource not found.
-            requests.HTTPError: If server request fails.
+            httpx.HTTPStatusError: If server request fails.
 
     `query_templates(self, base_type: str | None = None, tags: list[str] | None = None, created_by: str | None = None, timeout: float | None = None) ‑> list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
     :   List templates with optional filtering.

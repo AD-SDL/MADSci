@@ -1,16 +1,16 @@
-Module madsci.client.cli.tui.screens.workflows
+Module madsci.client.cli.tui.screens.resources
 ==============================================
-Workflow visualization screen for MADSci TUI.
+Resource inventory screen for MADSci TUI.
 
-Provides workflow monitoring with step progress visualization,
-active/queued workflow display, workflow control actions, filtering,
-and step detail inspection.
+Provides resource browsing with filtering by type and search,
+a detail panel for selected resources, and actions for delete,
+lock/unlock, and tree visualization.
 
 Classes
 -------
 
-`WorkflowsScreen(**kwargs: Any)`
-:   Screen showing workflow visualization and management.
+`ResourcesScreen(**kwargs: Any)`
+:   Screen showing resource inventory and management.
     
     Initialize the screen.
 
@@ -37,32 +37,32 @@ Classes
 
     ### Methods
 
-    `action_cancel_workflow(self) ‑> None`
-    :   Cancel the selected workflow.
+    `action_delete_resource(self) ‑> None`
+    :   Delete the selected resource.
 
     `action_go_back(self) ‑> None`
-    :   Go back to the previous screen.
+    :   Go back to the dashboard.
 
-    `action_pause_workflow(self) ‑> None`
-    :   Pause the selected workflow.
+    `action_new_resource(self) ‑> None`
+    :   Notify user to use CLI for resource creation.
 
     `action_refresh(self) ‑> None`
-    :   Refresh workflow data.
+    :   Refresh resource data.
 
-    `action_resubmit_workflow(self) ‑> None`
-    :   Resubmit the selected workflow as a new run.
+    `action_show_tree(self) ‑> None`
+    :   Show the resource tree for the selected resource.
 
-    `action_resume_workflow(self) ‑> None`
-    :   Resume the selected workflow.
-
-    `action_retry_workflow(self) ‑> None`
-    :   Retry the selected workflow from the beginning.
+    `action_toggle_lock(self) ‑> None`
+    :   Toggle lock on the selected resource.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the workflows screen layout.
+    :   Compose the resources screen layout.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the workflows or steps table.
+    :   Handle row selection in the resources table.
+        
+        Args:
+            event: The row selected event.
 
     `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
@@ -71,7 +71,7 @@ Classes
             event: The filter changed event with search and filters.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - set up tables and load data.
+    :   Handle screen mount - set up table and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh workflow data from workcell manager.
+    :   Refresh resource data from the resource manager.

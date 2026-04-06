@@ -2,7 +2,8 @@ Module madsci.client.cli.commands.logs
 ======================================
 MADSci CLI logs command.
 
-View and aggregate logs from MADSci services.
+View and aggregate logs from MADSci services, using the shared utility layer
+for timestamp formatting, level colouring, and output rendering.
 
 Functions
 ---------
@@ -14,7 +15,7 @@ Functions
 :   Filter logs locally.
 
 `format_log_entry(entry: dict[str, Any], show_timestamps: bool = True, no_color: bool = False) ‑> Any`
-:   Format a log entry for display.
+:   Format a log entry for display using shared formatting utilities.
 
 `parse_duration(duration: str) ‑> datetime.timedelta`
 :   Parse a duration string into a timedelta.

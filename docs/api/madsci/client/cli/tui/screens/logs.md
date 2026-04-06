@@ -7,39 +7,6 @@ Provides real-time log viewing with filtering capabilities.
 Classes
 -------
 
-`FilterPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
-:   Panel with log filters.
-    
-    Initialize a Widget.
-    
-    Args:
-        *children: Child widgets.
-        name: The name of the widget.
-        id: The ID of the widget in the DOM.
-        classes: The CSS classes for the widget.
-        disabled: Whether the widget is disabled or not.
-        markup: Enable content markup?
-
-    ### Ancestors (in MRO)
-
-    * textual.widgets._static.Static
-    * textual.widget.Widget
-    * textual.dom.DOMNode
-    * textual.message_pump.MessagePump
-
-    ### Class variables
-
-    `can_focus`
-    :
-
-    `can_focus_children`
-    :
-
-    ### Methods
-
-    `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the filter panel.
-
 `LogsScreen(**kwargs: Any)`
 :   Screen for viewing logs.
     
@@ -47,6 +14,8 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.AutoRefreshMixin
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -81,14 +50,11 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the logs screen layout.
 
-    `on_input_submitted(self, event: textual.widgets._input.Input.Submitted) ‑> None`
-    :   Handle search input submission.
+    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    :   Handle filter changes from FilterBar.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - load initial logs.
-
-    `on_select_changed(self, event: textual.widgets._select.Select.Changed) ‑> None`
-    :   Handle filter changes.
 
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.

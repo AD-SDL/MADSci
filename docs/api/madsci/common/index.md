@@ -13,6 +13,7 @@ Sub-modules
 * madsci.common.document_db_version_checker
 * madsci.common.exceptions
 * madsci.common.foss_migration
+* madsci.common.http_client
 * madsci.common.local_backends
 * madsci.common.manager_base
 * madsci.common.middleware

@@ -1,20 +1,21 @@
-Module madsci.client.cli.tui.screens.status
-===========================================
-Status screen for MADSci TUI.
+Module madsci.client.cli.tui.screens.event_analytics
+====================================================
+Event analytics screen for MADSci TUI.
 
-Provides detailed service status with health information.
+Provides a read-only analytics dashboard with utilization summary
+data and a recent events table. Displays daily utilization periods
+and the last 10 events for quick operational overview.
 
 Classes
 -------
 
-`StatusScreen(**kwargs: Any)`
-:   Screen showing detailed service status.
+`EventAnalyticsScreen(**kwargs: Any)`
+:   Screen showing event analytics and utilization summaries.
     
     Initialize the screen.
 
     ### Ancestors (in MRO)
 
-    * madsci.client.cli.tui.mixins.AutoRefreshMixin
     * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
@@ -36,19 +37,16 @@ Classes
     ### Methods
 
     `action_go_back(self) ‑> None`
-    :   Go back to the previous screen.
+    :   Go back to the dashboard.
 
     `action_refresh(self) ‑> None`
-    :   Refresh status data.
+    :   Refresh analytics data.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the status screen layout.
-
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the table.
+    :   Compose the event analytics screen layout.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh analytics data from the event manager.

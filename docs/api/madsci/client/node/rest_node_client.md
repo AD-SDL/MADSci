@@ -19,9 +19,36 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.http.DualModeClientMixin
     * madsci.client.node.abstract_node_client.AbstractNodeClient
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `async_get_action_history(self, action_id: str | None = None, timeout: float | None = None) ‑> dict[str, list[madsci.common.types.action_types.ActionResult]]`
+    :   Get action history asynchronously.
+
+    `async_get_info(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeInfo`
+    :   Get information about the node asynchronously.
+
+    `async_get_log(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Get the log from the node asynchronously.
+
+    `async_get_state(self, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    :   Get the state of the node asynchronously.
+
+    `async_get_status(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeStatus`
+    :   Get the status of the node asynchronously.
+
+    `async_send_admin_command(self, admin_command: madsci.common.types.admin_command_types.AdminCommands, timeout: float | None = None) ‑> madsci.common.types.admin_command_types.AdminCommandResponse`
+    :   Perform an administrative command on the node asynchronously.
+
+    `async_set_config(self, new_config: dict[str, typing.Any], timeout: float | None = None) ‑> madsci.common.types.node_types.NodeSetConfigResponse`
+    :   Update configuration values of the node asynchronously.
 
     `await_action_result(self, action_id: str, timeout: float | None = None, request_timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
     :   Wait for an action to complete and return the result. Optionally, specify a timeout in seconds.

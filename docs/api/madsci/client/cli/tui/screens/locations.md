@@ -1,16 +1,15 @@
-Module madsci.client.cli.tui.screens.workflows
+Module madsci.client.cli.tui.screens.locations
 ==============================================
-Workflow visualization screen for MADSci TUI.
+Location management screen for MADSci TUI.
 
-Provides workflow monitoring with step progress visualization,
-active/queued workflow display, workflow control actions, filtering,
-and step detail inspection.
+Provides location browsing with search filtering, a detail panel for
+selected locations, and an action to view the transfer adjacency graph.
 
 Classes
 -------
 
-`WorkflowsScreen(**kwargs: Any)`
-:   Screen showing workflow visualization and management.
+`LocationsScreen(**kwargs: Any)`
+:   Screen showing location inventory and management.
     
     Initialize the screen.
 
@@ -37,32 +36,23 @@ Classes
 
     ### Methods
 
-    `action_cancel_workflow(self) ‑> None`
-    :   Cancel the selected workflow.
-
     `action_go_back(self) ‑> None`
-    :   Go back to the previous screen.
-
-    `action_pause_workflow(self) ‑> None`
-    :   Pause the selected workflow.
+    :   Go back to the dashboard.
 
     `action_refresh(self) ‑> None`
-    :   Refresh workflow data.
+    :   Refresh location data.
 
-    `action_resubmit_workflow(self) ‑> None`
-    :   Resubmit the selected workflow as a new run.
-
-    `action_resume_workflow(self) ‑> None`
-    :   Resume the selected workflow.
-
-    `action_retry_workflow(self) ‑> None`
-    :   Retry the selected workflow from the beginning.
+    `action_show_transfer_graph(self) ‑> None`
+    :   Show the transfer graph screen.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the workflows screen layout.
+    :   Compose the locations screen layout.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the workflows or steps table.
+    :   Handle row selection in the locations table.
+        
+        Args:
+            event: The row selected event.
 
     `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
@@ -71,7 +61,7 @@ Classes
             event: The filter changed event with search and filters.
 
     `on_mount(self) ‑> None`
-    :   Handle screen mount - set up tables and load data.
+    :   Handle screen mount - set up table and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh workflow data from workcell manager.
+    :   Refresh location data from the location manager.
