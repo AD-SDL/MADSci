@@ -735,7 +735,7 @@ class EventClient:
         """
         if self.event_server:
             response = self._client.get(
-                str(self.event_server) + f"event/{event_id}",
+                f"{self.event_server}event/{event_id}",
                 timeout=timeout or self.config.timeout_default,
             )
             if not response.is_success:
@@ -762,7 +762,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = self._client.get(
-                str(self.event_server) + "events",
+                f"{self.event_server}events",
                 timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
             )
@@ -794,7 +794,7 @@ class EventClient:
         events = OrderedDict()
         if self.event_server:
             response = self._client.post(
-                str(self.event_server) + "events/query",
+                f"{self.event_server}events/query",
                 timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
             )
@@ -921,7 +921,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = self._client.get(
-                str(self.event_server) + "utilization/periods",
+                f"{self.event_server}utilization/periods",
                 params=params,
                 timeout=self.config.timeout_data_operations,
             )
@@ -990,7 +990,7 @@ class EventClient:
                     params["output_path"] = output_path
 
             response = self._client.get(
-                str(self.event_server) + "utilization/sessions",
+                f"{self.event_server}utilization/sessions",
                 params=params,
                 timeout=self.config.timeout_long_operations,
             )
