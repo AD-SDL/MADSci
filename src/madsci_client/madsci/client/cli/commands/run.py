@@ -153,6 +153,11 @@ def experiment(
 
     console = get_console(ctx)
 
+    console.print(
+        "[yellow]Note: 'madsci run experiment' is deprecated. "
+        "Use 'madsci experiment run' instead.[/yellow]"
+    )
+
     script_path = Path(path).resolve()
     console.print(f"Running experiment: [cyan]{script_path.name}[/cyan]")
 

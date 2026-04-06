@@ -41,6 +41,10 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "resource": ("madsci.client.cli.commands.resource", "resource"),
     "location": ("madsci.client.cli.commands.location", "location"),
     "node": ("madsci.client.cli.commands.node", "node"),
+    "experiment": ("madsci.client.cli.commands.experiment", "experiment"),
+    "campaign": ("madsci.client.cli.commands.campaign", "campaign"),
+    "data": ("madsci.client.cli.commands.data", "data"),
+    "events": ("madsci.client.cli.commands.events", "events"),
 }
 
 
@@ -103,6 +107,10 @@ class AliasedGroup(click.Group):
         "res": "resource",
         "loc": "location",
         "nd": "node",
+        "exp": "experiment",
+        "camp": "campaign",
+        "dt": "data",
+        "ev": "events",
     }
 
     def list_commands(self, ctx: click.Context) -> list[str]:
