@@ -26,9 +26,9 @@ from madsci.client.cli.tui.widgets import (
 from madsci.client.cli.utils.formatting import format_timestamp
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import VerticalScroll
-from textual.screen import Screen
-from textual.widgets import DataTable, Label
+from textual.containers import Horizontal, VerticalScroll
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, DataTable, Label
 
 
 def _matches_filter(
@@ -203,6 +203,50 @@ def _build_attributes_section(data: dict) -> DetailSection | None:
         return None
     fields = {str(k): str(v)[:80] for k, v in attrs.items()}
     return DetailSection("Attributes", fields)
+
+
+class ConfirmDeleteScreen(ModalScreen[bool]):
+    """Modal confirmation dialog for resource deletion."""
+
+    DEFAULT_CSS = """
+    ConfirmDeleteScreen {
+        align: center middle;
+    }
+    ConfirmDeleteScreen #confirm-dialog {
+        width: 60;
+        height: auto;
+        border: thick $error;
+        padding: 1 2;
+        background: $surface;
+    }
+    ConfirmDeleteScreen Button {
+        margin: 1 1 0 0;
+    }
+    """
+
+    def __init__(self, resource_id: str, resource_name: str, **kwargs: Any) -> None:
+        """Initialize the confirmation screen."""
+        super().__init__(**kwargs)
+        self._resource_id = resource_id
+        self._resource_name = resource_name
+
+    def compose(self) -> ComposeResult:
+        """Compose the confirmation dialog."""
+        with VerticalScroll(id="confirm-dialog"):
+            yield Label("[bold red]Delete Resource[/bold red]")
+            yield Label("")
+            yield Label(
+                f"Are you sure you want to delete [bold]{self._resource_name}[/bold]?"
+            )
+            yield Label(f"[dim]{self._resource_id}[/dim]")
+            yield Label("")
+            with Horizontal():
+                yield Button("Delete", id="confirm-delete", variant="error")
+                yield Button("Cancel", id="cancel-delete", variant="default")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press."""
+        self.dismiss(event.button.id == "confirm-delete")
 
 
 class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
@@ -434,10 +478,31 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             timeout=3,
         )
 
-    async def action_delete_resource(self) -> None:
-        """Delete the selected resource."""
+    def action_delete_resource(self) -> None:
+        """Prompt for confirmation before deleting the selected resource."""
         if not self.selected_resource_id:
             self.notify("No resource selected", timeout=2)
+            return
+
+        res_data = self.resources_data.get(self.selected_resource_id, {})
+        name = res_data.get("resource_name", self.selected_resource_id)
+
+        self.app.push_screen(
+            ConfirmDeleteScreen(
+                resource_id=self.selected_resource_id,
+                resource_name=name,
+            ),
+            callback=self._on_delete_confirmed,
+        )
+
+    def _on_delete_confirmed(self, confirmed: bool) -> None:
+        """Handle confirmation result from the delete screen."""
+        if confirmed:
+            self.run_worker(self._perform_delete())
+
+    async def _perform_delete(self) -> None:
+        """Execute the resource deletion after confirmation."""
+        if not self.selected_resource_id:
             return
 
         try:

@@ -55,7 +55,7 @@ class QuickActionsPanel(Static):
         yield Button("(n) Nodes", id="action-nodes", variant="default")
         yield Button("(w) Workflows", id="action-workflows", variant="default")
         yield Button("(e) Experiments", id="action-experiments", variant="default")
-        yield Button("(i) Inventory", id="action-resources", variant="default")
+        yield Button("(i) Resource Inventory", id="action-resources", variant="default")
         yield Button("(b) Data Browser", id="action-data", variant="default")
         yield Button("(o) Locations", id="action-locations", variant="default")
         yield Button("(r) Refresh", id="action-refresh", variant="default")
