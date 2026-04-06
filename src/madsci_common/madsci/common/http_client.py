@@ -316,10 +316,10 @@ def create_httpx_client(
     event_hooks: dict[str, list] = {"request": [], "response": []}
     rate_limit_tracker: RateLimitTracker | None = None
 
-    if getattr(config, "rate_limit_tracking_enabled", False):
+    if config.rate_limit_tracking_enabled:
         rate_limit_tracker = RateLimitTracker(
-            warning_threshold=getattr(config, "rate_limit_warning_threshold", 0.8),
-            respect_limits=getattr(config, "rate_limit_respect_limits", False),
+            warning_threshold=config.rate_limit_warning_threshold,
+            respect_limits=config.rate_limit_respect_limits,
         )
         event_hooks["response"].append(_make_rate_limit_hook(rate_limit_tracker))
 
