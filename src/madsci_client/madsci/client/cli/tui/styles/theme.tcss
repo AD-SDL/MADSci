@@ -114,6 +114,15 @@ WorkflowsScreen ActionBar {
     padding: 0 2;
 }
 
+/* ===== Step Detail Screen ===== */
+
+StepDetailScreen DetailPanel {
+    border: solid $primary;
+    padding: 1 2;
+    height: auto;
+    min-height: 12;
+}
+
 /* ===== Template Browser ===== */
 
 TemplateBrowserScreen #category-panel {
