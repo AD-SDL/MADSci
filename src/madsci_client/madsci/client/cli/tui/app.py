@@ -13,6 +13,7 @@ from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, get_default_s
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
 from madsci.client.cli.tui.screens.nodes import NodesScreen
+from madsci.client.cli.tui.screens.resources import ResourcesScreen
 from madsci.client.cli.tui.screens.status import StatusScreen
 from madsci.client.cli.tui.screens.workflows import WorkflowsScreen
 from textual.app import App, ComposeResult
@@ -42,6 +43,7 @@ class MadsciApp(App):
         Binding("l", "switch_screen('logs')", "Logs", show=True),
         Binding("n", "switch_screen('nodes')", "Nodes", show=True),
         Binding("w", "switch_screen('workflows')", "Workflows", show=True),
+        Binding("i", "switch_screen('resources')", "Inventory", show=True),
         Binding("q", "quit", "Quit", show=True),
         Binding("?", "show_help", "Help", show=True),
         Binding("r", "refresh", "Refresh", show=True),
@@ -54,6 +56,7 @@ class MadsciApp(App):
         "logs": LogsScreen,
         "nodes": NodesScreen,
         "workflows": WorkflowsScreen,
+        "resources": ResourcesScreen,
     }
 
     def __init__(
@@ -115,6 +118,7 @@ class MadsciApp(App):
             "  l - Logs\n"
             "  n - Nodes\n"
             "  w - Workflows\n"
+            "  i - Inventory (Resources)\n"
             "  r - Refresh\n"
             "  Ctrl+P - Command Palette\n"
             "  q - Quit",
