@@ -38,6 +38,7 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "commands": ("madsci.client.cli.commands.commands", "commands"),
     "config": ("madsci.client.cli.commands.config", "config"),
     "workflow": ("madsci.client.cli.commands.workflow", "workflow"),
+    "resource": ("madsci.client.cli.commands.resource", "resource"),
 }
 
 
@@ -97,6 +98,7 @@ class AliasedGroup(click.Group):
         "cmd": "commands",
         "cfg": "config",
         "wf": "workflow",
+        "res": "resource",
     }
 
     def list_commands(self, ctx: click.Context) -> list[str]:
