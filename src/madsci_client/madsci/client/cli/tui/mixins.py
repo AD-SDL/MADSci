@@ -6,8 +6,33 @@ Provides reusable behaviours that can be mixed into any
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Generator
+
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
 from textual.reactive import reactive
+from textual.widgets import DataTable
+
+
+@contextlib.contextmanager
+def preserve_cursor(table: DataTable) -> Generator[None, None, None]:
+    """Context manager that preserves cursor position across a table refresh.
+
+    Saves the current cursor row before the block executes, and
+    restores it (clamped to the new row count) afterwards.
+
+    Usage::
+
+        with preserve_cursor(table):
+            table.clear()
+            for row in new_data:
+                table.add_row(...)
+    """
+    saved_row = table.cursor_row if table.row_count > 0 else 0
+    yield
+    if table.row_count > 0 and saved_row >= 0:
+        restored = min(saved_row, table.row_count - 1)
+        table.move_cursor(row=restored)
 
 
 class AutoRefreshMixin:

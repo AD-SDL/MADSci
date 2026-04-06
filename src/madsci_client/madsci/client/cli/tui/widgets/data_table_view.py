@@ -122,14 +122,18 @@ class DataTableView(Widget):
         self._update_empty_state()
 
     def clear_and_populate(self, rows: list[dict[str, Any]]) -> None:
-        """Clear the table and populate with new data atomically.
+        """Clear the table and populate with new data, preserving cursor position.
 
         Args:
             rows: List of row dictionaries. Each dict should have keys
                 matching the ``key`` fields of the column definitions.
         """
-        self._rows = list(rows)
         table = self.query_one("#dtv-table", DataTable)
+
+        # Save cursor position before clearing
+        saved_row = table.cursor_row if table.row_count > 0 else 0
+
+        self._rows = list(rows)
         table.clear()
 
         for row in self._rows:
@@ -137,6 +141,11 @@ class DataTableView(Widget):
             table.add_row(*cells)
 
         self._update_empty_state()
+
+        # Restore cursor position, clamped to new row count
+        if self._rows and saved_row >= 0:
+            restored = min(saved_row, len(self._rows) - 1)
+            table.move_cursor(row=restored)
 
     def _update_empty_state(self) -> None:
         """Toggle empty label visibility based on row count."""
