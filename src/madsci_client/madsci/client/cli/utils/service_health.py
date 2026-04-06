@@ -219,14 +219,15 @@ async def check_all_services_async(
     Returns:
         Mapping of service name to :class:`ServiceHealthResult`.
     """
-    tasks = {
-        name: check_service_health_async(name, url, timeout=timeout)
-        for name, url in service_urls.items()
-    }
-    results: dict[str, ServiceHealthResult] = {}
-    for name, coro in tasks.items():
-        results[name] = await coro
-    return results
+    import asyncio
+
+    names = list(service_urls.keys())
+    coros = [
+        check_service_health_async(name, service_urls[name], timeout=timeout)
+        for name in names
+    ]
+    results_list = await asyncio.gather(*coros)
+    return dict(zip(names, results_list, strict=True))
 
 
 def get_default_service_urls() -> dict[str, str]:

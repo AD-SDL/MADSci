@@ -166,15 +166,9 @@ class DualModeClientMixin:
         if hasattr(self, "_client") and self._client is not None:
             self._client.close()
         if hasattr(self, "_async_client") and self._async_client is not None:
-            # AsyncClient.close() is a coroutine, but httpx also exposes a
-            # sync __del__ path internally.  We call .close() which works
-            # from synchronous code because httpx wraps it safely.
-            try:
-                self._async_client.close()  # type: ignore[unused-coroutine]
-            except Exception:
-                logger.debug(
-                    "Failed to synchronously close async client", exc_info=True
-                )
+            # AsyncClient only supports async cleanup via aclose().
+            # From sync code we can only drop the reference; use aclose()
+            # in async contexts for proper cleanup.
             self._async_client = None
 
     async def aclose(self) -> None:

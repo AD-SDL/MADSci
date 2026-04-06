@@ -229,13 +229,14 @@ class TestClose:
         stub.close()  # Should not raise
 
     def test_close_closes_async_client_and_nullifies(self) -> None:
-        """close() attempts to close the async client and sets it to None."""
+        """close() nullifies the async client (no sync close available)."""
         stub = _StubClient()
         mock_async = MagicMock(spec=httpx.AsyncClient)
         stub._async_client = mock_async
 
         stub.close()
 
+        # AsyncClient has no sync .close(); we just drop the reference
         assert stub._async_client is None
 
     def test_close_idempotent(self) -> None:

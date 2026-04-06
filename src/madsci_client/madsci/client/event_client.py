@@ -384,8 +384,7 @@ class EventClient:
             with contextlib.suppress(Exception):
                 self._client.close()
         if hasattr(self, "_async_client") and self._async_client:
-            with contextlib.suppress(Exception):
-                self._async_client.close()  # type: ignore[unused-coroutine]
+            # AsyncClient only supports async cleanup; drop reference.
             self._async_client = None
 
     def __enter__(self) -> "EventClient":
