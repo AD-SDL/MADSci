@@ -16,6 +16,7 @@ from madsci.client.cli.tui.screens.resources import ResourcesScreen
 from madsci.client.cli.tui.screens.status import StatusScreen
 from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
 from madsci.client.cli.tui.screens.transfer_graph import TransferGraphScreen
+from madsci.client.cli.tui.screens.workflow_detail import WorkflowDetailScreen
 from madsci.client.cli.tui.screens.workflows import WorkflowsScreen
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "StatusScreen",
     "StepDetailScreen",
     "TransferGraphScreen",
+    "WorkflowDetailScreen",
     "WorkflowsScreen",
 ]

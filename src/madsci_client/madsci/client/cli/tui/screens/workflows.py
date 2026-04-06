@@ -5,6 +5,7 @@ active/queued workflow display, workflow control actions, filtering,
 and step detail inspection.
 """
 
+import asyncio
 from typing import Any, ClassVar
 
 import httpx
@@ -13,24 +14,21 @@ from madsci.client.cli.tui.mixins import (
     ServiceURLMixin,
     preserve_cursor,
 )
-from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
 from madsci.client.cli.tui.widgets import (
     ActionBar,
     ActionDef,
-    DetailPanel,
     DetailSection,
     FilterBar,
     FilterDef,
 )
 from madsci.client.cli.utils.formatting import (
     format_duration,
-    format_status_colored,
     format_status_icon,
     format_timestamp,
 )
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -233,7 +231,7 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the workflows screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Workflow Management[/bold blue]")
             yield Label("")
 
@@ -270,18 +268,6 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 yield DataTable(id="archived-table")
 
             yield Label("")
-            yield DetailPanel(
-                placeholder="Select a workflow from the table above",
-                id="workflow-detail-panel",
-            )
-
-            yield Label("")
-
-            with Vertical(id="steps-section"):
-                yield Label("[bold]Steps[/bold]")
-                yield DataTable(id="steps-table")
-
-            yield Label("")
             yield ActionBar(
                 actions=[
                     ActionDef("a", "Auto-refresh", "toggle_auto_refresh"),
@@ -307,10 +293,6 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             "Status", "Name", "Progress", "Step", "Started", "Duration"
         )
         archived_table.cursor_type = "row"
-
-        steps_table = self.query_one("#steps-table", DataTable)
-        steps_table.add_columns("#", "Name", "Action", "Node", "Status")
-        steps_table.cursor_type = "row"
 
         await self.refresh_data()
 
@@ -504,158 +486,34 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle row selection in the workflows or steps table."""
+        """Handle row selection — push workflow detail screen."""
         table = event.data_table
         row_key = event.row_key
 
         if not row_key:
             return
 
-        # Handle step row selection - push step detail screen
-        if table.id == "steps-table":
-            self._handle_step_selection(table, row_key)
+        if table.id not in ("workflows-table", "archived-table"):
             return
 
-        # Handle workflow row selection
-        if table.id in ("workflows-table", "archived-table"):
-            row = table.get_row(row_key)
-            workflow_name = str(row[1])
-
-            # Find workflow by name match
-            for wf_id, wf_data in self.workflows_data.items():
-                if wf_data.get("name", "") == workflow_name:
-                    self.selected_workflow_id = wf_id
-                    self._update_detail_panel(wf_id, wf_data)
-                    self._update_steps_table(wf_data)
-                    break
-
-    def _handle_step_selection(self, table: DataTable, row_key: Any) -> None:
-        """Push the step detail screen for the selected step row.
-
-        Args:
-            table: The steps DataTable.
-            row_key: The selected row key.
-        """
-        if not self.selected_workflow_id:
-            return
-
-        wf_data = self.workflows_data.get(self.selected_workflow_id)
-        if not wf_data:
-            return
-
-        steps = wf_data.get("steps", [])
         row = table.get_row(row_key)
-        # Column 0 is the step number (1-based)
-        try:
-            step_index = int(str(row[0])) - 1
-        except (ValueError, IndexError):
-            return
+        workflow_name = str(row[1])
 
-        if 0 <= step_index < len(steps):
-            step_data = steps[step_index]
-            # Convert Pydantic models to dicts if needed
-            if hasattr(step_data, "model_dump"):
-                step_data = step_data.model_dump(mode="json")
-            self.app.push_screen(
-                StepDetailScreen(
-                    workflow_id=self.selected_workflow_id,
-                    step_data=step_data,
-                    step_index=step_index,
+        # Find workflow by name match and push detail screen
+        for wf_id, wf_data in self.workflows_data.items():
+            if wf_data.get("name", "") == workflow_name:
+                self.selected_workflow_id = wf_id
+                from madsci.client.cli.tui.screens.workflow_detail import (
+                    WorkflowDetailScreen,
                 )
-            )
 
-    def _update_steps_table(self, data: dict) -> None:
-        """Populate the steps table for the selected workflow.
-
-        Args:
-            data: Workflow data dictionary.
-        """
-        steps_table = self.query_one("#steps-table", DataTable)
-
-        steps = data.get("steps", [])
-        with preserve_cursor(steps_table):
-            steps_table.clear()
-
-            if not steps:
-                steps_table.add_row("-", "[dim]No steps[/dim]", "-", "-", "-")
-                return
-
-            for i, step in enumerate(steps):
-                step_name = step.get("name") or step.get("action") or f"Step {i + 1}"
-                action = step.get("action") or "-"
-                node = step.get("node") or "-"
-                status = step.get("status", "unknown")
-                if isinstance(status, str):
-                    status_display = format_status_colored(status.lower())
-                else:
-                    status_display = format_status_colored(
-                        _get_workflow_status_name(status)
-                        if isinstance(status, dict)
-                        else "unknown"
+                self.app.push_screen(
+                    WorkflowDetailScreen(
+                        workflow_id=wf_id,
+                        workflow_data=wf_data,
                     )
-                steps_table.add_row(str(i + 1), step_name, action, node, status_display)
-
-    def _update_detail_panel(self, workflow_id: str, data: dict) -> None:
-        """Update the detail panel with workflow data.
-
-        Args:
-            workflow_id: Workflow ID.
-            data: Workflow data dictionary.
-        """
-        detail_panel = self.query_one("#workflow-detail-panel", DetailPanel)
-        status = data.get("status", {})
-        status_name = _get_workflow_status_name(status)
-        name = data.get("name", "Unknown")
-
-        # General section
-        general_fields: dict[str, str] = {
-            "ID": str(workflow_id),
-            "Status": format_status_colored(
-                status_name, status.get("description", status_name)
-            ),
-        }
-        label = data.get("label")
-        if label:
-            general_fields["Label"] = str(label)
-
-        sections: list[DetailSection] = [DetailSection("General", general_fields)]
-
-        # Timing
-        timing_section = _build_timing_section(data)
-        if timing_section:
-            sections.append(timing_section)
-
-        # Parameter values
-        parameter_values = data.get("parameter_values") or {}
-        if parameter_values:
-            sections.append(
-                DetailSection(
-                    "Parameters",
-                    {str(k): str(v)[:100] for k, v in parameter_values.items()},
                 )
-            )
-
-        # File inputs
-        file_input_paths = data.get("file_input_paths") or {}
-        if file_input_paths:
-            sections.append(
-                DetailSection(
-                    "File Inputs",
-                    {str(k): str(v) for k, v in file_input_paths.items()},
-                )
-            )
-
-        # Ownership
-        ownership_section = _build_ownership_section(data)
-        if ownership_section:
-            sections.append(ownership_section)
-
-        # Progress
-        progress_section = _build_progress_section(data, status)
-        if progress_section:
-            sections.append(progress_section)
-
-        detail_panel.update_content(title=name, sections=sections)
+                break
 
     async def _send_workflow_command(self, command: str) -> None:
         """Send a control command to the selected workflow.
@@ -709,6 +567,23 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     async def action_resubmit_workflow(self) -> None:
         """Resubmit the selected workflow as a new run."""
         await self._send_workflow_command("resubmit")
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+            "pause": self.action_pause_workflow,
+            "resume": self.action_resume_workflow,
+            "cancel": self.action_cancel_workflow,
+            "retry": self.action_retry_workflow,
+            "resubmit": self.action_resubmit_workflow,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""

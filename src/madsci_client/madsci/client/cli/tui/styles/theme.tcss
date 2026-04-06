@@ -16,6 +16,10 @@ Screen {
     padding: 1 2;
 }
 
+#main-content DataTable {
+    max-height: 50%;
+}
+
 .panel {
     border: solid $primary;
     padding: 1 2;
@@ -80,7 +84,9 @@ StatusScreen DetailPanel {
 /* ===== Logs Screen ===== */
 
 LogsScreen FilterBar {
-    height: 5;
+    height: auto;
+    min-height: 5;
+    max-height: 7;
     padding: 1 2;
     border: solid $primary;
 }
@@ -102,16 +108,13 @@ NodeDetailScreen DetailPanel {
 
 /* ===== Workflows Screen ===== */
 
-WorkflowsScreen DetailPanel {
+/* ===== Workflow Detail Screen ===== */
+
+WorkflowDetailScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
-    min-height: 14;
-}
-
-WorkflowsScreen ActionBar {
-    height: 3;
-    padding: 0 2;
+    min-height: 12;
 }
 
 /* ===== Step Detail Screen ===== */

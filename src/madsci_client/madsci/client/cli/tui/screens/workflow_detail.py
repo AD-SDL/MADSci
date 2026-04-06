@@ -1,0 +1,291 @@
+"""Workflow detail screen for MADSci TUI.
+
+Pushed screen showing workflow details, step progress, and control actions.
+Opened when a workflow row is selected in :class:`WorkflowsScreen`.
+"""
+
+import asyncio
+from typing import Any, ClassVar
+
+import httpx
+from madsci.client.cli.tui.mixins import ServiceURLMixin, preserve_cursor
+from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
+from madsci.client.cli.tui.screens.workflows import (
+    _build_ownership_section,
+    _build_progress_section,
+    _build_timing_section,
+    _get_workflow_status_name,
+)
+from madsci.client.cli.tui.widgets import (
+    ActionBar,
+    ActionDef,
+    DetailPanel,
+    DetailSection,
+)
+from madsci.client.cli.utils.formatting import (
+    format_status_colored,
+)
+from textual.app import ComposeResult
+from textual.binding import BindingType
+from textual.containers import Vertical, VerticalScroll
+from textual.screen import Screen
+from textual.widgets import DataTable, Label
+
+
+class WorkflowDetailScreen(ServiceURLMixin, Screen):
+    """Screen showing details for a single workflow, pushed on top of WorkflowsScreen."""
+
+    BINDINGS: ClassVar[list[BindingType]] = [
+        ("r", "refresh", "Refresh"),
+        ("p", "pause_workflow", "Pause"),
+        ("u", "resume_workflow", "Resume"),
+        ("c", "cancel_workflow", "Cancel"),
+        ("t", "retry_workflow", "Retry"),
+        ("s", "resubmit_workflow", "Resubmit"),
+        ("escape", "go_back", "Back"),
+    ]
+
+    def __init__(
+        self,
+        workflow_id: str,
+        workflow_data: dict,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the detail screen.
+
+        Args:
+            workflow_id: Workflow ID.
+            workflow_data: Workflow data dictionary.
+        """
+        super().__init__(**kwargs)
+        self.workflow_id = workflow_id
+        self.workflow_data = workflow_data
+
+    def compose(self) -> ComposeResult:
+        """Compose the detail screen layout."""
+        name = self.workflow_data.get("name", "Workflow")
+        with VerticalScroll(id="main-content"):
+            yield Label(f"[bold blue]Workflow: {name}[/bold blue]")
+            yield Label("")
+            yield DetailPanel(
+                placeholder="Loading workflow details...",
+                id="workflow-detail-panel",
+            )
+            yield Label("")
+
+            with Vertical(id="steps-section"):
+                yield Label("[bold]Steps[/bold]")
+                yield DataTable(id="steps-table")
+
+            yield Label("")
+            yield ActionBar(
+                actions=[
+                    ActionDef("p", "Pause", "pause", variant="warning"),
+                    ActionDef("u", "Resume", "resume", variant="success"),
+                    ActionDef("c", "Cancel", "cancel", variant="error"),
+                    ActionDef("t", "Retry", "retry", variant="warning"),
+                    ActionDef("s", "Resubmit", "resubmit", variant="primary"),
+                ],
+                id="workflow-detail-action-bar",
+            )
+            yield Label("")
+            yield Label("[dim]'r' refresh | 'Esc' back[/dim]")
+
+    def on_mount(self) -> None:
+        """Set up the steps table and render content."""
+        steps_table = self.query_one("#steps-table", DataTable)
+        steps_table.add_columns("#", "Name", "Action", "Node", "Status")
+        steps_table.cursor_type = "row"
+
+        self._render_details()
+        self._render_steps()
+
+    def _render_details(self) -> None:
+        """Render the workflow detail panel."""
+        panel = self.query_one("#workflow-detail-panel", DetailPanel)
+        data = self.workflow_data
+        status = data.get("status", {})
+        status_name = _get_workflow_status_name(status)
+        name = data.get("name", "Unknown")
+
+        general_fields: dict[str, str] = {
+            "ID": str(self.workflow_id),
+            "Status": format_status_colored(
+                status_name, status.get("description", status_name)
+            ),
+        }
+        label = data.get("label")
+        if label:
+            general_fields["Label"] = str(label)
+
+        sections: list[DetailSection] = [DetailSection("General", general_fields)]
+
+        timing_section = _build_timing_section(data)
+        if timing_section:
+            sections.append(timing_section)
+
+        parameter_values = data.get("parameter_values") or {}
+        if parameter_values:
+            sections.append(
+                DetailSection(
+                    "Parameters",
+                    {str(k): str(v)[:100] for k, v in parameter_values.items()},
+                )
+            )
+
+        file_input_paths = data.get("file_input_paths") or {}
+        if file_input_paths:
+            sections.append(
+                DetailSection(
+                    "File Inputs",
+                    {str(k): str(v) for k, v in file_input_paths.items()},
+                )
+            )
+
+        ownership_section = _build_ownership_section(data)
+        if ownership_section:
+            sections.append(ownership_section)
+
+        progress_section = _build_progress_section(data, status)
+        if progress_section:
+            sections.append(progress_section)
+
+        panel.update_content(title=name, sections=sections)
+
+    def _render_steps(self) -> None:
+        """Render the steps table."""
+        steps_table = self.query_one("#steps-table", DataTable)
+        data = self.workflow_data
+        steps = data.get("steps", [])
+
+        with preserve_cursor(steps_table):
+            steps_table.clear()
+
+            if not steps:
+                steps_table.add_row("-", "[dim]No steps[/dim]", "-", "-", "-")
+                return
+
+            for i, step in enumerate(steps):
+                step_name = step.get("name") or step.get("action") or f"Step {i + 1}"
+                action = step.get("action") or "-"
+                node = step.get("node") or "-"
+                status = step.get("status", "unknown")
+                if isinstance(status, str):
+                    status_display = format_status_colored(status.lower())
+                else:
+                    status_display = format_status_colored(
+                        _get_workflow_status_name(status)
+                        if isinstance(status, dict)
+                        else "unknown"
+                    )
+                steps_table.add_row(str(i + 1), step_name, action, node, status_display)
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Handle step row selection — push step detail screen."""
+        table = event.data_table
+        row_key = event.row_key
+
+        if not row_key or table.id != "steps-table":
+            return
+
+        steps = self.workflow_data.get("steps", [])
+        row = table.get_row(row_key)
+        try:
+            step_index = int(str(row[0])) - 1
+        except (ValueError, IndexError):
+            return
+
+        if 0 <= step_index < len(steps):
+            step_data = steps[step_index]
+            if hasattr(step_data, "model_dump"):
+                step_data = step_data.model_dump(mode="json")
+            self.app.push_screen(
+                StepDetailScreen(
+                    workflow_id=self.workflow_id,
+                    step_data=step_data,
+                    step_index=step_index,
+                )
+            )
+
+    async def _send_workflow_command(self, command: str) -> None:
+        """Send a control command to this workflow.
+
+        Args:
+            command: Command to send (pause, resume, cancel, retry, resubmit).
+        """
+        try:
+            workcell_url = self.get_service_url("workcell_manager")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{workcell_url.rstrip('/')}/workflow/{self.workflow_id}/{command}"
+                )
+                if response.status_code == 200:
+                    self.notify(f"Workflow {command} successful", timeout=2)
+                    await self.action_refresh()
+                else:
+                    self.notify(
+                        f"Failed to {command} workflow: HTTP {response.status_code}",
+                        timeout=3,
+                    )
+        except Exception as e:
+            self.notify(f"Error: {e}", timeout=3)
+
+    async def action_refresh(self) -> None:
+        """Re-fetch workflow data and re-render."""
+        try:
+            workcell_url = self.get_service_url("workcell_manager")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Try active workflows first
+                for path in ("/workflows/active", "/workflows/archived?number=50"):
+                    response = await client.get(f"{workcell_url.rstrip('/')}{path}")
+                    if response.status_code == 200:
+                        data = response.json()
+                        if isinstance(data, dict) and self.workflow_id in data:
+                            self.workflow_data = data[self.workflow_id]
+                            self._render_details()
+                            self._render_steps()
+                            self.notify("Workflow refreshed", timeout=2)
+                            return
+        except Exception:  # noqa: S110
+            pass
+        self.notify("Could not refresh workflow data", timeout=2)
+
+    async def action_pause_workflow(self) -> None:
+        """Pause this workflow."""
+        await self._send_workflow_command("pause")
+
+    async def action_resume_workflow(self) -> None:
+        """Resume this workflow."""
+        await self._send_workflow_command("resume")
+
+    async def action_cancel_workflow(self) -> None:
+        """Cancel this workflow."""
+        await self._send_workflow_command("cancel")
+
+    async def action_retry_workflow(self) -> None:
+        """Retry this workflow."""
+        await self._send_workflow_command("retry")
+
+    async def action_resubmit_workflow(self) -> None:
+        """Resubmit this workflow."""
+        await self._send_workflow_command("resubmit")
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "pause": self.action_pause_workflow,
+            "resume": self.action_resume_workflow,
+            "cancel": self.action_cancel_workflow,
+            "retry": self.action_retry_workflow,
+            "resubmit": self.action_resubmit_workflow,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
+
+    def action_go_back(self) -> None:
+        """Go back to the workflows list."""
+        self.app.pop_screen()

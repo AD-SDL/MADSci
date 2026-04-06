@@ -440,28 +440,29 @@ class TestActionBar:
     """Tests for the ActionBar widget."""
 
     @pytest.mark.asyncio
-    async def test_render_contains_all_actions(self) -> None:
-        """ActionBar renders all defined actions."""
+    async def test_compose_contains_all_actions(self) -> None:
+        """ActionBar composes buttons for all defined actions."""
         async with ActionBarApp().run_test() as pilot:
             abar = pilot.app.query_one("#abar", ActionBar)
-            rendered = abar.render()
-            assert "Refresh" in rendered
-            assert "Pause" in rendered
-            assert "Cancel" in rendered
-            assert "[r]" in rendered
-            assert "[p]" in rendered
-            assert "[c]" in rendered
+            buttons = abar.query("Button")
+            labels = [str(btn.label) for btn in buttons]
+            assert any("Refresh" in lbl for lbl in labels)
+            assert any("Pause" in lbl for lbl in labels)
+            assert any("Cancel" in lbl for lbl in labels)
+            # Hotkey hints should be in the button labels
+            assert any("(r)" in lbl for lbl in labels)
+            assert any("(p)" in lbl for lbl in labels)
+            assert any("(c)" in lbl for lbl in labels)
 
     @pytest.mark.asyncio
-    async def test_variant_colours(self) -> None:
-        """ActionBar applies variant colours correctly."""
+    async def test_variant_applied_to_buttons(self) -> None:
+        """ActionBar applies variant to buttons correctly."""
         async with ActionBarApp().run_test() as pilot:
             abar = pilot.app.query_one("#abar", ActionBar)
-            rendered = abar.render()
-            # "Pause" should have yellow (warning variant)
-            assert "yellow" in rendered
-            # "Cancel" should have red (error variant)
-            assert "red" in rendered
+            buttons = {btn.id: btn for btn in abar.query("Button")}
+            assert buttons["action-btn-pause"].variant == "warning"
+            assert buttons["action-btn-cancel"].variant == "error"
+            assert buttons["action-btn-refresh"].variant == "default"
 
     @pytest.mark.asyncio
     async def test_trigger_action_posts_message(self) -> None:

@@ -5,6 +5,7 @@ a detail panel for selected experiments, and actions for pause,
 continue, and cancel operations.
 """
 
+import asyncio
 from typing import Any, ClassVar
 
 import httpx
@@ -30,7 +31,7 @@ from madsci.client.cli.utils.formatting import (
 )
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container
+from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -241,7 +242,7 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the experiments screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Experiment Management[/bold blue]")
             yield Label("")
 
@@ -467,6 +468,21 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     async def action_cancel_experiment(self) -> None:
         """Cancel the selected experiment."""
         await self._send_experiment_command("cancel")
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+            "pause": self.action_pause_experiment,
+            "continue": self.action_continue_experiment,
+            "cancel": self.action_cancel_experiment,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

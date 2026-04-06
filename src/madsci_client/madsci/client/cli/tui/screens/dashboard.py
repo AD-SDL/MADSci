@@ -54,6 +54,11 @@ class QuickActionsPanel(Static):
         yield Button("(l) Logs", id="action-logs", variant="default")
         yield Button("(n) Nodes", id="action-nodes", variant="default")
         yield Button("(w) Workflows", id="action-workflows", variant="default")
+        yield Button("(e) Experiments", id="action-experiments", variant="default")
+        yield Button("(i) Inventory", id="action-resources", variant="default")
+        yield Button("(b) Data Browser", id="action-data", variant="default")
+        yield Button("(o) Locations", id="action-locations", variant="default")
+        yield Button("(y) Analytics", id="action-analytics", variant="default")
         yield Button("(r) Refresh", id="action-refresh", variant="default")
         yield Button("(q) Quit", id="action-quit", variant="error")
 
@@ -64,6 +69,11 @@ class QuickActionsPanel(Static):
             "action-logs": "logs",
             "action-nodes": "nodes",
             "action-workflows": "workflows",
+            "action-experiments": "experiments",
+            "action-resources": "resources",
+            "action-data": "data",
+            "action-locations": "locations",
+            "action-analytics": "analytics",
         }
         button_id = event.button.id
         if button_id in action_map:

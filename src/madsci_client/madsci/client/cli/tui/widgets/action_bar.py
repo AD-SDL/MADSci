@@ -6,18 +6,21 @@ standardised footer-style action display used across TUI screens.
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
+from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.message import Message
-from textual.widgets import Static
+from textual.widget import Widget
+from textual.widgets import Button
 
-# Variant -> Rich colour mapping for rendering
-_VARIANT_COLOURS: dict[str, str] = {
-    "default": "dim",
-    "primary": "blue",
-    "success": "green",
-    "warning": "yellow",
-    "error": "red",
+# Variant mapping: ActionDef variant → Textual Button variant
+_BUTTON_VARIANTS: dict[str, str] = {
+    "default": "default",
+    "primary": "primary",
+    "success": "success",
+    "warning": "warning",
+    "error": "error",
 }
 
 
@@ -38,12 +41,11 @@ class ActionDef(NamedTuple):
     variant: str = "default"
 
 
-class ActionBar(Static):
-    """Displays a row of keyboard-bound actions.
+class ActionBar(Widget):
+    """Displays a row of clickable action buttons with keyboard hints.
 
-    Renders each action as ``[key] Label`` with variant-based colouring.
-    Posts :class:`ActionTriggered` messages when actions are invoked
-    programmatically.
+    Each button shows ``(key) Label`` and posts :class:`ActionTriggered`
+    messages when clicked.
 
     Usage::
 
@@ -52,6 +54,21 @@ class ActionBar(Static):
             ActionDef("p", "Pause", "pause", variant="warning"),
             ActionDef("c", "Cancel", "cancel", variant="error"),
         ])
+    """
+
+    DEFAULT_CSS = """
+    ActionBar {
+        height: auto;
+        min-height: 3;
+        max-height: 5;
+    }
+    ActionBar Horizontal {
+        height: auto;
+    }
+    ActionBar Button {
+        min-width: 10;
+        margin: 0 1 0 0;
+    }
     """
 
     class ActionTriggered(Message):
@@ -69,28 +86,35 @@ class ActionBar(Static):
     def __init__(
         self,
         actions: list[ActionDef],
-        **kwargs: object,
+        **kwargs: Any,
     ) -> None:
         """Initialize the action bar.
 
         Args:
             actions: List of action definitions to display.
-            **kwargs: Additional keyword arguments forwarded to ``Static``.
+            **kwargs: Additional keyword arguments forwarded to ``Widget``.
         """
         super().__init__(**kwargs)
         self._actions = list(actions)
 
-    def render(self) -> str:
-        """Render the action bar as Rich markup.
+    def compose(self) -> ComposeResult:
+        """Compose the action bar as a row of buttons."""
+        with Horizontal():
+            for action_def in self._actions:
+                variant = _BUTTON_VARIANTS.get(action_def.variant, "default")
+                yield Button(
+                    f"({action_def.key}) {action_def.label}",
+                    id=f"action-btn-{action_def.action}",
+                    variant=variant,
+                )
 
-        Returns:
-            Formatted string with all action entries.
-        """
-        parts: list[str] = []
-        for action_def in self._actions:
-            colour = _VARIANT_COLOURS.get(action_def.variant, "dim")
-            parts.append(f"[{colour}][{action_def.key}][/{colour}] {action_def.label}")
-        return "  ".join(parts)
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button press — post ActionTriggered message."""
+        button_id = event.button.id or ""
+        prefix = "action-btn-"
+        if button_id.startswith(prefix):
+            action_name = button_id[len(prefix) :]
+            self.post_message(self.ActionTriggered(action_name))
 
     def trigger_action(self, action_name: str) -> None:
         """Programmatically trigger a named action.

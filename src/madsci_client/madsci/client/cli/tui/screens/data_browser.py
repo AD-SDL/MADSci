@@ -5,6 +5,7 @@ a type-aware detail panel for selected datapoints, and preview
 information for JSON, file, and object storage types.
 """
 
+import asyncio
 import json
 from typing import Any, ClassVar
 
@@ -25,7 +26,7 @@ from madsci.client.cli.tui.widgets import (
 from madsci.client.cli.utils.formatting import format_timestamp, truncate
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container
+from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -264,7 +265,7 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the data browser screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Data Browser[/bold blue]")
             yield Label("")
 
@@ -445,6 +446,18 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Refresh data."""
         await self.refresh_data()
         self.notify("Data refreshed", timeout=2)
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

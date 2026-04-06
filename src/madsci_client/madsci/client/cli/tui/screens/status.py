@@ -6,6 +6,7 @@ Provides detailed service status with health information.
 import socket
 from typing import Any, ClassVar
 
+import httpx
 from madsci.client.cli.tui.mixins import (
     AutoRefreshMixin,
     ServiceURLMixin,
@@ -16,7 +17,7 @@ from madsci.client.cli.utils.formatting import format_status_colored, format_sta
 from madsci.client.cli.utils.service_health import check_all_services_async
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -44,7 +45,7 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the status screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Service Status[/bold blue]")
             yield Label("")
 
@@ -57,6 +58,12 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             with Vertical(id="infra-section"):
                 yield Label("[bold]Infrastructure[/bold]")
                 yield DataTable(id="infra-table")
+
+            yield Label("")
+
+            with Vertical(id="nodes-section"):
+                yield Label("[bold]Nodes[/bold]")
+                yield DataTable(id="nodes-table")
 
             yield Label("")
             yield DetailPanel(
@@ -80,6 +87,10 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         infra_table.add_columns("Status", "Service", "Host", "Port", "State")
         infra_table.cursor_type = "row"
 
+        nodes_table = self.query_one("#nodes-table", DataTable)
+        nodes_table.add_columns("Status", "Node", "URL", "State")
+        nodes_table.cursor_type = "row"
+
         await self.refresh_data()
 
     def _update_footer(self) -> None:
@@ -98,6 +109,7 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Refresh all service statuses."""
         await self._refresh_managers()
         await self._refresh_infrastructure()
+        await self._refresh_nodes()
 
     async def _refresh_managers(self) -> None:
         """Refresh manager service statuses."""
@@ -161,6 +173,49 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             for row in infra_rows:
                 table.add_row(*row)
 
+    async def _refresh_nodes(self) -> None:
+        """Refresh node status from the workcell manager."""
+        table = self.query_one("#nodes-table", DataTable)
+        try:
+            workcell_url = self.get_service_url("workcell_manager")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
+                if response.status_code == 200:
+                    nodes = response.json()
+                    with preserve_cursor(table):
+                        table.clear()
+                        if isinstance(nodes, dict):
+                            for name, node_data in nodes.items():
+                                node_status = node_data.get("status", {})
+                                if node_status.get("disconnected", False):
+                                    status_name = "disconnected"
+                                elif node_status.get("errored", False):
+                                    status_name = "errored"
+                                else:
+                                    status_name = "connected"
+                                icon = format_status_icon(status_name)
+                                url = str(node_data.get("node_url", "N/A"))
+                                state = format_status_colored(status_name)
+                                table.add_row(icon, name, url, state)
+                        if table.row_count == 0:
+                            table.add_row(
+                                format_status_icon("unknown"),
+                                "[dim]No nodes[/dim]",
+                                "-",
+                                "-",
+                            )
+                    return
+        except Exception:  # noqa: S110
+            pass
+        with preserve_cursor(table):
+            table.clear()
+            table.add_row(
+                format_status_icon("unknown"),
+                "[dim]Workcell Manager not reachable[/dim]",
+                "-",
+                "-",
+            )
+
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the table."""
         # Get the service name from the selected row
@@ -189,6 +244,20 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                     title=service_name,
                     sections=[DetailSection("Service Info", fields)],
                 )
+
+        elif row_key and table.id == "nodes-table":
+            row = table.get_row(row_key)
+            node_name = str(row[1])
+            detail_panel = self.query_one("#detail-panel", DetailPanel)
+            fields: dict[str, str] = {
+                "Node": node_name,
+                "URL": str(row[2]),
+                "State": str(row[3]),
+            }
+            detail_panel.update_content(
+                title=node_name,
+                sections=[DetailSection("Node Info", fields)],
+            )
 
     async def action_refresh(self) -> None:
         """Refresh status data."""

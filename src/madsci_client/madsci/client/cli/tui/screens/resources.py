@@ -5,6 +5,7 @@ a detail panel for selected resources, and actions for delete,
 lock/unlock, and tree visualization.
 """
 
+import asyncio
 from typing import Any, ClassVar
 
 import httpx
@@ -25,7 +26,7 @@ from madsci.client.cli.tui.widgets import (
 from madsci.client.cli.utils.formatting import format_timestamp
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container
+from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -228,7 +229,7 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the resources screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Resource Inventory[/bold blue]")
             yield Label("")
 
@@ -525,6 +526,22 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 resource_url=resource_url,
             )
         )
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+            "new_resource": self.action_new_resource,
+            "delete_resource": self.action_delete_resource,
+            "toggle_lock": self.action_toggle_lock,
+            "show_tree": self.action_show_tree,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

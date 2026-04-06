@@ -5,6 +5,7 @@ enhanced detail display, and action execution by querying the
 Workcell Manager and communicating with nodes directly.
 """
 
+import asyncio
 from typing import Any, ClassVar
 
 import httpx
@@ -22,7 +23,7 @@ from madsci.client.cli.tui.widgets import (
 from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Vertical, VerticalScroll
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
@@ -43,19 +44,18 @@ def _get_node_status_name(node_status: dict) -> str:
     return "connected"
 
 
-def _format_bool_indicator(value: bool, label: str) -> str:
-    """Format a boolean flag as a colored indicator.
+def _format_bool_indicator(value: bool) -> str:
+    """Format a boolean flag as a colored Yes/No indicator.
 
     Args:
         value: Boolean flag value.
-        label: Display label for the flag.
 
     Returns:
         Rich markup string with colored indicator.
     """
     if value:
-        return f"[red]{label}[/red]"
-    return f"[green]{label}[/green]"
+        return "[red]Yes[/red]"
+    return "[green]No[/green]"
 
 
 def _build_general_section(data: dict, info: dict, node_status: dict) -> DetailSection:
@@ -95,8 +95,12 @@ def _build_status_flags_section(node_status: dict) -> DetailSection:
         DetailSection with all status flag indicators.
     """
     status_fields: dict[str, str] = {}
+    description = node_status.get("description", "")
+    if description:
+        status_fields["Description"] = str(description)
     ready = node_status.get("ready", not node_status.get("errored", False))
-    status_fields["Ready"] = _format_bool_indicator(not ready, "ready")
+    # Ready is inverted: True = good (green), False = bad (red)
+    status_fields["Ready"] = "[green]Yes[/green]" if ready else "[red]No[/red]"
     for flag_name in (
         "busy",
         "paused",
@@ -107,7 +111,7 @@ def _build_status_flags_section(node_status: dict) -> DetailSection:
         "initializing",
     ):
         value = node_status.get(flag_name, False)
-        status_fields[flag_name.capitalize()] = _format_bool_indicator(value, flag_name)
+        status_fields[flag_name.capitalize()] = _format_bool_indicator(value)
     return DetailSection("Status Flags", status_fields)
 
 
@@ -297,7 +301,7 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the nodes screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Node Management[/bold blue]")
             yield Label("")
 
@@ -524,6 +528,23 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 actions=actions,
             )
         )
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Route ActionBar button triggers to screen actions."""
+        action_map = {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+            "pause": self.action_pause_node,
+            "resume": self.action_resume_node,
+            "reset": self.action_reset_node,
+            "toggle_lock": self.action_toggle_lock_node,
+            "execute": self.action_execute_action,
+        }
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())
+            else:
+                handler()
 
     async def action_refresh(self) -> None:
         """Refresh node data."""
