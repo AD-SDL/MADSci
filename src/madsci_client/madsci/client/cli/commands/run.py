@@ -71,6 +71,11 @@ def workflow(
 
     console = get_console(ctx)
 
+    console.print(
+        "[yellow]Note: 'madsci run workflow' is deprecated. "
+        "Use 'madsci workflow submit' instead.[/yellow]"
+    )
+
     if workcell_url is None:
         context = ctx.obj.get("context") if ctx.obj else None
         workcell_url = (
