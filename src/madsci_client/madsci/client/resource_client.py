@@ -262,10 +262,10 @@ class ResourceClient(DualModeClientMixin):
         if self.resource_server_url is None:
             if _configured_url is not None:
                 self.logger.warning(
-                    "Could not connect to the resource manager at %s. Falling back to local-only mode. Resource operations will not be persisted to a server.",
-                    _configured_url,
+                    "Could not connect to the resource manager. Falling back to local-only mode. Resource operations will not be persisted to a server.",
                     event_type=EventType.LOG_WARNING,
                     warning_category=MadsciLocalOnlyWarning,
+                    configured_url=str(_configured_url),
                 )
             else:
                 self.logger.warning(
