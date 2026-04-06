@@ -1,5 +1,7 @@
 """Tests for workflow types and validation."""
 
+from pathlib import Path
+
 import pytest
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
@@ -213,3 +215,174 @@ def test_parameter_key_uniqueness_validation():
             ),
             steps=[],
         )
+
+
+# --- YAML format compatibility tests ---
+
+
+class TestWorkflowYAMLCompatibility:
+    """Test that WorkflowDefinition accepts user-friendly YAML formats."""
+
+    def test_metadata_alias(self):
+        """The 'metadata' key should map to 'definition_metadata'."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "metadata": {"author": "Alice", "version": "2.0"},
+                "steps": [],
+            }
+        )
+        assert wf.definition_metadata.author == "Alice"
+        assert wf.definition_metadata.version == "2.0"
+
+    def test_info_alias_for_description(self):
+        """The 'info' key inside metadata should map to 'description'."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "metadata": {"info": "A useful workflow"},
+                "steps": [],
+            }
+        )
+        assert wf.definition_metadata.description == "A useful workflow"
+
+    def test_root_description_promoted_to_metadata(self):
+        """Root-level 'description' should be promoted into definition_metadata."""
+        wf = WorkflowDefinition.model_validate(
+            {"name": "Test", "description": "Root desc", "steps": []}
+        )
+        assert wf.definition_metadata.description == "Root desc"
+
+    def test_root_description_does_not_override_metadata_description(self):
+        """If metadata already has description, root description is dropped."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "description": "Root desc",
+                "metadata": {"description": "Meta desc"},
+                "steps": [],
+            }
+        )
+        assert wf.definition_metadata.description == "Meta desc"
+
+    def test_promote_root_description_does_not_mutate_input(self):
+        """The before-validator must not modify the caller's dict."""
+        data = {
+            "name": "Test",
+            "description": "Root desc",
+            "steps": [],
+        }
+        original_data = dict(data)
+        WorkflowDefinition.model_validate(data)
+        assert data == original_data, "Input dict was mutated by model_validate"
+
+    def test_promote_root_description_does_not_mutate_metadata_dict(self):
+        """The before-validator must not modify the caller's metadata dict."""
+        metadata = {"author": "Alice"}
+        data = {
+            "name": "Test",
+            "description": "Root desc",
+            "metadata": metadata,
+            "steps": [],
+        }
+        WorkflowDefinition.model_validate(data)
+        assert "description" not in metadata, "Caller's metadata dict was mutated"
+
+    def test_simplified_parameter_format(self):
+        """Simplified [{name, type, default}] parameters should be coerced."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [
+                    {
+                        "name": "message",
+                        "type": "string",
+                        "description": "A message",
+                        "default": "hello",
+                    }
+                ],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.json_inputs) == 1
+        param = wf.parameters.json_inputs[0]
+        assert param.key == "message"
+        assert param.default == "hello"
+        assert param.description == "A message"
+        assert param.parameter_type == "json_input"
+
+    def test_simplified_parameter_type_file_maps_to_file_input(self):
+        """Simplified parameter with type='file' should become a file_input."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [
+                    {"name": "protocol", "type": "file", "description": "Protocol file"}
+                ],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.file_inputs) == 1
+        assert wf.parameters.file_inputs[0].key == "protocol"
+        assert wf.parameters.file_inputs[0].parameter_type == "file_input"
+
+    def test_simplified_parameter_unknown_type_defaults_to_json_input(self):
+        """Simplified parameter with an unrecognized type should default to json_input."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [{"name": "count", "type": "integer", "default": 5}],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.json_inputs) == 1
+        assert wf.parameters.json_inputs[0].key == "count"
+        assert wf.parameters.json_inputs[0].parameter_type == "json_input"
+
+    def test_simplified_parameters_mixed_with_typed(self):
+        """Simplified params can coexist with properly typed params."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": [
+                    {"name": "simple_param", "default": 42},
+                    {
+                        "key": "typed_param",
+                        "parameter_type": "json_input",
+                        "default": "typed",
+                    },
+                ],
+                "steps": [{"name": "s1", "node": "n1", "action": "a1", "args": {}}],
+            }
+        )
+        assert len(wf.parameters.json_inputs) == 2
+        assert wf.parameters.json_inputs[0].key == "simple_param"
+        assert wf.parameters.json_inputs[1].key == "typed_param"
+
+    def test_canonical_format_still_works(self):
+        """The canonical json_inputs/file_inputs dict format still works."""
+        wf = WorkflowDefinition.model_validate(
+            {
+                "name": "Test",
+                "parameters": {
+                    "json_inputs": [{"key": "param1", "default": 0}],
+                    "file_inputs": [{"key": "protocol_file"}],
+                },
+                "steps": [],
+            }
+        )
+        assert len(wf.parameters.json_inputs) == 1
+        assert len(wf.parameters.file_inputs) == 1
+
+    def test_example_workflows_parse(self):
+        """All example workflow files should parse with metadata preserved."""
+        examples_dir = Path("examples/example_lab/workflows")
+        if not examples_dir.exists():
+            pytest.skip("Example workflows directory not found")
+
+        for workflow_file in sorted(examples_dir.glob("*.workflow.yaml")):
+            wf = WorkflowDefinition.from_yaml(workflow_file)
+            assert wf.name, f"{workflow_file.name}: name should not be empty"
+            assert wf.definition_metadata.author is not None, (
+                f"{workflow_file.name}: author should be parsed from metadata"
+            )

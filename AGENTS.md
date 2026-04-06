@@ -181,6 +181,20 @@ The `AbstractManagerBase` class provides:
 - SQLModel for database ORM with PostgreSQL
 - Enum types for status and state management
 
+### Pydantic-First Data Modeling
+
+MADSci uses Pydantic models as the single source of truth for all data structures. This applies everywhere MADSci objects are created, generated, validated, or serialized:
+
+1. **Every YAML/JSON config format must have a corresponding Pydantic model.** If you're generating a config file, there must be a model that can parse it. If no model exists, create one first.
+2. **Use `model_dump()` for serialization** — never construct config dicts by hand or with ad-hoc templates that don't correspond to a model.
+3. **Use `model_validate()` / `from_yaml()` for deserialization** — always parse configs through their Pydantic model.
+4. **Templates must align with models** — when a Jinja2 template generates YAML/JSON, the output structure must be loadable by a specific Pydantic model. Declare this model via the `target_model` field in `template.yaml`.
+
+**Anti-patterns:**
+- Generating YAML from raw string interpolation or dicts without a backing model
+- Creating new config file formats without a Pydantic model to parse them
+- Using `yaml.dump(raw_dict)` instead of `yaml.dump(model.model_dump(...))`
+
 ### ID Generation
 - **ULID (Universally Unique Lexicographically Sortable Identifier)** is used for all IDs throughout MADSci
 - ULIDs provide better performance than UUIDs while maintaining uniqueness and sortability

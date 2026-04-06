@@ -266,7 +266,7 @@ def new(ctx: click.Context, use_tui: bool) -> None:
     """Create new MADSci components from templates.
 
     Generate scaffolding for modules, interfaces, nodes, experiments,
-    workflows, workcells, and labs using templates.
+    workflows, and labs using templates.
 
     \b
     Examples:
@@ -672,54 +672,6 @@ def workflow(
 
 @new.command()
 @click.argument("directory", required=False, type=click.Path())
-@click.option("--name", "-n", help="Workcell name.")
-@click.option("--nodes", help="Comma-separated list of nodes to include.")
-@click.option(
-    "--no-interactive",
-    is_flag=True,
-    help="Skip interactive prompts, use defaults.",
-)
-@click.pass_context
-def workcell(
-    ctx: click.Context,
-    directory: Optional[str],
-    name: Optional[str],
-    nodes: Optional[str],
-    no_interactive: bool,
-) -> None:
-    """Create a new workcell configuration.
-
-    Creates workcell configuration for coordinating multiple nodes.
-
-    \b
-    Examples:
-        madsci new workcell --name my_lab_workcell
-        madsci new workcell --nodes liquidhandler,platereader,incubator
-    """
-    console = get_console(ctx)
-    output_dir = Path(directory) if directory else Path.cwd()
-
-    extra_params = {}
-    if nodes:
-        extra_params["nodes"] = [n.strip() for n in nodes.split(",")]
-
-    result = generate_from_template(
-        template_id="workcell/basic",
-        output_dir=output_dir,
-        name=name,
-        no_interactive=no_interactive,
-        console=console,
-        extra_params=extra_params,
-    )
-
-    if result:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print("  1. Edit the workcell configuration to add your nodes")
-        console.print("  2. Start: madsci start workcell")
-
-
-@new.command()
-@click.argument("directory", required=False, type=click.Path())
 @click.option("--name", "-n", help="Lab name.")
 @click.option(
     "--template",
@@ -785,9 +737,7 @@ def lab(
 @click.option(
     "--category",
     "-c",
-    type=click.Choice(
-        ["module", "interface", "node", "experiment", "workflow", "workcell", "lab"]
-    ),
+    type=click.Choice(["module", "interface", "node", "experiment", "workflow", "lab"]),
     default=None,
     help="Filter by category.",
 )

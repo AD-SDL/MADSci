@@ -33,6 +33,43 @@ _FILE_VALIDATORS: list[tuple[str, str, str]] = [
     ),
 ]
 
+# Manager settings classes indexed by prefix (used for settings.yaml validation)
+_MANAGER_SETTINGS: dict[str, tuple[str, str]] = {
+    # prefix -> (import path, friendly label)
+    "lab": (
+        "madsci.common.types.lab_types.LabManagerSettings",
+        "Lab Manager",
+    ),
+    "event": (
+        "madsci.common.types.event_types.EventManagerSettings",
+        "Event Manager",
+    ),
+    "experiment": (
+        "madsci.common.types.experiment_types.ExperimentManagerSettings",
+        "Experiment Manager",
+    ),
+    "resource": (
+        "madsci.common.types.resource_types.definitions.ResourceManagerSettings",
+        "Resource Manager",
+    ),
+    "data": (
+        "madsci.common.types.datapoint_types.DataManagerSettings",
+        "Data Manager",
+    ),
+    "workcell": (
+        "madsci.common.types.workcell_types.WorkcellManagerSettings",
+        "Workcell Manager",
+    ),
+    "location": (
+        "madsci.common.types.location_types.LocationManagerSettings",
+        "Location Manager",
+    ),
+}
+
+# Map prefixed settings file names to their manager prefix
+# e.g., "workcell.settings.yaml" -> "workcell"
+_SETTINGS_FILE_PATTERNS = ("settings.yaml", "*.settings.yaml")
+
 
 @dataclass
 class ValidationResult:
@@ -96,6 +133,151 @@ def _validate_file(
     return result
 
 
+def _validate_settings_file(file_path: Path) -> list[ValidationResult]:
+    """Validate a settings YAML file against manager settings classes.
+
+    For ``settings.yaml``, validates against all manager settings classes.
+    For ``<prefix>.settings.yaml``, validates against the matching manager only.
+
+    Returns one ValidationResult per manager settings class attempted.
+    """
+    import yaml
+
+    results: list[ValidationResult] = []
+
+    # Parse the YAML
+    try:
+        with Path.open(file_path) as f:
+            yaml_data = yaml.safe_load(f)
+    except Exception as exc:
+        results.append(
+            ValidationResult(
+                path=str(file_path),
+                valid=False,
+                file_type="settings",
+                errors=[f"Failed to parse YAML: {exc}"],
+            )
+        )
+        return results
+
+    if not isinstance(yaml_data, dict):
+        results.append(
+            ValidationResult(
+                path=str(file_path),
+                valid=False,
+                file_type="settings",
+                errors=[
+                    "Settings file must contain a YAML mapping (dict), not a scalar or list."
+                ],
+            )
+        )
+        return results
+
+    # Determine which managers to validate against
+    filename = file_path.name
+    if filename == "settings.yaml":
+        # Shared settings file — validate against all managers
+        managers_to_check = dict(_MANAGER_SETTINGS)
+    else:
+        # Manager-specific: e.g., "workcell.settings.yaml" -> prefix "workcell"
+        prefix = filename.split(".")[0]
+        if prefix in _MANAGER_SETTINGS:
+            managers_to_check = {prefix: _MANAGER_SETTINGS[prefix]}
+        else:
+            results.append(
+                ValidationResult(
+                    path=str(file_path),
+                    valid=False,
+                    file_type="settings",
+                    warnings=[
+                        f"Unknown settings prefix '{prefix}'. "
+                        f"Known prefixes: {', '.join(sorted(_MANAGER_SETTINGS))}."
+                    ],
+                )
+            )
+            return results
+
+    for _prefix, (model_path, label) in managers_to_check.items():
+        result = ValidationResult(
+            path=str(file_path),
+            valid=False,
+            file_type=f"{label} settings",
+        )
+
+        try:
+            model_class = _import_model(model_path)
+        except Exception as exc:
+            result.errors.append(f"Could not load {label} settings class: {exc}")
+            results.append(result)
+            continue
+
+        try:
+            import tempfile
+
+            with (
+                tempfile.TemporaryDirectory() as empty_dir,
+                warnings.catch_warnings(),
+            ):
+                warnings.simplefilter("ignore")
+                # Construct with _settings_dir pointing to an empty directory
+                # to prevent walk-up file discovery from finding and merging
+                # unrelated config files. Env vars still supplement validation,
+                # which is correct: in production, settings come from both
+                # YAML and environment.
+                model_class(_settings_dir=empty_dir, **yaml_data)
+            result.valid = True
+        except Exception as exc:
+            result.errors.append(f"{label}: {exc}")
+
+        results.append(result)
+
+    return results
+
+
+def _is_settings_file(filename: str) -> bool:
+    """Check if a filename matches a settings file pattern."""
+    return filename == "settings.yaml" or (
+        filename.endswith(".settings.yaml") and not filename.startswith(".")
+    )
+
+
+def _validate_single_file(path: Path) -> list[ValidationResult]:
+    """Validate a single file, auto-detecting its type."""
+    if _is_settings_file(path.name):
+        return _validate_settings_file(path)
+
+    for glob_pat, model_path, label in _FILE_VALIDATORS:
+        if fnmatch.fnmatch(path.name, glob_pat):
+            return [_validate_file(path, model_path, label)]
+
+    return [
+        ValidationResult(
+            path=str(path),
+            valid=False,
+            file_type="unknown",
+            warnings=["File does not match any known MADSci config pattern."],
+        )
+    ]
+
+
+def _scan_directory(directory: Path) -> list[ValidationResult]:
+    """Scan a directory for all known config files and validate them."""
+    results: list[ValidationResult] = []
+
+    # Settings files
+    for settings_match in sorted(directory.rglob("settings.yaml")):
+        results.extend(_validate_settings_file(settings_match))
+    for settings_match in sorted(directory.rglob("*.settings.yaml")):
+        results.extend(_validate_settings_file(settings_match))
+
+    # Definition and workflow files
+    for glob_pat, model_path, label in _FILE_VALIDATORS:
+        for match in sorted(directory.rglob(glob_pat)):
+            results.append(_validate_file(match, model_path, label))
+
+    return results
+
+
 def _scan_and_validate(paths: tuple[str, ...]) -> list[ValidationResult]:
     """Scan paths for known config files and validate each one."""
     results: list[ValidationResult] = []
@@ -106,30 +288,13 @@ def _scan_and_validate(paths: tuple[str, ...]) -> list[ValidationResult]:
         if path.is_dir():
             dirs_to_scan.append(path)
         elif path.is_file():
-            # Validate the specific file — try to match pattern
-            for glob_pat, model_path, label in _FILE_VALIDATORS:
-                if fnmatch.fnmatch(path.name, glob_pat):
-                    results.append(_validate_file(path, model_path, label))
-                    break
-            else:
-                results.append(
-                    ValidationResult(
-                        path=str(path),
-                        valid=False,
-                        file_type="unknown",
-                        warnings=[
-                            "File does not match any known MADSci config pattern."
-                        ],
-                    )
-                )
+            results.extend(_validate_single_file(path))
 
     if not dirs_to_scan and not results:
         dirs_to_scan.append(Path.cwd())
 
     for directory in dirs_to_scan:
-        for glob_pat, model_path, label in _FILE_VALIDATORS:
-            for match in sorted(directory.rglob(glob_pat)):
-                results.append(_validate_file(match, model_path, label))
+        results.extend(_scan_directory(directory))
 
     return results
 
@@ -198,14 +363,18 @@ def validate(
 ) -> None:
     """Validate MADSci configuration files.
 
-    Scans directories (or the current directory) for manager, node, and workflow
-    definition YAML files and validates them against their schemas.
+    Scans directories (or the current directory) for settings, workflow,
+    and definition YAML files and validates them against their schemas.
+
+    Supports settings.yaml (shared lab settings), manager-specific settings
+    files (e.g., workcell.settings.yaml), workflow definitions, and legacy
+    manager/node definition files (with deprecation warnings).
 
     \b
     Examples:
         madsci validate                       Validate current directory
         madsci validate examples/example_lab/  Validate a specific directory
-        madsci validate path/to/file.yaml     Validate a single file
+        madsci validate path/to/settings.yaml Validate a settings file
         madsci validate --json                Machine-readable output
     """
     from madsci.client.cli.utils.output import get_console

@@ -38,6 +38,10 @@ Classes
 `LabManagerDefinition(**data: Any)`
 :   Definition for a MADSci Lab Manager.
     
+    .. deprecated:: 0.7.0
+        ``LabManagerDefinition`` is removed in v0.7.0.
+        Use ``LabManagerSettings`` for configuration.
+    
     Create a new model by parsing and validating input data from keyword arguments.
     
     Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be

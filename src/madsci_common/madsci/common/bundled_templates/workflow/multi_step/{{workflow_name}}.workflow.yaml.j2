@@ -5,19 +5,15 @@
 
 # Workflow name (derived from workflow_name)
 name: {{ workflow_name | replace('_', ' ') | title }}
-description: "{{ workflow_description }}"
 
-# Metadata about this workflow
 metadata:
-  author: "MADSci User"
+  description: "{{ workflow_description }}"
   version: "1.0.0"
-  tags:
-    - generated
-    - multi-step
 
 # Workflow parameters (passed in when starting the workflow)
 # Add any workflow-level parameters your steps need here
-parameters: {}
+parameters:
+  json_inputs: []
 
 # Workflow steps - executed sequentially
 steps:

@@ -1,7 +1,8 @@
 """Types for MADSci Squid Lab configuration."""
 
+import warnings
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from madsci.common.types.base_types import (
     PathLike,
@@ -74,7 +75,12 @@ class LabHealth(ManagerHealth):
 
 
 class LabManagerDefinition(ManagerDefinition):
-    """Definition for a MADSci Lab Manager."""
+    """Definition for a MADSci Lab Manager.
+
+    .. deprecated:: 0.7.0
+        ``LabManagerDefinition`` is removed in v0.7.0.
+        Use ``LabManagerSettings`` for configuration.
+    """
 
     name: str = Field(
         title="Lab Name",
@@ -97,3 +103,14 @@ class LabManagerDefinition(ManagerDefinition):
         title="Description",
         description="A description of the lab.",
     )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Emit deprecation warning on instantiation."""
+        from madsci.common.deprecation import MadsciDeprecationWarning  # noqa: PLC0415
+
+        warnings.warn(
+            "LabManagerDefinition is deprecated and removed in v0.7.0. "
+            "Use LabManagerSettings for configuration.",
+            MadsciDeprecationWarning,
+            stacklevel=4,
+        )
