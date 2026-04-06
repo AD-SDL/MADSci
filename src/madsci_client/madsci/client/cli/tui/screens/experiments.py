@@ -344,12 +344,14 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 status = _get_experiment_status(exp)
                 icon = format_status_icon(status)
                 name = exp.get("experiment_name", "Unknown")
-                short_id = exp_id[:12] if exp_id else "-"
+                exp_id_str = exp_id or "-"
                 run_name = exp.get("run_name", "-") or "-"
                 started = exp.get("started_at")
                 started_str = format_timestamp(started, short=True) if started else "-"
                 duration_str = _calculate_duration(exp)
-                table.add_row(icon, name, short_id, run_name, started_str, duration_str)
+                table.add_row(
+                    icon, name, exp_id_str, run_name, started_str, duration_str
+                )
 
             if not filtered:
                 table.add_row(
@@ -383,11 +385,11 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             return
 
         row = table.get_row(row_key)
-        short_id = str(row[2])
+        row_id = str(row[2])
 
-        # Find experiment by matching short ID
+        # Find experiment by matching full ID
         for exp_id, exp_data in self.experiments_data.items():
-            if exp_id[:12] == short_id:
+            if exp_id == row_id:
                 self.selected_experiment_id = exp_id
                 self._update_detail_panel(exp_id, exp_data)
                 break

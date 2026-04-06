@@ -882,7 +882,7 @@ def _history_to_rows(history: dict) -> list[dict]:
     for action_name_key, results in history.items():
         result_list = results if isinstance(results, list) else [results]
         for r in result_list:
-            rid = str(_extract_attr(r, "action_id", "-"))[:12]
+            rid = str(_extract_attr(r, "action_id", "-"))
             st = str(_extract_attr(r, "status", "-"))
             rows.append({"action": action_name_key, "id": rid, "status": st})
     return rows

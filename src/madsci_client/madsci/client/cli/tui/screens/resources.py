@@ -334,7 +334,7 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             for res_id in filtered:
                 res = self.resources_data[res_id]
                 name = res.get("resource_name", "Unknown")
-                short_id = res_id[:12] if res_id else "-"
+                res_id_str = res_id or "-"
                 base_type = res.get("base_type", "unknown")
                 quantity = (
                     str(res.get("quantity", "-"))
@@ -346,12 +346,10 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                     if res.get("capacity") is not None
                     else "-"
                 )
-                parent = (
-                    str(res.get("parent_id", ""))[:12] if res.get("parent_id") else "-"
-                )
+                parent = str(res.get("parent_id", "")) if res.get("parent_id") else "-"
                 lock = ""  # Lock status requires a separate API call
                 table.add_row(
-                    name, short_id, base_type, quantity, capacity, parent, lock
+                    name, res_id_str, base_type, quantity, capacity, parent, lock
                 )
 
             if not filtered:
@@ -381,11 +379,11 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             return
 
         row = table.get_row(row_key)
-        short_id = str(row[1])
+        row_id = str(row[1])
 
-        # Find resource by matching short ID
+        # Find resource by matching full ID
         for res_id, res_data in self.resources_data.items():
-            if res_id[:12] == short_id:
+            if res_id == row_id:
                 self.selected_resource_id = res_id
                 self._update_detail_panel(res_id, res_data)
                 break

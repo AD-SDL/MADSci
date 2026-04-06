@@ -6,7 +6,6 @@ This module contains the screen implementations for the MADSci TUI.
 from madsci.client.cli.tui.screens.action_executor import ActionExecutorScreen
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.data_browser import DataBrowserScreen
-from madsci.client.cli.tui.screens.event_analytics import EventAnalyticsScreen
 from madsci.client.cli.tui.screens.experiments import ExperimentsScreen
 from madsci.client.cli.tui.screens.locations import LocationsScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
@@ -23,7 +22,6 @@ __all__ = [
     "ActionExecutorScreen",
     "DashboardScreen",
     "DataBrowserScreen",
-    "EventAnalyticsScreen",
     "ExperimentsScreen",
     "LocationsScreen",
     "LogsScreen",

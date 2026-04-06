@@ -88,10 +88,10 @@ class ResourceTreeScreen(Screen):
             resource: Resource data dictionary for the root resource.
             hierarchy: Hierarchy response with ancestor_ids and descendant_ids.
         """
-        res_name = resource.get("resource_name", self.resource_id[:12])
+        res_name = resource.get("resource_name", self.resource_id)
         res_type = resource.get("base_type", "")
         tree.root.set_label(
-            f"[bold]{res_name}[/bold] ({res_type}) [{self.resource_id[:12]}]"
+            f"[bold]{res_name}[/bold] ({res_type}) [{self.resource_id}]"
         )
         tree.root.expand()
 
@@ -102,7 +102,7 @@ class ResourceTreeScreen(Screen):
         if ancestor_ids:
             ancestors_node = tree.root.add("[dim]Ancestors[/dim]")
             for anc_id in ancestor_ids:
-                ancestors_node.add(f"{anc_id[:12]}...")
+                ancestors_node.add(f"{anc_id}")
             ancestors_node.expand()
 
         # Add descendants recursively
@@ -123,7 +123,7 @@ class ResourceTreeScreen(Screen):
         """
         children = descendant_ids.get(parent_id, [])
         for child_id in children:
-            node = parent_node.add(f"{child_id[:12]}...")
+            node = parent_node.add(f"{child_id}")
             self._add_children(node, child_id, descendant_ids)
 
     def action_go_back(self) -> None:

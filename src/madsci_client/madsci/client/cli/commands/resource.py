@@ -72,11 +72,11 @@ def _resource_to_row(r: Any) -> dict:
 
     return {
         "name": truncate(str(name), 30),
-        "id": str(rid)[:12],
+        "id": str(rid),
         "type": str(base_type),
         "quantity": str(quantity) if quantity is not None else "-",
         "capacity": str(capacity) if capacity is not None else "-",
-        "parent": str(parent_id)[:12] if parent_id else "-",
+        "parent": str(parent_id) if parent_id else "-",
     }
 
 
@@ -354,7 +354,7 @@ def create_resource(
         console.print(getattr(r, "resource_id", ""))
     else:
         rid = getattr(r, "resource_id", "unknown")
-        success(console, f"Resource created -- ID: {rid[:12]}")
+        success(console, f"Resource created -- ID: {rid}")
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +390,7 @@ def delete_resource(
     url = _get_resource_url(ctx, resource_url)
 
     if not yes:
-        click.confirm(f"Delete resource {resource_id[:12]}?", abort=True)
+        click.confirm(f"Delete resource {resource_id}?", abort=True)
 
     client = _make_client(url, timeout)
     r = client.remove_resource(resource_id)
@@ -400,7 +400,7 @@ def delete_resource(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{resource_id} deleted")
     else:
-        success(console, f"Resource {resource_id[:12]} deleted.")
+        success(console, f"Resource {resource_id} deleted.")
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +438,7 @@ def restore_resource(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{resource_id} restored")
     else:
-        success(console, f"Resource {resource_id[:12]} restored.")
+        success(console, f"Resource {resource_id} restored.")
 
 
 # ---------------------------------------------------------------------------
@@ -490,9 +490,9 @@ def tree_resource(
     # Build a Rich Tree
     # Show ancestors as a chain leading to the resource
     if hierarchy.ancestor_ids:
-        root_label = f"[dim]{hierarchy.ancestor_ids[-1][:12]}[/dim]"
+        root_label = f"[dim]{hierarchy.ancestor_ids[-1]}[/dim]"
     else:
-        root_label = f"[bold cyan]{resource_id[:12]}[/bold cyan] (root)"
+        root_label = f"[bold cyan]{resource_id}[/bold cyan] (root)"
 
     tree = Tree(root_label)
 
@@ -502,10 +502,10 @@ def tree_resource(
         for anc_id in reversed(
             hierarchy.ancestor_ids[:-1] if len(hierarchy.ancestor_ids) > 1 else []
         ):
-            current = current.add(f"[dim]{anc_id[:12]}[/dim]")
+            current = current.add(f"[dim]{anc_id}[/dim]")
 
         # Add the target resource as a highlighted node
-        target_node = current.add(f"[bold cyan]{resource_id[:12]}[/bold cyan] (target)")
+        target_node = current.add(f"[bold cyan]{resource_id}[/bold cyan] (target)")
     else:
         target_node = tree
 
@@ -513,7 +513,7 @@ def tree_resource(
     def _add_descendants(parent_node: Any, parent_id: str) -> None:
         children = hierarchy.descendant_ids.get(parent_id, [])
         for child_id in children:
-            child_node = parent_node.add(f"{child_id[:12]}")
+            child_node = parent_node.add(f"{child_id}")
             _add_descendants(child_node, child_id)
 
     _add_descendants(target_node, resource_id)
@@ -576,16 +576,14 @@ def lock_resource(
     )
 
     if result is None:
-        raise click.ClickException(
-            f"Failed to acquire lock on resource {resource_id[:12]}."
-        )
+        raise click.ClickException(f"Failed to acquire lock on resource {resource_id}.")
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, _resource_to_dict(result), format=fmt.value)
     elif fmt == OutputFormat.QUIET:
         console.print(f"{resource_id} locked")
     else:
-        success(console, f"Lock acquired on resource {resource_id[:12]}.")
+        success(console, f"Lock acquired on resource {resource_id}.")
 
 
 # ---------------------------------------------------------------------------
@@ -630,16 +628,14 @@ def unlock_resource(
     )
 
     if result is None:
-        raise click.ClickException(
-            f"Failed to release lock on resource {resource_id[:12]}."
-        )
+        raise click.ClickException(f"Failed to release lock on resource {resource_id}.")
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, _resource_to_dict(result), format=fmt.value)
     elif fmt == OutputFormat.QUIET:
         console.print(f"{resource_id} unlocked")
     else:
-        success(console, f"Lock released on resource {resource_id[:12]}.")
+        success(console, f"Lock released on resource {resource_id}.")
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +687,7 @@ def quantity_set(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{resource_id} quantity={value}")
     else:
-        success(console, f"Resource {resource_id[:12]} quantity set to {value}.")
+        success(console, f"Resource {resource_id} quantity set to {value}.")
 
 
 @quantity_group.command("adjust")
@@ -732,7 +728,7 @@ def quantity_adjust(
         new_qty = getattr(r, "quantity", "?")
         success(
             console,
-            f"Resource {resource_id[:12]} quantity adjusted by {sign}{delta} (now {new_qty}).",
+            f"Resource {resource_id} quantity adjusted by {sign}{delta} (now {new_qty}).",
         )
 
 
@@ -992,7 +988,7 @@ def history_resource(
         return
 
     if not entries:
-        info(console, f"No history found for resource {resource_id[:12]}.")
+        info(console, f"No history found for resource {resource_id}.")
         return
 
     rows = []
@@ -1012,6 +1008,6 @@ def history_resource(
         console,
         rows,
         format="text",
-        title=f"History for {resource_id[:12]}",
+        title=f"History for {resource_id}",
         columns=_HISTORY_COLUMNS,
     )

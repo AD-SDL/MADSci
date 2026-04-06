@@ -121,7 +121,7 @@ def create_campaign(
             if isinstance(result, dict)
             else getattr(result, "campaign_id", "")
         )
-        success(console, f"Campaign created -- ID: {str(cid)[:12]}")
+        success(console, f"Campaign created -- ID: {cid!s}")
 
 
 # ---------------------------------------------------------------------------

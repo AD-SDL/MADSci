@@ -401,66 +401,6 @@ class TestEventsPurge:
 
 
 # ---------------------------------------------------------------------------
-# events utilization
-# ---------------------------------------------------------------------------
-
-
-class TestEventsUtilization:
-    """Tests for 'events utilization'."""
-
-    def test_utilization_help(self) -> None:
-        runner = CliRunner()
-        result = runner.invoke(madsci, ["events", "utilization", "--help"])
-        assert result.exit_code == 0
-        assert "--period" in result.output
-        assert "--csv" in result.output
-
-    @patch("httpx.get")
-    def test_utilization_basic(self, mock_get) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = [
-            {"date": "2026-01-01", "events": 100},
-            {"date": "2026-01-02", "events": 150},
-        ]
-        mock_get.return_value = mock_response
-
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "utilization",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-
-    @patch("httpx.get")
-    def test_utilization_json(self, mock_get) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = [{"date": "2026-01-01", "events": 100}]
-        mock_get.return_value = mock_response
-
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "--json",
-                "events",
-                "utilization",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-
-
-# ---------------------------------------------------------------------------
 # events backup
 # ---------------------------------------------------------------------------
 

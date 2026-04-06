@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, ClassVar
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, get_default_services
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.data_browser import DataBrowserScreen
-from madsci.client.cli.tui.screens.event_analytics import EventAnalyticsScreen
 from madsci.client.cli.tui.screens.experiments import ExperimentsScreen
 from madsci.client.cli.tui.screens.locations import LocationsScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
@@ -51,7 +50,6 @@ class MadsciApp(App):
         Binding("i", "switch_screen('resources')", "Inventory", show=True),
         Binding("b", "switch_screen('data')", "Data Browser", show=True),
         Binding("o", "switch_screen('locations')", "Locations", show=True),
-        Binding("y", "switch_screen('analytics')", "Analytics", show=True),
         Binding("q", "quit", "Quit", show=True),
         Binding("?", "show_help", "Help", show=True),
         Binding("r", "refresh", "Refresh", show=True),
@@ -68,7 +66,6 @@ class MadsciApp(App):
         "resources": ResourcesScreen,
         "data": DataBrowserScreen,
         "locations": LocationsScreen,
-        "analytics": EventAnalyticsScreen,
     }
 
     def __init__(
@@ -134,7 +131,6 @@ class MadsciApp(App):
             "  i - Inventory (Resources)\n"
             "  b - Data Browser\n"
             "  o - Locations\n"
-            "  y - Analytics\n"
             "  r - Refresh\n"
             "  Ctrl+P - Command Palette\n"
             "  q - Quit",

@@ -69,9 +69,9 @@ def _location_to_row(loc: Any) -> dict:
 
     return {
         "name": truncate(str(name), 30),
-        "id": str(lid)[:12],
+        "id": str(lid),
         "template": truncate(str(template), 20),
-        "resource": str(resource_id)[:12] if resource_id != "-" else "-",
+        "resource": str(resource_id) if resource_id != "-" else "-",
         "transfers": "yes" if transfers else "no",
         "reservation": "reserved" if reservation else "-",
     }
@@ -313,7 +313,7 @@ def create_location(
         console.print(getattr(result, "location_id", ""))
     else:
         lid = getattr(result, "location_id", "unknown")
-        success(console, f"Location created -- ID: {lid[:12]}")
+        success(console, f"Location created -- ID: {lid}")
 
 
 # ---------------------------------------------------------------------------
@@ -407,7 +407,7 @@ def create_from_template(
         lid = getattr(result, "location_id", "unknown")
         success(
             console,
-            f"Location created from template '{template_name}' -- ID: {lid[:12]}",
+            f"Location created from template '{template_name}' -- ID: {lid}",
         )
 
 
@@ -512,7 +512,7 @@ def location_resources(
     if descendants:
         for parent_id, children in descendants.items():
             for child_id in children:
-                console.print(f"    {parent_id[:12]} -> {child_id[:12]}")
+                console.print(f"    {parent_id} -> {child_id}")
     console.print()
 
 
@@ -553,7 +553,7 @@ def attach_resource(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{location_name} attached {resource_id}")
     else:
-        success(console, f"Resource {resource_id[:12]} attached to '{location_name}'.")
+        success(console, f"Resource {resource_id} attached to '{location_name}'.")
 
 
 # ---------------------------------------------------------------------------
@@ -744,8 +744,8 @@ def transfer_graph(
     for src, targets in graph.items():
         rows.append(
             {
-                "source": str(src)[:12],
-                "targets": ", ".join(str(t)[:12] for t in targets) if targets else "-",
+                "source": str(src),
+                "targets": ", ".join(str(t) for t in targets) if targets else "-",
             }
         )
 

@@ -257,14 +257,14 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             for loc_id in filtered:
                 loc = self.locations_data[loc_id]
                 name = loc.get("location_name", "Unknown")
-                short_id = loc_id[:12] if loc_id else "-"
+                loc_id_str = loc_id or "-"
                 template = loc.get("location_template_name", "-") or "-"
                 resource = loc.get("resource_id", "")
-                resource_display = resource[:12] if resource else "None"
+                resource_display = resource or "None"
                 transfers = "Yes" if loc.get("allow_transfers", True) else "No"
                 reservation = "Reserved" if loc.get("reservation") else "-"
                 table.add_row(
-                    name, short_id, template, resource_display, transfers, reservation
+                    name, loc_id_str, template, resource_display, transfers, reservation
                 )
 
             if not filtered:
@@ -291,11 +291,11 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             return
 
         row = table.get_row(row_key)
-        short_id = str(row[1])
+        row_id = str(row[1])
 
-        # Find location by matching short ID
+        # Find location by matching full ID
         for loc_id, loc_data in self.locations_data.items():
-            if loc_id[:12] == short_id:
+            if loc_id == row_id:
                 self.selected_location_id = loc_id
                 self._update_detail_panel(loc_id, loc_data)
                 break

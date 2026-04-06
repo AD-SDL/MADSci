@@ -112,7 +112,7 @@ class TestExperimentList:
                 ],
             )
             assert result.exit_code == 0
-            assert "test-experiment" in result.output
+            assert "Experiments" in result.output
 
     def test_list_json(self) -> None:
         exps = [_make_experiment()]
@@ -129,6 +129,13 @@ class TestExperimentList:
                 ],
             )
             assert result.exit_code == 0
+            assert "test-experiment" in result.output
+            # Full ULID ID appears in JSON output (26 chars, not truncated to 12)
+            import json as _json
+
+            data = _json.loads(result.output)
+            assert len(data) == 1
+            assert len(data[0]["experiment_id"]) == 26
 
     def test_list_empty(self) -> None:
         with _patch_client_init(), _patch_client("get_experiments", []):

@@ -1,12 +1,10 @@
 """MADSci CLI events command group.
 
 Provides subcommands for event management: querying, viewing, archiving,
-purging, utilization reporting, and backup operations.
+purging, and backup operations.
 """
 
 from __future__ import annotations
-
-from pathlib import Path
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -106,7 +104,6 @@ def events() -> None:
         madsci events get <id>                  Show event details
         madsci events archive --ids <id1,id2>   Archive specific events
         madsci events purge --older-than-days 30
-        madsci events utilization               Show utilization report
         madsci events backup --create           Create event backup
     """
 
@@ -370,94 +367,6 @@ def purge_events(
     else:
         purged_count = result.get("purged_count", 0) if isinstance(result, dict) else 0
         success(console, f"Purged {purged_count} archived event(s).")
-
-
-# ---------------------------------------------------------------------------
-# events utilization
-# ---------------------------------------------------------------------------
-
-
-@events.command("utilization")
-@click.option(
-    "--period",
-    type=click.Choice(["daily", "weekly", "monthly"], case_sensitive=False),
-    default="daily",
-    show_default=True,
-    help="Aggregation period.",
-)
-@click.option("--csv", "csv_output", is_flag=True, help="Output as CSV.")
-@click.option(
-    "--save-to",
-    type=click.Path(),
-    default=None,
-    help="Save output to a file.",
-)
-@_EVENT_URL_OPTION
-@timeout_option(default=10.0)
-@click.pass_context
-@with_service_error_handling
-def utilization_report(
-    ctx: click.Context,
-    period: str,
-    csv_output: bool,
-    save_to: str | None,
-    event_url: str | None,
-    timeout: float,
-) -> None:
-    """Show event utilization report.
-
-    \b
-    Examples:
-        madsci events utilization
-        madsci events utilization --period weekly
-        madsci events utilization --csv --save-to ./util.csv
-    """
-    import httpx
-
-    console = get_console(ctx)
-    fmt = determine_output_format(ctx)
-    url = _get_event_url(ctx, event_url)
-
-    response = httpx.get(
-        f"{url}utilization/periods",
-        params={"period": period},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    result = response.json()
-
-    if save_to:
-        if csv_output and isinstance(result, list) and result:
-            import csv
-
-            with Path(save_to).open("w", newline="") as f:
-                writer = csv.DictWriter(f, fieldnames=result[0].keys())
-                writer.writeheader()
-                writer.writerows(result)
-        else:
-            import json as json_mod
-
-            with Path(save_to).open("w") as f:
-                json_mod.dump(result, f, indent=2, default=str)
-        success(console, f"Utilization report saved to {save_to}")
-        return
-
-    if csv_output and isinstance(result, list) and result:
-        # Print CSV to stdout
-        import csv
-        import io
-
-        buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=result[0].keys())
-        writer.writeheader()
-        writer.writerows(result)
-        console.print(buf.getvalue())
-        return
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    else:
-        output_result(console, result, format="text", title=f"Utilization ({period})")
 
 
 # ---------------------------------------------------------------------------

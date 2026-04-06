@@ -13,7 +13,7 @@ from madsci.client.cli.utils.formatting import truncate
 from madsci.client.cli.utils.service_health import check_all_services_async
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
@@ -58,7 +58,6 @@ class QuickActionsPanel(Static):
         yield Button("(i) Inventory", id="action-resources", variant="default")
         yield Button("(b) Data Browser", id="action-data", variant="default")
         yield Button("(o) Locations", id="action-locations", variant="default")
-        yield Button("(y) Analytics", id="action-analytics", variant="default")
         yield Button("(r) Refresh", id="action-refresh", variant="default")
         yield Button("(q) Quit", id="action-quit", variant="error")
 
@@ -73,7 +72,6 @@ class QuickActionsPanel(Static):
             "action-resources": "resources",
             "action-data": "data",
             "action-locations": "locations",
-            "action-analytics": "analytics",
         }
         button_id = event.button.id
         if button_id in action_map:
@@ -165,7 +163,7 @@ class DashboardScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
     def compose(self) -> ComposeResult:
         """Compose the dashboard layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]MADSci Lab Dashboard[/bold blue]")
             yield Label("")
 

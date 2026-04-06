@@ -103,7 +103,7 @@ def format_log_entry(
     # Source
     source = entry.get("source", entry.get("service", entry.get("name", "")))
     if source:
-        source_str = f"{source[:12]:12}"
+        source_str = source
         if not no_color:
             text.append(source_str, style="cyan")
         else:

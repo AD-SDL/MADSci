@@ -72,7 +72,7 @@ def _experiment_to_row(exp) -> dict:  # noqa: ANN001
     return {
         "status": f"{format_status_icon(status_label)} {format_status_colored(status_label)}",
         "name": name or "-",
-        "id": exp.experiment_id[:12],
+        "id": exp.experiment_id,
         "run_name": exp.run_name or "-",
         "started": format_timestamp(exp.started_at),
         "ended": format_timestamp(exp.ended_at),
@@ -309,7 +309,7 @@ def start_experiment(
     elif fmt == OutputFormat.QUIET:
         console.print(exp.experiment_id)
     else:
-        success(console, f"Experiment started -- ID: {exp.experiment_id[:12]}")
+        success(console, f"Experiment started -- ID: {exp.experiment_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +390,7 @@ def pause_experiment(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{exp.experiment_id} paused")
     else:
-        success(console, f"Experiment {experiment_id[:12]} paused.")
+        success(console, f"Experiment {experiment_id} paused.")
 
 
 # ---------------------------------------------------------------------------
@@ -428,7 +428,7 @@ def continue_experiment(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{exp.experiment_id} continued")
     else:
-        success(console, f"Experiment {experiment_id[:12]} continued.")
+        success(console, f"Experiment {experiment_id} continued.")
 
 
 # ---------------------------------------------------------------------------
@@ -462,7 +462,7 @@ def cancel_experiment(
     url = _get_experiment_url(ctx, experiment_url)
 
     if not yes:
-        click.confirm(f"Cancel experiment {experiment_id[:12]}?", abort=True)
+        click.confirm(f"Cancel experiment {experiment_id}?", abort=True)
 
     client = _make_client(url, timeout)
     exp = client.cancel_experiment(experiment_id)
@@ -472,7 +472,7 @@ def cancel_experiment(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{exp.experiment_id} cancelled")
     else:
-        success(console, f"Experiment {experiment_id[:12]} cancelled.")
+        success(console, f"Experiment {experiment_id} cancelled.")
 
 
 # ---------------------------------------------------------------------------
@@ -523,4 +523,4 @@ def end_experiment(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{exp.experiment_id} ended")
     else:
-        success(console, f"Experiment {experiment_id[:12]} ended.")
+        success(console, f"Experiment {experiment_id} ended.")

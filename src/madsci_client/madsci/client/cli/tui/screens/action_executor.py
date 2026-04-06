@@ -175,7 +175,7 @@ class ActionExecutorScreen(Screen):
                     f"{self.node_url.rstrip('/')}/action/{action_name}/{action_id}/start"
                 )
 
-                self.notify(f"Action started: {action_id[:12]}", timeout=2)
+                self.notify(f"Action started: {action_id}", timeout=2)
 
                 # Poll for result (30s timeout)
                 for _ in range(60):

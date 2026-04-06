@@ -56,9 +56,9 @@ def _extract_source(source_data: object) -> str:
         for key in ("node_id", "manager_id", "workcell_id", "experiment_id"):
             val = source_data.get(key)
             if val:
-                return str(val)[:12]
+                return str(val)
         return ""
-    return str(source_data)[:12]
+    return str(source_data)
 
 
 def _extract_message(entry: dict[str, Any]) -> str:

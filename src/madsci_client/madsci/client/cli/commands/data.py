@@ -58,7 +58,7 @@ def _make_client(data_url: str, timeout: float) -> DataClient:  # noqa: F821 -- 
 def _datapoint_to_row(dp) -> dict:  # noqa: ANN001
     """Convert a DataPoint to a dict for table rendering."""
     return {
-        "id": dp.datapoint_id[:12] if dp.datapoint_id else "-",
+        "id": dp.datapoint_id or "-",
         "label": getattr(dp, "label", None) or "-",
         "type": dp.data_type or "-",
         "timestamp": format_timestamp(getattr(dp, "data_timestamp", None)),
@@ -349,7 +349,7 @@ def submit_datapoint(
     elif fmt == OutputFormat.QUIET:
         console.print(result.datapoint_id)
     else:
-        success(console, f"Datapoint submitted -- ID: {result.datapoint_id[:12]}")
+        success(console, f"Datapoint submitted -- ID: {result.datapoint_id}")
 
 
 # ---------------------------------------------------------------------------

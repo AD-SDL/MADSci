@@ -106,7 +106,7 @@ def _workflow_to_row(wf: Workflow) -> dict:
     return {
         "status": f"{format_status_icon(status_label)} {format_status_colored(status_label)}",
         "name": wf.name or "-",
-        "id": wf.workflow_id[:12],
+        "id": wf.workflow_id,
         "progress": _workflow_progress(wf),
         "step": _workflow_step_label(wf),
         "started": format_timestamp(wf.start_time),
@@ -514,7 +514,7 @@ def pause_workflow(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{wf.workflow_id} paused")
     else:
-        success(console, f"Workflow {workflow_id[:12]} paused.")
+        success(console, f"Workflow {workflow_id} paused.")
 
 
 # ---------------------------------------------------------------------------
@@ -552,7 +552,7 @@ def resume_workflow(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{wf.workflow_id} resumed")
     else:
-        success(console, f"Workflow {workflow_id[:12]} resumed.")
+        success(console, f"Workflow {workflow_id} resumed.")
 
 
 # ---------------------------------------------------------------------------
@@ -586,7 +586,7 @@ def cancel_workflow(
     url = _get_workcell_url(ctx, workcell_url)
 
     if not yes:
-        click.confirm(f"Cancel workflow {workflow_id[:12]}?", abort=True)
+        click.confirm(f"Cancel workflow {workflow_id}?", abort=True)
 
     client = _make_client(url, timeout)
     wf = client.cancel_workflow(workflow_id)
@@ -596,7 +596,7 @@ def cancel_workflow(
     elif fmt == OutputFormat.QUIET:
         console.print(f"{wf.workflow_id} cancelled")
     else:
-        success(console, f"Workflow {workflow_id[:12]} cancelled.")
+        success(console, f"Workflow {workflow_id} cancelled.")
 
 
 # ---------------------------------------------------------------------------
@@ -652,7 +652,7 @@ def retry_workflow(
         index = wf.status.current_step_index
 
     if not no_wait:
-        console.print(f"Retrying workflow {workflow_id[:12]} from step {index}...")
+        console.print(f"Retrying workflow {workflow_id} from step {index}...")
 
     wf = client.retry_workflow(
         workflow_id,
@@ -671,7 +671,7 @@ def retry_workflow(
     else:
         success(
             console,
-            f"Workflow {workflow_id[:12]} retried -- status: {format_status_colored(status_label)}",
+            f"Workflow {workflow_id} retried -- status: {format_status_colored(status_label)}",
         )
 
 
@@ -711,7 +711,7 @@ def resubmit_workflow(
     client = _make_client(url, timeout)
 
     if not no_wait:
-        console.print(f"Resubmitting workflow {workflow_id[:12]}...")
+        console.print(f"Resubmitting workflow {workflow_id}...")
 
     wf = client.resubmit_workflow(
         workflow_id,
@@ -729,5 +729,5 @@ def resubmit_workflow(
     else:
         success(
             console,
-            f"Workflow resubmitted -- new ID: {wf.workflow_id[:12]}, status: {format_status_colored(status_label)}",
+            f"Workflow resubmitted -- new ID: {wf.workflow_id}, status: {format_status_colored(status_label)}",
         )

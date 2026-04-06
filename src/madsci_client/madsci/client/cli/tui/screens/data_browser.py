@@ -359,13 +359,13 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
             for dp_id in filtered:
                 dp = self.datapoints_data[dp_id]
-                short_id = dp_id[:12] if dp_id else "-"
+                dp_id_str = dp_id or "-"
                 label = dp.get("label", "-") or "-"
                 data_type = _get_data_type(dp)
                 timestamp = dp.get("data_timestamp")
                 ts_str = format_timestamp(timestamp, short=True) if timestamp else "-"
                 preview = _get_preview(dp)
-                table.add_row(short_id, label, data_type, ts_str, preview)
+                table.add_row(dp_id_str, label, data_type, ts_str, preview)
 
             if not filtered:
                 table.add_row(
@@ -398,11 +398,11 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             return
 
         row = table.get_row(row_key)
-        short_id = str(row[0])
+        row_id = str(row[0])
 
-        # Find datapoint by matching short ID
+        # Find datapoint by matching full ID
         for dp_id, dp_data in self.datapoints_data.items():
-            if dp_id[:12] == short_id:
+            if dp_id == row_id:
                 self.selected_datapoint_id = dp_id
                 self._update_detail_panel(dp_id, dp_data)
                 break
