@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, get_default_services
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
+from madsci.client.cli.tui.screens.locations import LocationsScreen
 from madsci.client.cli.tui.screens.logs import LogsScreen
 from madsci.client.cli.tui.screens.nodes import NodesScreen
 from madsci.client.cli.tui.screens.resources import ResourcesScreen
@@ -44,6 +45,7 @@ class MadsciApp(App):
         Binding("n", "switch_screen('nodes')", "Nodes", show=True),
         Binding("w", "switch_screen('workflows')", "Workflows", show=True),
         Binding("i", "switch_screen('resources')", "Inventory", show=True),
+        Binding("o", "switch_screen('locations')", "Locations", show=True),
         Binding("q", "quit", "Quit", show=True),
         Binding("?", "show_help", "Help", show=True),
         Binding("r", "refresh", "Refresh", show=True),
@@ -57,6 +59,7 @@ class MadsciApp(App):
         "nodes": NodesScreen,
         "workflows": WorkflowsScreen,
         "resources": ResourcesScreen,
+        "locations": LocationsScreen,
     }
 
     def __init__(
@@ -119,6 +122,7 @@ class MadsciApp(App):
             "  n - Nodes\n"
             "  w - Workflows\n"
             "  i - Inventory (Resources)\n"
+            "  o - Locations\n"
             "  r - Refresh\n"
             "  Ctrl+P - Command Palette\n"
             "  q - Quit",
