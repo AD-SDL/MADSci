@@ -2,8 +2,8 @@
 
 from unittest.mock import Mock, patch
 
+import httpx
 import pytest
-import requests
 from madsci.client.experiment_client import ExperimentClient
 from madsci.common.types.experiment_types import (
     Experiment,
@@ -130,7 +130,11 @@ class TestExperimentClientGetExperiment:
         """Test get_experiment with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(404),
+        )
 
         mock_session = Mock()
         mock_session.request.return_value = mock_response
@@ -138,7 +142,7 @@ class TestExperimentClientGetExperiment:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_experiment("nonexistent_id")
 
 
@@ -198,8 +202,10 @@ class TestExperimentClientGetExperiments:
         """Test get_experiments with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "500 Server Error"
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "500 Server Error",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(500),
         )
 
         mock_session = Mock()
@@ -208,7 +214,7 @@ class TestExperimentClientGetExperiments:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_experiments()
 
 
@@ -278,8 +284,10 @@ class TestExperimentClientStartExperiment:
         """Test start_experiment with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "400 Bad Request"
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "400 Bad Request",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(400),
         )
 
         mock_session = Mock()
@@ -288,7 +296,7 @@ class TestExperimentClientStartExperiment:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.start_experiment(experiment_design)
 
 
@@ -442,7 +450,11 @@ class TestExperimentClientLifecycleMethods:
         """Test lifecycle methods with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(404),
+        )
 
         mock_session = Mock()
         mock_session.request.return_value = mock_response
@@ -450,16 +462,16 @@ class TestExperimentClientLifecycleMethods:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.end_experiment(experiment.experiment_id)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.continue_experiment(experiment.experiment_id)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.pause_experiment(experiment.experiment_id)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.cancel_experiment(experiment.experiment_id)
 
 
@@ -494,8 +506,10 @@ class TestExperimentClientCampaignMethods:
         """Test register_campaign with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "400 Bad Request"
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "400 Bad Request",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(400),
         )
 
         mock_session = Mock()
@@ -504,7 +518,7 @@ class TestExperimentClientCampaignMethods:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.register_campaign(campaign)
 
     @patch("madsci.client.experiment_client.create_httpx_client")
@@ -534,7 +548,11 @@ class TestExperimentClientCampaignMethods:
         """Test get_campaign with HTTP error."""
         mock_response = Mock()
         mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found",
+            request=httpx.Request("GET", "http://test"),
+            response=httpx.Response(404),
+        )
 
         mock_session = Mock()
         mock_session.request.return_value = mock_response
@@ -542,5 +560,5 @@ class TestExperimentClientCampaignMethods:
 
         client = ExperimentClient(experiment_server_url="http://localhost:8002")
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_campaign("nonexistent_campaign_id")

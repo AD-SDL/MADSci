@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import Response
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.db_handlers import (
     InMemoryCacheHandler,
@@ -29,7 +30,6 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.workcell_server import WorkcellManager
-from requests import Response
 
 
 @pytest.fixture

@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Optional
 from unittest.mock import MagicMock, Mock, patch
 
+import httpx
 import pytest
-import requests
 
 
 @pytest.fixture(autouse=True)
@@ -114,7 +114,7 @@ def mock_http_session():
             mock_http_session.get.assert_called_once()
     """
     with patch("madsci.common.utils.create_http_session") as mock_create_session:
-        mock_session = Mock(spec=requests.Session)
+        mock_session = Mock(spec=httpx.Client)
         mock_create_session.return_value = mock_session
         yield mock_session
 
@@ -148,8 +148,10 @@ def mock_error_response():
     mock_response = Mock()
     mock_response.ok = False
     mock_response.status_code = 500
-    mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-        "Test error"
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "Test error",
+        request=httpx.Request("GET", "http://test"),
+        response=httpx.Response(500),
     )
     mock_response.json.return_value = {"error": "Test error"}
     mock_response.text = "Internal Server Error"
