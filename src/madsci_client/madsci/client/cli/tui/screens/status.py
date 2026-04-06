@@ -6,12 +6,15 @@ Provides detailed service status with health information.
 import socket
 from typing import Any, ClassVar
 
-import httpx
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
+from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
+from madsci.client.cli.utils.service_health import check_all_services_async
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Label, Static
+from textual.widgets import DataTable, Label
 
 INFRASTRUCTURE_SERVICES = {
     "ferretdb": ("localhost", 27017),
@@ -21,56 +24,7 @@ INFRASTRUCTURE_SERVICES = {
 }
 
 
-class ServiceDetailPanel(Static):
-    """Panel showing details for a selected service."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the panel."""
-        super().__init__(**kwargs)
-        self.selected_service = None
-        self.service_data = {}
-
-    def compose(self) -> ComposeResult:
-        """Compose the panel."""
-        yield Label("[bold]Service Details[/bold]")
-        yield Label(
-            "[dim]Select a service from the table above[/dim]", id="detail-content"
-        )
-
-    def update_details(self, name: str, data: dict) -> None:
-        """Update the detail display.
-
-        Args:
-            name: Service name.
-            data: Service data dictionary.
-        """
-        self.selected_service = name
-        self.service_data = data
-
-        content = self.query_one("#detail-content", Label)
-
-        status = data.get("status", "unknown")
-        status_color = {
-            "healthy": "green",
-            "unhealthy": "yellow",
-            "offline": "red",
-        }.get(status, "dim")
-
-        lines = [
-            f"[bold]{name}[/bold]",
-            "",
-            f"  URL:     {data.get('url', 'N/A')}",
-            f"  Status:  [{status_color}]{status}[/{status_color}]",
-            f"  Version: {data.get('version', 'N/A')}",
-        ]
-
-        if data.get("error"):
-            lines.append(f"  Error:   [red]{data.get('error')}[/red]")
-
-        content.update("\n".join(lines))
-
-
-class StatusScreen(Screen):
+class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing detailed service status."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -82,8 +36,7 @@ class StatusScreen(Screen):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.service_status = {}
-        self.auto_refresh_enabled = True
+        self.service_status: dict[str, dict] = {}
 
     def compose(self) -> ComposeResult:
         """Compose the status screen layout."""
@@ -102,7 +55,10 @@ class StatusScreen(Screen):
                 yield DataTable(id="infra-table")
 
             yield Label("")
-            yield ServiceDetailPanel(id="detail-panel")
+            yield DetailPanel(
+                placeholder="Select a service from the table above",
+                id="detail-panel",
+            )
 
             yield Label("")
             yield Label(
@@ -134,13 +90,6 @@ class StatusScreen(Screen):
                 "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
             )
 
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()
-
     async def refresh_data(self) -> None:
         """Refresh all service statuses."""
         await self._refresh_managers()
@@ -151,29 +100,35 @@ class StatusScreen(Screen):
         table = self.query_one("#managers-table", DataTable)
         table.clear()
 
-        for name, url in self.app.service_urls.items():
-            status_data = await self._check_service(name, url)
-            self.service_status[name] = status_data
+        service_urls = getattr(self.app, "service_urls", {})
+        results = await check_all_services_async(service_urls)
 
-            status = status_data.get("status", "unknown")
-            icon = {
-                "healthy": "\u25cf",
-                "unhealthy": "\u25cf",
-                "offline": "\u25cb",
-            }.get(status, "\u25cb")
+        for name, result in results.items():
+            status = (
+                "healthy"
+                if result.is_available
+                else (
+                    "unhealthy"
+                    if result.error and "HTTP" in (result.error or "")
+                    else "offline"
+                )
+            )
+            self.service_status[name] = {
+                "status": status,
+                "url": result.url,
+                "version": result.version,
+                "error": result.error,
+            }
 
-            status_style = {
-                "healthy": "green",
-                "unhealthy": "yellow",
-                "offline": "red",
-            }.get(status, "dim")
+            icon = format_status_icon(status)
+            state = format_status_colored(status)
 
             table.add_row(
-                f"[{status_style}]{icon}[/{status_style}]",
+                icon,
                 name,
-                url,
-                f"[{status_style}]{status}[/{status_style}]",
-                status_data.get("version", "-"),
+                result.url,
+                state,
+                result.version or "-",
             )
 
     async def _refresh_infrastructure(self) -> None:
@@ -188,64 +143,12 @@ class StatusScreen(Screen):
                 sock.settimeout(1)
                 result = sock.connect_ex((host, port))
                 sock.close()
-                if result == 0:
-                    status = "connected"
-                    icon = "[green]\u25cf[/green]"
-                else:
-                    status = "unavailable"
-                    icon = "[red]\u25cb[/red]"
+                status = "connected" if result == 0 else "disconnected"
             except Exception:
-                status = "error"
-                icon = "[red]\u25cb[/red]"
+                status = "disconnected"
 
+            icon = format_status_icon(status)
             table.add_row(icon, name, host, str(port), status)
-
-    async def _check_service(self, name: str, url: str) -> dict:  # noqa: ARG002
-        """Check a service's health.
-
-        Args:
-            name: Service name.
-            url: Service URL.
-
-        Returns:
-            Dictionary with status information.
-        """
-        health_url = url.rstrip("/") + "/health"
-
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(health_url)
-                if response.status_code == 200:
-                    data = response.json() if response.text else {}
-                    return {
-                        "status": "healthy",
-                        "url": url,
-                        "version": data.get("version"),
-                        "details": data,
-                    }
-                return {
-                    "status": "unhealthy",
-                    "url": url,
-                    "error": f"HTTP {response.status_code}",
-                }
-        except httpx.ConnectError:
-            return {
-                "status": "offline",
-                "url": url,
-                "error": "Connection refused",
-            }
-        except httpx.TimeoutException:
-            return {
-                "status": "offline",
-                "url": url,
-                "error": "Timeout",
-            }
-        except Exception as e:
-            return {
-                "status": "offline",
-                "url": url,
-                "error": str(e),
-            }
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Handle row selection in the table."""
@@ -259,9 +162,21 @@ class StatusScreen(Screen):
             service_name = str(row[1])  # Service name is in column 1
 
             if service_name in self.service_status:
-                detail_panel = self.query_one("#detail-panel", ServiceDetailPanel)
-                detail_panel.update_details(
-                    service_name, self.service_status[service_name]
+                data = self.service_status[service_name]
+                detail_panel = self.query_one("#detail-panel", DetailPanel)
+
+                status = data.get("status", "unknown")
+                fields: dict[str, str] = {
+                    "URL": data.get("url", "N/A"),
+                    "Status": format_status_colored(status),
+                    "Version": data.get("version") or "N/A",
+                }
+                if data.get("error"):
+                    fields["Error"] = f"[red]{data['error']}[/red]"
+
+                detail_panel.update_content(
+                    title=service_name,
+                    sections=[DetailSection("Service Info", fields)],
                 )
 
     async def action_refresh(self) -> None:

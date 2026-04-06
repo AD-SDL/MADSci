@@ -4,9 +4,13 @@ Provides an overview of the lab status including services, nodes,
 active workflows, and recent events.
 """
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 import httpx
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import StatusBadge
+from madsci.client.cli.utils.formatting import truncate
+from madsci.client.cli.utils.service_health import check_all_services_async
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal, Vertical
@@ -14,57 +18,30 @@ from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
 
-class ServiceStatusWidget(Static):
-    """Widget displaying status of a single service."""
-
-    def __init__(self, name: str, url: str, **kwargs: Any) -> None:
-        """Initialize the service status widget.
-
-        Args:
-            name: Service name.
-            url: Service URL.
-        """
-        super().__init__(**kwargs)
-        self.service_name = name
-        self.service_url = url
-        self.status = "unknown"
-
-    def compose(self) -> ComposeResult:
-        """Compose the widget."""
-        yield Label(f"\u25cb {self.service_name}", id=f"status-{self.service_name}")
-
-    async def check_health(self) -> None:
-        """Check service health and update display."""
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{self.service_url.rstrip('/')}/health")
-                if response.status_code == 200:
-                    self.status = "healthy"
-                    icon = "[green]\u25cf[/green]"
-                else:
-                    self.status = "unhealthy"
-                    icon = "[yellow]\u25cf[/yellow]"
-        except Exception:
-            self.status = "offline"
-            icon = "[red]\u25cb[/red]"
-
-        label = self.query_one(f"#status-{self.service_name}", Label)
-        label.update(f"{icon} {self.service_name}")
-
-
 class ServicesPanel(Static):
-    """Panel showing all service statuses."""
+    """Panel showing all service statuses using StatusBadge widgets."""
 
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Services[/bold]")
-        for name, url in self.app.service_urls.items():
-            yield ServiceStatusWidget(name, url)
+        for name in self.app.service_urls:
+            yield StatusBadge("unknown", id=f"svc-badge-{name}")
+            yield Label(f" {name}", id=f"svc-label-{name}")
 
     async def refresh_data(self) -> None:
-        """Refresh all service statuses."""
-        for widget in self.query(ServiceStatusWidget):
-            await widget.check_health()
+        """Refresh all service statuses using shared health check."""
+        service_urls = getattr(self.app, "service_urls", {})
+        results = await check_all_services_async(service_urls)
+
+        for name, result in results.items():
+            try:
+                badge = self.query_one(f"#svc-badge-{name}", StatusBadge)
+                if result.is_available:
+                    badge.status = "healthy"
+                else:
+                    badge.status = "offline"
+            except Exception:  # noqa: S110
+                pass  # Widget may not exist if service_urls changed
 
 
 class QuickActionsPanel(Static):
@@ -118,8 +95,8 @@ def _extract_message(event: dict) -> str:
     """Extract the message string from an Event dict."""
     event_data = event.get("event_data", {})
     if isinstance(event_data, dict):
-        return event_data.get("message", str(event_data))[:50]
-    return str(event_data)[:50]
+        return truncate(event_data.get("message", str(event_data)), max_len=50)
+    return truncate(str(event_data), max_len=50)
 
 
 class RecentEventsPanel(Static):
@@ -168,18 +145,13 @@ class RecentEventsPanel(Static):
             content.update("[dim]Event Manager not available[/dim]")
 
 
-class DashboardScreen(Screen):
+class DashboardScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Main dashboard screen showing lab overview."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
         ("r", "refresh", "Refresh"),
         ("a", "toggle_auto_refresh", "Auto-refresh"),
     ]
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the dashboard screen."""
-        super().__init__(**kwargs)
-        self.auto_refresh_enabled = True
 
     def compose(self) -> ComposeResult:
         """Compose the dashboard layout."""
@@ -228,10 +200,3 @@ class DashboardScreen(Screen):
         """Refresh dashboard data."""
         await self.refresh_data()
         self.notify("Dashboard refreshed", timeout=2)
-
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()

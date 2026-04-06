@@ -4,98 +4,42 @@ Provides workflow monitoring with step progress visualization,
 active/queued workflow display, and workflow control actions.
 """
 
-from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import DEFAULT_SERVICES
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import (
+    ActionBar,
+    ActionDef,
+    DetailPanel,
+    DetailSection,
+)
+from madsci.client.cli.utils.formatting import (
+    format_duration,
+    format_status_colored,
+    format_status_icon,
+    format_timestamp,
+)
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Label, Static
-
-# Status-to-color mapping used across the module
-_STATUS_COLORS = {
-    "completed": "green",
-    "failed": "red",
-    "cancelled": "yellow",
-    "running": "blue",
-    "paused": "yellow",
-}
-
-# Status-to-icon mapping for table rows
-_STATUS_ICONS = {
-    "completed": "[green]\u25cf[/green]",
-    "failed": "[red]\u25cf[/red]",
-    "cancelled": "[yellow]\u25cb[/yellow]",
-    "running": "[blue]\u25cf[/blue]",
-    "paused": "[yellow]\u25cf[/yellow]",
-}
+from textual.widgets import DataTable, Label
 
 
-def _get_status_color(status: dict) -> str:
-    """Get the display color for a workflow status.
+def _get_workflow_status_name(status: dict) -> str:
+    """Get a canonical status name from a workflow status dict.
 
     Args:
-        status: Workflow status dictionary.
+        status: Workflow status dictionary with boolean flags.
 
     Returns:
-        Color name string.
+        Status name string.
     """
-    for key, color in _STATUS_COLORS.items():
+    for key in ("completed", "failed", "cancelled", "running", "paused"):
         if status.get(key):
-            return color
-    return "dim"
-
-
-def _get_status_icon(status: dict) -> str:
-    """Get the display icon for a workflow status.
-
-    Args:
-        status: Workflow status dictionary.
-
-    Returns:
-        Rich markup icon string.
-    """
-    for key, icon in _STATUS_ICONS.items():
-        if status.get(key):
-            return icon
-    return "[dim]\u25cb[/dim]"
-
-
-def _format_timestamp(ts: Any) -> str:
-    """Format a timestamp for display.
-
-    Args:
-        ts: Timestamp value (string or datetime).
-
-    Returns:
-        Formatted time string.
-    """
-    if isinstance(ts, str):
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            return dt.strftime("%H:%M:%S")
-        except ValueError:
-            return ts[:8]
-    return str(ts)[:8]
-
-
-def _format_duration(seconds: float) -> str:
-    """Format duration in seconds to a human-readable string.
-
-    Args:
-        seconds: Duration in seconds.
-
-    Returns:
-        Formatted duration string.
-    """
-    minutes, secs = divmod(int(seconds), 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        return f"{hours}h {minutes:02d}m {secs:02d}s"
-    return f"{minutes:02d}m {secs:02d}s"
+            return key
+    return "unknown"
 
 
 def _build_step_lines(steps: list, current_step: int, is_running: bool) -> list[str]:
@@ -141,7 +85,8 @@ def _add_workflow_row(table: DataTable, data: dict) -> None:
     """
     status = data.get("status", {})
     name = data.get("name", "Unknown")
-    icon = _get_status_icon(status)
+    status_name = _get_workflow_status_name(status)
+    icon = format_status_icon(status_name)
 
     # Progress
     steps = data.get("steps", [])
@@ -157,117 +102,17 @@ def _add_workflow_row(table: DataTable, data: dict) -> None:
     else:
         step_name = "-"
 
-    # Timing
+    # Timing - use shared formatting utilities
     start_time = data.get("start_time")
-    started_str = _format_timestamp(start_time) if start_time else "-"
+    started_str = format_timestamp(start_time, short=True) if start_time else "-"
 
     duration = data.get("duration_seconds")
-    duration_str = _format_duration(duration) if duration is not None else "-"
+    duration_str = format_duration(duration)
 
     table.add_row(icon, name, progress, step_name, started_str, duration_str)
 
 
-class WorkflowDetailPanel(Static):
-    """Panel showing details for a selected workflow."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the panel."""
-        super().__init__(**kwargs)
-        self.selected_workflow: str | None = None
-        self.workflow_data: dict = {}
-
-    def compose(self) -> ComposeResult:
-        """Compose the panel."""
-        yield Label("[bold]Workflow Details[/bold]")
-        yield Label(
-            "[dim]Select a workflow from the table above[/dim]",
-            id="workflow-detail-content",
-        )
-
-    def update_details(self, workflow_id: str, data: dict) -> None:
-        """Update the detail display.
-
-        Args:
-            workflow_id: Workflow ID.
-            data: Workflow data dictionary.
-        """
-        self.selected_workflow = workflow_id
-        self.workflow_data = data
-
-        content = self.query_one("#workflow-detail-content", Label)
-        status = data.get("status", {})
-        status_color = _get_status_color(status)
-
-        lines = self._build_header_lines(workflow_id, data, status, status_color)
-        lines.extend(self._build_timing_lines(data))
-        lines.extend(self._build_progress_lines(data, status, status_color))
-
-        content.update("\n".join(lines))
-
-    def _build_header_lines(
-        self, workflow_id: str, data: dict, status: dict, status_color: str
-    ) -> list[str]:
-        """Build the header section of the detail display."""
-        name = data.get("name", "Unknown")
-        status_desc = status.get("description", "Unknown")
-        return [
-            f"[bold]{name}[/bold]",
-            "",
-            f"  ID:       {workflow_id[:20]}...",
-            f"  Status:   [{status_color}]{status_desc}[/{status_color}]",
-        ]
-
-    def _build_timing_lines(self, data: dict) -> list[str]:
-        """Build the timing section of the detail display."""
-        lines: list[str] = []
-        start_time = data.get("start_time")
-        end_time = data.get("end_time")
-        if start_time:
-            lines.append(f"  Started:  {_format_timestamp(start_time)}")
-        if end_time:
-            lines.append(f"  Ended:    {_format_timestamp(end_time)}")
-        duration = data.get("duration_seconds")
-        if duration is not None:
-            lines.append(f"  Duration: {_format_duration(duration)}")
-        return lines
-
-    def _build_progress_lines(
-        self, data: dict, status: dict, status_color: str
-    ) -> list[str]:
-        """Build the step progress section of the detail display."""
-        steps = data.get("steps", [])
-        total_steps = len(steps)
-        if total_steps == 0:
-            return []
-
-        completed_steps = data.get("completed_steps", 0)
-        failed_steps = data.get("failed_steps", 0)
-        current_step = status.get("current_step_index", 0)
-
-        lines = [""]
-        summary = f"  [bold]Steps:[/bold] {completed_steps}/{total_steps} completed"
-        if failed_steps:
-            summary += f", {failed_steps} failed"
-        lines.append(summary)
-
-        # Progress bar
-        progress = completed_steps / total_steps
-        filled = int(progress * 20)
-        empty = 20 - filled
-        bar = "\u2588" * filled + "\u2591" * empty
-        percent = int(progress * 100)
-        lines.append(f"  [{status_color}]{bar}[/{status_color}] {percent}%")
-
-        # Step list
-        lines.append("")
-        lines.extend(
-            _build_step_lines(steps, current_step, bool(status.get("running")))
-        )
-
-        return lines
-
-
-class WorkflowsScreen(Screen):
+class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing workflow visualization and management."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -284,7 +129,6 @@ class WorkflowsScreen(Screen):
         super().__init__(**kwargs)
         self.workflows_data: dict[str, dict] = {}
         self.selected_workflow_id: str | None = None
-        self.auto_refresh_enabled = True
 
     def compose(self) -> ComposeResult:
         """Compose the workflows screen layout."""
@@ -303,13 +147,20 @@ class WorkflowsScreen(Screen):
                 yield DataTable(id="archived-table")
 
             yield Label("")
-            yield WorkflowDetailPanel(id="workflow-detail-panel")
+            yield DetailPanel(
+                placeholder="Select a workflow from the table above",
+                id="workflow-detail-panel",
+            )
 
             yield Label("")
-            yield Label(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]",
-                id="workflows-footer",
+            yield ActionBar(
+                actions=[
+                    ActionDef("a", "Auto-refresh", "toggle_auto_refresh"),
+                    ActionDef("p", "Pause", "pause", variant="warning"),
+                    ActionDef("u", "Resume", "resume", variant="success"),
+                    ActionDef("c", "Cancel", "cancel", variant="error"),
+                ],
+                id="workflows-action-bar",
             )
 
     async def on_mount(self) -> None:
@@ -327,20 +178,6 @@ class WorkflowsScreen(Screen):
         archived_table.cursor_type = "row"
 
         await self.refresh_data()
-
-    def _update_footer(self) -> None:
-        """Update the footer label with current auto-refresh state."""
-        footer = self.query_one("#workflows-footer", Label)
-        if self.auto_refresh_enabled:
-            footer.update(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]"
-            )
-        else:
-            footer.update(
-                "[dim]Auto-refresh: off | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]"
-            )
 
     async def refresh_data(self) -> None:
         """Refresh workflow data from workcell manager."""
@@ -369,7 +206,7 @@ class WorkflowsScreen(Screen):
 
         if not self.workflows_data:
             table.add_row(
-                "[dim]\u25cb[/dim]",
+                format_status_icon("unknown"),
                 "[dim]No active workflows[/dim]",
                 "-",
                 "-",
@@ -392,7 +229,7 @@ class WorkflowsScreen(Screen):
 
         if not rows:
             archived_table.add_row(
-                "[dim]\u25cb[/dim]",
+                format_status_icon("unknown"),
                 "[dim]No archived workflows[/dim]",
                 "-",
                 "-",
@@ -419,11 +256,8 @@ class WorkflowsScreen(Screen):
             Workflow data (dict or list depending on endpoint).
         """
         try:
+            workcell_url = self.get_service_url("workcell_manager")
             async with httpx.AsyncClient(timeout=5.0) as client:
-                workcell_url = self.app.service_urls.get(
-                    "workcell_manager",
-                    DEFAULT_SERVICES["workcell_manager"],
-                )
                 response = await client.get(f"{workcell_url.rstrip('/')}{path}")
                 if response.status_code == 200:
                     return response.json()
@@ -444,11 +278,77 @@ class WorkflowsScreen(Screen):
             for wf_id, wf_data in self.workflows_data.items():
                 if wf_data.get("name", "") == workflow_name:
                     self.selected_workflow_id = wf_id
-                    detail_panel = self.query_one(
-                        "#workflow-detail-panel", WorkflowDetailPanel
-                    )
-                    detail_panel.update_details(wf_id, wf_data)
+                    self._update_detail_panel(wf_id, wf_data)
                     break
+
+    def _update_detail_panel(self, workflow_id: str, data: dict) -> None:
+        """Update the detail panel with workflow data.
+
+        Args:
+            workflow_id: Workflow ID.
+            data: Workflow data dictionary.
+        """
+        detail_panel = self.query_one("#workflow-detail-panel", DetailPanel)
+        status = data.get("status", {})
+        status_name = _get_workflow_status_name(status)
+        name = data.get("name", "Unknown")
+
+        # General section
+        general_fields: dict[str, str] = {
+            "ID": f"{workflow_id[:20]}...",
+            "Status": format_status_colored(
+                status_name, status.get("description", status_name)
+            ),
+        }
+
+        # Timing section
+        timing_fields: dict[str, str] = {}
+        start_time = data.get("start_time")
+        end_time = data.get("end_time")
+        if start_time:
+            timing_fields["Started"] = format_timestamp(start_time, short=True)
+        if end_time:
+            timing_fields["Ended"] = format_timestamp(end_time, short=True)
+        duration = data.get("duration_seconds")
+        if duration is not None:
+            timing_fields["Duration"] = format_duration(duration)
+
+        sections = [DetailSection("General", general_fields)]
+        if timing_fields:
+            sections.append(DetailSection("Timing", timing_fields))
+
+        # Progress section
+        steps = data.get("steps", [])
+        total_steps = len(steps)
+        if total_steps > 0:
+            completed_steps = data.get("completed_steps", 0)
+            failed_steps = data.get("failed_steps", 0)
+            current_step = status.get("current_step_index", 0)
+
+            progress = completed_steps / total_steps
+            filled = int(progress * 20)
+            empty = 20 - filled
+            bar = "\u2588" * filled + "\u2591" * empty
+            percent = int(progress * 100)
+
+            progress_fields: dict[str, str] = {
+                "Completed": f"{completed_steps}/{total_steps}",
+                "Progress": f"{bar} {percent}%",
+            }
+            if failed_steps:
+                progress_fields["Failed"] = str(failed_steps)
+
+            sections.append(DetailSection("Steps", progress_fields))
+
+            # Build step lines as a separate section
+            step_lines = _build_step_lines(
+                steps, current_step, bool(status.get("running"))
+            )
+            if step_lines:
+                step_fields = {line.strip(): "" for line in step_lines}
+                sections.append(DetailSection("Step List", step_fields))
+
+        detail_panel.update_content(title=name, sections=sections)
 
     async def _send_workflow_command(self, command: str) -> None:
         """Send a control command to the selected workflow.
@@ -461,9 +361,7 @@ class WorkflowsScreen(Screen):
             return
 
         try:
-            workcell_url = self.app.service_urls.get(
-                "workcell_manager", DEFAULT_SERVICES["workcell_manager"]
-            )
+            workcell_url = self.get_service_url("workcell_manager")
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.post(
                     f"{workcell_url.rstrip('/')}/workflow/"
@@ -484,13 +382,6 @@ class WorkflowsScreen(Screen):
         """Refresh workflow data."""
         await self.refresh_data()
         self.notify("Workflows refreshed", timeout=2)
-
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()
 
     async def action_pause_workflow(self) -> None:
         """Pause the selected workflow."""

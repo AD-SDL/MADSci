@@ -7,11 +7,30 @@ by querying the Workcell Manager.
 from typing import Any, ClassVar
 
 import httpx
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
+from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import DataTable, Label, Static
+from textual.widgets import DataTable, Label
+
+
+def _get_node_status_name(node_status: dict) -> str:
+    """Derive a status name string from node status dict.
+
+    Args:
+        node_status: Node status dictionary with errored/disconnected flags.
+
+    Returns:
+        Status name: "disconnected", "errored", or "connected".
+    """
+    if node_status.get("disconnected", False):
+        return "disconnected"
+    if node_status.get("errored", False):
+        return "errored"
+    return "connected"
 
 
 class NodeDetailScreen(Screen):
@@ -38,7 +57,10 @@ class NodeDetailScreen(Screen):
         with VerticalScroll(id="main-content"):
             yield Label(f"[bold blue]Node: {self.node_name}[/bold blue]")
             yield Label("")
-            yield Static(id="node-detail-content")
+            yield DetailPanel(
+                placeholder="Loading node details...",
+                id="node-detail-panel",
+            )
             yield Label("")
             yield Label("[dim]'r' refresh | 'Esc' back[/dim]")
 
@@ -47,80 +69,64 @@ class NodeDetailScreen(Screen):
         self._render_details()
 
     def _render_details(self) -> None:
-        """Render the node detail content."""
-        content = self.query_one("#node-detail-content", Static)
+        """Render the node detail content using DetailPanel."""
+        panel = self.query_one("#node-detail-panel", DetailPanel)
         data = self.node_data
         node_status = data.get("status") or {}
         info = data.get("info") or {}
 
-        lines = self._build_header_lines(data, node_status)
-        lines.extend(self._build_action_lines(info))
-        lines.extend(self._build_extra_lines(info, node_status, data))
+        sections: list[DetailSection] = []
 
-        content.update("\n".join(lines))
+        # General section
+        status_name = _get_node_status_name(node_status)
+        general_fields: dict[str, str] = {
+            "URL": str(data.get("node_url", "N/A")),
+            "Status": format_status_colored(status_name),
+        }
+        sections.append(DetailSection("General", general_fields))
 
-    def _build_header_lines(self, data: dict, node_status: dict) -> list[str]:
-        """Build header lines with name, URL, and status."""
-        errored = node_status.get("errored", False)
-        disconnected = node_status.get("disconnected", False)
-
-        if disconnected:
-            status_str = "[red]disconnected[/red]"
-        elif errored:
-            status_str = "[yellow]errored[/yellow]"
-        else:
-            status_str = "[green]connected[/green]"
-
-        node_url = str(data.get("node_url", "N/A"))
-        return [
-            f"[bold]{self.node_name}[/bold]",
-            "",
-            f"  URL:      {node_url}",
-            f"  Status:   {status_str}",
-        ]
-
-    @staticmethod
-    def _build_action_lines(info: dict) -> list[str]:
-        """Build action listing lines."""
+        # Actions section
         actions = info.get("actions", {})
-        if not actions:
-            return []
-        lines = ["", "  [bold]Actions:[/bold]"]
-        for action_name, action_def in actions.items():
-            desc = ""
-            if isinstance(action_def, dict) and action_def.get("description"):
-                desc = f" - {action_def['description']}"
-            lines.append(f"    - {action_name}{desc}")
-        return lines
+        if actions:
+            action_fields: dict[str, str] = {}
+            for action_name, action_def in actions.items():
+                desc = ""
+                if isinstance(action_def, dict) and action_def.get("description"):
+                    desc = action_def["description"]
+                action_fields[action_name] = desc or "-"
+            sections.append(DetailSection("Actions", action_fields))
 
-    @staticmethod
-    def _build_extra_lines(info: dict, node_status: dict, data: dict) -> list[str]:
-        """Build admin, errors, and state lines."""
-        lines: list[str] = []
-
+        # Admin commands section
         capabilities = info.get("capabilities") or {}
         admin_commands = capabilities.get("admin_commands", [])
         if admin_commands:
-            lines.extend(["", f"  [bold]Admin:[/bold] {', '.join(admin_commands)}"])
+            sections.append(
+                DetailSection("Admin", {"Commands": ", ".join(admin_commands)})
+            )
 
+        # Errors section
         errors = node_status.get("errors", [])
         if errors:
-            lines.extend(["", "  [bold red]Errors:[/bold red]"])
-            for error in errors[:5]:
+            error_fields: dict[str, str] = {}
+            for i, error in enumerate(errors[:5]):
                 err_msg = (
                     error.get("message", str(error))
                     if isinstance(error, dict)
                     else str(error)
                 )
-                lines.append(f"    [red]{err_msg[:80]}[/red]")
+                error_fields[f"Error {i + 1}"] = f"[red]{err_msg[:80]}[/red]"
+            sections.append(DetailSection("Errors", error_fields))
 
+        # State section
         state = data.get("state")
         if state and isinstance(state, dict):
-            lines.extend(["", "  [bold]State:[/bold]"])
-            for key, value in state.items():
-                lines.append(f"    {key}: {value}")
+            state_fields = {k: str(v) for k, v in state.items()}
+            sections.append(DetailSection("State", state_fields))
 
-        return lines
+        panel.update_content(
+            title=self.node_name,
+            sections=sections,
+        )
 
     async def action_refresh(self) -> None:
         """Refresh node data by re-fetching from workcell manager."""
@@ -146,7 +152,7 @@ class NodeDetailScreen(Screen):
         self.app.pop_screen()
 
 
-class NodesScreen(Screen):
+class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing node management and monitoring."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -159,7 +165,6 @@ class NodesScreen(Screen):
         """Initialize the screen."""
         super().__init__(**kwargs)
         self.nodes_data: dict[str, dict] = {}
-        self.auto_refresh_enabled = True
 
     def compose(self) -> ComposeResult:
         """Compose the nodes screen layout."""
@@ -201,10 +206,8 @@ class NodesScreen(Screen):
         table.clear()
 
         try:
+            workcell_url = self.get_service_url("workcell_manager")
             async with httpx.AsyncClient(timeout=5.0) as client:
-                workcell_url = self.app.service_urls.get(
-                    "workcell_manager", "http://localhost:8005/"
-                )
                 response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
                 if response.status_code == 200:
                     nodes = response.json()
@@ -219,7 +222,7 @@ class NodesScreen(Screen):
         # If we can't reach the workcell manager, show a message
         if not self.nodes_data:
             table.add_row(
-                "[dim]\u25cb[/dim]",
+                format_status_icon("unknown"),
                 "[dim]No nodes available[/dim]",
                 "[dim]Workcell Manager not reachable[/dim]",
                 "-",
@@ -235,18 +238,10 @@ class NodesScreen(Screen):
             node_data: Node data dictionary.
         """
         node_status = node_data.get("status", {})
-        errored = node_status.get("errored", False)
-        disconnected = node_status.get("disconnected", False)
+        status_name = _get_node_status_name(node_status)
 
-        if disconnected:
-            icon = "[red]\u25cb[/red]"
-            state = "[red]disconnected[/red]"
-        elif errored:
-            icon = "[yellow]\u25cf[/yellow]"
-            state = "[yellow]errored[/yellow]"
-        else:
-            icon = "[green]\u25cf[/green]"
-            state = "[green]connected[/green]"
+        icon = format_status_icon(status_name)
+        state = format_status_colored(status_name)
 
         node_url = str(node_data.get("node_url", "N/A"))
         info = node_data.get("info") or {}
@@ -273,13 +268,6 @@ class NodesScreen(Screen):
         """Refresh node data."""
         await self.refresh_data()
         self.notify("Nodes refreshed", timeout=2)
-
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""

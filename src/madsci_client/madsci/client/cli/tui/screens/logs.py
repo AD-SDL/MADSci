@@ -3,51 +3,19 @@
 Provides real-time log viewing with filtering capabilities.
 """
 
-from collections import OrderedDict
-from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.constants import DEFAULT_SERVICES
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import FilterBar, FilterDef, LogViewer
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
-from textual.widgets import Input, Label, RichLog, Select, Static
-
-# Log level options
-LOG_LEVELS = [
-    ("All", "all"),
-    ("Debug", "debug"),
-    ("Info", "info"),
-    ("Warning", "warning"),
-    ("Error", "error"),
-    ("Critical", "critical"),
-]
-
-# Level colors for display
-LEVEL_COLORS = {
-    "DEBUG": "dim",
-    "INFO": "blue",
-    "WARNING": "yellow",
-    "WARN": "yellow",
-    "ERROR": "red",
-    "CRITICAL": "bold red",
-}
+from textual.widgets import Label
 
 
-class FilterPanel(Static):
-    """Panel with log filters."""
-
-    def compose(self) -> ComposeResult:
-        """Compose the filter panel."""
-        yield Label("[bold]Filters[/bold]")
-        with Horizontal():
-            yield Select(LOG_LEVELS, id="level-select", value="all")
-            yield Input(placeholder="Search...", id="search-input")
-
-
-class LogsScreen(Screen):
+class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen for viewing logs."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -60,12 +28,7 @@ class LogsScreen(Screen):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.follow_mode = False
-        # Use an OrderedDict as a bounded set (max 10,000 IDs) to
-        # prevent unbounded memory growth in long-running follow mode.
-        self._seen_ids: OrderedDict[str, None] = OrderedDict()
         self._follow_timer: Any = None
-        self._max_seen_ids = 10_000
 
     def compose(self) -> ComposeResult:
         """Compose the logs screen layout."""
@@ -73,10 +36,28 @@ class LogsScreen(Screen):
             yield Label("[bold blue]Log Viewer[/bold blue]")
             yield Label("")
 
-            yield FilterPanel(id="filter-panel")
+            yield FilterBar(
+                search_placeholder="Search...",
+                filters=[
+                    FilterDef(
+                        name="level",
+                        label="Level",
+                        options=[
+                            ("all", "All"),
+                            ("debug", "Debug"),
+                            ("info", "Info"),
+                            ("warning", "Warning"),
+                            ("error", "Error"),
+                            ("critical", "Critical"),
+                        ],
+                        default="all",
+                    ),
+                ],
+                id="filter-panel",
+            )
             yield Label("")
 
-            yield RichLog(id="log-view", highlight=True, markup=True)
+            yield LogViewer(id="log-view")
 
             yield Label("")
             with Horizontal():
@@ -91,35 +72,39 @@ class LogsScreen(Screen):
 
     async def refresh_data(self) -> None:
         """Fetch and display logs."""
-        log_view = self.query_one("#log-view", RichLog)
+        log_viewer = self.query_one("#log-view", LogViewer)
 
-        # Get filter values
-        level_select = self.query_one("#level-select", Select)
-        search_input = self.query_one("#search-input", Input)
+        # Get filter values from FilterBar
+        filter_bar = self.query_one("#filter-panel", FilterBar)
+        filter_values = filter_bar.get_filter_values()
+        search_text = filter_bar.get_search_text()
 
-        level_value = level_select.value
-        level = str(level_value) if level_value and level_value != "all" else None
-        search = search_input.value or None
+        level_value = filter_values.get("level", "all")
+        level = level_value if level_value and level_value != "all" else None
+        search = search_text or None
 
         # Fetch logs from Event Manager
         logs = await self._fetch_logs(level=level, search=search)
 
         if not logs:
-            if not self._seen_ids:  # Only show message if no logs have been loaded
-                log_view.write(
-                    "[dim]No logs available. Event Manager may not be running.[/dim]"
+            if (
+                not log_viewer._seen_ids
+            ):  # Only show message if no logs have been loaded
+                log_viewer.append_entries(
+                    [
+                        {
+                            "event_id": "__no_logs__",
+                            "log_level": 20,
+                            "event_data": {
+                                "message": "No logs available. Event Manager may not be running."
+                            },
+                        }
+                    ]
                 )
             return
 
-        # Add new logs to display
-        for entry in logs:
-            entry_id = entry.get("_id", entry.get("event_id", str(hash(str(entry)))))
-            if entry_id not in self._seen_ids:
-                self._seen_ids[entry_id] = None
-                # Trim oldest entries when exceeding the bound
-                while len(self._seen_ids) > self._max_seen_ids:
-                    self._seen_ids.popitem(last=False)
-                log_view.write(self._format_log_entry(entry))
+        # Add new logs to display (dedup handled by LogViewer)
+        log_viewer.append_entries(logs)
 
     async def _fetch_logs(
         self,
@@ -144,9 +129,7 @@ class LogsScreen(Screen):
             if search:
                 params["search"] = search
 
-            event_url = self.app.service_urls.get(
-                "event_manager", DEFAULT_SERVICES["event_manager"]
-            )
+            event_url = self.get_service_url("event_manager")
             async with httpx.AsyncClient(timeout=5.0) as client:
                 response = await client.get(
                     f"{event_url.rstrip('/')}/events",
@@ -163,70 +146,6 @@ class LogsScreen(Screen):
         except Exception:
             return []
 
-    def _format_log_entry(self, entry: dict) -> str:
-        """Format a log entry for display.
-
-        Args:
-            entry: Log entry dictionary.
-
-        Returns:
-            Formatted string.
-        """
-        # Timestamp (Event model uses event_timestamp)
-        timestamp = entry.get("event_timestamp", entry.get("timestamp", ""))
-        if timestamp:
-            if isinstance(timestamp, str):
-                try:
-                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    timestamp_str = dt.strftime("%H:%M:%S.%f")[:-3]
-                except ValueError:
-                    timestamp_str = timestamp[:12]
-            else:
-                timestamp_str = str(timestamp)[:12]
-        else:
-            timestamp_str = "????????????"
-
-        # Level (Event model uses log_level, which is an int enum)
-        log_level = entry.get("log_level", entry.get("level", 20))
-        if isinstance(log_level, int):
-            level_names = {
-                0: "NOTSET",
-                10: "DEBUG",
-                20: "INFO",
-                30: "WARNING",
-                40: "ERROR",
-                50: "CRITICAL",
-            }
-            level = level_names.get(log_level, str(log_level))
-        else:
-            level = str(log_level).upper()
-        level_color = LEVEL_COLORS.get(level, "")
-
-        # Source: extract first meaningful ID from OwnershipInfo
-        source = self._extract_source(entry.get("source", {}))
-
-        # Message is in event_data dict
-        event_data = entry.get("event_data", {})
-        if isinstance(event_data, dict):
-            message = event_data.get("message", str(event_data) if event_data else "")
-        else:
-            message = (
-                str(event_data) if event_data else str(entry.get("event_type", ""))
-            )
-
-        return f"[dim]{timestamp_str}[/dim]  [{level_color}]{level:8}[/{level_color}]  [cyan]{source:12}[/cyan]  {message}"
-
-    @staticmethod
-    def _extract_source(source_data: object) -> str:
-        """Extract a display-friendly source name from OwnershipInfo."""
-        if isinstance(source_data, dict):
-            for key in ("node_id", "manager_id", "workcell_id", "experiment_id"):
-                val = source_data.get(key)
-                if val:
-                    return str(val)[:12]
-            return ""
-        return str(source_data)[:12]
-
     async def action_refresh(self) -> None:
         """Refresh logs."""
         await self.refresh_data()
@@ -234,15 +153,16 @@ class LogsScreen(Screen):
 
     def action_clear(self) -> None:
         """Clear the log view."""
-        log_view = self.query_one("#log-view", RichLog)
-        log_view.clear()
-        self._seen_ids.clear()
+        log_viewer = self.query_one("#log-view", LogViewer)
+        log_viewer.clear()
         self.notify("Logs cleared", timeout=2)
 
     def action_toggle_follow(self) -> None:
         """Toggle follow mode."""
-        self.follow_mode = not self.follow_mode
-        if self.follow_mode:
+        log_viewer = self.query_one("#log-view", LogViewer)
+        log_viewer.follow_mode = not log_viewer.follow_mode
+
+        if log_viewer.follow_mode:
             self.notify("Follow mode enabled", timeout=2)
             self._follow_timer = self.set_interval(
                 2.0, self._follow_refresh, name="follow-timer"
@@ -255,28 +175,21 @@ class LogsScreen(Screen):
 
     async def _follow_refresh(self) -> None:
         """Refresh logs in follow mode."""
-        if self.follow_mode:
+        log_viewer = self.query_one("#log-view", LogViewer)
+        if log_viewer.follow_mode:
             await self.refresh_data()
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""
-        self.follow_mode = False
+        log_viewer = self.query_one("#log-view", LogViewer)
+        log_viewer.follow_mode = False
         if self._follow_timer is not None:
             self._follow_timer.stop()
             self._follow_timer = None
         self.app.switch_screen("dashboard")
 
-    def on_select_changed(self, event: Select.Changed) -> None:  # noqa: ARG002
-        """Handle filter changes."""
-        # Clear and refresh when filters change
-        log_view = self.query_one("#log-view", RichLog)
-        log_view.clear()
-        self._seen_ids.clear()
-        self.run_worker(self.refresh_data())
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:  # noqa: ARG002
-        """Handle search input submission."""
-        log_view = self.query_one("#log-view", RichLog)
-        log_view.clear()
-        self._seen_ids.clear()
+    def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:  # noqa: ARG002
+        """Handle filter changes from FilterBar."""
+        log_viewer = self.query_one("#log-view", LogViewer)
+        log_viewer.clear()
         self.run_worker(self.refresh_data())

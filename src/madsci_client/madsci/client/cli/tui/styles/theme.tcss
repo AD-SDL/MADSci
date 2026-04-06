@@ -70,7 +70,7 @@ RecentEventsPanel {
 
 /* ===== Status Screen ===== */
 
-ServiceDetailPanel {
+StatusScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
@@ -79,23 +79,10 @@ ServiceDetailPanel {
 
 /* ===== Logs Screen ===== */
 
-FilterPanel {
+LogsScreen FilterBar {
     height: 5;
     padding: 1 2;
     border: solid $primary;
-}
-
-FilterPanel Horizontal {
-    height: 3;
-}
-
-FilterPanel Select {
-    width: 20;
-    margin-right: 2;
-}
-
-FilterPanel Input {
-    width: 30;
 }
 
 LogsScreen #log-view {
@@ -106,7 +93,7 @@ LogsScreen #log-view {
 
 /* ===== Nodes Screen ===== */
 
-NodeDetailScreen #node-detail-content {
+NodeDetailScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
@@ -115,11 +102,16 @@ NodeDetailScreen #node-detail-content {
 
 /* ===== Workflows Screen ===== */
 
-WorkflowDetailPanel {
+WorkflowsScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
     min-height: 14;
+}
+
+WorkflowsScreen ActionBar {
+    height: 3;
+    padding: 0 2;
 }
 
 /* ===== Template Browser ===== */

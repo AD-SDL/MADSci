@@ -198,5 +198,5 @@ class TestTuiScreenImports:
         assert ".status-offline" in content
         assert "ServicesPanel" in content
         assert "NodeDetailScreen" in content
-        assert "WorkflowDetailPanel" in content
-        assert "FilterPanel" in content
+        assert "DetailPanel" in content
+        assert "FilterBar" in content
