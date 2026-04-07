@@ -807,6 +807,87 @@ class EventClient:
                 break
         return selected_events
 
+    def archive_events(
+        self,
+        before_date: Optional[str] = None,
+        event_ids: Optional[list[str]] = None,
+        timeout: Optional[float] = None,
+    ) -> dict:
+        """Archive events by date or by specific IDs.
+
+        Args:
+            before_date: Archive events before this ISO date string.
+            event_ids: List of specific event IDs to archive.
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server (e.g. {"archived_count": N}).
+        """
+        payload: dict = {}
+        if before_date:
+            payload["before_date"] = before_date
+        if event_ids:
+            payload["event_ids"] = event_ids
+        response = self._client.post(
+            f"{self.event_server}events/archive",
+            json=payload,
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def purge_events(
+        self, older_than_days: int = 30, timeout: Optional[float] = None
+    ) -> dict:
+        """Permanently delete archived events older than specified days.
+
+        Args:
+            older_than_days: Delete archived events older than this many days.
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server (e.g. {"purged_count": N}).
+        """
+        response = self._client.delete(
+            f"{self.event_server}events/archived",
+            params={"older_than_days": older_than_days},
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def create_backup(self, timeout: Optional[float] = None) -> dict:
+        """Create an event backup.
+
+        Args:
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server.
+        """
+        response = self._client.post(
+            f"{self.event_server}backup",
+            timeout=timeout or 30.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_backup_status(self, timeout: Optional[float] = None) -> dict:
+        """Get event backup status.
+
+        Args:
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server describing backup status.
+        """
+        response = self._client.get(
+            f"{self.event_server}backup",
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
     def query_events(
         self, selector: dict, timeout: Optional[float] = None
     ) -> dict[str, Event]:

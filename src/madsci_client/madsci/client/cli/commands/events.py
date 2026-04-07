@@ -275,7 +275,7 @@ def archive_events(
         madsci events archive --before-date 2026-01-01
         madsci events archive --ids "id1,id2,id3"
     """
-    import httpx
+    from madsci.client.event_client import EventClient
 
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
@@ -284,19 +284,16 @@ def archive_events(
     if not before_date and not ids:
         raise click.ClickException("Provide --before-date or --ids.")
 
-    payload = {}
-    if before_date:
-        payload["before_date"] = before_date
-    if ids:
-        payload["event_ids"] = [i.strip() for i in ids.split(",")]
-
-    response = httpx.post(
-        f"{url}events/archive",
-        json=payload,
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    result = response.json()
+    event_ids_list = [i.strip() for i in ids.split(",")] if ids else None
+    client = EventClient(event_server_url=url)
+    try:
+        result = client.archive_events(
+            before_date=before_date,
+            event_ids=event_ids_list,
+            timeout=timeout,
+        )
+    finally:
+        client.close()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, result, format=fmt.value)
@@ -342,7 +339,7 @@ def purge_events(
         madsci events purge --older-than-days 7
         madsci events purge --older-than-days 90 --yes
     """
-    import httpx
+    from madsci.client.event_client import EventClient
 
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
@@ -354,13 +351,11 @@ def purge_events(
             abort=True,
         )
 
-    response = httpx.delete(
-        f"{url}events/archived",
-        params={"older_than_days": older_than_days},
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    result = response.json()
+    client = EventClient(event_server_url=url)
+    try:
+        result = client.purge_events(older_than_days=older_than_days, timeout=timeout)
+    finally:
+        client.close()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, result, format=fmt.value)
@@ -395,7 +390,7 @@ def backup_events(
         madsci events backup --create
         madsci events backup --status
     """
-    import httpx
+    from madsci.client.event_client import EventClient
 
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
@@ -404,21 +399,21 @@ def backup_events(
     if not do_create and not show_status:
         raise click.ClickException("Provide --create or --status.")
 
-    if show_status:
-        response = httpx.get(f"{url}backup", timeout=timeout)
-        response.raise_for_status()
-        result = response.json()
-        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-            output_result(console, result, format=fmt.value)
-        else:
-            output_result(console, result, format="text", title="Backup Status")
-        return
+    client = EventClient(event_server_url=url)
+    try:
+        if show_status:
+            result = client.get_backup_status(timeout=timeout)
+            if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+                output_result(console, result, format=fmt.value)
+            else:
+                output_result(console, result, format="text", title="Backup Status")
+            return
 
-    if do_create:
-        response = httpx.post(f"{url}backup", timeout=timeout)
-        response.raise_for_status()
-        result = response.json()
-        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-            output_result(console, result, format=fmt.value)
-        else:
-            success(console, "Event backup created.")
+        if do_create:
+            result = client.create_backup(timeout=timeout)
+            if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+                output_result(console, result, format=fmt.value)
+            else:
+                success(console, "Event backup created.")
+    finally:
+        client.close()

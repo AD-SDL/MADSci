@@ -497,23 +497,21 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             return
 
         row = table.get_row(row_key)
-        workflow_name = str(row[1])
+        workflow_id = str(row[0])  # ID is the first column
 
-        # Find workflow by name match and push detail screen
-        for wf_id, wf_data in self.workflows_data.items():
-            if wf_data.get("name", "") == workflow_name:
-                self.selected_workflow_id = wf_id
-                from madsci.client.cli.tui.screens.workflow_detail import (
-                    WorkflowDetailScreen,
-                )
+        wf_data = self.workflows_data.get(workflow_id)
+        if wf_data is not None:
+            self.selected_workflow_id = workflow_id
+            from madsci.client.cli.tui.screens.workflow_detail import (
+                WorkflowDetailScreen,
+            )
 
-                self.app.push_screen(
-                    WorkflowDetailScreen(
-                        workflow_id=wf_id,
-                        workflow_data=wf_data,
-                    )
+            self.app.push_screen(
+                WorkflowDetailScreen(
+                    workflow_id=workflow_id,
+                    workflow_data=wf_data,
                 )
-                break
+            )
 
     async def _send_workflow_command(self, command: str) -> None:
         """Send a control command to the selected workflow.

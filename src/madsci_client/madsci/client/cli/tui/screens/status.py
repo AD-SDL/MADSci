@@ -3,7 +3,7 @@
 Provides detailed service status with health information.
 """
 
-import socket
+import asyncio
 from typing import Any, ClassVar
 
 import httpx
@@ -157,12 +157,13 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         for name, (host, port) in INFRASTRUCTURE_SERVICES.items():
             # Check if port is reachable
             try:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(1)
-                result = sock.connect_ex((host, port))
-                sock.close()
-                status = "connected" if result == 0 else "disconnected"
-            except Exception:
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, port), timeout=1.0
+                )
+                writer.close()
+                await writer.wait_closed()
+                status = "connected"
+            except (OSError, asyncio.TimeoutError):
                 status = "disconnected"
 
             icon = format_status_icon(status)

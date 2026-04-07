@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from click.testing import CliRunner
 from madsci.client.cli import madsci
@@ -301,51 +301,45 @@ class TestEventsArchive:
         assert result.exit_code != 0
         assert "Provide --before-date or --ids" in result.output
 
-    @patch("httpx.post")
-    def test_archive_by_date(self, mock_post) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"archived_count": 5}
-        mock_post.return_value = mock_response
+    def test_archive_by_date(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("archive_events", {"archived_count": 5}),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "archive",
+                    "--before-date",
+                    "2026-01-01",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "5" in result.output
 
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "archive",
-                "--before-date",
-                "2026-01-01",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "5" in result.output
-
-    @patch("httpx.post")
-    def test_archive_by_ids(self, mock_post) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"archived_count": 2}
-        mock_post.return_value = mock_response
-
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "archive",
-                "--ids",
-                "id1,id2",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "2" in result.output
+    def test_archive_by_ids(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("archive_events", {"archived_count": 2}),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "archive",
+                    "--ids",
+                    "id1,id2",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "2" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -363,27 +357,24 @@ class TestEventsPurge:
         assert "--older-than-days" in result.output
         assert "--yes" in result.output
 
-    @patch("httpx.delete")
-    def test_purge_with_yes(self, mock_delete) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"purged_count": 10}
-        mock_delete.return_value = mock_response
-
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "purge",
-                "--yes",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "10" in result.output
+    def test_purge_with_yes(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("purge_events", {"purged_count": 10}),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "purge",
+                    "--yes",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "10" in result.output
 
     def test_purge_abort(self) -> None:
         runner = CliRunner()
@@ -429,48 +420,46 @@ class TestEventsBackup:
         assert result.exit_code != 0
         assert "Provide --create or --status" in result.output
 
-    @patch("httpx.post")
-    def test_backup_create(self, mock_post) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"backup_id": "bk-123", "status": "created"}
-        mock_post.return_value = mock_response
+    def test_backup_create(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client(
+                "create_backup", {"backup_id": "bk-123", "status": "created"}
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "backup",
+                    "--create",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "created" in result.output.lower()
 
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "backup",
-                "--create",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
-        assert "created" in result.output.lower()
-
-    @patch("httpx.get")
-    def test_backup_status(self, mock_get) -> None:
-        mock_response = MagicMock()
-        mock_response.is_success = True
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {"last_backup": "2026-01-01", "count": 5}
-        mock_get.return_value = mock_response
-
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            [
-                "events",
-                "backup",
-                "--status",
-                "--event-url",
-                "http://localhost:8001/",
-            ],
-        )
-        assert result.exit_code == 0
+    def test_backup_status(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client(
+                "get_backup_status", {"last_backup": "2026-01-01", "count": 5}
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "backup",
+                    "--status",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
 
 
 # ---------------------------------------------------------------------------
