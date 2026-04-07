@@ -55,10 +55,10 @@ Functions
         Click decorator that injects ``timeout`` as a keyword argument.
 
 `with_service_error_handling(f: F) ‑> ~F`
-:   Catch :class:`MadsciServiceError` and print a friendly CLI message.
+:   Catch service and HTTP exceptions, print a friendly CLI message.
     
-    Translates service exceptions into user-friendly Rich-formatted
-    error output and exits with code 1.
+    Translates :class:`MadsciServiceError` and raw ``httpx`` transport
+    exceptions into user-friendly error output and exits with code 1.
     
     Usage::
     

@@ -170,8 +170,10 @@ def init(
     # Validate parameters
     errors = engine.validate_parameters(parameters)
     if errors:
+        from rich.markup import escape
+
         for err in errors:
-            console.print(f"  [red]Error:[/red] {err}")
+            console.print(f"  [red]Error:[/red] {escape(str(err))}")
         raise click.ClickException("Invalid parameters. See errors above.")
 
     console.print(f'Creating lab "[bold]{lab_name}[/bold]" in {output_dir / lab_name}/')

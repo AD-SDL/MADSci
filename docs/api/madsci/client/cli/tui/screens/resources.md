@@ -9,6 +9,39 @@ lock/unlock, and tree visualization.
 Classes
 -------
 
+`ConfirmDeleteScreen(resource_id: str, resource_name: str, **kwargs: Any)`
+:   Modal confirmation dialog for resource deletion.
+    
+    Initialize the confirmation screen.
+
+    ### Ancestors (in MRO)
+
+    * textual.screen.ModalScreen
+    * textual.screen.Screen
+    * typing.Generic
+    * textual.widget.Widget
+    * textual.dom.DOMNode
+    * textual.message_pump.MessagePump
+
+    ### Class variables
+
+    `DEFAULT_CSS`
+    :
+
+    `can_focus`
+    :
+
+    `can_focus_children`
+    :
+
+    ### Methods
+
+    `compose(self) ‑> Iterable[textual.widget.Widget]`
+    :   Compose the confirmation dialog.
+
+    `on_button_pressed(self, event: textual.widgets._button.Button.Pressed) ‑> None`
+    :   Handle button press.
+
 `ResourcesScreen(**kwargs: Any)`
 :   Screen showing resource inventory and management.
     
@@ -38,7 +71,7 @@ Classes
     ### Methods
 
     `action_delete_resource(self) ‑> None`
-    :   Delete the selected resource.
+    :   Prompt for confirmation before deleting the selected resource.
 
     `action_go_back(self) ‑> None`
     :   Go back to the dashboard.
@@ -57,6 +90,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the resources screen layout.
+
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the resources table.

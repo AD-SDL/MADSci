@@ -138,7 +138,7 @@ def display_template_list(
     console.print(table)
 
 
-def generate_from_template(  # noqa: C901, PLR0912
+def generate_from_template(  # noqa: C901, PLR0912, PLR0915
     template_id: str,
     output_dir: Path,
     name: Optional[str],
@@ -217,9 +217,11 @@ def generate_from_template(  # noqa: C901, PLR0912
     # Validate
     errors = engine.validate_parameters(params)
     if errors:
+        from rich.markup import escape
+
         console.print("[red]✗[/red] Parameter validation failed:")
         for error in errors:
-            console.print(f"    • {error}")
+            console.print(f"    • {escape(str(error))}")
         return None
 
     # Preview
@@ -239,10 +241,14 @@ def generate_from_template(  # noqa: C901, PLR0912
     try:
         result = engine.render(output_dir, params)
     except TemplateValidationError as e:
-        console.print(f"[red]✗[/red] Validation error: {e.errors}")
+        from rich.markup import escape
+
+        console.print(f"[red]✗[/red] Validation error: {escape(str(e.errors))}")
         return None
     except TemplateError as e:
-        console.print(f"[red]✗[/red] Template error: {e}")
+        from rich.markup import escape
+
+        console.print(f"[red]✗[/red] Template error: {escape(str(e))}")
         return None
 
     console.print(f"\n[green]✓[/green] Created {len(result.files_created)} files\n")
@@ -320,13 +326,15 @@ def _launch_tui_browser(ctx: click.Context) -> None:
     console = get_console(ctx)
     output_dir = Path.cwd()
 
-    generate_from_template(
+    result = generate_from_template(
         template_id=template_id,
         output_dir=output_dir,
         name=None,
         no_interactive=False,
         console=console,
     )
+    if not result:
+        ctx.exit(1)
 
 
 @new.command()
@@ -404,14 +412,17 @@ def module(
         console=console,
     )
 
-    if result:
-        module_name = result.parameters_used.get("module_name", name or "my_device")
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. cd {module_name}_module")
-        console.print("  2. Implement your interface in src/*_interface.py")
-        console.print("  3. Test with fake interface: python src/*_rest_node.py --fake")
-        console.print("  4. Run tests: pytest tests/")
-        console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/readme/")
+    if not result:
+        ctx.exit(1)
+        return
+
+    module_name = result.parameters_used.get("module_name", name or "my_device")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. cd {module_name}_module")
+    console.print("  2. Implement your interface in src/*_interface.py")
+    console.print("  3. Test with fake interface: python src/*_rest_node.py --fake")
+    console.print("  4. Run tests: pytest tests/")
+    console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/readme/")
 
 
 @new.command()
@@ -487,13 +498,16 @@ def interface(
         console=console,
     )
 
-    if result:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Implement {interface_type} behavior in the generated file")
-        console.print("  2. Run tests: pytest tests/")
-        console.print(
-            f"  3. Use {interface_type} interface: python src/*_rest_node.py --{interface_type}"
-        )
+    if not result:
+        ctx.exit(1)
+        return
+
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Implement {interface_type} behavior in the generated file")
+    console.print("  2. Run tests: pytest tests/")
+    console.print(
+        f"  3. Use {interface_type} interface: python src/*_rest_node.py --{interface_type}"
+    )
 
 
 @new.command()
@@ -544,11 +558,14 @@ def node(
         extra_params=extra_params,
     )
 
-    if result:
-        node_name = result.parameters_used.get("node_name", name or "my_node")
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Start the node: python {node_name}.py")
-        console.print(f"  2. Test: curl http://localhost:{port}/health")
+    if not result:
+        ctx.exit(1)
+        return
+
+    node_name = result.parameters_used.get("node_name", name or "my_node")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Start the node: python {node_name}.py")
+    console.print(f"  2. Test: curl http://localhost:{port}/health")
 
 
 @new.command()
@@ -603,17 +620,18 @@ def experiment(
         console=console,
     )
 
-    if result:
-        exp_name = result.parameters_used.get(
-            "experiment_name", name or "my_experiment"
-        )
-        console.print("\n[bold]Next steps:[/bold]")
-        if modality == "script":
-            console.print(f"  1. Edit {exp_name}.py to define your experiment logic")
-            console.print(f"  2. Run: python {exp_name}.py")
-        elif modality == "notebook":
-            console.print(f"  1. Open {exp_name}.ipynb in Jupyter")
-            console.print("  2. Run cells to execute experiment")
+    if not result:
+        ctx.exit(1)
+        return
+
+    exp_name = result.parameters_used.get("experiment_name", name or "my_experiment")
+    console.print("\n[bold]Next steps:[/bold]")
+    if modality == "script":
+        console.print(f"  1. Edit {exp_name}.py to define your experiment logic")
+        console.print(f"  2. Run: python {exp_name}.py")
+    elif modality == "notebook":
+        console.print(f"  1. Open {exp_name}.ipynb in Jupyter")
+        console.print("  2. Run cells to execute experiment")
 
 
 @new.command()
@@ -663,11 +681,14 @@ def workflow(
         console=console,
     )
 
-    if result:
-        wf_name = result.parameters_used.get("workflow_name", name or "my_workflow")
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Edit {wf_name}.workflow.yaml to define your steps")
-        console.print(f"  2. Run: madsci run workflow {wf_name}.workflow.yaml")
+    if not result:
+        ctx.exit(1)
+        return
+
+    wf_name = result.parameters_used.get("workflow_name", name or "my_workflow")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Edit {wf_name}.workflow.yaml to define your steps")
+    console.print(f"  2. Run: madsci run workflow {wf_name}.workflow.yaml")
 
 
 @new.command()
@@ -721,16 +742,19 @@ def lab(
         console=console,
     )
 
-    if result:
-        lab_name = result.parameters_used.get("lab_name", name or "my_lab")
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. cd {lab_name}")
-        if template == "minimal":
-            console.print("  2. python -m madsci.squid")
-        else:
-            console.print("  2. madsci start lab")
-        console.print("  3. Open http://localhost:8000 in your browser")
-        console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/")
+    if not result:
+        ctx.exit(1)
+        return
+
+    lab_name = result.parameters_used.get("lab_name", name or "my_lab")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. cd {lab_name}")
+    if template == "minimal":
+        console.print("  2. python -m madsci.squid")
+    else:
+        console.print("  2. madsci start lab")
+    console.print("  3. Open http://localhost:8000 in your browser")
+    console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/")
 
 
 @new.command("list")

@@ -145,11 +145,11 @@ def timeout_option(default: float = 10.0) -> Callable[[F], F]:
 # ---------------------------------------------------------------------------
 
 
-def with_service_error_handling(f: F) -> F:
-    """Catch :class:`MadsciServiceError` and print a friendly CLI message.
+def with_service_error_handling(f: F) -> F:  # noqa: C901
+    """Catch service and HTTP exceptions, print a friendly CLI message.
 
-    Translates service exceptions into user-friendly Rich-formatted
-    error output and exits with code 1.
+    Translates :class:`MadsciServiceError` and raw ``httpx`` transport
+    exceptions into user-friendly error output and exits with code 1.
 
     Usage::
 
@@ -161,6 +161,8 @@ def with_service_error_handling(f: F) -> F:
 
     @functools.wraps(f)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        import httpx
+
         try:
             return f(*args, **kwargs)
         except ServiceUnavailableError as exc:
@@ -182,6 +184,25 @@ def with_service_error_handling(f: F) -> F:
             _print_service_error(exc, "Service error", detail)
         except MadsciServiceError as exc:
             _print_service_error(exc, "Service error", None)
+        except httpx.ConnectError as exc:
+            url = str(exc.request.url) if exc.request else "unknown"
+            _print_raw_error(
+                f"Connection refused: Could not connect to {url}",
+                "Is the service running? Check with 'madsci status'.",
+            )
+        except httpx.TimeoutException as exc:
+            url = str(exc.request.url) if exc.request else "unknown"
+            _print_raw_error(
+                f"Request timed out: {url}",
+                "The service did not respond in time. Try increasing --timeout.",
+            )
+        except httpx.HTTPStatusError as exc:
+            url = str(exc.request.url) if exc.request else "unknown"
+            body = exc.response.text[:200] if exc.response else ""
+            detail = f"HTTP {exc.response.status_code} from {url}"
+            if body:
+                detail += f": {body}"
+            _print_raw_error(detail, None)
 
     return wrapper  # type: ignore[return-value]
 
@@ -193,6 +214,17 @@ def _print_service_error(
 ) -> None:
     """Print a formatted service error and exit."""
     click.echo(click.style(f"\u2717 {heading}: {exc}", fg="red"), err=True)
+    if hint:
+        click.echo(click.style(f"  {hint}", fg="yellow"), err=True)
+    raise SystemExit(1)
+
+
+def _print_raw_error(
+    message: str,
+    hint: str | None,
+) -> None:
+    """Print a formatted error message (no MadsciServiceError) and exit."""
+    click.echo(click.style(f"\u2717 {message}", fg="red"), err=True)
     if hint:
         click.echo(click.style(f"  {hint}", fg="yellow"), err=True)
     raise SystemExit(1)

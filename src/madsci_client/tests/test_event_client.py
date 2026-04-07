@@ -545,7 +545,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_version_on_init(self, config_without_server, caplog):
         """Test that MADSci version is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         # Check that version info appears in log output
@@ -555,7 +555,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_config_summary_on_init(self, config_without_server, caplog):
         """Test that configuration summary is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()
@@ -572,7 +572,7 @@ class TestEventClientStartupLogging:
 
         with (
             patch("madsci.client.event_client.create_httpx_client"),
-            caplog.at_level(logging.INFO),
+            caplog.at_level(logging.DEBUG),
         ):
             client = EventClient(config=config_with_server)
 
@@ -583,7 +583,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_python_version_on_init(self, config_without_server, caplog):
         """Test that Python version is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()
@@ -595,7 +595,7 @@ class TestEventClientStartupLogging:
         self, config_without_server, caplog
     ):
         """Test that platform info is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()

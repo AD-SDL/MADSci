@@ -88,7 +88,7 @@ Classes
     ### Methods
 
     `clear_and_populate(self, rows: list[dict[str, Any]]) ‑> None`
-    :   Clear the table and populate with new data atomically.
+    :   Clear the table and populate with new data, preserving cursor position.
         
         Args:
             rows: List of row dictionaries. Each dict should have keys

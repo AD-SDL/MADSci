@@ -32,12 +32,11 @@ Sub-modules
 Classes
 -------
 
-`ActionBar(actions: list[ActionDef], **kwargs: object)`
-:   Displays a row of keyboard-bound actions.
+`ActionBar(actions: list[ActionDef], **kwargs: Any)`
+:   Displays a row of clickable action buttons with keyboard hints.
     
-    Renders each action as ``[key] Label`` with variant-based colouring.
-    Posts :class:`ActionTriggered` messages when actions are invoked
-    programmatically.
+    Each button shows ``(key) Label`` and posts :class:`ActionTriggered`
+    messages when clicked.
     
     Usage::
     
@@ -51,11 +50,10 @@ Classes
     
     Args:
         actions: List of action definitions to display.
-        **kwargs: Additional keyword arguments forwarded to ``Static``.
+        **kwargs: Additional keyword arguments forwarded to ``Widget``.
 
     ### Ancestors (in MRO)
 
-    * textual.widgets._static.Static
     * textual.widget.Widget
     * textual.dom.DOMNode
     * textual.message_pump.MessagePump
@@ -68,6 +66,9 @@ Classes
         Attributes:
             action: The action name from the :class:`ActionDef`.
 
+    `DEFAULT_CSS`
+    :
+
     `can_focus`
     :
 
@@ -76,11 +77,11 @@ Classes
 
     ### Methods
 
-    `render(self) ‑> str`
-    :   Render the action bar as Rich markup.
-        
-        Returns:
-            Formatted string with all action entries.
+    `compose(self) ‑> Iterable[textual.widget.Widget]`
+    :   Compose the action bar as a row of buttons.
+
+    `on_button_pressed(self, event: Button.Pressed) ‑> None`
+    :   Handle button press — post ActionTriggered message.
 
     `trigger_action(self, action_name: str) ‑> None`
     :   Programmatically trigger a named action.
@@ -199,7 +200,7 @@ Classes
     ### Methods
 
     `clear_and_populate(self, rows: list[dict[str, Any]]) ‑> None`
-    :   Clear the table and populate with new data atomically.
+    :   Clear the table and populate with new data, preserving cursor position.
         
         Args:
             rows: List of row dictionaries. Each dict should have keys

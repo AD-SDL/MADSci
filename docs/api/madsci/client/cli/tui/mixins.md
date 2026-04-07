@@ -5,6 +5,22 @@ Screen mixins for MADSci TUI.
 Provides reusable behaviours that can be mixed into any
 :class:`~textual.screen.Screen` subclass.
 
+Functions
+---------
+
+`preserve_cursor(table: DataTable) ‑> Generator[None, None, None]`
+:   Context manager that preserves cursor position across a table refresh.
+    
+    Saves the current cursor row before the block executes, and
+    restores it (clamped to the new row count) afterwards.
+    
+    Usage::
+    
+        with preserve_cursor(table):
+            table.clear()
+            for row in new_data:
+                table.add_row(...)
+
 Classes
 -------
 
@@ -87,13 +103,13 @@ Classes
 
     * madsci.client.cli.tui.screens.dashboard.DashboardScreen
     * madsci.client.cli.tui.screens.data_browser.DataBrowserScreen
-    * madsci.client.cli.tui.screens.event_analytics.EventAnalyticsScreen
     * madsci.client.cli.tui.screens.experiments.ExperimentsScreen
     * madsci.client.cli.tui.screens.locations.LocationsScreen
     * madsci.client.cli.tui.screens.logs.LogsScreen
     * madsci.client.cli.tui.screens.nodes.NodesScreen
     * madsci.client.cli.tui.screens.resources.ResourcesScreen
     * madsci.client.cli.tui.screens.status.StatusScreen
+    * madsci.client.cli.tui.screens.workflow_detail.WorkflowDetailScreen
     * madsci.client.cli.tui.screens.workflows.WorkflowsScreen
 
     ### Methods

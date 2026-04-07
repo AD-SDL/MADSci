@@ -222,3 +222,57 @@ class TestWithServiceErrorHandling:
         result = runner.invoke(cmd, [])
         # ValueError should propagate and cause a non-zero exit
         assert result.exit_code != 0
+
+    def test_httpx_connect_error(self) -> None:
+        """Raw httpx.ConnectError should be caught and produce a friendly message."""
+        import httpx
+
+        @click.command()
+        @with_service_error_handling
+        def cmd() -> None:
+            request = httpx.Request("GET", "http://localhost:9999/api/test")
+            raise httpx.ConnectError("[Errno 61] Connection refused", request=request)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 1
+        output = result.output.lower()
+        assert "connection refused" in output
+        assert "localhost:9999" in output
+        assert "madsci status" in output
+
+    def test_httpx_timeout_error(self) -> None:
+        """Raw httpx.TimeoutException should be caught and produce a friendly message."""
+        import httpx
+
+        @click.command()
+        @with_service_error_handling
+        def cmd() -> None:
+            request = httpx.Request("GET", "http://localhost:8005/api/workflows")
+            raise httpx.ReadTimeout("timed out", request=request)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 1
+        output = result.output.lower()
+        assert "timed out" in output
+        assert "--timeout" in output
+
+    def test_httpx_http_status_error(self) -> None:
+        """Raw httpx.HTTPStatusError should be caught and produce a friendly message."""
+        import httpx
+
+        @click.command()
+        @with_service_error_handling
+        def cmd() -> None:
+            request = httpx.Request("GET", "http://localhost:8005/api/workflows/bad-id")
+            response = httpx.Response(404, request=request, text="Not found")
+            raise httpx.HTTPStatusError(
+                "404 Not Found", request=request, response=response
+            )
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 1
+        assert "404" in result.output
+        assert "localhost:8005" in result.output

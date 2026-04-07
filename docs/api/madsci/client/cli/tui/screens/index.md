@@ -9,7 +9,6 @@ Sub-modules
 * madsci.client.cli.tui.screens.action_executor
 * madsci.client.cli.tui.screens.dashboard
 * madsci.client.cli.tui.screens.data_browser
-* madsci.client.cli.tui.screens.event_analytics
 * madsci.client.cli.tui.screens.experiments
 * madsci.client.cli.tui.screens.locations
 * madsci.client.cli.tui.screens.logs
@@ -20,6 +19,7 @@ Sub-modules
 * madsci.client.cli.tui.screens.status
 * madsci.client.cli.tui.screens.step_detail
 * madsci.client.cli.tui.screens.transfer_graph
+* madsci.client.cli.tui.screens.workflow_detail
 * madsci.client.cli.tui.screens.workflows
 
 Classes
@@ -160,6 +160,9 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the data browser screen layout.
 
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
+
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the data table.
         
@@ -177,48 +180,6 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh datapoint data from the data manager.
-
-`EventAnalyticsScreen(**kwargs: Any)`
-:   Screen showing event analytics and utilization summaries.
-    
-    Initialize the screen.
-
-    ### Ancestors (in MRO)
-
-    * madsci.client.cli.tui.mixins.ServiceURLMixin
-    * textual.screen.Screen
-    * typing.Generic
-    * textual.widget.Widget
-    * textual.dom.DOMNode
-    * textual.message_pump.MessagePump
-
-    ### Class variables
-
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
-    :
-
-    `can_focus`
-    :
-
-    `can_focus_children`
-    :
-
-    ### Methods
-
-    `action_go_back(self) ‑> None`
-    :   Go back to the dashboard.
-
-    `action_refresh(self) ‑> None`
-    :   Refresh analytics data.
-
-    `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the event analytics screen layout.
-
-    `on_mount(self) ‑> None`
-    :   Handle screen mount - set up tables and load data.
-
-    `refresh_data(self) ‑> None`
-    :   Refresh analytics data from the event manager.
 
 `ExperimentsScreen(**kwargs: Any)`
 :   Screen showing experiment management and monitoring.
@@ -265,6 +226,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the experiments screen layout.
+
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the experiments table.
@@ -323,6 +287,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the locations screen layout.
+
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the locations table.
@@ -446,6 +413,9 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
 
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
+
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.
 
@@ -524,7 +494,7 @@ Classes
     ### Methods
 
     `action_delete_resource(self) ‑> None`
-    :   Delete the selected resource.
+    :   Prompt for confirmation before deleting the selected resource.
 
     `action_go_back(self) ‑> None`
     :   Go back to the dashboard.
@@ -543,6 +513,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the resources screen layout.
+
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection in the resources table.
@@ -691,6 +664,70 @@ Classes
     `on_mount(self) ‑> None`
     :   Handle mount - set up table and fetch graph data.
 
+`WorkflowDetailScreen(workflow_id: str, workflow_data: dict, **kwargs: Any)`
+:   Screen showing details for a single workflow, pushed on top of WorkflowsScreen.
+    
+    Initialize the detail screen.
+    
+    Args:
+        workflow_id: Workflow ID.
+        workflow_data: Workflow data dictionary.
+
+    ### Ancestors (in MRO)
+
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
+    * textual.screen.Screen
+    * typing.Generic
+    * textual.widget.Widget
+    * textual.dom.DOMNode
+    * textual.message_pump.MessagePump
+
+    ### Class variables
+
+    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    :
+
+    `can_focus`
+    :
+
+    `can_focus_children`
+    :
+
+    ### Methods
+
+    `action_cancel_workflow(self) ‑> None`
+    :   Cancel this workflow.
+
+    `action_go_back(self) ‑> None`
+    :   Go back to the workflows list.
+
+    `action_pause_workflow(self) ‑> None`
+    :   Pause this workflow.
+
+    `action_refresh(self) ‑> None`
+    :   Re-fetch workflow data and re-render.
+
+    `action_resubmit_workflow(self) ‑> None`
+    :   Resubmit this workflow.
+
+    `action_resume_workflow(self) ‑> None`
+    :   Resume this workflow.
+
+    `action_retry_workflow(self) ‑> None`
+    :   Retry this workflow.
+
+    `compose(self) ‑> Iterable[textual.widget.Widget]`
+    :   Compose the detail screen layout.
+
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
+
+    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    :   Handle step row selection — push step detail screen.
+
+    `on_mount(self) ‑> None`
+    :   Set up the steps table and render content.
+
 `WorkflowsScreen(**kwargs: Any)`
 :   Screen showing workflow visualization and management.
     
@@ -743,8 +780,11 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the workflows screen layout.
 
+    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
+    :   Route ActionBar button triggers to screen actions.
+
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection in the workflows or steps table.
+    :   Handle row selection — push workflow detail screen.
 
     `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.

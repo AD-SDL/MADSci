@@ -261,7 +261,7 @@ class EventClient:
         Logs MADSci version, client configuration, and environment info
         to help with debugging and auditing.
         """
-        self._structlog_logger.info(
+        self._structlog_logger.debug(
             "EventClient initialized",
             madsci_version=get_madsci_version(),
             client_name=self.name,
