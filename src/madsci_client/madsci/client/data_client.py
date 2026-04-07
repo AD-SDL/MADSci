@@ -235,13 +235,15 @@ class DataClient(DualModeClientMixin):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.data_server_url is None:
-            return list(self._local_datapoints.values()).sort(
-                key=lambda x: x.datapoint_id, reverse=True
+            return sorted(
+                self._local_datapoints.values(),
+                key=lambda x: x.datapoint_id,
+                reverse=True,
             )[:number]
         response = self._request(
             "GET",
             f"{self.data_server_url}datapoints",
-            params={number: number},
+            params={"number": number},
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
@@ -581,13 +583,15 @@ class DataClient(DualModeClientMixin):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.data_server_url is None:
-            return list(self._local_datapoints.values()).sort(
-                key=lambda x: x.datapoint_id, reverse=True
+            return sorted(
+                self._local_datapoints.values(),
+                key=lambda x: x.datapoint_id,
+                reverse=True,
             )[:number]
         response = await self._async_request(
             "GET",
             f"{self.data_server_url}datapoints",
-            params={number: number},
+            params={"number": number},
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()

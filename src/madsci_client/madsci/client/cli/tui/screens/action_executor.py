@@ -128,7 +128,7 @@ class ActionExecutorScreen(Screen):
             event: The button pressed event.
         """
         if event.button.id == "execute-btn":
-            await self._execute_action()
+            self.run_worker(self._execute_action(), exclusive=True)
 
     async def _execute_action(self) -> None:
         """Execute the selected action on the node."""
