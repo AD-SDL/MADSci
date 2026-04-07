@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Union
 
 import httpx
@@ -86,6 +87,8 @@ class RetryTransport(httpx.BaseTransport):
             response = self._transport.handle_request(request)
 
             if response.status_code not in self._status_forcelist:
+                if last_response is not None:
+                    last_response.close()
                 return response
 
             # Close the previous failed response before overwriting.
@@ -176,6 +179,8 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
             response = await self._transport.handle_async_request(request)
 
             if response.status_code not in self._status_forcelist:
+                if last_response is not None:
+                    await last_response.aclose()
                 return response
 
             # Close the previous failed response before overwriting.
@@ -218,7 +223,7 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 
 def _make_rate_limit_hook(
     tracker: RateLimitTracker,
-) -> callable:
+) -> Callable[[httpx.Response], None]:
     """
     Create an httpx response event hook that feeds headers into *tracker*.
 

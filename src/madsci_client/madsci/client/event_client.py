@@ -383,9 +383,37 @@ class EventClient:
         if hasattr(self, "_client") and self._client:
             with contextlib.suppress(Exception):
                 self._client.close()
-        if hasattr(self, "_async_client") and self._async_client:
-            # AsyncClient only supports async cleanup; drop reference.
+        if hasattr(self, "_async_client") and self._async_client is not None:
+            try:
+                import asyncio  # noqa: PLC0415
+
+                loop = asyncio.get_event_loop()
+                if not loop.is_running():
+                    loop.run_until_complete(self._async_client.aclose())
+                else:
+                    self._async_client = None
+            except Exception:
+                self._async_client = None
+            finally:
+                self._async_client = None
+
+    async def aclose(self) -> None:
+        """Close async resources properly.
+
+        Use this method in async contexts for proper cleanup. Bound child
+        clients (created via bind()/unbind()) share resources with their
+        parent and will skip cleanup.
+        """
+        # Bound child clients share resources with parent - don't close them
+        if getattr(self, "_is_bound_child", False):
+            return
+
+        if self._async_client is not None:
+            await self._async_client.aclose()
             self._async_client = None
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
     def __enter__(self) -> "EventClient":
         """Context manager entry."""

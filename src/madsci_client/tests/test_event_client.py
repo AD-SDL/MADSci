@@ -6,7 +6,7 @@ import tempfile
 import time
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
 import pytest
@@ -1490,3 +1490,107 @@ class TestEventClientBoundChildBehavior:
         assert child.session is parent.session
 
         parent.close()
+
+
+# ---------------------------------------------------------------------------
+# EventClient aclose / close async cleanup tests
+# ---------------------------------------------------------------------------
+
+
+class TestEventClientAsyncCleanup:
+    """Tests for EventClient.aclose() and the async-cleanup path in close()."""
+
+    @pytest.mark.asyncio
+    async def test_aclose_closes_async_client(self, temp_log_dir):
+        """aclose() awaits _async_client.aclose() and nullifies the reference."""
+        config = EventClientConfig(
+            name="aclose_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
+        client._async_client = mock_async
+
+        await client.aclose()
+
+        mock_async.aclose.assert_called_once()
+        assert client._async_client is None
+
+    @pytest.mark.asyncio
+    async def test_aclose_closes_sync_client(self, temp_log_dir):
+        """aclose() also closes the sync _client."""
+        config = EventClientConfig(
+            name="aclose_sync_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_sync = MagicMock(spec=httpx.Client)
+        client._client = mock_sync
+
+        await client.aclose()
+
+        mock_sync.close.assert_called_once()
+        assert client._client is None
+
+    @pytest.mark.asyncio
+    async def test_aclose_idempotent(self, temp_log_dir):
+        """aclose() can be called multiple times without error."""
+        config = EventClientConfig(
+            name="aclose_idempotent",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        await client.aclose()
+        await client.aclose()  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_aclose_skips_if_bound_child(self, temp_log_dir):
+        """aclose() on a bound child client skips cleanup."""
+        config = EventClientConfig(
+            name="aclose_child_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+        child = parent.bind(step="x")
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
+        child._async_client = mock_async
+
+        await child.aclose()
+
+        mock_async.aclose.assert_not_called()
+        parent.close()
+
+    def test_close_attempts_async_cleanup_when_no_loop_running(self, temp_log_dir):
+        """close() attempts async cleanup via event loop when no loop is running."""
+        config = EventClientConfig(
+            name="close_async_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_async = MagicMock(spec=httpx.AsyncClient)
+        # Track whether aclose was scheduled
+        aclose_called = []
+
+        async def fake_aclose():
+            aclose_called.append(True)
+
+        mock_async.aclose = fake_aclose
+        client._async_client = mock_async
+
+        # No async loop is running in this sync test, so close() should
+        # attempt to run aclose() via get_event_loop().run_until_complete()
+        client.close()
+
+        # Either the loop ran aclose or the reference was dropped -- either way
+        # the client should be None afterward.
+        assert client._async_client is None

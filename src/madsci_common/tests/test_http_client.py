@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
 from madsci.common.http_client import (
     AsyncRetryTransport,
     RetryTransport,
+    _make_rate_limit_hook,
     create_httpx_client,
 )
 from madsci.common.types.client_types import MadsciClientConfig
@@ -199,6 +201,36 @@ class TestRetryTransport:
         assert response.status_code == 503
         assert stub._call_count == 1
 
+    def test_closes_previous_failed_response_on_successful_retry(self) -> None:
+        """Failed responses from earlier attempts must be closed when retry succeeds."""
+        failed_response = MagicMock(spec=httpx.Response)
+        failed_response.status_code = 503
+        ok_response = httpx.Response(200)
+
+        class _SequenceTransport(httpx.BaseTransport):
+            def __init__(self) -> None:
+                self._responses = [failed_response, ok_response]
+                self._index = 0
+
+            def handle_request(self, request: httpx.Request) -> httpx.Response:
+                resp = self._responses[self._index]
+                self._index += 1
+                return resp
+
+            def close(self) -> None:
+                pass
+
+        transport = RetryTransport(
+            _SequenceTransport(),
+            retries=3,
+            status_forcelist=[503],
+            backoff_factor=0.0,
+        )
+        result = transport.handle_request(httpx.Request("GET", "http://example.com/"))
+        assert result.status_code == 200
+        # The failed response must have been closed to avoid FD leaks
+        failed_response.close.assert_called_once()
+
 
 # ---------------------------------------------------------------------------
 # AsyncRetryTransport tests
@@ -265,6 +297,64 @@ class TestAsyncRetryTransport:
                 httpx.Request("GET", "http://example.com/"),
             )
             assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_closes_previous_failed_response_on_successful_retry(self) -> None:
+        """Failed async responses from earlier attempts must be closed when retry succeeds."""
+        failed_response = MagicMock(spec=httpx.Response)
+        failed_response.status_code = 500
+        failed_response.aclose = AsyncMock()
+        ok_response = httpx.Response(200)
+
+        class _SequenceAsyncTransport(httpx.AsyncBaseTransport):
+            def __init__(self) -> None:
+                self._responses = [failed_response, ok_response]
+                self._index = 0
+
+            async def handle_async_request(
+                self, request: httpx.Request
+            ) -> httpx.Response:
+                resp = self._responses[self._index]
+                self._index += 1
+                return resp
+
+            async def aclose(self) -> None:
+                pass
+
+        transport = AsyncRetryTransport(
+            _SequenceAsyncTransport(),
+            retries=3,
+            status_forcelist=[500],
+            backoff_factor=0.0,
+        )
+        result = await transport.handle_async_request(
+            httpx.Request("GET", "http://example.com/")
+        )
+        assert result.status_code == 200
+        # The failed response must have been async-closed to avoid FD leaks
+        failed_response.aclose.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Rate limit hook type annotation
+# ---------------------------------------------------------------------------
+
+
+class TestRateLimitHookTypeAnnotation:
+    """Test that _make_rate_limit_hook has the correct return type annotation."""
+
+    def test_return_type_annotation_is_callable(self) -> None:
+        """_make_rate_limit_hook should be annotated with Callable, not callable."""
+        hints: dict = {}
+        with contextlib.suppress(AttributeError):
+            hints = _make_rate_limit_hook.__annotations__
+
+        # The return annotation should be Callable (not the built-in callable)
+        return_annotation = hints.get("return")
+        # It must not be the lowercase builtin callable
+        assert return_annotation is not callable, (
+            "Return type annotation should be Callable[...], not lowercase callable"
+        )
 
 
 # ---------------------------------------------------------------------------

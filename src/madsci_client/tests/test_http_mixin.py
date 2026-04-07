@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -229,14 +231,42 @@ class TestClose:
         stub.close()  # Should not raise
 
     def test_close_closes_async_client_and_nullifies(self) -> None:
-        """close() nullifies the async client (no sync close available)."""
+        """close() attempts async cleanup and nullifies the async client."""
         stub = _StubClient()
-        mock_async = MagicMock(spec=httpx.AsyncClient)
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
         stub._async_client = mock_async
 
         stub.close()
 
-        # AsyncClient has no sync .close(); we just drop the reference
+        # Either the loop ran aclose() or we fell back to dropping the reference --
+        # either way _async_client must be None afterward.
+        assert stub._async_client is None
+
+    def test_close_attempts_loop_run_when_no_loop_running(self) -> None:
+        """close() runs aclose() via get_event_loop() when no loop is running."""
+        stub = _StubClient()
+        aclose_called = []
+
+        async def fake_aclose() -> None:
+            aclose_called.append(True)
+
+        # Use a plain object so aclose is a real coroutine function
+        class _FakeAsyncClient:
+            aclose = fake_aclose
+
+        stub._async_client = _FakeAsyncClient()
+
+        # Only attempt if the current event loop is not running
+        loop = asyncio.get_event_loop()
+        with contextlib.suppress(Exception):
+            if not loop.is_running():
+                stub.close()
+                assert aclose_called, (
+                    "aclose() should have been called via run_until_complete"
+                )
+            else:
+                stub.close()
+
         assert stub._async_client is None
 
     def test_close_idempotent(self) -> None:

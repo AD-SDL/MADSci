@@ -166,10 +166,18 @@ class DualModeClientMixin:
         if hasattr(self, "_client") and self._client is not None:
             self._client.close()
         if hasattr(self, "_async_client") and self._async_client is not None:
-            # AsyncClient only supports async cleanup via aclose().
-            # From sync code we can only drop the reference; use aclose()
-            # in async contexts for proper cleanup.
-            self._async_client = None
+            try:
+                import asyncio  # noqa: PLC0415
+
+                loop = asyncio.get_event_loop()
+                if not loop.is_running():
+                    loop.run_until_complete(self._async_client.aclose())
+                else:
+                    self._async_client = None
+            except Exception:
+                self._async_client = None
+            finally:
+                self._async_client = None
 
     async def aclose(self) -> None:
         """
