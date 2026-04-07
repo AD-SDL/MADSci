@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -36,12 +37,7 @@ _EVENT_URL_OPTION = click.option(
 
 def _get_event_url(ctx: click.Context, event_url: str | None) -> str:
     """Resolve the event URL from the option, context, or default."""
-    if event_url:
-        return event_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.event_server_url:
-        return str(context.event_server_url)
-    return "http://localhost:8001/"
+    return resolve_service_url(ctx, event_url, "event_server_url", 8001)
 
 
 def _make_client(event_url: str, timeout: float) -> EventClient:  # noqa: F821 -- lazy import

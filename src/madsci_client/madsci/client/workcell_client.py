@@ -89,6 +89,12 @@ class WorkcellClient(DualModeClientMixin):
         """Backward-compatible accessor for the underlying HTTP client."""
         return self._client
 
+    def close(self) -> None:
+        """Close HTTP clients and embedded logger."""
+        super().close()
+        if hasattr(self, "logger") and self.logger is not None:
+            self.logger.close()
+
     # ------------------------------------------------------------------
     # Sync methods
     # ------------------------------------------------------------------

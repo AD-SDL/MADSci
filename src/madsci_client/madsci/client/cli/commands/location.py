@@ -12,6 +12,7 @@ from typing import Any
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -42,12 +43,7 @@ _LOCATION_URL_OPTION = click.option(
 
 def _get_location_url(ctx: click.Context, location_url: str | None) -> str:
     """Resolve the location URL from the option, context, or default."""
-    if location_url:
-        return location_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.location_server_url:
-        return str(context.location_server_url)
-    return "http://localhost:8006/"
+    return resolve_service_url(ctx, location_url, "location_server_url", 8006)
 
 
 def _make_client(location_url: str, timeout: float) -> LocationClient:  # noqa: F821

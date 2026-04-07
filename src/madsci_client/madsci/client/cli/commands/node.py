@@ -14,6 +14,7 @@ from typing import Any, Callable
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -48,12 +49,7 @@ _WORKCELL_URL_OPTION = click.option(
 
 def _get_workcell_url(ctx: click.Context, workcell_url: str | None) -> str:
     """Resolve the workcell URL from the option, context, or default."""
-    if workcell_url:
-        return workcell_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.workcell_server_url:
-        return str(context.workcell_server_url)
-    return "http://localhost:8005/"
+    return resolve_service_url(ctx, workcell_url, "workcell_server_url", 8005)
 
 
 def _make_workcell_client(workcell_url: str, timeout: float) -> Any:

@@ -246,7 +246,7 @@ class ResourceClient(DualModeClientMixin):
                         timeout=self.config.timeout_default,
                     )
                     break
-                except Exception:
+                except (httpx.HTTPError, OSError):
                     time.sleep(1)
             else:
                 self.resource_server_url = None  # Fall back to local-only mode
@@ -279,6 +279,12 @@ class ResourceClient(DualModeClientMixin):
     def session(self) -> httpx.Client:
         """Backward-compatible accessor for the underlying HTTP client."""
         return self._client
+
+    def close(self) -> None:
+        """Close HTTP clients and embedded logger."""
+        super().close()
+        if hasattr(self, "logger") and self.logger is not None:
+            self.logger.close()
 
     def _wrap_resource(
         self, resource: Optional["ResourceDataModels"]

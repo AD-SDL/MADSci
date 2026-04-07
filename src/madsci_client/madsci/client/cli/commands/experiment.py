@@ -10,6 +10,7 @@ from pathlib import Path
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -42,12 +43,7 @@ _EXPERIMENT_URL_OPTION = click.option(
 
 def _get_experiment_url(ctx: click.Context, experiment_url: str | None) -> str:
     """Resolve the experiment URL from the option, context, or default."""
-    if experiment_url:
-        return experiment_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.experiment_server_url:
-        return str(context.experiment_server_url)
-    return "http://localhost:8002/"
+    return resolve_service_url(ctx, experiment_url, "experiment_server_url", 8002)
 
 
 def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:  # noqa: F821 -- lazy import

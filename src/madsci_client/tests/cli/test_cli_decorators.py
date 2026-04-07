@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import click
 from click.testing import CliRunner
 from madsci.client.cli.utils.cli_decorators import (
     output_options,
+    resolve_service_url,
     service_url_option,
     timeout_option,
     with_service_error_handling,
@@ -276,3 +279,131 @@ class TestWithServiceErrorHandling:
         assert result.exit_code == 1
         assert "404" in result.output
         assert "localhost:8005" in result.output
+
+
+# ---------------------------------------------------------------------------
+# resolve_service_url
+# ---------------------------------------------------------------------------
+
+
+class TestResolveServiceUrl:
+    """Tests for the resolve_service_url helper."""
+
+    def _make_ctx(self, context_obj=None) -> click.Context:
+        """Build a minimal Click context with ctx.obj."""
+
+        @click.command()
+        @click.pass_context
+        def dummy(ctx: click.Context) -> None:
+            pass
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            ctx_holder = {}
+
+            @click.command()
+            @click.pass_context
+            def probe(ctx: click.Context) -> None:
+                ctx_holder["ctx"] = ctx
+
+            runner.invoke(
+                probe,
+                [],
+                obj={"context": context_obj} if context_obj is not None else {},
+            )
+            if ctx_holder:
+                return ctx_holder["ctx"]
+        return None
+
+    def test_explicit_url_takes_precedence(self) -> None:
+        """Explicit URL should override context and default."""
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            result = resolve_service_url(
+                ctx, "http://explicit:9999/", "workcell_server_url", 8005
+            )
+            click.echo(result)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [], obj={})
+        assert result.exit_code == 0
+        assert "http://explicit:9999/" in result.output
+
+    def test_context_url_used_when_no_explicit(self) -> None:
+        """Context attribute should be used when no explicit URL is given."""
+        mock_context = MagicMock()
+        mock_context.workcell_server_url = "http://context-host:8005/"
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            result = resolve_service_url(ctx, None, "workcell_server_url", 8005)
+            click.echo(result)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [], obj={"context": mock_context})
+        assert result.exit_code == 0
+        assert "http://context-host:8005/" in result.output
+
+    def test_default_used_when_no_explicit_or_context(self) -> None:
+        """Default localhost URL should be returned when nothing else is set."""
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            result = resolve_service_url(ctx, None, "workcell_server_url", 8005)
+            click.echo(result)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [], obj={})
+        assert result.exit_code == 0
+        assert "http://localhost:8005/" in result.output
+
+    def test_default_used_when_ctx_obj_is_none(self) -> None:
+        """Default should be returned when ctx.obj is None."""
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            result = resolve_service_url(ctx, None, "event_server_url", 8001)
+            click.echo(result)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [])
+        assert result.exit_code == 0
+        assert "http://localhost:8001/" in result.output
+
+    def test_context_url_none_falls_back_to_default(self) -> None:
+        """When context attribute is None, fall back to default."""
+        mock_context = MagicMock()
+        mock_context.resource_server_url = None
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            result = resolve_service_url(ctx, None, "resource_server_url", 8003)
+            click.echo(result)
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [], obj={"context": mock_context})
+        assert result.exit_code == 0
+        assert "http://localhost:8003/" in result.output
+
+    def test_different_ports(self) -> None:
+        """Should use the given default_port for different services."""
+
+        @click.command()
+        @click.pass_context
+        def cmd(ctx: click.Context) -> None:
+            click.echo(resolve_service_url(ctx, None, "data_server_url", 8004))
+            click.echo(resolve_service_url(ctx, None, "location_server_url", 8006))
+            click.echo(resolve_service_url(ctx, None, "experiment_server_url", 8002))
+
+        runner = CliRunner()
+        result = runner.invoke(cmd, [], obj={})
+        assert result.exit_code == 0
+        assert "8004" in result.output
+        assert "8006" in result.output
+        assert "8002" in result.output

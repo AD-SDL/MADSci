@@ -11,6 +11,7 @@ from pathlib import Path
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -39,12 +40,7 @@ _DATA_URL_OPTION = click.option(
 
 def _get_data_url(ctx: click.Context, data_url: str | None) -> str:
     """Resolve the data URL from the option, context, or default."""
-    if data_url:
-        return data_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.data_server_url:
-        return str(context.data_server_url)
-    return "http://localhost:8004/"
+    return resolve_service_url(ctx, data_url, "data_server_url", 8004)
 
 
 def _make_client(data_url: str, timeout: float) -> DataClient:  # noqa: F821 -- lazy import

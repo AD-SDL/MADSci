@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
+    resolve_service_url,
     timeout_option,
     with_service_error_handling,
 )
@@ -42,12 +43,7 @@ _RESOURCE_URL_OPTION = click.option(
 
 def _get_resource_url(ctx: click.Context, resource_url: str | None) -> str:
     """Resolve the resource URL from the option, context, or default."""
-    if resource_url:
-        return resource_url
-    context = ctx.obj.get("context") if ctx.obj else None
-    if context and context.resource_server_url:
-        return str(context.resource_server_url)
-    return "http://localhost:8003/"
+    return resolve_service_url(ctx, resource_url, "resource_server_url", 8003)
 
 
 def _make_client(resource_url: str, timeout: float) -> ResourceClient:  # noqa: F821
