@@ -417,8 +417,8 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 response = await client.get(f"{workcell_url.rstrip('/')}{path}")
                 if response.status_code == 200:
                     return response.json()
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Workcell Manager", timeout=3)
         return {}
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:

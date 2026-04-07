@@ -362,8 +362,8 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                             for name, node_data in nodes.items():
                                 self._add_node_row(table, name, node_data)
                     return
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Workcell Manager", timeout=3)
 
         # If we can't reach the workcell manager, show a message
         if not self.nodes_data:

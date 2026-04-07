@@ -91,7 +91,7 @@ def mock_http_session():
     """
     Fixture that provides a mock HTTP session for testing client requests.
 
-    This fixture replaces the requests.Session object returned by create_http_session
+    This fixture replaces the httpx.Client object returned by create_httpx_client
     with a mock that can be configured for different test scenarios.
 
     Returns:
@@ -102,7 +102,7 @@ def mock_http_session():
             # Configure the mock response
             mock_response = Mock()
             mock_response.json.return_value = {"test": "data"}
-            mock_response.ok = True
+            mock_response.is_success = True
             mock_response.status_code = 200
             mock_http_session.get.return_value = mock_response
 
@@ -113,7 +113,7 @@ def mock_http_session():
             # Verify the request was made correctly
             mock_http_session.get.assert_called_once()
     """
-    with patch("madsci.common.utils.create_http_session") as mock_create_session:
+    with patch("madsci.common.http_client.create_httpx_client") as mock_create_session:
         mock_session = Mock(spec=httpx.Client)
         mock_create_session.return_value = mock_session
         yield mock_session
@@ -128,7 +128,7 @@ def mock_successful_response():
         Mock: A configured mock response object with common success attributes
     """
     mock_response = Mock()
-    mock_response.ok = True
+    mock_response.is_success = True
     mock_response.status_code = 200
     mock_response.raise_for_status.return_value = None
     mock_response.json.return_value = {}
@@ -146,7 +146,7 @@ def mock_error_response():
         Mock: A configured mock response object with common error attributes
     """
     mock_response = Mock()
-    mock_response.ok = False
+    mock_response.is_success = False
     mock_response.status_code = 500
     mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
         "Test error",
@@ -161,7 +161,7 @@ def mock_error_response():
 
 class HttpClientTestHelper:
     """
-    Helper class for testing HTTP clients with the new create_http_session pattern.
+    Helper class for testing HTTP clients with the new create_httpx_client pattern.
 
     This class provides utility methods to simplify testing of MADSci HTTP clients
     by standardizing common test patterns.

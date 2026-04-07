@@ -25,7 +25,7 @@ def mock_session():
 def mock_response():
     """Create a mock response object."""
     response = Mock()
-    response.ok = True
+    response.is_success = True
     response.status_code = 200
     return response
 
@@ -86,7 +86,7 @@ class TestExperimentClientGetExperiment:
     def test_get_experiment_success(self, mock_create_session, experiment):
         """Test successful get_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -109,7 +109,7 @@ class TestExperimentClientGetExperiment:
     def test_get_experiment_with_ulid(self, mock_create_session, experiment):
         """Test get_experiment with ULID object."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -129,7 +129,7 @@ class TestExperimentClientGetExperiment:
     def test_get_experiment_http_error(self, mock_create_session):
         """Test get_experiment with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404 Not Found",
             request=httpx.Request("GET", "http://test"),
@@ -153,7 +153,7 @@ class TestExperimentClientGetExperiments:
     def test_get_experiments_success(self, mock_create_session, experiment):
         """Test successful get_experiments call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         experiments_data = [experiment.model_dump(), experiment.model_dump()]
         mock_response.json.return_value = experiments_data
 
@@ -178,7 +178,7 @@ class TestExperimentClientGetExperiments:
     def test_get_experiments_default_number(self, mock_create_session, experiment):
         """Test get_experiments with default number parameter."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = [experiment.model_dump()]
 
         mock_session = Mock()
@@ -201,7 +201,7 @@ class TestExperimentClientGetExperiments:
     def test_get_experiments_http_error(self, mock_create_session):
         """Test get_experiments with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "500 Server Error",
             request=httpx.Request("GET", "http://test"),
@@ -227,7 +227,7 @@ class TestExperimentClientStartExperiment:
     ):
         """Test successful start_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -262,7 +262,7 @@ class TestExperimentClientStartExperiment:
     ):
         """Test start_experiment with minimal parameters."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -283,7 +283,7 @@ class TestExperimentClientStartExperiment:
     def test_start_experiment_http_error(self, mock_create_session, experiment_design):
         """Test start_experiment with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "400 Bad Request",
             request=httpx.Request("GET", "http://test"),
@@ -307,7 +307,7 @@ class TestExperimentClientLifecycleMethods:
     def test_end_experiment_success(self, mock_create_session, experiment):
         """Test successful end_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         ended_experiment = experiment.model_copy()
         ended_experiment.status = ExperimentStatus.COMPLETED
         mock_response.json.return_value = ended_experiment.model_dump()
@@ -334,7 +334,7 @@ class TestExperimentClientLifecycleMethods:
     def test_end_experiment_without_status(self, mock_create_session, experiment):
         """Test end_experiment without status parameter."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -356,7 +356,7 @@ class TestExperimentClientLifecycleMethods:
     def test_continue_experiment_success(self, mock_create_session, experiment):
         """Test successful continue_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -377,7 +377,7 @@ class TestExperimentClientLifecycleMethods:
     def test_pause_experiment_success(self, mock_create_session, experiment):
         """Test successful pause_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         paused_experiment = experiment.model_copy()
         paused_experiment.status = ExperimentStatus.PAUSED
         mock_response.json.return_value = paused_experiment.model_dump()
@@ -401,7 +401,7 @@ class TestExperimentClientLifecycleMethods:
     def test_cancel_experiment_success(self, mock_create_session, experiment):
         """Test successful cancel_experiment call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         cancelled_experiment = experiment.model_copy()
         cancelled_experiment.status = ExperimentStatus.CANCELLED
         mock_response.json.return_value = cancelled_experiment.model_dump()
@@ -425,7 +425,7 @@ class TestExperimentClientLifecycleMethods:
     def test_lifecycle_methods_with_ulid(self, mock_create_session, experiment):
         """Test lifecycle methods work with ULID objects."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = experiment.model_dump()
 
         mock_session = Mock()
@@ -449,7 +449,7 @@ class TestExperimentClientLifecycleMethods:
     def test_lifecycle_methods_http_error(self, mock_create_session, experiment):
         """Test lifecycle methods with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404 Not Found",
             request=httpx.Request("GET", "http://test"),
@@ -482,7 +482,7 @@ class TestExperimentClientCampaignMethods:
     def test_register_campaign_success(self, mock_create_session, campaign):
         """Test successful register_campaign call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = campaign.model_dump()
 
         mock_session = Mock()
@@ -505,7 +505,7 @@ class TestExperimentClientCampaignMethods:
     def test_register_campaign_http_error(self, mock_create_session, campaign):
         """Test register_campaign with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "400 Bad Request",
             request=httpx.Request("GET", "http://test"),
@@ -525,7 +525,7 @@ class TestExperimentClientCampaignMethods:
     def test_get_campaign_success(self, mock_create_session, campaign):
         """Test successful get_campaign call."""
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = campaign.model_dump()
 
         mock_session = Mock()
@@ -547,7 +547,7 @@ class TestExperimentClientCampaignMethods:
     def test_get_campaign_http_error(self, mock_create_session):
         """Test get_campaign with HTTP error."""
         mock_response = Mock()
-        mock_response.ok = False
+        mock_response.is_success = False
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "404 Not Found",
             request=httpx.Request("GET", "http://test"),

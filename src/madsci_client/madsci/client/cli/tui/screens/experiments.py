@@ -316,8 +316,8 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                             if exp_id:
                                 self.experiments_data[exp_id] = exp_data
                                 self._experiment_ids.append(exp_id)
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Experiment Manager", timeout=3)
 
         self._populate_table()
 

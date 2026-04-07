@@ -352,8 +352,8 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                             if res_id:
                                 self.resources_data[res_id] = res
                                 self._resource_ids.append(res_id)
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Resource Manager", timeout=3)
 
         self._populate_table()
 

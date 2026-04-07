@@ -334,8 +334,8 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                             if dp_id:
                                 self.datapoints_data[dp_id] = dp_data
                                 self._datapoint_ids.append(dp_id)
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Data Manager", timeout=3)
 
         self._populate_table()
 

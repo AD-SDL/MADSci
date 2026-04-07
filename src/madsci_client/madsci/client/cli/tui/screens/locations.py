@@ -232,8 +232,8 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                             if loc_id:
                                 self.locations_data[loc_id] = loc
                                 self._location_ids.append(loc_id)
-        except Exception:  # noqa: S110
-            pass
+        except Exception:
+            self.notify("Failed to reach Location Manager", timeout=3)
 
         self._populate_table()
 
