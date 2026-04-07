@@ -4,6 +4,7 @@ Provides an overview of the lab status including services, nodes,
 active workflows, and recent events.
 """
 
+import asyncio
 from typing import ClassVar
 
 import httpx
@@ -201,8 +202,10 @@ class DashboardScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         services_panel = self.query_one("#services-panel", ServicesPanel)
         events_panel = self.query_one("#events-panel", RecentEventsPanel)
 
-        await services_panel.refresh_data()
-        await events_panel.refresh_data()
+        await asyncio.gather(
+            services_panel.refresh_data(),
+            events_panel.refresh_data(),
+        )
 
     async def action_refresh(self) -> None:
         """Refresh dashboard data."""

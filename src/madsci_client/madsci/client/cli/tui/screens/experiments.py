@@ -298,24 +298,24 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         try:
             experiment_url = self.get_service_url("experiment_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{experiment_url.rstrip('/')}/experiments",
-                    params={"number": 50},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        for exp_id, exp_data in data.items():
-                            if isinstance(exp_data, dict):
-                                self.experiments_data[exp_id] = exp_data
-                                self._experiment_ids.append(exp_id)
-                    elif isinstance(data, list):
-                        for exp_data in data:
-                            exp_id = exp_data.get("experiment_id", "")
-                            if exp_id:
-                                self.experiments_data[exp_id] = exp_data
-                                self._experiment_ids.append(exp_id)
+            client = self.get_async_client(experiment_url)
+            response = await client.get(
+                f"{experiment_url.rstrip('/')}/experiments",
+                params={"number": 50},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, dict):
+                    for exp_id, exp_data in data.items():
+                        if isinstance(exp_data, dict):
+                            self.experiments_data[exp_id] = exp_data
+                            self._experiment_ids.append(exp_id)
+                elif isinstance(data, list):
+                    for exp_data in data:
+                        exp_id = exp_data.get("experiment_id", "")
+                        if exp_id:
+                            self.experiments_data[exp_id] = exp_data
+                            self._experiment_ids.append(exp_id)
         except Exception:
             self.notify("Failed to reach Experiment Manager", timeout=3)
 

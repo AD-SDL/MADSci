@@ -413,10 +413,10 @@ class WorkflowsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """
         try:
             workcell_url = self.get_service_url("workcell_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{workcell_url.rstrip('/')}{path}")
-                if response.status_code == 200:
-                    return response.json()
+            client = self.get_async_client(workcell_url)
+            response = await client.get(f"{workcell_url.rstrip('/')}{path}")
+            if response.status_code == 200:
+                return response.json()
         except Exception:
             self.notify("Failed to reach Workcell Manager", timeout=3)
         return {}

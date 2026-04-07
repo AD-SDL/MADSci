@@ -6,7 +6,6 @@ Provides detailed service status with health information.
 import asyncio
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     AutoRefreshMixin,
     ServiceURLMixin,
@@ -179,33 +178,33 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         table = self.query_one("#nodes-table", DataTable)
         try:
             workcell_url = self.get_service_url("workcell_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
-                if response.status_code == 200:
-                    nodes = response.json()
-                    with preserve_cursor(table):
-                        table.clear()
-                        if isinstance(nodes, dict):
-                            for name, node_data in nodes.items():
-                                node_status = node_data.get("status", {})
-                                if node_status.get("disconnected", False):
-                                    status_name = "disconnected"
-                                elif node_status.get("errored", False):
-                                    status_name = "errored"
-                                else:
-                                    status_name = "connected"
-                                icon = format_status_icon(status_name)
-                                url = str(node_data.get("node_url", "N/A"))
-                                state = format_status_colored(status_name)
-                                table.add_row(icon, name, url, state)
-                        if table.row_count == 0:
-                            table.add_row(
-                                format_status_icon("unknown"),
-                                "[dim]No nodes[/dim]",
-                                "-",
-                                "-",
-                            )
-                    return
+            client = self.get_async_client(workcell_url)
+            response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
+            if response.status_code == 200:
+                nodes = response.json()
+                with preserve_cursor(table):
+                    table.clear()
+                    if isinstance(nodes, dict):
+                        for name, node_data in nodes.items():
+                            node_status = node_data.get("status", {})
+                            if node_status.get("disconnected", False):
+                                status_name = "disconnected"
+                            elif node_status.get("errored", False):
+                                status_name = "errored"
+                            else:
+                                status_name = "connected"
+                            icon = format_status_icon(status_name)
+                            url = str(node_data.get("node_url", "N/A"))
+                            state = format_status_colored(status_name)
+                            table.add_row(icon, name, url, state)
+                    if table.row_count == 0:
+                        table.add_row(
+                            format_status_icon("unknown"),
+                            "[dim]No nodes[/dim]",
+                            "-",
+                            "-",
+                        )
+                return
         except Exception:  # noqa: S110
             pass
         with preserve_cursor(table):

@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import contextlib
 from collections.abc import Generator
+from typing import ClassVar
 
+import httpx
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
 from textual.reactive import reactive
 from textual.widgets import DataTable
@@ -71,6 +73,11 @@ class AutoRefreshMixin:
         if hasattr(self, "notify"):
             self.notify(f"Auto-refresh {state}", timeout=2)
 
+    async def on_unmount(self) -> None:
+        """Clean up when screen is unmounted."""
+        if hasattr(self, "close_async_clients"):
+            await self.close_async_clients()
+
 
 class ServiceURLMixin:
     """Provides service URL resolution from the application context.
@@ -86,6 +93,8 @@ class ServiceURLMixin:
                 url = self.get_service_url("event_manager")
                 ...
     """
+
+    _async_clients: ClassVar[dict[str, httpx.AsyncClient]] = {}
 
     def get_service_url(self, service_name: str) -> str:
         """Get the URL for a named service.
@@ -107,3 +116,15 @@ class ServiceURLMixin:
             )
         except Exception:
             return DEFAULT_SERVICES.get(service_name, "http://localhost:8000/")
+
+    def get_async_client(self, service_url: str) -> httpx.AsyncClient:
+        """Get or create a cached async HTTP client for a service URL."""
+        if service_url not in self._async_clients:
+            self._async_clients[service_url] = httpx.AsyncClient(timeout=5.0)
+        return self._async_clients[service_url]
+
+    async def close_async_clients(self) -> None:
+        """Close all cached async clients."""
+        for client in self._async_clients.values():
+            await client.aclose()
+        self._async_clients.clear()

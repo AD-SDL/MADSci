@@ -9,7 +9,6 @@ import asyncio
 import json
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     AutoRefreshMixin,
     ServiceURLMixin,
@@ -316,24 +315,24 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         try:
             data_url = self.get_service_url("data_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{data_url.rstrip('/')}/datapoints",
-                    params={"number": 50},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, dict):
-                        for dp_id, dp_data in data.items():
-                            if isinstance(dp_data, dict):
-                                self.datapoints_data[dp_id] = dp_data
-                                self._datapoint_ids.append(dp_id)
-                    elif isinstance(data, list):
-                        for dp_data in data:
-                            dp_id = dp_data.get("datapoint_id", "")
-                            if dp_id:
-                                self.datapoints_data[dp_id] = dp_data
-                                self._datapoint_ids.append(dp_id)
+            client = self.get_async_client(data_url)
+            response = await client.get(
+                f"{data_url.rstrip('/')}/datapoints",
+                params={"number": 50},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, dict):
+                    for dp_id, dp_data in data.items():
+                        if isinstance(dp_data, dict):
+                            self.datapoints_data[dp_id] = dp_data
+                            self._datapoint_ids.append(dp_id)
+                elif isinstance(data, list):
+                    for dp_data in data:
+                        dp_id = dp_data.get("datapoint_id", "")
+                        if dp_id:
+                            self.datapoints_data[dp_id] = dp_data
+                            self._datapoint_ids.append(dp_id)
         except Exception:
             self.notify("Failed to reach Data Manager", timeout=3)
 

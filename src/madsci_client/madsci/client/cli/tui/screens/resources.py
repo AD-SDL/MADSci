@@ -339,19 +339,19 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         try:
             resource_url = self.get_service_url("resource_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(
-                    f"{resource_url.rstrip('/')}/resource/query",
-                    json={"multiple": True},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list):
-                        for res in data:
-                            res_id = res.get("resource_id", "")
-                            if res_id:
-                                self.resources_data[res_id] = res
-                                self._resource_ids.append(res_id)
+            client = self.get_async_client(resource_url)
+            response = await client.post(
+                f"{resource_url.rstrip('/')}/resource/query",
+                json={"multiple": True},
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    for res in data:
+                        res_id = res.get("resource_id", "")
+                        if res_id:
+                            self.resources_data[res_id] = res
+                            self._resource_ids.append(res_id)
         except Exception:
             self.notify("Failed to reach Resource Manager", timeout=3)
 

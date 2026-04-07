@@ -167,12 +167,6 @@ def create_status_table(results: list[ServiceHealthResult]) -> Any:
     help="Watch interval in seconds (default: 5).",
 )
 @click.option(
-    "--json",
-    "as_json",
-    is_flag=True,
-    help="Output as JSON.",
-)
-@click.option(
     "--timeout",
     type=float,
     default=5.0,
@@ -184,7 +178,6 @@ def status(  # noqa: C901, PLR0912, PLR0915
     services: tuple[str, ...],
     watch: bool,
     interval: float,
-    as_json: bool,
     timeout: float,
 ) -> None:
     """Show status of MADSci services.
@@ -195,17 +188,11 @@ def status(  # noqa: C901, PLR0912, PLR0915
         madsci status lab_manager        Show specific service
         madsci status --watch            Continuously update
         madsci status --json             Output as JSON
-        madsci status --yaml             Output as YAML
         madsci status -q                 Quiet: service names and status only
     """
     from madsci.client.cli.tui.constants import get_default_services
 
     console = get_console(ctx)
-
-    # Merge local --json flag into ctx.obj so determine_output_format sees it
-    if as_json:
-        ctx.ensure_object(dict)
-        ctx.obj["json"] = True
 
     fmt = determine_output_format(ctx)
 

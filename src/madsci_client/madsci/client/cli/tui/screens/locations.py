@@ -7,7 +7,6 @@ selected locations, and an action to view the transfer adjacency graph.
 import asyncio
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     AutoRefreshMixin,
     ServiceURLMixin,
@@ -220,18 +219,18 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         try:
             location_url = self.get_service_url("location_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{location_url.rstrip('/')}/locations",
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list):
-                        for loc in data:
-                            loc_id = loc.get("location_id", "")
-                            if loc_id:
-                                self.locations_data[loc_id] = loc
-                                self._location_ids.append(loc_id)
+            client = self.get_async_client(location_url)
+            response = await client.get(
+                f"{location_url.rstrip('/')}/locations",
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    for loc in data:
+                        loc_id = loc.get("location_id", "")
+                        if loc_id:
+                            self.locations_data[loc_id] = loc
+                            self._location_ids.append(loc_id)
         except Exception:
             self.notify("Failed to reach Location Manager", timeout=3)
 

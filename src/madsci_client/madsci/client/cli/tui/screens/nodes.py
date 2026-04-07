@@ -351,17 +351,17 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         try:
             workcell_url = self.get_service_url("workcell_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
-                if response.status_code == 200:
-                    nodes = response.json()
-                    if isinstance(nodes, dict):
-                        self.nodes_data = nodes
-                        with preserve_cursor(table):
-                            table.clear()
-                            for name, node_data in nodes.items():
-                                self._add_node_row(table, name, node_data)
-                    return
+            client = self.get_async_client(workcell_url)
+            response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
+            if response.status_code == 200:
+                nodes = response.json()
+                if isinstance(nodes, dict):
+                    self.nodes_data = nodes
+                    with preserve_cursor(table):
+                        table.clear()
+                        for name, node_data in nodes.items():
+                            self._add_node_row(table, name, node_data)
+                return
         except Exception:
             self.notify("Failed to reach Workcell Manager", timeout=3)
 

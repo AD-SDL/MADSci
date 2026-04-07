@@ -4,22 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from madsci.client.cli.utils.service_health import (
+    DEFAULT_SERVICE_URLS as DEFAULT_SERVICES,
+)
+
 if TYPE_CHECKING:
     from madsci.common.types.context_types import MadsciContext
 
 # Default auto-refresh interval in seconds
 AUTO_REFRESH_INTERVAL = 5.0
-
-# Fallback service URLs (used when no MadsciContext is available)
-DEFAULT_SERVICES = {
-    "lab_manager": "http://localhost:8000/",
-    "event_manager": "http://localhost:8001/",
-    "experiment_manager": "http://localhost:8002/",
-    "resource_manager": "http://localhost:8003/",
-    "data_manager": "http://localhost:8004/",
-    "workcell_manager": "http://localhost:8005/",
-    "location_manager": "http://localhost:8006/",
-}
 
 
 def get_default_services(context: MadsciContext | None = None) -> dict[str, str]:
