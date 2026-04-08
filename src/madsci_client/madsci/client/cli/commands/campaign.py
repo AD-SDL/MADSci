@@ -18,6 +18,7 @@ from madsci.client.cli.utils.cli_decorators import (
     with_service_error_handling,
 )
 from madsci.client.cli.utils.output import (
+    ColumnDef,
     OutputFormat,
     determine_output_format,
     get_console,
@@ -55,15 +56,91 @@ def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:
 # ---------------------------------------------------------------------------
 
 
+_LIST_COLUMNS = [
+    ColumnDef("ID", "id", style="dim"),
+    ColumnDef("Name", "name", style="cyan"),
+]
+
+
 @click.group()
 def campaign() -> None:
     """Manage experimental campaigns.
 
     \b
     Examples:
+        madsci campaign list
         madsci campaign create --name "My Campaign"
         madsci campaign get <campaign_id>
     """
+
+
+# ---------------------------------------------------------------------------
+# campaign list
+# ---------------------------------------------------------------------------
+
+
+@campaign.command("list")
+@_EXPERIMENT_URL_OPTION
+@timeout_option(default=10.0)
+@click.pass_context
+@with_service_error_handling
+def list_campaigns(
+    ctx: click.Context,
+    experiment_url: str | None,
+    timeout: float,
+) -> None:
+    """List all campaigns.
+
+    \b
+    Examples:
+        madsci campaign list
+        madsci campaign list --json
+        madsci campaign list --quiet
+    """
+    console = get_console(ctx)
+    fmt = determine_output_format(ctx)
+    url = _get_experiment_url(ctx, experiment_url)
+    client = _make_client(url, timeout)
+
+    campaigns = client.get_campaigns(timeout=timeout)
+
+    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+        output_result(console, campaigns, format=fmt.value)
+        return
+
+    if fmt == OutputFormat.QUIET:
+        for camp in campaigns if isinstance(campaigns, list) else []:
+            cid = (
+                camp.get("campaign_id", "")
+                if isinstance(camp, dict)
+                else getattr(camp, "campaign_id", "")
+            )
+            console.print(str(cid))
+        return
+
+    if not campaigns:
+        console.print("[dim]No campaigns found.[/dim]")
+        return
+
+    rows = []
+    for camp in campaigns if isinstance(campaigns, list) else []:
+        if isinstance(camp, dict):
+            rows.append(
+                {
+                    "id": camp.get("campaign_id", "-"),
+                    "name": camp.get("campaign_name", "-"),
+                }
+            )
+        else:
+            rows.append(
+                {
+                    "id": getattr(camp, "campaign_id", "-"),
+                    "name": getattr(camp, "campaign_name", "-"),
+                }
+            )
+    output_result(
+        console, rows, format="text", title="Campaigns", columns=_LIST_COLUMNS
+    )
 
 
 # ---------------------------------------------------------------------------

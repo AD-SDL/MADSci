@@ -241,6 +241,23 @@ class ExperimentClient(DualModeClientMixin):
         response.raise_for_status()
         return response.json()
 
+    def get_campaigns(
+        self, timeout: Optional[float] = None
+    ) -> list[ExperimentalCampaign]:
+        """
+        Get a list of all experimental campaigns.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = self._request(
+            "GET",
+            f"{self.experiment_server_url}campaigns",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
     # ------------------------------------------------------------------
     # Async methods
     # ------------------------------------------------------------------

@@ -156,6 +156,92 @@ class TestCampaignCreate:
 
 
 # ---------------------------------------------------------------------------
+# campaign list
+# ---------------------------------------------------------------------------
+
+
+class TestCampaignList:
+    """Tests for 'campaign list'."""
+
+    def test_list_campaigns_help(self, cli_runner=None) -> None:
+        """Verify campaign list --help works."""
+        runner = CliRunner()
+        result = runner.invoke(madsci, ["campaign", "list", "--help"])
+        assert result.exit_code == 0
+        assert "List all campaigns" in result.output
+
+    def test_list_campaigns_empty(self) -> None:
+        with _patch_client_init(), _patch_client("get_campaigns", []):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "campaign",
+                    "list",
+                    "--experiment-url",
+                    "http://localhost:8002/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "No campaigns found" in result.output
+
+    def test_list_campaigns_with_results(self) -> None:
+        mock_campaigns = [
+            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Alpha"},
+        ]
+        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "campaign",
+                    "list",
+                    "--experiment-url",
+                    "http://localhost:8002/",
+                ],
+            )
+            assert result.exit_code == 0
+            assert "Campaign Alpha" in result.output
+
+    def test_list_campaigns_json(self) -> None:
+        mock_campaigns = [
+            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Beta"},
+        ]
+        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "--json",
+                    "campaign",
+                    "list",
+                    "--experiment-url",
+                    "http://localhost:8002/",
+                ],
+            )
+            assert result.exit_code == 0
+
+    def test_list_campaigns_quiet(self) -> None:
+        mock_campaigns = [
+            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Gamma"},
+        ]
+        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "--quiet",
+                    "campaign",
+                    "list",
+                    "--experiment-url",
+                    "http://localhost:8002/",
+                ],
+            )
+            # quiet Console suppresses output; just verify no crash
+            assert result.exit_code == 0
+
+
+# ---------------------------------------------------------------------------
 # campaign get
 # ---------------------------------------------------------------------------
 

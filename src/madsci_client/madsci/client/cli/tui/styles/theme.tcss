@@ -161,3 +161,48 @@ TemplateBrowserScreen #search-bar {
     color: $text-muted;
     text-style: dim;
 }
+
+/* ===== Data Browser ===== */
+
+DataBrowserScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Experiments Screen ===== */
+
+ExperimentsScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Locations Screen ===== */
+
+LocationsScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Resources Screen ===== */
+
+ResourcesScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+ResourceTreeScreen {
+    padding: 1;
+}
+
+/* ===== Transfer Graph ===== */
+
+TransferGraphScreen {
+    padding: 1;
+}
+
+/* ===== Action Executor ===== */
+
+ActionExecutorScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
