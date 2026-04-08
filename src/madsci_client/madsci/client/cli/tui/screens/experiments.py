@@ -5,12 +5,12 @@ a detail panel for selected experiments, and actions for pause,
 continue, and cancel operations.
 """
 
-import asyncio
 from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
 from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
     AutoRefreshMixin,
     ServiceURLMixin,
     preserve_cursor,
@@ -24,6 +24,7 @@ from madsci.client.cli.tui.widgets import (
     FilterDef,
 )
 from madsci.client.cli.utils.formatting import (
+    build_ownership_section,
     format_duration,
     format_status_colored,
     format_status_icon,
@@ -196,29 +197,7 @@ def _build_timing_section(data: dict) -> DetailSection | None:
     return None
 
 
-def _build_ownership_section(data: dict) -> DetailSection | None:
-    """Build the ownership section for the detail panel.
-
-    Args:
-        data: Experiment data dictionary.
-
-    Returns:
-        DetailSection if ownership info exists, else None.
-    """
-    ownership_info = data.get("ownership_info") or {}
-    if not isinstance(ownership_info, dict):
-        return None
-    fields: dict[str, str] = {}
-    for key in ("user_id", "campaign_id"):
-        value = ownership_info.get(key)
-        if value:
-            fields[key.replace("_", " ").title()] = str(value)
-    if fields:
-        return DetailSection("Ownership", fields)
-    return None
-
-
-class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
+class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing experiment management and monitoring."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -419,9 +398,9 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         if timing_section:
             sections.append(timing_section)
 
-        ownership_section = _build_ownership_section(data)
-        if ownership_section:
-            sections.append(ownership_section)
+        ownership_items = build_ownership_section(data)
+        if ownership_items:
+            sections.append(DetailSection("Ownership", dict(ownership_items)))
 
         detail_panel.update_content(title=name, sections=sections)
 
@@ -470,20 +449,14 @@ class ExperimentsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Cancel the selected experiment."""
         await self._send_experiment_command("cancel")
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "toggle_auto_refresh": self.action_toggle_auto_refresh,
             "pause": self.action_pause_experiment,
             "continue": self.action_continue_experiment,
             "cancel": self.action_cancel_experiment,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

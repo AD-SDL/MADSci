@@ -4,10 +4,10 @@ Provides location browsing with search filtering, a detail panel for
 selected locations, and an action to view the transfer adjacency graph.
 """
 
-import asyncio
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
     AutoRefreshMixin,
     ServiceURLMixin,
     preserve_cursor,
@@ -155,7 +155,7 @@ def _build_reservation_section(data: dict) -> DetailSection | None:
     return None
 
 
-class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
+class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing location inventory and management."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -336,18 +336,12 @@ class LocationsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         location_url = self.get_service_url("location_manager")
         self.app.push_screen(TransferGraphScreen(location_url=location_url))
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "toggle_auto_refresh": self.action_toggle_auto_refresh,
             "show_transfer_graph": self.action_show_transfer_graph,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

@@ -170,3 +170,45 @@ def truncate(text: str, max_len: int = 50) -> str:
     if max_len <= 3:
         return text[:max_len]
     return text[: max_len - 3] + "..."
+
+
+# ---------------------------------------------------------------------------
+# Ownership section helpers
+# ---------------------------------------------------------------------------
+
+_OWNERSHIP_KEYS: tuple[str, ...] = (
+    "user_id",
+    "experiment_id",
+    "campaign_id",
+    "workflow_id",
+    "workflow_run_id",
+    "step_id",
+    "node_id",
+)
+
+
+def build_ownership_section(data: dict) -> list[tuple[str, str]]:
+    """Build ownership detail section items from a data dict.
+
+    Extracts ownership-related fields and formats them as (label, value) tuples
+    suitable for a DetailPanel section.
+
+    Args:
+        data: Data dictionary that may contain an ``"ownership_info"`` key
+            with a nested dict of ownership fields.
+
+    Returns:
+        List of ``(label, value)`` tuples for the non-empty ownership fields.
+        Returns an empty list if no ownership info is present.
+    """
+    ownership_info = data.get("ownership_info", {})
+    if not ownership_info:
+        return []
+
+    items: list[tuple[str, str]] = []
+    for key in _OWNERSHIP_KEYS:
+        value = ownership_info.get(key)
+        if value:
+            label = key.replace("_", " ").title()
+            items.append((label, str(value)))
+    return items

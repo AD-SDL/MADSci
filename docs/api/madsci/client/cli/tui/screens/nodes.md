@@ -58,6 +58,7 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.ActionBarMixin
     * madsci.client.cli.tui.mixins.AutoRefreshMixin
     * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
@@ -102,9 +103,6 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
-
-    `on_action_bar_action_triggered(self, event: madsci.client.cli.tui.widgets.action_bar.ActionBar.ActionTriggered) ‑> None`
-    :   Route ActionBar button triggers to screen actions.
 
     `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.

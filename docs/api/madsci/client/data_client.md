@@ -62,6 +62,9 @@ Classes
         Returns:
             The submitted datapoint with server-assigned IDs if applicable
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `extract_datapoint_ids_from_action_result(self, action_result: Any) ‑> list[str]`
     :   Extract all datapoint IDs from an ActionResult.
         

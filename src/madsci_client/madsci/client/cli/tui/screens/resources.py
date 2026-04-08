@@ -5,11 +5,11 @@ a detail panel for selected resources, and actions for delete,
 lock/unlock, and tree visualization.
 """
 
-import asyncio
 from typing import Any, ClassVar
 
 import httpx
 from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
     AutoRefreshMixin,
     ServiceURLMixin,
     preserve_cursor,
@@ -23,7 +23,7 @@ from madsci.client.cli.tui.widgets import (
     FilterBar,
     FilterDef,
 )
-from madsci.client.cli.utils.formatting import format_timestamp
+from madsci.client.cli.utils.formatting import build_ownership_section, format_timestamp
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Horizontal, VerticalScroll
@@ -146,28 +146,6 @@ def _build_hierarchy_section(data: dict) -> DetailSection | None:
     return None
 
 
-def _build_ownership_section(data: dict) -> DetailSection | None:
-    """Build the ownership section.
-
-    Args:
-        data: Resource data dictionary.
-
-    Returns:
-        DetailSection if ownership info exists, else None.
-    """
-    owner = data.get("owner") or {}
-    if not isinstance(owner, dict):
-        return None
-    fields: dict[str, str] = {}
-    for key in ("user_id", "experiment_id", "campaign_id"):
-        value = owner.get(key)
-        if value:
-            fields[key.replace("_", " ").title()] = str(value)
-    if fields:
-        return DetailSection("Ownership", fields)
-    return None
-
-
 def _build_timestamps_section(data: dict) -> DetailSection | None:
     """Build the timestamps section.
 
@@ -249,7 +227,7 @@ class ConfirmDeleteScreen(ModalScreen[bool]):
         self.dismiss(event.button.id == "confirm-delete")
 
 
-class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
+class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing resource inventory and management."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -452,9 +430,9 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         if hierarchy_section:
             sections.append(hierarchy_section)
 
-        ownership_section = _build_ownership_section(data)
-        if ownership_section:
-            sections.append(ownership_section)
+        ownership_items = build_ownership_section(data)
+        if ownership_items:
+            sections.append(DetailSection("Ownership", dict(ownership_items)))
 
         timestamps_section = _build_timestamps_section(data)
         if timestamps_section:
@@ -590,21 +568,15 @@ class ResourcesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         )
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "toggle_auto_refresh": self.action_toggle_auto_refresh,
             "new_resource": self.action_new_resource,
             "delete_resource": self.action_delete_resource,
             "toggle_lock": self.action_toggle_lock,
             "show_tree": self.action_show_tree,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

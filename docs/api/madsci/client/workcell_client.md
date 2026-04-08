@@ -130,6 +130,9 @@ Classes
         Workflow
             The cancelled workflow object.
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         

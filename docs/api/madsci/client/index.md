@@ -139,6 +139,9 @@ Classes
         Returns:
             The submitted datapoint with server-assigned IDs if applicable
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `extract_datapoint_ids_from_action_result(self, action_result: Any) ‑> list[str]`
     :   Extract all datapoint IDs from an ActionResult.
         
@@ -274,12 +277,30 @@ Classes
 
     ### Methods
 
+    `aclose(self) ‑> None`
+    :   Close async resources properly.
+        
+        Use this method in async contexts for proper cleanup. Bound child
+        clients (created via bind()/unbind()) share resources with their
+        parent and will skip cleanup.
+
     `alert(self, event: madsci.common.types.event_types.Event | str, **kwargs: Any) ‑> None`
     :   Log an event at the alert level (critical with alert flag).
         
         Args:
             event: The event or message to log
             **kwargs: Additional structured data
+
+    `archive_events(self, before_date: str | None = None, event_ids: list[str] | None = None, timeout: float | None = None) ‑> dict`
+    :   Archive events by date or by specific IDs.
+        
+        Args:
+            before_date: Archive events before this ISO date string.
+            event_ids: List of specific event IDs to archive.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"archived_count": N}).
 
     `async_get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
     :   Get a specific event by ID asynchronously.
@@ -332,6 +353,15 @@ Classes
         Note: Bound child clients (created via bind()/unbind()) share resources
         with their parent and will skip cleanup to avoid closing shared resources.
 
+    `create_backup(self, timeout: float | None = None) ‑> dict`
+    :   Create an event backup.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server.
+
     `critical(self, message: str, **kwargs: Any) ‑> None`
     :   Log a critical message.
         
@@ -359,6 +389,15 @@ Classes
         Args:
             message: The log message
             **kwargs: Additional structured data to include in the log entry
+
+    `get_backup_status(self, timeout: float | None = None) ‑> dict`
+    :   Get event backup status.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server describing backup status.
 
     `get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
     :   Get a specific event by ID.
@@ -484,6 +523,16 @@ Classes
             event: The event or message to log
             warning_category: Optional warning category for warnings module integration
             **kwargs: Additional structured data
+
+    `purge_events(self, older_than_days: int = 30, timeout: float | None = None) ‑> dict`
+    :   Permanently delete archived events older than specified days.
+        
+        Args:
+            older_than_days: Delete archived events older than this many days.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"purged_count": N}).
 
     `query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
     :   Query the event server for events based on a selector.
@@ -636,6 +685,12 @@ Classes
         
         Args:
             campaign_id: The ID of the campaign to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns.
+        
+        Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
     `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
@@ -885,6 +940,9 @@ Classes
         -------
         Location
             The updated location.
+
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
 
     `create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Create a location from a LocationTemplate.
@@ -1570,6 +1628,9 @@ Classes
         Returns:
             ResourceDataModels: The updated resource.
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `create_resource_from_template(self, template_name: str, resource_name: str, overrides: dict[str, typing.Any] | None = None, add_to_database: bool = True, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Create a resource from a template.
         
@@ -2216,6 +2277,9 @@ Classes
         Workflow
             The cancelled workflow object.
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
@@ -2642,6 +2706,9 @@ Classes
         -------
         Workflow
             The cancelled workflow object.
+
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
 
     `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.

@@ -9,6 +9,20 @@ ensure consistent visual presentation.
 Functions
 ---------
 
+`build_ownership_section(data: dict) ‑> list[tuple[str, str]]`
+:   Build ownership detail section items from a data dict.
+    
+    Extracts ownership-related fields and formats them as (label, value) tuples
+    suitable for a DetailPanel section.
+    
+    Args:
+        data: Data dictionary that may contain an ``"ownership_info"`` key
+            with a nested dict of ownership fields.
+    
+    Returns:
+        List of ``(label, value)`` tuples for the non-empty ownership fields.
+        Returns an empty list if no ownership info is present.
+
 `format_duration(seconds: float | None) ‑> str`
 :   Format a duration in seconds as a human-readable string.
     

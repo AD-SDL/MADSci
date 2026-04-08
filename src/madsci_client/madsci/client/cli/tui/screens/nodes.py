@@ -5,11 +5,11 @@ enhanced detail display, and action execution by querying the
 Workcell Manager and communicating with nodes directly.
 """
 
-import asyncio
 from typing import Any, ClassVar
 
 import httpx
 from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
     AutoRefreshMixin,
     ServiceURLMixin,
     preserve_cursor,
@@ -280,7 +280,7 @@ class NodeDetailScreen(Screen):
         self.app.pop_screen()
 
 
-class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
+class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing node management and monitoring."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -529,9 +529,9 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             )
         )
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "toggle_auto_refresh": self.action_toggle_auto_refresh,
             "pause": self.action_pause_node,
             "resume": self.action_resume_node,
@@ -539,12 +539,6 @@ class NodesScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             "toggle_lock": self.action_toggle_lock_node,
             "execute": self.action_execute_action,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     async def action_refresh(self) -> None:
         """Refresh node data."""

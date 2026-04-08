@@ -26,6 +26,23 @@ Functions
         def my_command(ctx):
             fmt = determine_output_format(ctx)
 
+`resolve_service_url(ctx: click.Context, explicit_url: str | None, context_attr: str, default_port: int) ‑> str`
+:   Resolve a service URL from explicit option, context, or default.
+    
+    Priority order:
+    1. ``explicit_url`` (from a CLI option) — highest precedence.
+    2. The named attribute on the ``MadsciContext`` stored in ``ctx.obj["context"]``.
+    3. ``http://localhost:<default_port>/`` — fallback default.
+    
+    Args:
+        ctx: Click context.
+        explicit_url: URL provided via CLI option (takes precedence).
+        context_attr: Attribute name on MadsciContext (e.g. ``"workcell_server_url"``).
+        default_port: Default localhost port number.
+    
+    Returns:
+        Resolved URL string with trailing slash.
+
 `service_url_option(service_name: str, envvar: str, default_port: int) ‑> Callable[[~F], ~F]`
 :   Create a ``--<service>-url`` Click option with env-var fallback.
     

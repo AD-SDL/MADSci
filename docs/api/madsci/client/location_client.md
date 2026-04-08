@@ -152,6 +152,9 @@ Classes
         Location
             The updated location.
 
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
     `create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Create a location from a LocationTemplate.
 

@@ -24,6 +24,36 @@ Functions
 Classes
 -------
 
+`ActionBarMixin()`
+:   Mixin that dispatches ActionBar.ActionTriggered events to an action map.
+    
+    Subclasses should define a ``_get_action_map()`` method returning
+    ``dict[str, Callable]`` mapping action IDs to handlers.
+    
+    Usage::
+    
+        class MyScreen(ActionBarMixin, AutoRefreshMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {
+                    "refresh": self.action_refresh,
+                    "toggle_auto_refresh": self.action_toggle_auto_refresh,
+                }
+
+    ### Descendants
+
+    * madsci.client.cli.tui.screens.data_browser.DataBrowserScreen
+    * madsci.client.cli.tui.screens.experiments.ExperimentsScreen
+    * madsci.client.cli.tui.screens.locations.LocationsScreen
+    * madsci.client.cli.tui.screens.nodes.NodesScreen
+    * madsci.client.cli.tui.screens.resources.ResourcesScreen
+    * madsci.client.cli.tui.screens.workflow_detail.WorkflowDetailScreen
+    * madsci.client.cli.tui.screens.workflows.WorkflowsScreen
+
+    ### Methods
+
+    `on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) ‑> None`
+    :   Dispatch an action bar event to the appropriate handler.
+
 `AutoRefreshMixin()`
 :   Adds auto-refresh toggle capability to any Screen.
     
@@ -78,6 +108,9 @@ Classes
     `action_toggle_auto_refresh(self) ‑> None`
     :   Toggle the auto-refresh flag and notify the user.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up when screen is unmounted.
+
     `refresh_data(self) ‑> None`
     :   Override to define the refresh behaviour.
         
@@ -113,6 +146,12 @@ Classes
     * madsci.client.cli.tui.screens.workflows.WorkflowsScreen
 
     ### Methods
+
+    `close_async_clients(self) ‑> None`
+    :   Close all cached async clients.
+
+    `get_async_client(self, service_url: str) ‑> httpx.AsyncClient`
+    :   Get or create a cached async HTTP client for a service URL.
 
     `get_service_url(self, service_name: str) ‑> str`
     :   Get the URL for a named service.

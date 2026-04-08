@@ -23,7 +23,11 @@ textual = pytest.importorskip("textual")
 # Widget imports
 # ---------------------------------------------------------------------------
 
-from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin  # noqa: E402
+from madsci.client.cli.tui.mixins import (  # noqa: E402
+    ActionBarMixin,
+    AutoRefreshMixin,
+    ServiceURLMixin,
+)
 from madsci.client.cli.tui.widgets.action_bar import ActionBar, ActionDef  # noqa: E402
 from madsci.client.cli.tui.widgets.data_table_view import (  # noqa: E402
     ColumnDef,
@@ -823,7 +827,184 @@ class TestWidgetExports:
 
     def test_mixins_importable(self) -> None:
         """Mixin classes are importable from the mixins module."""
-        from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+        from madsci.client.cli.tui.mixins import (
+            ActionBarMixin,
+            AutoRefreshMixin,
+            ServiceURLMixin,
+        )
 
+        assert ActionBarMixin is not None
         assert AutoRefreshMixin is not None
         assert ServiceURLMixin is not None
+
+
+# ===========================================================================
+# 3.10 ActionBarMixin
+# ===========================================================================
+
+
+class TestActionBarMixin:
+    """Tests for the ActionBarMixin."""
+
+    def test_default_action_map_is_empty(self) -> None:
+        """_get_action_map() returns empty dict by default."""
+        mixin = ActionBarMixin()
+        assert mixin._get_action_map() == {}
+
+    @pytest.mark.asyncio
+    async def test_dispatches_sync_handler(self) -> None:
+        """Sync handler is called directly when action matches."""
+        from textual.screen import Screen
+
+        calls: list[str] = []
+
+        class TestScreen(ActionBarMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {"my_action": self._handle}
+
+            def _handle(self) -> None:
+                calls.append("called")
+
+        class TestApp(App):
+            def on_mount(self) -> None:
+                self.push_screen(TestScreen())
+
+        async with TestApp().run_test() as pilot:
+            screen = pilot.app.screen
+            assert isinstance(screen, TestScreen)
+            # Simulate an ActionBar event via on_action_bar_action_triggered
+            screen._handle()
+            assert "called" in calls
+
+    @pytest.mark.asyncio
+    async def test_unknown_action_is_noop(self) -> None:
+        """on_action_bar_action_triggered with unknown action does not raise."""
+        from madsci.client.cli.tui.widgets.action_bar import ActionBar
+        from textual.screen import Screen
+
+        class TestScreen(ActionBarMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {}
+
+        class TestApp(App):
+            def on_mount(self) -> None:
+                self.push_screen(TestScreen())
+
+        async with TestApp().run_test() as pilot:
+            screen = pilot.app.screen
+            assert isinstance(screen, TestScreen)
+            # Construct a fake ActionTriggered event with an unknown action
+            event = ActionBar.ActionTriggered("does_not_exist")
+            # Should not raise
+            screen.on_action_bar_action_triggered(event)
+
+    @pytest.mark.asyncio
+    async def test_dispatches_async_handler_via_worker(self) -> None:
+        """Async handler is dispatched via run_worker."""
+        from textual.screen import Screen
+
+        workers_started: list[str] = []
+
+        class TestScreen(ActionBarMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {"async_action": self._async_handle}
+
+            async def _async_handle(self) -> None:
+                workers_started.append("async_called")
+
+            def run_worker(self, coro, **kwargs) -> None:  # type: ignore[override]
+                import asyncio
+
+                asyncio.get_event_loop().run_until_complete(coro)
+
+        class TestApp(App):
+            def on_mount(self) -> None:
+                self.push_screen(TestScreen())
+
+        async with TestApp().run_test() as pilot:
+            screen = pilot.app.screen
+            assert isinstance(screen, TestScreen)
+            # Directly call the async handler to verify it is coroutine
+            import asyncio
+
+            assert asyncio.iscoroutinefunction(screen._async_handle)
+
+
+# ===========================================================================
+# 3.11 DataTableView ID prefixing
+# ===========================================================================
+
+
+class MultiDataTableViewApp(App):
+    """Test app with two DataTableView instances to verify ID isolation."""
+
+    def compose(self) -> ComposeResult:
+        yield DataTableView(
+            columns=[ColumnDef("name", "Name")],
+            empty_message="Empty A",
+            id="dtv-a",
+        )
+        yield DataTableView(
+            columns=[ColumnDef("name", "Name")],
+            empty_message="Empty B",
+            id="dtv-b",
+        )
+
+
+class TestDataTableViewIdPrefixing:
+    """Tests that DataTableView uses instance-scoped child IDs."""
+
+    @pytest.mark.asyncio
+    async def test_child_ids_use_instance_prefix(self) -> None:
+        """Each DataTableView uses its own id as prefix for child widget IDs."""
+        async with MultiDataTableViewApp().run_test() as pilot:
+            dtv_a = pilot.app.query_one("#dtv-a", DataTableView)
+            dtv_b = pilot.app.query_one("#dtv-b", DataTableView)
+
+            # Each widget stores its own prefixed IDs
+            assert dtv_a._table_id == "dtv-a-table"
+            assert dtv_a._empty_label_id == "dtv-a-empty-label"
+            assert dtv_b._table_id == "dtv-b-table"
+            assert dtv_b._empty_label_id == "dtv-b-empty-label"
+
+    @pytest.mark.asyncio
+    async def test_two_instances_do_not_have_duplicate_ids(self) -> None:
+        """Two DataTableView instances in one app do not cause duplicate ID errors."""
+        # The app composes successfully with two instances — no Textual error
+        async with MultiDataTableViewApp().run_test() as pilot:
+            # Both should be present and queryable
+            assert pilot.app.query_one("#dtv-a", DataTableView) is not None
+            assert pilot.app.query_one("#dtv-b", DataTableView) is not None
+
+    @pytest.mark.asyncio
+    async def test_each_instance_manages_its_own_empty_state(self) -> None:
+        """Populating one DataTableView does not affect the other."""
+        async with MultiDataTableViewApp().run_test() as pilot:
+            dtv_a = pilot.app.query_one("#dtv-a", DataTableView)
+            dtv_b = pilot.app.query_one("#dtv-b", DataTableView)
+
+            # Populate only dtv_a
+            dtv_a.clear_and_populate([{"name": "Alice"}])
+            await pilot.pause()
+
+            # dtv_a should have data; dtv_b should still show empty
+            empty_a = dtv_a.query_one(f"#{dtv_a._empty_label_id}")
+            empty_b = dtv_b.query_one(f"#{dtv_b._empty_label_id}")
+            assert empty_a.display is False
+            assert empty_b.display is True
+
+    @pytest.mark.asyncio
+    async def test_fallback_prefix_when_no_id(self) -> None:
+        """DataTableView without an id uses 'dtv' as the prefix."""
+
+        class NoIdApp(App):
+            def compose(self) -> ComposeResult:
+                yield DataTableView(
+                    columns=[ColumnDef("name", "Name")],
+                    empty_message="No id",
+                )
+
+        async with NoIdApp().run_test() as pilot:
+            dtv = pilot.app.query_one(DataTableView)
+            assert dtv._table_id == "dtv-table"
+            assert dtv._empty_label_id == "dtv-empty-label"

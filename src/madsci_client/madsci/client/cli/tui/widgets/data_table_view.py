@@ -99,19 +99,24 @@ class DataTableView(Widget):
         self._columns = columns
         self._empty_message = empty_message
         self._rows: list[dict[str, Any]] = []
+        # Child IDs are derived from the widget's own id to avoid duplicates
+        # when multiple DataTableView instances appear in the same app.
+        prefix = self.id or "dtv"
+        self._table_id = f"{prefix}-table"
+        self._empty_label_id = f"{prefix}-empty-label"
 
     def compose(self) -> ComposeResult:
         """Compose the widget."""
-        yield DataTable(id="dtv-table")
+        yield DataTable(id=self._table_id)
         yield Label(
             f"[dim]{self._empty_message}[/dim]",
-            id="dtv-empty-label",
+            id=self._empty_label_id,
             classes="dtv-empty",
         )
 
     def on_mount(self) -> None:
         """Set up the table columns on mount."""
-        table = self.query_one("#dtv-table", DataTable)
+        table = self.query_one(f"#{self._table_id}", DataTable)
         for col in self._columns:
             if col.width is not None:
                 table.add_column(col.label, key=col.key, width=col.width)
@@ -128,7 +133,7 @@ class DataTableView(Widget):
             rows: List of row dictionaries. Each dict should have keys
                 matching the ``key`` fields of the column definitions.
         """
-        table = self.query_one("#dtv-table", DataTable)
+        table = self.query_one(f"#{self._table_id}", DataTable)
 
         # Save cursor position before clearing
         saved_row = table.cursor_row if table.row_count > 0 else 0
@@ -149,15 +154,15 @@ class DataTableView(Widget):
 
     def _update_empty_state(self) -> None:
         """Toggle empty label visibility based on row count."""
-        table = self.query_one("#dtv-table", DataTable)
-        empty_label = self.query_one("#dtv-empty-label", Label)
+        table = self.query_one(f"#{self._table_id}", DataTable)
+        empty_label = self.query_one(f"#{self._empty_label_id}", Label)
         has_rows = len(self._rows) > 0
         table.display = has_rows
         empty_label.display = not has_rows
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Translate DataTable selection into a typed RowSelected message."""
-        if event.data_table.id != "dtv-table":
+        if event.data_table.id != self._table_id:
             return
 
         # Find the row index from the cursor coordinate

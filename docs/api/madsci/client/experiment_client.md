@@ -125,6 +125,12 @@ Classes
             campaign_id: The ID of the campaign to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
+    `get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
     `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
     :   Get an experiment by ID.
         

@@ -5,12 +5,12 @@ a type-aware detail panel for selected datapoints, and preview
 information for JSON, file, and object storage types.
 """
 
-import asyncio
 import json
 from pathlib import PurePosixPath
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
     AutoRefreshMixin,
     ServiceURLMixin,
     preserve_cursor,
@@ -23,7 +23,11 @@ from madsci.client.cli.tui.widgets import (
     FilterBar,
     FilterDef,
 )
-from madsci.client.cli.utils.formatting import format_timestamp, truncate
+from madsci.client.cli.utils.formatting import (
+    build_ownership_section,
+    format_timestamp,
+    truncate,
+)
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -142,28 +146,6 @@ def _build_general_section(dp_id: str, data: dict) -> DetailSection:
     return DetailSection("General", fields)
 
 
-def _build_ownership_section(data: dict) -> DetailSection | None:
-    """Build the ownership section for the detail panel.
-
-    Args:
-        data: Datapoint data dictionary.
-
-    Returns:
-        DetailSection if ownership info exists, else None.
-    """
-    ownership_info = data.get("ownership_info") or {}
-    if not isinstance(ownership_info, dict):
-        return None
-    fields: dict[str, str] = {}
-    for key in ("user_id", "experiment_id", "workflow_id"):
-        value = ownership_info.get(key)
-        if value:
-            fields[key.replace("_", " ").title()] = str(value)
-    if fields:
-        return DetailSection("Ownership", fields)
-    return None
-
-
 def _build_json_section(data: dict) -> DetailSection | None:
     """Build the JSON value section for JSON-type datapoints.
 
@@ -243,7 +225,7 @@ def _build_object_storage_section(data: dict) -> DetailSection | None:
     return None
 
 
-class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
+class DataBrowserScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing data browser with type-aware detail display."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -419,9 +401,9 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             _build_general_section(datapoint_id, data),
         ]
 
-        ownership_section = _build_ownership_section(data)
-        if ownership_section:
-            sections.append(ownership_section)
+        ownership_items = build_ownership_section(data)
+        if ownership_items:
+            sections.append(DetailSection("Ownership", dict(ownership_items)))
 
         # Type-specific sections
         data_type = _get_data_type(data)
@@ -445,17 +427,11 @@ class DataBrowserScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         await self.refresh_data()
         self.notify("Data refreshed", timeout=2)
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "toggle_auto_refresh": self.action_toggle_auto_refresh,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     def action_go_back(self) -> None:
         """Go back to the dashboard."""

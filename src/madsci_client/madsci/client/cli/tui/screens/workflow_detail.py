@@ -4,14 +4,16 @@ Pushed screen showing workflow details, step progress, and control actions.
 Opened when a workflow row is selected in :class:`WorkflowsScreen`.
 """
 
-import asyncio
 from typing import Any, ClassVar
 
 import httpx
-from madsci.client.cli.tui.mixins import ServiceURLMixin, preserve_cursor
+from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
 from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
 from madsci.client.cli.tui.screens.workflows import (
-    _build_ownership_section,
     _build_progress_section,
     _build_timing_section,
     _get_workflow_status_name,
@@ -23,6 +25,7 @@ from madsci.client.cli.tui.widgets import (
     DetailSection,
 )
 from madsci.client.cli.utils.formatting import (
+    build_ownership_section,
     format_status_colored,
 )
 from textual.app import ComposeResult
@@ -32,7 +35,7 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
 
-class WorkflowDetailScreen(ServiceURLMixin, Screen):
+class WorkflowDetailScreen(ActionBarMixin, ServiceURLMixin, Screen):
     """Screen showing details for a single workflow, pushed on top of WorkflowsScreen."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -142,9 +145,9 @@ class WorkflowDetailScreen(ServiceURLMixin, Screen):
                 )
             )
 
-        ownership_section = _build_ownership_section(data)
-        if ownership_section:
-            sections.append(ownership_section)
+        ownership_items = build_ownership_section(data)
+        if ownership_items:
+            sections.append(DetailSection("Ownership", dict(ownership_items)))
 
         progress_section = _build_progress_section(data, status)
         if progress_section:
@@ -270,21 +273,15 @@ class WorkflowDetailScreen(ServiceURLMixin, Screen):
         """Resubmit this workflow."""
         await self._send_workflow_command("resubmit")
 
-    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
-        """Route ActionBar button triggers to screen actions."""
-        action_map = {
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
             "pause": self.action_pause_workflow,
             "resume": self.action_resume_workflow,
             "cancel": self.action_cancel_workflow,
             "retry": self.action_retry_workflow,
             "resubmit": self.action_resubmit_workflow,
         }
-        handler = action_map.get(event.action)
-        if handler is not None:
-            if asyncio.iscoroutinefunction(handler):
-                self.run_worker(handler())
-            else:
-                handler()
 
     def action_go_back(self) -> None:
         """Go back to the workflows list."""

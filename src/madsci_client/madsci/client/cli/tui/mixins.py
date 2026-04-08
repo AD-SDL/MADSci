@@ -6,14 +6,18 @@ Provides reusable behaviours that can be mixed into any
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
-from collections.abc import Generator
-from typing import ClassVar
+from collections.abc import Callable, Generator
+from typing import TYPE_CHECKING, ClassVar
 
 import httpx
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
 from textual.reactive import reactive
 from textual.widgets import DataTable
+
+if TYPE_CHECKING:
+    from madsci.client.cli.tui.widgets.action_bar import ActionBar
 
 
 @contextlib.contextmanager
@@ -128,3 +132,34 @@ class ServiceURLMixin:
         for client in self._async_clients.values():
             await client.aclose()
         self._async_clients.clear()
+
+
+class ActionBarMixin:
+    """Mixin that dispatches ActionBar.ActionTriggered events to an action map.
+
+    Subclasses should define a ``_get_action_map()`` method returning
+    ``dict[str, Callable]`` mapping action IDs to handlers.
+
+    Usage::
+
+        class MyScreen(ActionBarMixin, AutoRefreshMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {
+                    "refresh": self.action_refresh,
+                    "toggle_auto_refresh": self.action_toggle_auto_refresh,
+                }
+    """
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Dispatch an action bar event to the appropriate handler."""
+        action_map = self._get_action_map()
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())  # type: ignore[attr-defined]
+            else:
+                handler()
+
+    def _get_action_map(self) -> dict[str, Callable]:
+        """Return a mapping of action IDs to handler callables. Override in subclass."""
+        return {}
