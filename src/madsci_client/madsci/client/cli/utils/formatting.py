@@ -163,6 +163,8 @@ def truncate(text: str, max_len: int = 50) -> str:
     Returns:
         Truncated string.
     """
+    if max_len <= 0:
+        return ""
     if len(text) <= max_len:
         return text
     if max_len <= 3:

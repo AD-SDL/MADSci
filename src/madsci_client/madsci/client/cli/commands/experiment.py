@@ -7,6 +7,10 @@ starting, running, pausing, continuing, cancelling, and ending experiments.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from madsci.client.experiment_client import ExperimentClient
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -46,7 +50,7 @@ def _get_experiment_url(ctx: click.Context, experiment_url: str | None) -> str:
     return resolve_service_url(ctx, experiment_url, "experiment_server_url", 8002)
 
 
-def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:  # noqa: F821 -- lazy import
+def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:
     from madsci.client.experiment_client import ExperimentClient
     from madsci.common.types.client_types import ExperimentClientConfig
 

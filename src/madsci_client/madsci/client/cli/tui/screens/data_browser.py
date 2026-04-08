@@ -7,6 +7,7 @@ information for JSON, file, and object storage types.
 
 import asyncio
 import json
+from pathlib import PurePosixPath
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
@@ -62,8 +63,6 @@ def _get_preview(data: dict) -> str:
     if data_type == "file":
         path = data.get("path") or data.get("file_path", "")
         if path:
-            from pathlib import PurePosixPath
-
             return PurePosixPath(str(path)).name
         return "-"
 

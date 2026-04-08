@@ -6,6 +6,12 @@ purging, and backup operations.
 
 from __future__ import annotations
 
+import json
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from madsci.client.event_client import EventClient
+
 import click
 from madsci.client.cli.utils.cli_decorators import (
     resolve_service_url,
@@ -40,7 +46,7 @@ def _get_event_url(ctx: click.Context, event_url: str | None) -> str:
     return resolve_service_url(ctx, event_url, "event_server_url", 8001)
 
 
-def _make_client(event_url: str, timeout: float) -> EventClient:  # noqa: F821 -- lazy import
+def _make_client(event_url: str, timeout: float) -> EventClient:
     from madsci.client.event_client import EventClient
 
     return EventClient(event_server_url=event_url, timeout_default=timeout)
@@ -151,8 +157,6 @@ def query_events(
         madsci events query --level ERROR
         madsci events query --selector '{"event_type": "WORKFLOW_START"}'
     """
-    import json as json_mod
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
@@ -160,8 +164,8 @@ def query_events(
 
     if selector:
         try:
-            parsed_selector = json_mod.loads(selector)
-        except json_mod.JSONDecodeError as exc:
+            parsed_selector = json.loads(selector)
+        except json.JSONDecodeError as exc:
             raise click.ClickException(f"Invalid JSON in --selector: {exc}") from exc
         results = client.query_events(parsed_selector)
     else:

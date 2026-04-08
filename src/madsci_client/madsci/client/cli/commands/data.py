@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from madsci.client.data_client import DataClient
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -43,7 +47,7 @@ def _get_data_url(ctx: click.Context, data_url: str | None) -> str:
     return resolve_service_url(ctx, data_url, "data_server_url", 8004)
 
 
-def _make_client(data_url: str, timeout: float) -> DataClient:  # noqa: F821 -- lazy import
+def _make_client(data_url: str, timeout: float) -> DataClient:
     from madsci.client.data_client import DataClient
     from madsci.common.types.client_types import DataClientConfig
 

@@ -6,6 +6,7 @@ continue, and cancel operations.
 """
 
 import asyncio
+from datetime import datetime
 from typing import Any, ClassVar
 
 import httpx
@@ -101,8 +102,6 @@ def _calculate_duration(data: dict) -> str:
     ended = data.get("ended_at")
     if started and ended:
         try:
-            from datetime import datetime
-
             start_dt = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
             end_dt = datetime.fromisoformat(str(ended).replace("Z", "+00:00"))
             delta = (end_dt - start_dt).total_seconds()

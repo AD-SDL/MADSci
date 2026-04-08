@@ -377,7 +377,7 @@ class TestCreateHttpxClient:
         try:
             assert isinstance(client, httpx.AsyncClient)
         finally:
-            asyncio.get_event_loop().run_until_complete(client.aclose())
+            asyncio.run(client.aclose())
 
     def test_default_config(self) -> None:
         client = create_httpx_client()
@@ -429,7 +429,7 @@ class TestCreateHttpxClient:
             transport = client._transport
             assert isinstance(transport, AsyncRetryTransport)
         finally:
-            asyncio.get_event_loop().run_until_complete(client.aclose())
+            asyncio.run(client.aclose())
 
     def test_rate_limit_tracker_attached(self) -> None:
         cfg = MadsciClientConfig(rate_limit_tracking_enabled=True)

@@ -7,7 +7,11 @@ template management, hierarchy display, and history querying.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import json
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from madsci.client.resource_client import ResourceClient
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -46,7 +50,7 @@ def _get_resource_url(ctx: click.Context, resource_url: str | None) -> str:
     return resolve_service_url(ctx, resource_url, "resource_server_url", 8003)
 
 
-def _make_client(resource_url: str, timeout: float) -> ResourceClient:  # noqa: F821
+def _make_client(resource_url: str, timeout: float) -> ResourceClient:
     from madsci.client.resource_client import ResourceClient
     from madsci.common.types.client_types import ResourceClientConfig
 
@@ -324,14 +328,12 @@ def create_resource(
         madsci resource create --template my_tube --params '{"quantity": 10}'
         madsci resource create --template rack --json
     """
-    import json
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
     client = _make_client(url, timeout)
 
-    overrides: Optional[dict] = None
+    overrides: dict | None = None
     if params_json:
         try:
             overrides = json.loads(params_json)

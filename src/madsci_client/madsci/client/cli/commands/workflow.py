@@ -6,6 +6,7 @@ submitting, pausing, resuming, cancelling, retrying, and resubmitting workflows.
 
 from __future__ import annotations
 
+import json
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -14,6 +15,7 @@ import click
 from rich.console import Console
 
 if TYPE_CHECKING:
+    from madsci.client.workcell_client import WorkcellClient
     from madsci.common.types.workflow_types import Workflow
 from madsci.client.cli.utils.cli_decorators import (
     resolve_service_url,
@@ -53,7 +55,7 @@ def _get_workcell_url(ctx: click.Context, workcell_url: str | None) -> str:
     return resolve_service_url(ctx, workcell_url, "workcell_server_url", 8005)
 
 
-def _make_client(workcell_url: str, timeout: float) -> WorkcellClient:  # noqa: F821 -- lazy import
+def _make_client(workcell_url: str, timeout: float) -> WorkcellClient:
     from madsci.client.workcell_client import WorkcellClient
     from madsci.common.types.client_types import WorkcellClientConfig
 
@@ -420,8 +422,6 @@ def submit_workflow(
         madsci workflow submit ./wf.yaml --parameters '{"source": "plate_1"}'
         madsci workflow submit ./wf.yaml --name "nightly run"
     """
-    import json
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)

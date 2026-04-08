@@ -7,8 +7,12 @@ transfer graph/planning, import/export, and template management.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from madsci.client.location_client import LocationClient
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -46,7 +50,7 @@ def _get_location_url(ctx: click.Context, location_url: str | None) -> str:
     return resolve_service_url(ctx, location_url, "location_server_url", 8006)
 
 
-def _make_client(location_url: str, timeout: float) -> LocationClient:  # noqa: F821
+def _make_client(location_url: str, timeout: float) -> LocationClient:
     from madsci.client.location_client import LocationClient
     from madsci.common.types.client_types import LocationClientConfig
 
@@ -364,8 +368,6 @@ def create_from_template(
         madsci location create-from-template ot2_deck_slot --name slot_1 \\
             --bindings '{"deck_controller": "ot2_node"}'
     """
-    import json
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
@@ -622,8 +624,6 @@ def set_repr(
     Examples:
         madsci location set-repr deck_slot_1 robot_arm --data '{"x": 1, "y": 2}'
     """
-    import json
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
