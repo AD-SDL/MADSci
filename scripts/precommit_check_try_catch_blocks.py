@@ -72,7 +72,6 @@ def main(argv: list[str]) -> int:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.Try):
-                print(f"Found try block in {file_path}:{node.lineno}")
                 violations = sub_walk(node, violations, no_qa_lines, file_path)
 
     if violations:
