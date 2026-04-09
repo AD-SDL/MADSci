@@ -3,16 +3,62 @@
 Provides real-time log viewing with filtering capabilities.
 """
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
 from madsci.client.cli.tui.widgets import FilterBar, FilterDef, LogViewer
+from madsci.client.event_client import EventClient
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Label
+
+# Map level name strings to Python logging int values.
+_LEVEL_NAME_MAP: dict[str, int] = {
+    "debug": 10,
+    "info": 20,
+    "warning": 30,
+    "error": 40,
+    "critical": 50,
+}
+
+
+def _level_name_to_int(name: str | None) -> int:
+    """Convert a level name string to the corresponding integer.
+
+    Args:
+        name: Level name (e.g. ``"info"``, ``"error"``). ``None`` or
+            ``"all"`` returns ``-1`` so EventClient fetches all levels.
+
+    Returns:
+        Integer log level, or ``-1`` for no filtering.
+    """
+    if name is None or name.lower() in {"all", ""}:
+        return -1
+    return _LEVEL_NAME_MAP.get(name.lower(), -1)
+
+
+def _matches_search(event_dict: dict[str, Any], search: str) -> bool:
+    """Check whether an event dict matches a search string.
+
+    Searches in the ``event_data.message`` field (case-insensitive).
+
+    Args:
+        event_dict: A serialized Event dictionary.
+        search: The search text.
+
+    Returns:
+        True if the event matches.
+    """
+    event_data = event_dict.get("event_data", {})
+    if isinstance(event_data, dict):
+        message = str(event_data.get("message", ""))
+    else:
+        message = str(event_data)
+    return search.lower() in message.lower()
 
 
 class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
@@ -29,6 +75,17 @@ class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Initialize the screen."""
         super().__init__(**kwargs)
         self._follow_timer: Any = None
+        self._event_client: EventClient | None = None
+
+    def _get_event_client(self) -> EventClient:
+        """Get or create the EventClient instance."""
+        if self._event_client is None:
+            url = self.get_service_url("event_manager")
+            self._event_client = EventClient(
+                name="tui-logs",
+                event_server_url=url,
+            )
+        return self._event_client
 
     def compose(self) -> ComposeResult:
         """Compose the logs screen layout."""
@@ -112,37 +169,32 @@ class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         level: str | None = None,
         search: str | None = None,
     ) -> list[dict]:
-        """Fetch logs from the Event Manager.
+        """Fetch logs from the Event Manager using EventClient.
 
         Args:
             limit: Maximum number of logs to fetch.
-            level: Minimum log level.
-            search: Search pattern.
+            level: Minimum log level name (e.g. ``"info"``).
+            search: Search pattern applied client-side.
 
         Returns:
-            List of log entries.
+            List of log entry dictionaries.
         """
         try:
-            params: dict[str, str | int] = {"number": limit}
-            if level:
-                params["level"] = level.upper()
-            if search:
-                params["search"] = search
+            client = self._get_event_client()
+            level_int = _level_name_to_int(level)
+            events = await client.async_get_events(
+                number=limit,
+                level=level_int,
+            )
 
-            event_url = self.get_service_url("event_manager")
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(
-                    f"{event_url.rstrip('/')}/events",
-                    params=params,
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    if isinstance(data, list):
-                        return data
-                    if isinstance(data, dict):
-                        # The Event Manager returns Dict[str, Event]
-                        return list(data.values())
-                return []
+            # Convert Event models to dicts for LogViewer.append_entries
+            entries = [event.model_dump(mode="json") for event in events.values()]
+
+            # Apply search filtering client-side (EventClient doesn't support search)
+            if search:
+                entries = [e for e in entries if _matches_search(e, search)]
+
+            return entries
         except Exception:
             return []
 

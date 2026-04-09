@@ -814,3 +814,182 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         )
         response.raise_for_status()
         return response.json()
+
+    async def async_send_action(
+        self,
+        action_request: ActionRequest,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
+        """
+        Send an action to the node asynchronously.
+
+        Unlike the synchronous ``send_action``, this method does **not** poll or
+        wait for the action to reach a terminal state.  It creates the action,
+        starts it, and returns the initial ``ActionResult`` immediately.
+
+        Args:
+            action_request: The action request to send.
+            timeout: Optional timeout override in seconds for individual HTTP
+                requests.  If ``None``, uses ``config.timeout_data_operations``.
+        """
+        try:
+            # Step 1: Create the action
+            action_id = await self._async_create_action(action_request, timeout=timeout)
+
+            # Step 2: Start the action
+            return await self._async_start_action(
+                action_request.action_name, action_id, timeout=timeout
+            )
+
+        except Exception as e:
+            if hasattr(e, "response") and e.response is not None:
+                self.logger.error(
+                    "REST node async action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    status_code=e.response.status_code,
+                    response_text=e.response.text,
+                )
+            else:
+                self.logger.error(
+                    "REST node async action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    error=str(e),
+                )
+            raise e
+
+    async def _async_create_action(
+        self, action_request: ActionRequest, timeout: Optional[float] = None
+    ) -> str:
+        """
+        Create a new action asynchronously and return the action_id.
+
+        Args:
+            action_request: The action request to create.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_data_operations``.
+        """
+        args = dict(action_request.args) if action_request.args else {}
+
+        serialized_args = _serialize_for_json(args)
+        serialized_var_args = (
+            _serialize_for_json(action_request.var_args)
+            if action_request.var_args is not None
+            else None
+        )
+        serialized_var_kwargs = (
+            _serialize_for_json(action_request.var_kwargs)
+            if action_request.var_kwargs is not None
+            else None
+        )
+
+        request_data = {"args": serialized_args}
+        if serialized_var_args is not None:
+            request_data["var_args"] = serialized_var_args
+        if serialized_var_kwargs is not None:
+            request_data["var_kwargs"] = serialized_var_kwargs
+
+        rest_response = await self._async_request(
+            "POST",
+            f"{self.url}/action/{action_request.action_name}",
+            json=request_data,
+            timeout=timeout or self.config.timeout_data_operations,
+        )
+        rest_response.raise_for_status()
+        response_data = rest_response.json()
+        return response_data["action_id"]
+
+    async def _async_start_action(
+        self, action_name: str, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Start an action that has been created, asynchronously.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_data_operations``.
+        """
+        rest_response = await self._async_request(
+            "POST",
+            f"{self.url}/action/{action_name}/{action_id}/start",
+            timeout=timeout or self.config.timeout_data_operations,
+        )
+        rest_response.raise_for_status()
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id, timeout=timeout
+        )
+
+    async def async_get_action_result_by_name(
+        self,
+        action_name: str,
+        action_id: str,
+        include_files: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
+        """
+        Get the result of an action by name asynchronously.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+        """
+        rest_response = await self._async_request(
+            "GET",
+            f"{self.url}/action/{action_name}/{action_id}/result",
+            timeout=timeout or self.config.timeout_default,
+        )
+        try:
+            rest_response.raise_for_status()
+        except httpx.HTTPStatusError:
+            if rest_response.status_code >= 500:
+                self.logger.warning(
+                    "Typed endpoint returned server error; falling back to generic endpoint",
+                    action_name=action_name,
+                    status_code=rest_response.status_code,
+                )
+                return await self.async_get_action_result(action_id, timeout=timeout)
+            raise
+
+        if not include_files:
+            response_data = rest_response.json()
+            response_data = response_data.copy()
+            response_data["files"] = None
+            return self._convert_rest_result_to_action_result(
+                response_data, action_name, action_id, timeout=timeout
+            )
+
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id, timeout=timeout
+        )
+
+    async def async_get_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Get the result of an action on the node asynchronously.
+
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+        """
+        rest_response = await self._async_request(
+            "GET",
+            f"{self.url}/action/{action_id}/result",
+            timeout=timeout or self.config.timeout_default,
+        )
+        rest_response.raise_for_status()
+
+        response_data = rest_response.json()
+        response_data = response_data.copy()
+
+        return self._convert_rest_result_to_action_result(
+            response_data, "action_name", action_id, timeout=timeout
+        )

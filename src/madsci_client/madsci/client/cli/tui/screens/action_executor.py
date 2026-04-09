@@ -8,9 +8,11 @@ import asyncio
 import json
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
 from madsci.client.cli.utils.formatting import format_status_colored
+from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.common.types.action_types import ActionRequest, ActionResult, ActionStatus
+from pydantic import AnyUrl
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -48,6 +50,13 @@ class ActionExecutorScreen(Screen):
         self.node_name = node_name
         self.node_url = node_url
         self.actions = actions
+        self._node_client: RestNodeClient | None = None
+
+    def _get_node_client(self) -> RestNodeClient:
+        """Get or create the RestNodeClient instance."""
+        if self._node_client is None:
+            self._node_client = RestNodeClient(url=AnyUrl(self.node_url))
+        return self._node_client
 
     def compose(self) -> ComposeResult:
         """Compose the action executor layout."""
@@ -154,45 +163,29 @@ class ActionExecutorScreen(Screen):
 
         # Execute action
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                # Create action request
-                create_response = await client.post(
-                    f"{self.node_url.rstrip('/')}/action/{action_name}",
-                    json={"action_args": args},
+            client = self._get_node_client()
+            action_request = ActionRequest(
+                action_name=action_name,
+                args=args,
+            )
+
+            # Send action (creates and starts it)
+            result = await client.async_send_action(action_request)
+            self.notify(f"Action started: {result.action_id}", timeout=2)
+
+            # Poll for result (30s timeout)
+            for _ in range(60):
+                await asyncio.sleep(0.5)
+                result = await client.async_get_action_result_by_name(
+                    action_name,
+                    result.action_id,
+                    include_files=True,
                 )
-                if create_response.status_code != 200:
-                    self.notify(
-                        f"Failed to create action: HTTP {create_response.status_code}",
-                        timeout=3,
-                    )
+                if result.status.is_terminal:
+                    self._show_result(result_panel, action_name, result)
                     return
 
-                action_data = create_response.json()
-                action_id = action_data.get("action_id", "")
-
-                # Start action
-                await client.post(
-                    f"{self.node_url.rstrip('/')}/action/{action_name}/{action_id}/start"
-                )
-
-                self.notify(f"Action started: {action_id}", timeout=2)
-
-                # Poll for result (30s timeout)
-                for _ in range(60):
-                    await asyncio.sleep(0.5)
-                    result_response = await client.get(
-                        f"{self.node_url.rstrip('/')}/action/{action_name}/{action_id}/result"
-                    )
-                    if result_response.status_code == 200:
-                        result = result_response.json()
-                        status = result.get(
-                            "action_status", result.get("status", "unknown")
-                        )
-                        if status in ("succeeded", "failed", "cancelled"):
-                            self._show_result(result_panel, action_name, result)
-                            return
-
-                self.notify("Action timed out (30s)", timeout=3)
+            self.notify("Action timed out (30s)", timeout=3)
 
         except Exception as e:
             self.notify(f"Error: {e}", timeout=3)
@@ -201,31 +194,30 @@ class ActionExecutorScreen(Screen):
         self,
         panel: DetailPanel,
         action_name: str,
-        result: dict[str, Any],
+        result: ActionResult,
     ) -> None:
         """Display the action result in the detail panel.
 
         Args:
             panel: The DetailPanel to update.
             action_name: Name of the executed action.
-            result: Result data dictionary from the node.
+            result: ActionResult model instance from the node.
         """
         sections: list[DetailSection] = []
 
         # General result section
-        action_status = result.get("action_status", result.get("status", "unknown"))
+        action_status: ActionStatus = result.status
+        status_value = action_status.value
         general: dict[str, str] = {
             "Action": action_name,
-            "Status": format_status_colored(action_status, action_status),
+            "Status": format_status_colored(status_value, status_value),
         }
-        if result.get("action_id"):
-            general["Action ID"] = str(result["action_id"])
-        if result.get("action_msg"):
-            general["Message"] = str(result["action_msg"])[:200]
+        if result.action_id:
+            general["Action ID"] = str(result.action_id)
         sections.append(DetailSection("Result", general))
 
         # Data section
-        data = result.get("data", {})
+        data = result.json_result
         if data and isinstance(data, dict):
             sections.append(
                 DetailSection(
@@ -235,21 +227,22 @@ class ActionExecutorScreen(Screen):
             )
 
         # Files section
-        files = result.get("files", {})
-        if files and isinstance(files, dict):
-            sections.append(
-                DetailSection(
-                    "Files",
-                    {str(k): str(v)[:200] for k, v in files.items()},
+        files = result.files
+        if files is not None:
+            files_dict = files.model_dump() if hasattr(files, "model_dump") else {}
+            if files_dict:
+                sections.append(
+                    DetailSection(
+                        "Files",
+                        {str(k): str(v)[:200] for k, v in files_dict.items()},
+                    )
                 )
-            )
 
         # Errors section
-        errors = result.get("errors", [])
-        if errors:
+        if result.errors:
             error_fields: dict[str, str] = {}
-            for i, e in enumerate(errors[:10]):
-                err_msg = e.get("message", str(e)) if isinstance(e, dict) else str(e)
+            for i, e in enumerate(result.errors[:10]):
+                err_msg = e.message or str(e)
                 error_fields[f"Error {i + 1}"] = f"[red]{err_msg[:200]}[/red]"
             sections.append(DetailSection("Errors", error_fields))
 

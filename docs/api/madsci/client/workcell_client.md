@@ -89,8 +89,40 @@ Classes
     `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID asynchronously.
 
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
     `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
 
     `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.

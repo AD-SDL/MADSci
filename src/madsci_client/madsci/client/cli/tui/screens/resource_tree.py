@@ -4,9 +4,13 @@ A pushed screen that visualises the parent-child hierarchy of
 a resource using Textual's Tree widget.
 """
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
+from madsci.client.resource_client import ResourceClient
+from madsci.common.types.resource_types import ResourceDataModels
+from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container
@@ -24,19 +28,19 @@ class ResourceTreeScreen(Screen):
     def __init__(
         self,
         resource_id: str,
-        resource_url: str,
+        resource_client: ResourceClient,
         **kwargs: Any,
     ) -> None:
         """Initialize the resource tree screen.
 
         Args:
             resource_id: ID of the resource to display hierarchy for.
-            resource_url: Base URL of the resource manager.
+            resource_client: ResourceClient instance for API calls.
             **kwargs: Additional keyword arguments forwarded to Screen.
         """
         super().__init__(**kwargs)
         self.resource_id = resource_id
-        self._resource_url = resource_url
+        self._resource_client = resource_client
 
     def compose(self) -> ComposeResult:
         """Compose the tree screen layout."""
@@ -49,28 +53,14 @@ class ResourceTreeScreen(Screen):
         """Handle mount - fetch hierarchy and build tree."""
         tree = self.query_one(Tree)
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Fetch the resource itself for its name
-                res_response = await client.get(
-                    f"{self._resource_url.rstrip('/')}/resource/{self.resource_id}"
-                )
-                resource: dict[str, Any] = {}
-                if res_response.status_code == 200:
-                    resource = res_response.json()
+            # Fetch the resource itself for its name
+            resource = await self._resource_client.async_get_resource(self.resource_id)
 
-                # Fetch hierarchy
-                hier_response = await client.get(
-                    f"{self._resource_url.rstrip('/')}/resource/"
-                    f"{self.resource_id}/hierarchy"
-                )
-                if hier_response.status_code != 200:
-                    tree.root.set_label(
-                        f"Error loading hierarchy: HTTP {hier_response.status_code}"
-                    )
-                    return
-
-                hierarchy = hier_response.json()
-                self._build_tree(tree, resource, hierarchy)
+            # Fetch hierarchy
+            hierarchy = await self._resource_client.async_query_resource_hierarchy(
+                self.resource_id
+            )
+            self._build_tree(tree, resource, hierarchy)
 
         except Exception as e:
             tree.root.set_label(f"Error loading hierarchy: {e}")
@@ -78,27 +68,27 @@ class ResourceTreeScreen(Screen):
     def _build_tree(
         self,
         tree: Tree,
-        resource: dict[str, Any],
-        hierarchy: dict[str, Any],
+        resource: ResourceDataModels,
+        hierarchy: ResourceHierarchy,
     ) -> None:
         """Build the tree widget from hierarchy data.
 
         Args:
             tree: The Tree widget to populate.
-            resource: Resource data dictionary for the root resource.
-            hierarchy: Hierarchy response with ancestor_ids and descendant_ids.
+            resource: Resource model instance for the root resource.
+            hierarchy: ResourceHierarchy model with ancestor_ids and descendant_ids.
         """
-        res_name = resource.get("resource_name", self.resource_id)
-        res_type = resource.get("base_type", "")
+        res_name = resource.resource_name or self.resource_id
+        res_type = resource.base_type.value if resource.base_type else ""
         tree.root.set_label(
             f"[bold]{res_name}[/bold] ({res_type}) [{self.resource_id}]"
         )
         tree.root.expand()
 
-        descendant_ids: dict[str, list[str]] = hierarchy.get("descendant_ids", {})
+        descendant_ids: dict[str, list[str]] = hierarchy.descendant_ids or {}
 
         # Show ancestor chain if present
-        ancestor_ids: list[str] = hierarchy.get("ancestor_ids", [])
+        ancestor_ids: list[str] = hierarchy.ancestor_ids or []
         if ancestor_ids:
             ancestors_node = tree.root.add("[dim]Ancestors[/dim]")
             for anc_id in ancestor_ids:

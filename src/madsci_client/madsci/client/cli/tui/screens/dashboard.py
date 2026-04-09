@@ -5,13 +5,14 @@ active workflows, and recent events.
 """
 
 import asyncio
-from typing import ClassVar
+from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
 from madsci.client.cli.tui.widgets import StatusBadge
 from madsci.client.cli.utils.formatting import truncate
 from madsci.client.cli.utils.service_health import check_all_services_async
+from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import Event
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -100,9 +101,9 @@ def _format_level(level: object) -> str:
     return str(level)[:5]
 
 
-def _extract_message(event: dict) -> str:
-    """Extract the message string from an Event dict."""
-    event_data = event.get("event_data", {})
+def _extract_message(event: Event) -> str:
+    """Extract the message string from an Event model instance."""
+    event_data = event.event_data
     if isinstance(event_data, dict):
         return truncate(event_data.get("message", str(event_data)), max_len=50)
     return truncate(str(event_data), max_len=50)
@@ -110,6 +111,21 @@ def _extract_message(event: dict) -> str:
 
 class RecentEventsPanel(Static):
     """Panel showing recent events."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the panel."""
+        super().__init__(**kwargs)
+        self._event_client: EventClient | None = None
+
+    def _get_event_client(self) -> EventClient:
+        """Get or create the EventClient instance."""
+        if self._event_client is None:
+            url = self.app.service_urls.get("event_manager", "http://localhost:8001/")
+            self._event_client = EventClient(
+                name="tui-dashboard",
+                event_server_url=url,
+            )
+        return self._event_client
 
     def compose(self) -> ComposeResult:
         """Compose the panel."""
@@ -122,34 +138,18 @@ class RecentEventsPanel(Static):
         """Refresh recent events."""
         content = self.query_one("#events-content", Label)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                event_url = self.app.service_urls.get(
-                    "event_manager", "http://localhost:8001/"
-                )
-                response = await client.get(
-                    f"{event_url.rstrip('/')}/events",
-                    params={"number": 5},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    # Event Manager returns Dict[str, Event]
-                    if isinstance(data, dict) and data:
-                        events = list(data.values())
-                    elif isinstance(data, list):
-                        events = data
-                    else:
-                        events = []
-                    if events:
-                        lines = []
-                        for event in events[:5]:
-                            msg = _extract_message(event)
-                            level = _format_level(event.get("log_level", 20))
-                            lines.append(f"  [{level}] {msg}")
-                        content.update("\n".join(lines))
-                    else:
-                        content.update("[dim]No recent events[/dim]")
-                else:
-                    content.update("[dim]Could not load events[/dim]")
+            client = self._get_event_client()
+            events_dict = await client.async_get_events(number=5)
+            events = list(events_dict.values())
+            if events:
+                lines = []
+                for event in events[:5]:
+                    msg = _extract_message(event)
+                    level = _format_level(event.log_level)
+                    lines.append(f"  [{level}] {msg}")
+                content.update("\n".join(lines))
+            else:
+                content.update("[dim]No recent events[/dim]")
         except Exception:
             content.update("[dim]Event Manager not available[/dim]")
 

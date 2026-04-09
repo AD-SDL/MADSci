@@ -89,18 +89,10 @@ Classes
     `on_button_pressed(self, event: textual.widgets._button.Button.Pressed) ‑> None`
     :   Handle quick action button presses.
 
-`RecentEventsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
+`RecentEventsPanel(**kwargs: Any)`
 :   Panel showing recent events.
     
-    Initialize a Widget.
-    
-    Args:
-        *children: Child widgets.
-        name: The name of the widget.
-        id: The ID of the widget in the DOM.
-        classes: The CSS classes for the widget.
-        disabled: Whether the widget is disabled or not.
-        markup: Enable content markup?
+    Initialize the panel.
 
     ### Ancestors (in MRO)
 

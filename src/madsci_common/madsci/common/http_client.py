@@ -223,13 +223,30 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 
 def _make_rate_limit_hook(
     tracker: RateLimitTracker,
-) -> Callable[[httpx.Response], None]:
+    *,
+    async_mode: bool = False,
+) -> Callable:
     """
     Create an httpx response event hook that feeds headers into *tracker*.
 
     The returned callable has the signature expected by ``httpx.Client``'s
     ``event_hooks={"response": [hook]}``.
+
+    Parameters
+    ----------
+    tracker : RateLimitTracker
+        The rate limit tracker to feed response headers into.
+    async_mode : bool
+        If ``True``, return an async hook suitable for ``httpx.AsyncClient``.
+        Async clients require event hooks to be coroutines.
     """
+
+    if async_mode:
+
+        async def _async_hook(response: httpx.Response) -> None:
+            tracker.update_from_headers(response.headers)
+
+        return _async_hook
 
     def _hook(response: httpx.Response) -> None:
         # Pass the httpx Headers object directly -- it is a case-insensitive
@@ -326,7 +343,9 @@ def create_httpx_client(
             warning_threshold=config.rate_limit_warning_threshold,
             respect_limits=config.rate_limit_respect_limits,
         )
-        event_hooks["response"].append(_make_rate_limit_hook(rate_limit_tracker))
+        event_hooks["response"].append(
+            _make_rate_limit_hook(rate_limit_tracker, async_mode=async_mode)
+        )
 
     # -- Build transport & client -------------------------------------------
     retry_kwargs = {

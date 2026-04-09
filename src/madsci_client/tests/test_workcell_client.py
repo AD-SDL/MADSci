@@ -4,7 +4,7 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -16,6 +16,7 @@ from madsci.common.db_handlers import (
 )
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import (
@@ -672,3 +673,277 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
     assert retrieved_node["node_url"] == "http://test_node/"
+
+
+# ------------------------------------------------------------------
+# Async method tests
+# ------------------------------------------------------------------
+
+
+def _make_mock_response(json_data: Any, status_code: int = 200) -> MagicMock:
+    """Create a mock httpx.Response with the given JSON data."""
+    mock_resp = MagicMock(spec=Response)
+    mock_resp.json.return_value = json_data
+    mock_resp.status_code = status_code
+    mock_resp.is_success = status_code < 400
+    mock_resp.raise_for_status = MagicMock()
+    return mock_resp
+
+
+@pytest.fixture
+def async_client() -> Generator[WorkcellClient, None, None]:
+    """Fixture for WorkcellClient with mocked async request for async tests."""
+    mock_event_client = Mock()
+    workcell_client = WorkcellClient(
+        workcell_server_url="http://testserver", event_client=mock_event_client
+    )
+    yield workcell_client
+
+
+class TestAsyncGetNodes:
+    """Tests for async_get_nodes returning proper Node models."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_returns_dict_of_node_models(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_nodes should return dict[str, Node], not raw JSON."""
+        node_data = {
+            "node1": {
+                "node_url": "http://node1/",
+                "node_name": "node1",
+            },
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_nodes()
+
+        assert isinstance(result, dict)
+        assert "node1" in result
+        assert isinstance(result["node1"], Node)
+        assert str(result["node1"].node_url) == "http://node1/"
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_nodes should call raise_for_status on the response."""
+        node_data = {}
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_get_nodes()
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_empty(self, async_client: WorkcellClient) -> None:
+        """async_get_nodes should handle an empty nodes dict."""
+        mock_resp = _make_mock_response({})
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_nodes()
+
+        assert result == {}
+
+
+class TestAsyncGetNode:
+    """Tests for async_get_node returning a proper Node model."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_node_returns_node_model(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_node should return a Node instance, not raw JSON."""
+        node_data = {
+            "node_url": "http://node1/",
+            "node_name": "node1",
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_node("node1")
+
+        assert isinstance(result, Node)
+        assert str(result.node_url) == "http://node1/"
+
+    @pytest.mark.asyncio
+    async def test_async_get_node_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_node should call raise_for_status on the response."""
+        node_data = {
+            "node_url": "http://node1/",
+            "node_name": "node1",
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_get_node("node1")
+
+        mock_resp.raise_for_status.assert_called_once()
+
+
+class TestAsyncRetryWorkflow:
+    """Tests for the async_retry_workflow method."""
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_exists(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow method should exist on WorkcellClient."""
+        assert hasattr(async_client, "async_retry_workflow")
+        assert callable(async_client.async_retry_workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_returns_workflow(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should return a Workflow instance."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {"completed": False},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_retry_workflow(workflow_id)
+
+        assert isinstance(result, Workflow)
+        assert result.workflow_id == workflow_id
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should call raise_for_status."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id)
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_posts_to_correct_url(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should POST to the correct retry endpoint."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id)
+
+        call_args = async_client._async_request.call_args
+        assert call_args[0][0] == "POST"
+        assert f"workflow/{workflow_id}/retry" in call_args[0][1]
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_with_index(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should pass index as a query param when provided."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id, index=2)
+
+        call_args = async_client._async_request.call_args
+        params = call_args[1].get("params", {})
+        assert params.get("index") == 2
+
+
+class TestAsyncResubmitWorkflow:
+    """Tests for the async_resubmit_workflow method."""
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_exists(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow method should exist on WorkcellClient."""
+        assert hasattr(async_client, "async_resubmit_workflow")
+        assert callable(async_client.async_resubmit_workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_returns_workflow(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should return a Workflow instance."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_resubmit_workflow(workflow_id)
+
+        assert isinstance(result, Workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should call raise_for_status."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_resubmit_workflow(workflow_id)
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_posts_to_correct_url(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should POST to the correct resubmit endpoint."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_resubmit_workflow(workflow_id)
+
+        call_args = async_client._async_request.call_args
+        assert call_args[0][0] == "POST"
+        assert f"workflow/{workflow_id}/resubmit" in call_args[0][1]

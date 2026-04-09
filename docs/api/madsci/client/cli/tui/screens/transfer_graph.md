@@ -8,13 +8,13 @@ Location Manager as a DataTable.
 Classes
 -------
 
-`TransferGraphScreen(location_url: str, **kwargs: Any)`
+`TransferGraphScreen(location_client: madsci.client.location_client.LocationClient, **kwargs: Any)`
 :   Screen showing the transfer adjacency graph.
     
     Initialize the transfer graph screen.
     
     Args:
-        location_url: Base URL of the location manager.
+        location_client: LocationClient instance for fetching data.
         **kwargs: Additional keyword arguments forwarded to Screen.
 
     ### Ancestors (in MRO)

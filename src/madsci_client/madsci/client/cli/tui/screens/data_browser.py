@@ -5,6 +5,8 @@ a type-aware detail panel for selected datapoints, and preview
 information for JSON, file, and object storage types.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import PurePosixPath
 from typing import Any, ClassVar
@@ -28,6 +30,8 @@ from madsci.client.cli.utils.formatting import (
     format_timestamp,
     truncate,
 )
+from madsci.client.data_client import DataClient
+from madsci.common.types.datapoint_types import DataPoint
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -35,58 +39,58 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
 
-def _get_data_type(data: dict) -> str:
+def _get_data_type(datapoint: DataPoint) -> str:
     """Extract the data type from a datapoint.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance.
 
     Returns:
         Lowercase data type string.
     """
-    data_type = data.get("data_type", "unknown")
+    data_type = datapoint.data_type
     if isinstance(data_type, str):
         return data_type.lower()
-    return "unknown"
+    return data_type.value.lower()
 
 
-def _get_preview(data: dict) -> str:
+def _get_preview(datapoint: DataPoint) -> str:
     """Generate a preview string for a datapoint.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance.
 
     Returns:
         Short preview string for display in the table.
     """
-    data_type = _get_data_type(data)
+    data_type = _get_data_type(datapoint)
 
     if data_type == "json":
-        return _get_json_preview(data)
+        return _get_json_preview(datapoint)
 
     if data_type == "file":
-        path = data.get("path") or data.get("file_path", "")
+        path = getattr(datapoint, "path", None)
         if path:
             return PurePosixPath(str(path)).name
         return "-"
 
     if data_type in ("object_storage", "object storage"):
-        object_name = data.get("object_name", "")
+        object_name = getattr(datapoint, "object_name", None)
         return truncate(str(object_name), 30) if object_name else "-"
 
     return "-"
 
 
-def _get_json_preview(data: dict) -> str:
+def _get_json_preview(datapoint: DataPoint) -> str:
     """Generate a preview string for a JSON datapoint.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance.
 
     Returns:
         Truncated JSON value string.
     """
-    value = data.get("value")
+    value = getattr(datapoint, "value", None)
     if value is None:
         return "-"
     try:
@@ -97,14 +101,14 @@ def _get_json_preview(data: dict) -> str:
 
 
 def _matches_filter(
-    dp_data: dict,
+    datapoint: DataPoint,
     search: str,
     filters: dict[str, Any],
 ) -> bool:
     """Check whether a datapoint matches the current filter criteria.
 
     Args:
-        dp_data: Datapoint data dictionary.
+        datapoint: DataPoint model instance.
         search: Search text (matched against label, case-insensitive).
         filters: Filter dict; supports ``"type"`` key.
 
@@ -113,49 +117,47 @@ def _matches_filter(
     """
     type_filter = filters.get("type", "all")
     if type_filter and type_filter != "all":
-        data_type = _get_data_type(dp_data)
+        data_type = _get_data_type(datapoint)
         if data_type != type_filter:
             return False
 
     if search:
-        label = dp_data.get("label", "")
+        label = datapoint.label or ""
         if search.lower() not in label.lower():
             return False
 
     return True
 
 
-def _build_general_section(dp_id: str, data: dict) -> DetailSection:
+def _build_general_section(datapoint: DataPoint) -> DetailSection:
     """Build the general info section for the detail panel.
 
     Args:
-        dp_id: Datapoint ID.
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance.
 
     Returns:
         DetailSection with general fields.
     """
     fields: dict[str, str] = {
-        "ID": dp_id,
-        "Label": data.get("label", "Unknown"),
-        "Type": _get_data_type(data),
+        "ID": datapoint.datapoint_id,
+        "Label": datapoint.label or "Unknown",
+        "Type": _get_data_type(datapoint),
     }
-    timestamp = data.get("data_timestamp")
-    if timestamp:
-        fields["Timestamp"] = format_timestamp(timestamp, short=True)
+    if datapoint.data_timestamp:
+        fields["Timestamp"] = format_timestamp(datapoint.data_timestamp, short=True)
     return DetailSection("General", fields)
 
 
-def _build_json_section(data: dict) -> DetailSection | None:
+def _build_json_section(datapoint: DataPoint) -> DetailSection | None:
     """Build the JSON value section for JSON-type datapoints.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance (expected to be a ValueDataPoint).
 
     Returns:
         DetailSection if value exists, else None.
     """
-    value = data.get("value")
+    value = getattr(datapoint, "value", None)
     if value is None:
         return None
     try:
@@ -168,23 +170,23 @@ def _build_json_section(data: dict) -> DetailSection | None:
     return DetailSection("Value", {"Data": formatted})
 
 
-def _build_file_section(data: dict) -> DetailSection | None:
+def _build_file_section(datapoint: DataPoint) -> DetailSection | None:
     """Build the file info section for file-type datapoints.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance (expected to be a FileDataPoint).
 
     Returns:
         DetailSection if file info exists, else None.
     """
     fields: dict[str, str] = {}
-    path = data.get("path") or data.get("file_path")
+    path = getattr(datapoint, "path", None)
     if path:
         fields["Path"] = str(path)
-    content_type = data.get("content_type")
+    content_type = getattr(datapoint, "content_type", None)
     if content_type:
         fields["Content Type"] = str(content_type)
-    size = data.get("size") or data.get("file_size")
+    size = getattr(datapoint, "size_bytes", None)
     if size is not None:
         fields["Size"] = str(size)
     if fields:
@@ -192,32 +194,32 @@ def _build_file_section(data: dict) -> DetailSection | None:
     return None
 
 
-def _build_object_storage_section(data: dict) -> DetailSection | None:
+def _build_object_storage_section(datapoint: DataPoint) -> DetailSection | None:
     """Build the object storage section for object-storage-type datapoints.
 
     Args:
-        data: Datapoint data dictionary.
+        datapoint: DataPoint model instance (expected to be an ObjectStorageDataPoint).
 
     Returns:
         DetailSection if object storage info exists, else None.
     """
     fields: dict[str, str] = {}
-    endpoint = data.get("endpoint")
+    endpoint = getattr(datapoint, "storage_endpoint", None)
     if endpoint:
         fields["Endpoint"] = str(endpoint)
-    bucket = data.get("bucket")
+    bucket = getattr(datapoint, "bucket_name", None)
     if bucket:
         fields["Bucket"] = str(bucket)
-    object_name = data.get("object_name")
+    object_name = getattr(datapoint, "object_name", None)
     if object_name:
         fields["Object Name"] = str(object_name)
-    content_type = data.get("content_type")
+    content_type = getattr(datapoint, "content_type", None)
     if content_type:
         fields["Content Type"] = str(content_type)
-    size = data.get("size") or data.get("object_size")
+    size = getattr(datapoint, "size_bytes", None)
     if size is not None:
         fields["Size"] = str(size)
-    url = data.get("url") or data.get("object_url")
+    url = getattr(datapoint, "url", None)
     if url:
         fields["URL"] = str(url)
     if fields:
@@ -237,11 +239,21 @@ class DataBrowserScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.datapoints_data: dict[str, dict] = {}
+        self.datapoints_data: dict[str, DataPoint] = {}
         self.selected_datapoint_id: str | None = None
         self._datapoint_ids: list[str] = []
         self._current_search: str = ""
         self._current_filters: dict[str, Any] = {}
+        self._data_client: DataClient | None = None
+
+    def _get_data_client(self) -> DataClient:
+        """Get or create the DataClient instance."""
+        if self._data_client is None:
+            url = self.get_service_url("data_manager")
+            self._data_client = DataClient(
+                data_server_url=url,
+            )
+        return self._data_client
 
     def compose(self) -> ComposeResult:
         """Compose the data browser screen layout."""
@@ -295,25 +307,11 @@ class DataBrowserScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
         self._datapoint_ids.clear()
 
         try:
-            data_url = self.get_service_url("data_manager")
-            client = self.get_async_client(data_url)
-            response = await client.get(
-                f"{data_url.rstrip('/')}/datapoints",
-                params={"number": 50},
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, dict):
-                    for dp_id, dp_data in data.items():
-                        if isinstance(dp_data, dict):
-                            self.datapoints_data[dp_id] = dp_data
-                            self._datapoint_ids.append(dp_id)
-                elif isinstance(data, list):
-                    for dp_data in data:
-                        dp_id = dp_data.get("datapoint_id", "")
-                        if dp_id:
-                            self.datapoints_data[dp_id] = dp_data
-                            self._datapoint_ids.append(dp_id)
+            client = self._get_data_client()
+            datapoints = await client.async_get_datapoints(number=50)
+            for datapoint in datapoints:
+                self.datapoints_data[datapoint.datapoint_id] = datapoint
+                self._datapoint_ids.append(datapoint.datapoint_id)
         except Exception:
             self.notify("Failed to reach Data Manager", timeout=3)
 
@@ -340,10 +338,13 @@ class DataBrowserScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
             for dp_id in filtered:
                 dp = self.datapoints_data[dp_id]
                 dp_id_str = dp_id or "-"
-                label = dp.get("label", "-") or "-"
+                label = dp.label or "-"
                 data_type = _get_data_type(dp)
-                timestamp = dp.get("data_timestamp")
-                ts_str = format_timestamp(timestamp, short=True) if timestamp else "-"
+                ts_str = (
+                    format_timestamp(dp.data_timestamp, short=True)
+                    if dp.data_timestamp
+                    else "-"
+                )
                 preview = _get_preview(dp)
                 table.add_row(dp_id_str, label, data_type, ts_str, preview)
 
@@ -381,42 +382,41 @@ class DataBrowserScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
         row_id = str(row[0])
 
         # Find datapoint by matching full ID
-        for dp_id, dp_data in self.datapoints_data.items():
-            if dp_id == row_id:
-                self.selected_datapoint_id = dp_id
-                self._update_detail_panel(dp_id, dp_data)
-                break
+        if row_id in self.datapoints_data:
+            self.selected_datapoint_id = row_id
+            self._update_detail_panel(self.datapoints_data[row_id])
 
-    def _update_detail_panel(self, datapoint_id: str, data: dict) -> None:
+    def _update_detail_panel(self, datapoint: DataPoint) -> None:
         """Update the detail panel with datapoint data.
 
         Args:
-            datapoint_id: Datapoint ID.
-            data: Datapoint data dictionary.
+            datapoint: DataPoint model instance.
         """
         detail_panel = self.query_one("#data-detail-panel", DetailPanel)
-        label = data.get("label", "Datapoint")
+        label = datapoint.label or "Datapoint"
 
         sections: list[DetailSection] = [
-            _build_general_section(datapoint_id, data),
+            _build_general_section(datapoint),
         ]
 
-        ownership_items = build_ownership_section(data)
+        ownership_items = build_ownership_section(
+            datapoint.model_dump(mode="json"),
+        )
         if ownership_items:
             sections.append(DetailSection("Ownership", dict(ownership_items)))
 
         # Type-specific sections
-        data_type = _get_data_type(data)
+        data_type = _get_data_type(datapoint)
         if data_type == "json":
-            json_section = _build_json_section(data)
+            json_section = _build_json_section(datapoint)
             if json_section:
                 sections.append(json_section)
         elif data_type == "file":
-            file_section = _build_file_section(data)
+            file_section = _build_file_section(datapoint)
             if file_section:
                 sections.append(file_section)
         elif data_type in ("object_storage", "object storage"):
-            storage_section = _build_object_storage_section(data)
+            storage_section = _build_object_storage_section(datapoint)
             if storage_section:
                 sections.append(storage_section)
 

@@ -9,14 +9,14 @@ Workcell Manager and communicating with nodes directly.
 Classes
 -------
 
-`NodeDetailScreen(node_name: str, node_data: dict, **kwargs: Any)`
+`NodeDetailScreen(node_name: str, node_data: Node, **kwargs: Any)`
 :   Screen showing details for a single node, pushed on top of NodesScreen.
     
     Initialize the detail screen.
     
     Args:
         node_name: Name of the node.
-        node_data: Node data dictionary.
+        node_data: Node model instance.
 
     ### Ancestors (in MRO)
 
@@ -28,7 +28,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -69,7 +69,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -104,7 +104,7 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`

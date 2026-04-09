@@ -130,7 +130,8 @@ Classes
         class MyScreen(ServiceURLMixin, Screen):
             async def fetch_data(self):
                 url = self.get_service_url("event_manager")
-                ...
+                client = MyClient(server_url=url)
+                data = await client.async_get_data()
 
     ### Descendants
 
@@ -146,12 +147,6 @@ Classes
     * madsci.client.cli.tui.screens.workflows.WorkflowsScreen
 
     ### Methods
-
-    `close_async_clients(self) ‑> None`
-    :   Close all cached async clients.
-
-    `get_async_client(self, service_url: str) ‑> httpx.AsyncClient`
-    :   Get or create a cached async HTTP client for a service URL.
 
     `get_service_url(self, service_name: str) ‑> str`
     :   Get the URL for a named service.

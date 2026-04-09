@@ -27,7 +27,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -56,13 +56,13 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the experiments screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the experiments table.
         
         Args:
             event: The row selected event.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
         
         Args:

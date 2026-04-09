@@ -5,9 +5,10 @@ enhanced detail display, and action execution by querying the
 Workcell Manager and communicating with nodes directly.
 """
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     ActionBarMixin,
     AutoRefreshMixin,
@@ -21,6 +22,12 @@ from madsci.client.cli.tui.widgets import (
     DetailSection,
 )
 from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
+from madsci.client.node.rest_node_client import RestNodeClient
+from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.action_types import ActionDefinition
+from madsci.common.types.admin_command_types import AdminCommands
+from madsci.common.types.node_types import Node, NodeInfo, NodeStatus
+from pydantic import AnyUrl
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Vertical, VerticalScroll
@@ -28,18 +35,18 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
 
-def _get_node_status_name(node_status: dict) -> str:
-    """Derive a status name string from node status dict.
+def _get_node_status_name(node_status: NodeStatus) -> str:
+    """Derive a status name string from a NodeStatus model.
 
     Args:
-        node_status: Node status dictionary with errored/disconnected flags.
+        node_status: NodeStatus model instance.
 
     Returns:
         Status name: "disconnected", "errored", or "connected".
     """
-    if node_status.get("disconnected", False):
+    if node_status.disconnected:
         return "disconnected"
-    if node_status.get("errored", False):
+    if node_status.errored:
         return "errored"
     return "connected"
 
@@ -58,47 +65,51 @@ def _format_bool_indicator(value: bool) -> str:
     return "[green]No[/green]"
 
 
-def _build_general_section(data: dict, info: dict, node_status: dict) -> DetailSection:
+def _build_general_section(
+    node: Node, info: NodeInfo | None, node_status: NodeStatus | None
+) -> DetailSection:
     """Build the general info section for the node detail panel.
 
     Args:
-        data: Full node data dictionary.
-        info: Node info dictionary.
-        node_status: Node status dictionary.
+        node: Node model instance.
+        info: NodeInfo model instance, or None.
+        node_status: NodeStatus model instance, or None.
 
     Returns:
         DetailSection with general node information.
     """
-    status_name = _get_node_status_name(node_status)
+    status_name = _get_node_status_name(node_status) if node_status else "unknown"
     general_fields: dict[str, str] = {
-        "URL": str(data.get("node_url", "N/A")),
+        "URL": str(node.node_url),
         "Status": format_status_colored(status_name),
     }
-    for key, label in (
-        ("node_id", "Node ID"),
-        ("module_name", "Module"),
-        ("module_version", "Version"),
-        ("node_type", "Type"),
-    ):
-        if info.get(key):
-            general_fields[label] = str(info[key])
+    if info is not None:
+        for attr, label in (
+            ("node_id", "Node ID"),
+            ("module_name", "Module"),
+            ("module_version", "Version"),
+            ("node_type", "Type"),
+        ):
+            value = getattr(info, attr, None)
+            if value is not None:
+                general_fields[label] = str(value)
     return DetailSection("General", general_fields)
 
 
-def _build_status_flags_section(node_status: dict) -> DetailSection:
+def _build_status_flags_section(node_status: NodeStatus) -> DetailSection:
     """Build the status flags section for the node detail panel.
 
     Args:
-        node_status: Node status dictionary.
+        node_status: NodeStatus model instance.
 
     Returns:
         DetailSection with all status flag indicators.
     """
     status_fields: dict[str, str] = {}
-    description = node_status.get("description", "")
+    description = node_status.description
     if description:
         status_fields["Description"] = str(description)
-    ready = node_status.get("ready", not node_status.get("errored", False))
+    ready = node_status.ready
     # Ready is inverted: True = good (green), False = bad (red)
     status_fields["Ready"] = "[green]Yes[/green]" if ready else "[red]No[/red]"
     for flag_name in (
@@ -110,7 +121,7 @@ def _build_status_flags_section(node_status: dict) -> DetailSection:
         "disconnected",
         "initializing",
     ):
-        value = node_status.get(flag_name, False)
+        value = getattr(node_status, flag_name, False)
         status_fields[flag_name.capitalize()] = _format_bool_indicator(value)
     return DetailSection("Status Flags", status_fields)
 
@@ -134,29 +145,73 @@ def _extract_param_names(args: Any) -> list[str]:
     return []
 
 
-def _build_actions_section(actions: dict) -> DetailSection:
+def _build_errors_section(node_status: NodeStatus) -> DetailSection | None:
+    """Build the errors section for the node detail panel.
+
+    Args:
+        node_status: NodeStatus model instance.
+
+    Returns:
+        DetailSection with error information, or None if no errors.
+    """
+    if not node_status.errors:
+        return None
+    error_fields: dict[str, str] = {}
+    for i, error in enumerate(node_status.errors[:5]):
+        err_msg = error.message or str(error)
+        error_fields[f"Error {i + 1}"] = f"[red]{err_msg[:80]}[/red]"
+    return DetailSection("Errors", error_fields)
+
+
+def _build_config_section(info: NodeInfo) -> DetailSection | None:
+    """Build the configuration section for the node detail panel.
+
+    Args:
+        info: NodeInfo model instance.
+
+    Returns:
+        DetailSection with config information, or None if no config.
+    """
+    config = info.config
+    if config is None or not isinstance(config, dict):
+        return None
+    config_fields = {str(k): str(v)[:100] for k, v in list(config.items())[:20]}
+    return DetailSection("Configuration", config_fields)
+
+
+def _build_actions_section(
+    actions: dict[str, ActionDefinition | Any],
+) -> DetailSection:
     """Build the actions section with parameter details.
 
     Args:
-        actions: Dict mapping action names to action definitions.
+        actions: Dict mapping action names to ActionDefinition models or dicts.
 
     Returns:
         DetailSection with action descriptions and parameter info.
     """
     action_fields: dict[str, str] = {}
     for action_name, action_def in actions.items():
-        if not isinstance(action_def, dict):
+        if isinstance(action_def, ActionDefinition):
+            parts: list[str] = []
+            if action_def.description:
+                parts.append(action_def.description)
+            param_names = _extract_param_names(action_def.args)
+            if param_names:
+                parts.append(f"[dim]params: {', '.join(param_names)}[/dim]")
+            action_fields[action_name] = " | ".join(parts) if parts else "-"
+        elif isinstance(action_def, dict):
+            desc = action_def.get("description", "")
+            args = action_def.get("args", {})
+            parts = []
+            if desc:
+                parts.append(desc)
+            param_names = _extract_param_names(args)
+            if param_names:
+                parts.append(f"[dim]params: {', '.join(param_names)}[/dim]")
+            action_fields[action_name] = " | ".join(parts) if parts else "-"
+        else:
             action_fields[action_name] = "-"
-            continue
-        desc = action_def.get("description", "")
-        args = action_def.get("args", {})
-        parts: list[str] = []
-        if desc:
-            parts.append(desc)
-        param_names = _extract_param_names(args)
-        if param_names:
-            parts.append(f"[dim]params: {', '.join(param_names)}[/dim]")
-        action_fields[action_name] = " | ".join(parts) if parts else "-"
     return DetailSection("Actions", action_fields)
 
 
@@ -168,16 +223,28 @@ class NodeDetailScreen(Screen):
         ("escape", "go_back", "Back"),
     ]
 
-    def __init__(self, node_name: str, node_data: dict, **kwargs: Any) -> None:
+    def __init__(self, node_name: str, node_data: Node, **kwargs: Any) -> None:
         """Initialize the detail screen.
 
         Args:
             node_name: Name of the node.
-            node_data: Node data dictionary.
+            node_data: Node model instance.
         """
         super().__init__(**kwargs)
         self.node_name = node_name
         self.node_data = node_data
+        self._workcell_client: WorkcellClient | None = None
+
+    def _get_workcell_client(self) -> WorkcellClient:
+        """Get or create the WorkcellClient instance."""
+        if self._workcell_client is None:
+            workcell_url = self.app.service_urls.get(
+                "workcell_manager", "http://localhost:8005/"
+            )
+            self._workcell_client = WorkcellClient(
+                workcell_server_url=workcell_url,
+            )
+        return self._workcell_client
 
     def compose(self) -> ComposeResult:
         """Compose the detail screen layout."""
@@ -198,79 +265,74 @@ class NodeDetailScreen(Screen):
     def _render_details(self) -> None:
         """Render the node detail content using DetailPanel."""
         panel = self.query_one("#node-detail-panel", DetailPanel)
-        data = self.node_data
-        node_status = data.get("status") or {}
-        info = data.get("info") or {}
+        node = self.node_data
+        node_status = node.status
+        info = node.info
 
         sections: list[DetailSection] = [
-            _build_general_section(data, info, node_status),
-            _build_status_flags_section(node_status),
+            _build_general_section(node, info, node_status),
         ]
+        if node_status is not None:
+            sections.append(_build_status_flags_section(node_status))
+            self._append_running_actions(sections, node_status)
 
-        # Running actions
-        running_actions = node_status.get("running_actions", [])
-        if running_actions:
-            running_fields = {
-                f"Action {i + 1}": str(aid)
-                for i, aid in enumerate(list(running_actions)[:10])
-            }
-            sections.append(DetailSection("Running Actions", running_fields))
+        self._append_info_sections(sections, info)
 
-        # Action definitions with parameter details
-        actions = info.get("actions", {})
-        if actions:
-            sections.append(_build_actions_section(actions))
-
-        # Admin commands
-        capabilities = info.get("capabilities") or {}
-        admin_commands = capabilities.get("admin_commands", [])
-        if admin_commands:
-            cmd_str = ", ".join(str(c) for c in admin_commands)
-            sections.append(DetailSection("Admin Commands", {"Supported": cmd_str}))
-
-        # Configuration
-        config = info.get("config")
-        if config and isinstance(config, dict):
-            config_fields = {str(k): str(v)[:100] for k, v in list(config.items())[:20]}
-            sections.append(DetailSection("Configuration", config_fields))
-
-        # Errors
-        errors = node_status.get("errors", [])
-        if errors:
-            error_fields = {}
-            for i, error in enumerate(errors[:5]):
-                err_msg = (
-                    error.get("message", str(error))
-                    if isinstance(error, dict)
-                    else str(error)
-                )
-                error_fields[f"Error {i + 1}"] = f"[red]{err_msg[:80]}[/red]"
-            sections.append(DetailSection("Errors", error_fields))
+        if node_status is not None:
+            errors_section = _build_errors_section(node_status)
+            if errors_section is not None:
+                sections.append(errors_section)
 
         # State
-        state = data.get("state")
-        if state and isinstance(state, dict):
+        if node.state and isinstance(node.state, dict):
             sections.append(
-                DetailSection("State", {k: str(v) for k, v in state.items()})
+                DetailSection("State", {k: str(v) for k, v in node.state.items()})
             )
 
         panel.update_content(title=self.node_name, sections=sections)
 
+    @staticmethod
+    def _append_running_actions(
+        sections: list[DetailSection], node_status: NodeStatus
+    ) -> None:
+        """Append running actions section if any exist."""
+        if node_status.running_actions:
+            running_fields = {
+                f"Action {i + 1}": str(aid)
+                for i, aid in enumerate(list(node_status.running_actions)[:10])
+            }
+            sections.append(DetailSection("Running Actions", running_fields))
+
+    @staticmethod
+    def _append_info_sections(
+        sections: list[DetailSection], info: NodeInfo | None
+    ) -> None:
+        """Append action definitions, admin commands, and config sections."""
+        if info is None:
+            return
+
+        if info.actions:
+            sections.append(_build_actions_section(info.actions))
+
+        if info.capabilities is not None and info.capabilities.admin_commands:
+            cmd_str = ", ".join(
+                str(c) for c in sorted(info.capabilities.admin_commands)
+            )
+            sections.append(DetailSection("Admin Commands", {"Supported": cmd_str}))
+
+        config_section = _build_config_section(info)
+        if config_section is not None:
+            sections.append(config_section)
+
     async def action_refresh(self) -> None:
         """Refresh node data by re-fetching from workcell manager."""
         try:
-            workcell_url = self.app.service_urls.get(
-                "workcell_manager", "http://localhost:8005/"
-            )
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
-                if response.status_code == 200:
-                    nodes = response.json()
-                    if isinstance(nodes, dict) and self.node_name in nodes:
-                        self.node_data = nodes[self.node_name]
-                        self._render_details()
-                        self.notify("Node refreshed", timeout=2)
-                        return
+            client = self._get_workcell_client()
+            node = await client.async_get_node(self.node_name)
+            self.node_data = node
+            self._render_details()
+            self.notify("Node refreshed", timeout=2)
+            return
         except Exception:  # noqa: S110
             pass
         self.notify("Could not refresh node data", timeout=2)
@@ -297,7 +359,17 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.nodes_data: dict[str, dict] = {}
+        self.nodes_data: dict[str, Node] = {}
+        self._workcell_client: WorkcellClient | None = None
+
+    def _get_workcell_client(self) -> WorkcellClient:
+        """Get or create the WorkcellClient instance."""
+        if self._workcell_client is None:
+            url = self.get_service_url("workcell_manager")
+            self._workcell_client = WorkcellClient(
+                workcell_server_url=url,
+            )
+        return self._workcell_client
 
     def compose(self) -> ComposeResult:
         """Compose the nodes screen layout."""
@@ -350,18 +422,14 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
         table = self.query_one("#nodes-table", DataTable)
 
         try:
-            workcell_url = self.get_service_url("workcell_manager")
-            client = self.get_async_client(workcell_url)
-            response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
-            if response.status_code == 200:
-                nodes = response.json()
-                if isinstance(nodes, dict):
-                    self.nodes_data = nodes
-                    with preserve_cursor(table):
-                        table.clear()
-                        for name, node_data in nodes.items():
-                            self._add_node_row(table, name, node_data)
-                return
+            client = self._get_workcell_client()
+            nodes = await client.async_get_nodes()
+            self.nodes_data = nodes
+            with preserve_cursor(table):
+                table.clear()
+                for name, node in nodes.items():
+                    self._add_node_row(table, name, node)
+            return
         except Exception:
             self.notify("Failed to reach Workcell Manager", timeout=3)
 
@@ -377,32 +445,32 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
                     "[dim]unknown[/dim]",
                 )
 
-    def _add_node_row(self, table: DataTable, name: str, node_data: dict) -> None:
+    def _add_node_row(self, table: DataTable, name: str, node: Node) -> None:
         """Add a node row to the table.
 
         Args:
             table: The DataTable to add to.
             name: Node name.
-            node_data: Node data dictionary.
+            node: Node model instance.
         """
-        node_status = node_data.get("status", {})
+        node_status = node.status or NodeStatus()
         status_name = _get_node_status_name(node_status)
 
         icon = format_status_icon(status_name)
         state = format_status_colored(status_name)
 
-        node_url = str(node_data.get("node_url", "N/A"))
-        info = node_data.get("info") or {}
-        actions = info.get("actions", {})
+        node_url = str(node.node_url)
+        info = node.info
+        actions = info.actions if info is not None else {}
         action_count = str(len(actions)) if actions else "0"
 
         table.add_row(icon, name, node_url, action_count, state)
 
-    def _get_selected_node(self) -> tuple[str, dict] | None:
+    def _get_selected_node(self) -> tuple[str, Node] | None:
         """Get the currently selected node name and data.
 
         Returns:
-            Tuple of (node_name, node_data) or None if no valid selection.
+            Tuple of (node_name, Node) or None if no valid selection.
         """
         table = self.query_one("#nodes-table", DataTable)
         try:
@@ -449,27 +517,20 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             self.notify("No node selected", timeout=2)
             return
 
-        node_name, node_data = selected
-        node_url = str(node_data.get("node_url", ""))
+        node_name, node = selected
+        node_url = str(node.node_url)
         if not node_url:
             self.notify(f"No URL for node {node_name}", timeout=2)
             return
 
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(f"{node_url.rstrip('/')}/admin/{command}")
-                if response.status_code == 200:
-                    self.notify(
-                        f"Admin command '{command}' sent to {node_name}",
-                        timeout=2,
-                    )
-                    await self.refresh_data()
-                else:
-                    self.notify(
-                        f"Failed to send '{command}' to {node_name}: "
-                        f"HTTP {response.status_code}",
-                        timeout=3,
-                    )
+            node_client = RestNodeClient(url=AnyUrl(node_url))
+            await node_client.async_send_admin_command(AdminCommands(command))
+            self.notify(
+                f"Admin command '{command}' sent to {node_name}",
+                timeout=2,
+            )
+            await self.refresh_data()
         except Exception as e:
             self.notify(f"Error sending '{command}' to {node_name}: {e}", timeout=3)
 
@@ -492,9 +553,9 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             self.notify("No node selected", timeout=2)
             return
 
-        _node_name, node_data = selected
-        node_status = node_data.get("status") or {}
-        is_locked = node_status.get("locked", False)
+        _node_name, node = selected
+        node_status = node.status or NodeStatus()
+        is_locked = node_status.locked
         command = "unlock" if is_locked else "lock"
         await self._send_admin_command(command)
 
@@ -505,14 +566,14 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             self.notify("No node selected", timeout=2)
             return
 
-        node_name, node_data = selected
-        node_url = str(node_data.get("node_url", ""))
+        node_name, node = selected
+        node_url = str(node.node_url)
         if not node_url:
             self.notify(f"No URL for node {node_name}", timeout=2)
             return
 
-        info = node_data.get("info") or {}
-        actions = info.get("actions", {})
+        info = node.info
+        actions = info.actions if info is not None else {}
         if not actions:
             self.notify(f"Node {node_name} has no actions", timeout=2)
             return
