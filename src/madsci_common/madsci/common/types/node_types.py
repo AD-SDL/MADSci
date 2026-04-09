@@ -370,9 +370,9 @@ class NodeInfo(NodeDefinition):
         description="JSON Schema for the configuration of the node.",
         default_factory=NodeConfig.model_json_schema,
     )
-    location_templates: list["NodeLocationTemplateDefinition"] = Field(
-        title="Location Templates",
-        description="Location template definitions that this node registers.",
+    intrinsic_locations: list["NodeIntrinsicLocationDefinition"] = Field(
+        title="Intrinsic Locations",
+        description="Locations intrinsic to this node's hardware, auto-created on startup.",
         default_factory=list,
     )
     location_representation_templates: list["NodeRepresentationTemplateDefinition"] = (
@@ -690,21 +690,36 @@ class NodeRepresentationTemplateDefinition(MadsciBaseModel):
     )
 
 
-class NodeLocationTemplateDefinition(MadsciBaseModel):
-    """Declarative location template definition for node startup registration."""
+class NodeIntrinsicLocationDefinition(MadsciBaseModel):
+    """A location intrinsic to this node's hardware, auto-created on startup.
 
-    template_name: str = Field(
-        title="Template Name",
-        description="Unique name for the location template.",
+    The location_name is automatically prefixed with '{node_name}.' to ensure
+    uniqueness across node instances. For example, location_name="deck_1" on a
+    node named "liquidhandler_1" becomes "liquidhandler_1.deck_1".
+    """
+
+    location_name: str = Field(
+        title="Location Name",
+        description="Suffix for the location name (auto-prefixed with '{node_name}.'). "
+        "For example, 'deck_1' becomes 'liquidhandler_1.deck_1'.",
     )
-    representation_templates: Optional[dict[str, str]] = Field(
-        title="Representation Templates",
-        description="Mapping of abstract role names to representation template names.",
+    description: Optional[str] = Field(
+        title="Description",
+        description="Human-readable description of this location.",
         default=None,
+    )
+    representation_template_name: str = Field(
+        title="Representation Template Name",
+        description="Name of the representation template this node uses for this location.",
+    )
+    representation_overrides: dict[str, Any] = Field(
+        title="Representation Overrides",
+        description="Per-location overrides merged with representation template defaults.",
+        default_factory=dict,
     )
     resource_template_name: Optional[str] = Field(
         title="Resource Template Name",
-        description="Name of the ResourceTemplate to use for creating a resource on instantiation.",
+        description="Optional resource template for creating a resource at this location.",
         default=None,
     )
     resource_template_overrides: Optional[dict[str, Any]] = Field(
@@ -712,23 +727,13 @@ class NodeLocationTemplateDefinition(MadsciBaseModel):
         description="Default overrides to apply when creating a resource from the template.",
         default=None,
     )
-    default_allow_transfers: bool = Field(
-        title="Default Allow Transfers",
-        description="Default value for allow_transfers when creating locations from this template.",
+    allow_transfers: bool = Field(
+        title="Allow Transfers",
+        description="Whether this location participates in transfer planning.",
         default=True,
     )
     tags: Optional[list[str]] = Field(
         title="Tags",
         description="Tags for categorization.",
-        default=None,
-    )
-    version: str = Field(
-        title="Version",
-        description="Semantic version of this template.",
-        default="1.0.0",
-    )
-    description: Optional[str] = Field(
-        title="Description",
-        description="Human-readable description of this location template.",
         default=None,
     )

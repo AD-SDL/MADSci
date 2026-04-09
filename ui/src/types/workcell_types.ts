@@ -163,6 +163,24 @@ export interface Location {
   node_bindings?: {
     [k: string]: string;
   } | null;
+  /**
+   * Whether this location is managed by a node or by the lab configuration.
+   */
+  managed_by?: "node" | "lab";
+  /**
+   * Ownership provenance for this location.
+   */
+  owner?: {
+    user_id?: string | null;
+    experiment_id?: string | null;
+    campaign_id?: string | null;
+    project_id?: string | null;
+    node_id?: string | null;
+    workcell_id?: string | null;
+    step_id?: string | null;
+    lab_id?: string | null;
+    [k: string]: unknown;
+  } | null;
 }
 /**
  * Definition for a MADSci Resource.

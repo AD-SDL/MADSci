@@ -135,16 +135,12 @@
         <v-row>
           <v-col cols="12" md="6">
             <div class="legend-item d-flex align-center mb-2">
-              <div class="legend-color occupied mr-2"></div>
-              <span>Occupied Location</span>
+              <div class="legend-color lab-managed mr-2"></div>
+              <span>Lab-Managed Location</span>
             </div>
             <div class="legend-item d-flex align-center mb-2">
-              <div class="legend-color empty mr-2"></div>
-              <span>Empty Location</span>
-            </div>
-            <div class="legend-item d-flex align-center mb-2">
-              <div class="legend-color unknown mr-2"></div>
-              <span>Unknown Status</span>
+              <div class="legend-color node-managed mr-2"></div>
+              <span>Node-Managed Location</span>
             </div>
           </v-col>
           <v-col cols="12" md="6">
@@ -168,6 +164,7 @@
 
         <!-- Location-specific information -->
         <div v-if="selectedNode.type === 'location'">
+          <p><strong>Managed By:</strong> {{ (selectedNode.managedBy || 'lab').toUpperCase() }}</p>
           <p><strong>Status:</strong> {{ selectedNode.occupied || 'Unknown' }}</p>
           <p><strong>Resource:</strong> {{ selectedNode.hasResource ? 'Present' : 'None' }}</p>
         </div>
@@ -260,6 +257,7 @@ const nodes = computed(() => {
       type: 'location',
       hasResource,
       occupied,
+      managedBy: location.managed_by || 'lab',
       originalLocation: location
     });
   });
@@ -319,15 +317,11 @@ function getNodeColor(node: any): string {
     return '#2196F3'; // Blue for MADSci nodes
   }
 
-  // Location nodes
-  switch (node.occupied) {
-    case 'Occupied':
-      return '#4CAF50'; // Green
-    case 'Empty':
-      return '#FFC107'; // Amber
-    default:
-      return '#9E9E9E'; // Grey
+  // Location nodes: color by managed_by
+  if (node.managedBy === 'node') {
+    return '#2196F3'; // Info/Blue for node-managed
   }
+  return '#4CAF50'; // Success/Green for lab-managed
 }
 
 
@@ -546,16 +540,12 @@ onMounted(() => {
   border: 2px solid #333;
 }
 
-.legend-color.occupied {
+.legend-color.lab-managed {
   background-color: #4CAF50;
 }
 
-.legend-color.empty {
-  background-color: #FFC107;
-}
-
-.legend-color.unknown {
-  background-color: #9E9E9E;
+.legend-color.node-managed {
+  background-color: #2196F3;
 }
 
 .legend-color.madsci-node {

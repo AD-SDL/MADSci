@@ -15,7 +15,7 @@ Node modules are the instrument integration layer of MADSci. Each node wraps a l
 | `src/madsci_node_module/madsci/node_module/rest_node_module.py` | FastAPI server, file upload/download, rate limiting |
 | `src/madsci_node_module/madsci/node_module/helpers.py` | `@action` decorator |
 | `src/madsci_node_module/madsci/node_module/type_analyzer.py` | Recursive type hint analysis (`TypeInfo`) |
-| `src/madsci_common/madsci/common/types/node_types.py` | NodeConfig, RestNodeConfig, NodeStatus, NodeInfo, NodeCapabilities |
+| `src/madsci_common/madsci/common/types/node_types.py` | NodeConfig, RestNodeConfig, NodeStatus, NodeInfo, NodeCapabilities, NodeIntrinsicLocationDefinition |
 | `src/madsci_client/madsci/client/node/rest_node_client.py` | HTTP client for node communication |
 | `src/madsci_common/madsci/common/bundled_templates/node/basic/` | `madsci new node` template |
 
@@ -268,10 +268,26 @@ class MyNode(RestNode):
             version="1.0",
         ),
     ]
-    location_templates: ClassVar[list[NodeLocationTemplateDefinition]] = [
-        NodeLocationTemplateDefinition(
-            template_name="plate_slot",
-            description="Instrument plate slot",
+
+    # Representation templates define how this node "sees" a location
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="mynode_slot_repr",
+            default_values={"slot_index": 0},
+            required_overrides=["slot_index"],
+            version="1.0.0",
+        ),
+    ]
+
+    # Intrinsic locations are auto-created on startup with '{node_name}.' prefix
+    intrinsic_locations: ClassVar[list[NodeIntrinsicLocationDefinition]] = [
+        NodeIntrinsicLocationDefinition(
+            location_name="slot_1",  # becomes "{node_name}.slot_1"
+            representation_template_name="mynode_slot_repr",
+            representation_overrides={"slot_index": 1},
+            resource_template_name="sample_plate",
         ),
     ]
 

@@ -76,3 +76,55 @@ async def test_resources_screen_composes(mock_app_class) -> None:
     async with app.run_test() as pilot:
         await pilot.app.push_screen(ResourcesScreen())
         assert pilot.app.screen is not None
+
+
+@pytest.mark.asyncio
+async def test_locations_screen_has_managed_by_column(mock_app_class) -> None:
+    """LocationsScreen table should include a 'Managed By' column."""
+    from madsci.client.cli.tui.screens.locations import LocationsScreen
+
+    app = mock_app_class()
+    async with app.run_test() as pilot:
+        screen = LocationsScreen()
+        await pilot.app.push_screen(screen)
+        from textual.widgets import DataTable
+
+        table = screen.query_one("#locations-table", DataTable)
+        column_labels = [col.label.plain for col in table.columns.values()]
+        assert "Managed By" in column_labels
+
+
+@pytest.mark.asyncio
+async def test_locations_detail_panel_shows_managed_by() -> None:
+    """LocationsScreen detail panel should display Managed By field."""
+    from madsci.client.cli.tui.screens.locations import (
+        _build_general_section,
+    )
+
+    section = _build_general_section(
+        "test_id",
+        {"location_name": "test", "managed_by": "node"},
+    )
+    # Check that the section has a 'Managed By' field
+    assert "Managed By" in section.fields
+    assert section.fields["Managed By"] == "NODE"
+
+
+@pytest.mark.asyncio
+async def test_locations_detail_panel_shows_owner() -> None:
+    """LocationsScreen detail panel should display Owner field."""
+    from madsci.client.cli.tui.screens.locations import (
+        _build_general_section,
+    )
+
+    node_id = "01JTEST12345678901234"
+    section = _build_general_section(
+        "test_id",
+        {
+            "location_name": "test",
+            "managed_by": "node",
+            "owner": {"node_id": node_id},
+        },
+    )
+    assert "Owner" in section.fields
+    assert node_id in section.fields["Owner"]

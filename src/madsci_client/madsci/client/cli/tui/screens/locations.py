@@ -58,9 +58,21 @@ def _build_general_section(loc_id: str, data: dict) -> DetailSection:
     Returns:
         DetailSection with general fields.
     """
+    managed_by_raw = data.get("managed_by", "lab")
+    managed_by_str = str(managed_by_raw).upper() if managed_by_raw else "LAB"
+
+    owner = data.get("owner")
+    if owner and isinstance(owner, dict):
+        node_id = owner.get("node_id")
+        owner_str = str(node_id) if node_id else "N/A"
+    else:
+        owner_str = "N/A"
+
     fields: dict[str, str] = {
         "Name": data.get("location_name", "Unknown"),
         "ID": loc_id,
+        "Managed By": managed_by_str,
+        "Owner": owner_str,
         "Allow Transfers": str(data.get("allow_transfers", True)),
     }
     template_name = data.get("location_template_name")
@@ -207,7 +219,13 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         """Handle screen mount - set up table and load data."""
         table = self.query_one("#locations-table", DataTable)
         table.add_columns(
-            "Name", "ID", "Template", "Resource", "Transfers", "Reservation"
+            "Name",
+            "Managed By",
+            "ID",
+            "Template",
+            "Resource",
+            "Transfers",
+            "Reservation",
         )
         table.cursor_type = "row"
         await self.refresh_data()
@@ -256,6 +274,10 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             for loc_id in filtered:
                 loc = self.locations_data[loc_id]
                 name = loc.get("location_name", "Unknown")
+                managed_by_raw = loc.get("managed_by", "lab")
+                managed_by_str = (
+                    str(managed_by_raw).upper() if managed_by_raw else "LAB"
+                )
                 loc_id_str = loc_id or "-"
                 template = loc.get("location_template_name", "-") or "-"
                 resource = loc.get("resource_id", "")
@@ -263,11 +285,25 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
                 transfers = "Yes" if loc.get("allow_transfers", True) else "No"
                 reservation = "Reserved" if loc.get("reservation") else "-"
                 table.add_row(
-                    name, loc_id_str, template, resource_display, transfers, reservation
+                    name,
+                    managed_by_str,
+                    loc_id_str,
+                    template,
+                    resource_display,
+                    transfers,
+                    reservation,
                 )
 
             if not filtered:
-                table.add_row("[dim]No locations found[/dim]", "-", "-", "-", "-", "-")
+                table.add_row(
+                    "[dim]No locations found[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
         """Handle filter changes from the FilterBar.
@@ -290,7 +326,7 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             return
 
         row = table.get_row(row_key)
-        row_id = str(row[1])
+        row_id = str(row[2])
 
         # Find location by matching full ID
         for loc_id, loc_data in self.locations_data.items():

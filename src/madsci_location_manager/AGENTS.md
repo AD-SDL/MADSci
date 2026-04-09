@@ -10,7 +10,7 @@ The Location Manager (Port 8006) handles laboratory location management, resourc
 - REST API for location CRUD operations, resource attachments, transfer planning, and bulk import/export
 - Dual-handler architecture: document database (FerretDB) for persistent location storage, cache (Valkey) for transient state (locks, change counters)
 - Document database schema versioning via `schema.json` and `DocumentDBVersionChecker`
-- One-time seed file loading from `seed_locations_file` on empty database startup
+- Location ownership model with `managed_by` (lab vs node) and `owner` fields
 
 ### State Management
 - **location_state_handler.py**: Dual-handler state storage
@@ -85,7 +85,6 @@ Environment variables with `LOCATION_` prefix:
 - `LOCATION_SERVER_PORT` - Server port (default: 8006)
 - `LOCATION_DOCUMENT_DB_URL` - MongoDB/FerretDB URL for persistent storage (default: mongodb://localhost:27017/)
 - `LOCATION_DATABASE_NAME` - Database name (default: madsci_locations)
-- `LOCATION_SEED_LOCATIONS_FILE` - Path to seed file for one-time bootstrap (default: locations.yaml)
 - `LOCATION_CACHE_HOST` - Cache host for transient state (locks, counters)
 - `LOCATION_CACHE_PORT` - Cache port
 - `LOCATION_CACHE_PASSWORD` - Cache password (optional)
@@ -125,4 +124,4 @@ Optional feature that adjusts transfer costs based on target resource utilizatio
 - Transfer planning automatically rebuilds graphs when locations or representations change
 - Non-transfer locations (`allow_transfers: false`) are excluded from transfer graph
 - A document database (FerretDB) is required for persistent location storage; a cache (Valkey) for transient state (locks, counters)
-- The `seed_locations_file` is loaded **once** to bootstrap an empty database; it is not re-read on subsequent startups
+- Locations have a `managed_by` field (`"lab"` or `"node"`) and optional `owner` (OwnershipInfo) for layered ownership tracking

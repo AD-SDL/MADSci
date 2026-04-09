@@ -31,12 +31,46 @@
 
        <v-window-item value="table">
          <v-card-text>
+           <div class="d-flex ga-2 mb-3">
+             <v-chip
+               :color="managedByFilter === 'all' ? 'primary' : undefined"
+               :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
+               @click="managedByFilter = 'all'"
+             >
+               All
+             </v-chip>
+             <v-chip
+               :color="managedByFilter === 'node' ? 'info' : undefined"
+               :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
+               @click="managedByFilter = 'node'"
+               prepend-icon="mdi-robot-industrial"
+             >
+               Node-Managed
+             </v-chip>
+             <v-chip
+               :color="managedByFilter === 'lab' ? 'success' : undefined"
+               :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
+               @click="managedByFilter = 'lab'"
+               prepend-icon="mdi-flask"
+             >
+               Lab-Managed
+             </v-chip>
+           </div>
            <v-data-table :headers="location_headers" hover
            :items="location_items(locations, resources)"
            no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
            <template v-slot:item="{ item }: { item: any }">
              <tr @click="set_modal(item.name || item.location_name, item)">
                <td>{{ item.name || item.location_name }}</td>
+               <td>
+                 <v-chip
+                   :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                   size="small"
+                   :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+                 >
+                   {{ (item.managed_by || 'lab').toUpperCase() }}
+                 </v-chip>
+               </td>
                <td>{{ get_resource(resources, item) }}</td>
                <td>{{ item.location_id }}</td>
                <td>{{ Object.keys(item.representations || {}) }}</td>
@@ -65,12 +99,46 @@
    <!-- Locations Table Section -->
    <v-card class="pa-1 ma-1" title="Locations">
       <v-card-text>
+        <div class="d-flex ga-2 mb-3">
+          <v-chip
+            :color="managedByFilter === 'all' ? 'primary' : undefined"
+            :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
+            @click="managedByFilter = 'all'"
+          >
+            All
+          </v-chip>
+          <v-chip
+            :color="managedByFilter === 'node' ? 'info' : undefined"
+            :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
+            @click="managedByFilter = 'node'"
+            prepend-icon="mdi-robot-industrial"
+          >
+            Node-Managed
+          </v-chip>
+          <v-chip
+            :color="managedByFilter === 'lab' ? 'success' : undefined"
+            :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
+            @click="managedByFilter = 'lab'"
+            prepend-icon="mdi-flask"
+          >
+            Lab-Managed
+          </v-chip>
+        </div>
         <v-data-table :headers="location_headers" hover
         :items="location_items(locations, resources)"
         no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
         <template v-slot:item="{ item }: { item: any }">
           <tr @click="set_modal(item.name || item.location_name, item)">
             <td>{{ item.name || item.location_name }}</td>
+            <td>
+              <v-chip
+                :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                size="small"
+                :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+              >
+                {{ (item.managed_by || 'lab').toUpperCase() }}
+              </v-chip>
+            </td>
             <td>{{ get_resource(resources, item) }}</td>
             <td>{{ item.location_id }}</td>
             <td>{{ Object.keys(item.representations || {}) }}</td>
@@ -97,12 +165,46 @@
    <v-col cols="12" lg="6" xl="6">
      <v-card class="pa-1 ma-1" title="Locations">
         <v-card-text>
+          <div class="d-flex ga-2 mb-3">
+            <v-chip
+              :color="managedByFilter === 'all' ? 'primary' : undefined"
+              :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
+              @click="managedByFilter = 'all'"
+            >
+              All
+            </v-chip>
+            <v-chip
+              :color="managedByFilter === 'node' ? 'info' : undefined"
+              :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
+              @click="managedByFilter = 'node'"
+              prepend-icon="mdi-robot-industrial"
+            >
+              Node-Managed
+            </v-chip>
+            <v-chip
+              :color="managedByFilter === 'lab' ? 'success' : undefined"
+              :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
+              @click="managedByFilter = 'lab'"
+              prepend-icon="mdi-flask"
+            >
+              Lab-Managed
+            </v-chip>
+          </div>
           <v-data-table :headers="location_headers" hover
           :items="location_items(locations, resources)"
           no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
           <template v-slot:item="{ item }: { item: any }">
             <tr @click="set_modal(item.name || item.location_name, item)">
               <td>{{ item.name || item.location_name }}</td>
+              <td>
+                <v-chip
+                  :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                  size="small"
+                  :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+                >
+                  {{ (item.managed_by || 'lab').toUpperCase() }}
+                </v-chip>
+              </td>
               <td>{{ get_resource(resources, item) }}</td>
               <td>{{ item.location_id }}</td>
               <td>{{ Object.keys(item.representations || {}) }}</td>
@@ -148,6 +250,9 @@ const modal_title = ref()
 const modal_location_id = ref<string | null>(null)
 const modal = ref(false)
 
+// Managed-by filter state
+const managedByFilter = ref<'all' | 'node' | 'lab'>('all')
+
 // Derive the modal location from the store so it stays in sync after refreshes
 const modal_text = computed(() => {
   if (!modal_location_id.value) return null
@@ -165,6 +270,7 @@ const activeTab = ref('graph') // Default to showing the graph tab
 const sortBy: VDataTable['sortBy'] = [{ key: 'occupied', order: 'desc' }];
 const location_headers = [
   { title: 'Name', key: 'name' },
+  { title: 'Managed By', key: 'managed_by' },
   { title: 'Occupied', key: 'occupied', sort: (a: string, b: string) => occupied_compare(a, b) },
   { title: 'ID', key: 'location_id' },
   { title: 'Nodes', key: 'nodes' },
@@ -218,6 +324,10 @@ function location_items(locations: any, resources: any) {
     location["name"] = location.name || location.location_name; // Ensure backwards compatibility
     new_locations.push(location);
   })
+  // Apply managed_by filter
+  if (managedByFilter.value !== 'all') {
+    return new_locations.filter((loc: any) => (loc.managed_by || 'lab') === managedByFilter.value)
+  }
   return new_locations
 
 }

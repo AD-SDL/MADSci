@@ -66,9 +66,12 @@ def _location_to_row(loc: Any) -> dict:
     resource_id = getattr(loc, "resource_id", None) or "-"
     transfers = getattr(loc, "allow_transfers", True)
     reservation = getattr(loc, "reservation", None)
+    managed_by = getattr(loc, "managed_by", None)
+    managed_by_str = managed_by.value.upper() if managed_by else "LAB"
 
     return {
         "name": truncate(str(name), 30),
+        "managed_by": managed_by_str,
         "id": str(lid),
         "template": truncate(str(template), 20),
         "resource": str(resource_id) if resource_id != "-" else "-",
@@ -86,6 +89,7 @@ def _location_to_dict(loc: Any) -> dict:
 
 _LIST_COLUMNS = [
     ColumnDef("Name", "name", style="cyan"),
+    ColumnDef("Managed By", "managed_by"),
     ColumnDef("ID", "id", style="dim"),
     ColumnDef("Template", "template"),
     ColumnDef("Resource", "resource", style="dim"),
@@ -106,6 +110,7 @@ def location() -> None:
     \b
     Examples:
         madsci location list                         List locations
+        madsci location list -m node                 List node-managed locations
         madsci location get <name>                   Show location details
         madsci location create --name <name>         Create a location
         madsci location create-from-template <t>     Create from template
@@ -113,6 +118,7 @@ def location() -> None:
         madsci location resources <name>             Show attached resources
         madsci location attach <name> <resource_id>  Attach resource
         madsci location detach <name>                Detach resource
+        madsci location train <loc> <node>           Train location for a node
         madsci location set-repr <loc> <node>        Set representation
         madsci location remove-repr <loc> <node>     Remove representation
         madsci location transfer-graph               Show transfer graph
@@ -130,12 +136,21 @@ def location() -> None:
 
 
 @location.command("list")
+@click.option(
+    "--managed-by",
+    "-m",
+    "managed_by",
+    default=None,
+    type=click.Choice(["node", "lab"], case_sensitive=False),
+    help="Filter by management type (node or lab).",
+)
 @_LOCATION_URL_OPTION
 @timeout_option(default=10.0)
 @click.pass_context
 @with_service_error_handling
 def list_locations(
     ctx: click.Context,
+    managed_by: str | None,
     location_url: str | None,
     timeout: float,
 ) -> None:
@@ -144,6 +159,8 @@ def list_locations(
     \b
     Examples:
         madsci location list
+        madsci location list --managed-by node
+        madsci location list -m lab
         madsci location list --json
     """
     console = get_console(ctx)
@@ -151,7 +168,7 @@ def list_locations(
     url = _get_location_url(ctx, location_url)
     client = _make_client(url, timeout)
 
-    locations = client.get_locations()
+    locations = client.get_locations(managed_by=managed_by)
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         data = [_location_to_dict(loc) for loc in locations]
@@ -220,9 +237,18 @@ def get_location(
 
     # Rich detail display
     name = getattr(loc, "location_name", "Unnamed Location")
+    managed_by = getattr(loc, "managed_by", None)
+    managed_by_str = managed_by.value.upper() if managed_by else "LAB"
+    owner = getattr(loc, "owner", None)
+    owner_str = (
+        str(owner.node_id) if owner and getattr(owner, "node_id", None) else "N/A"
+    )
+
     console.print()
     console.print(f"[bold]{name}[/bold]")
     console.print(f"  ID:          {getattr(loc, 'location_id', '-')}")
+    console.print(f"  Managed By:  {managed_by_str}")
+    console.print(f"  Owner:       {owner_str}")
     console.print(
         f"  Template:    {getattr(loc, 'location_template_name', None) or '-'}"
     )
@@ -826,6 +852,93 @@ def plan_transfer(
             console.print(f"    {i + 1}. {step_name}")
 
     console.print()
+
+
+# ---------------------------------------------------------------------------
+# location train
+# ---------------------------------------------------------------------------
+
+
+@location.command("train")
+@click.argument("location_name")
+@click.argument("node_name")
+@click.option(
+    "--template",
+    "template_name",
+    default=None,
+    help="Name of a representation template whose defaults to use.",
+)
+@click.option(
+    "--overrides",
+    "overrides_json",
+    default=None,
+    help="Representation data overrides as a JSON string.",
+)
+@_LOCATION_URL_OPTION
+@timeout_option(default=10.0)
+@click.pass_context
+@with_service_error_handling
+def train_location(
+    ctx: click.Context,
+    location_name: str,
+    node_name: str,
+    template_name: str | None,
+    overrides_json: str | None,
+    location_url: str | None,
+    timeout: float,
+) -> None:
+    """Train a location by setting a node's representation.
+
+    Adds (or updates) a node-specific representation for a location. If
+    ``--template`` is given, the template's defaults are fetched and merged
+    with any ``--overrides``. At least one of ``--template`` or
+    ``--overrides`` must be provided.
+
+    \b
+    Examples:
+        madsci location train deck_slot_1 robot_arm --overrides '{"x": 1, "y": 2}'
+        madsci location train deck_slot_1 robot_arm --template arm_template
+        madsci location train deck_slot_1 robot_arm --template arm_template \\
+            --overrides '{"gripper": "wide"}'
+    """
+    console = get_console(ctx)
+    fmt = determine_output_format(ctx)
+    url = _get_location_url(ctx, location_url)
+    client = _make_client(url, timeout)
+
+    # Parse overrides
+    overrides: dict[str, Any] | None = None
+    if overrides_json:
+        try:
+            overrides = json.loads(overrides_json)
+        except json.JSONDecodeError as exc:
+            raise click.ClickException(f"Invalid JSON in --overrides: {exc}") from exc
+
+    if not template_name and not overrides:
+        raise click.ClickException(
+            "At least one of --template or --overrides must be provided."
+        )
+
+    # Build the representation data
+    data: dict[str, Any] = {}
+    if template_name:
+        template = client.get_representation_template(template_name)
+        data = dict(getattr(template, "default_values", {}) or {})
+
+    if overrides:
+        data.update(overrides)
+
+    result = client.set_representation(location_name, node_name, data)
+
+    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+        output_result(console, _location_to_dict(result), format=fmt.value)
+    elif fmt == OutputFormat.QUIET:
+        console.print(f"{location_name} trained for {node_name}")
+    else:
+        success(
+            console,
+            f"Location '{location_name}' trained for node '{node_name}'.",
+        )
 
 
 # ---------------------------------------------------------------------------

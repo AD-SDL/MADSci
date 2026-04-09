@@ -1,6 +1,7 @@
 """Location types for MADSci."""
 
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Literal, Optional
 
 from madsci.common.types.auth_types import OwnershipInfo
@@ -20,6 +21,15 @@ from madsci.common.validators import ulid_validator, url_safe_name_validator
 from pydantic import AliasChoices, AnyUrl, Field
 from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
+
+
+class LocationManagement(str, Enum):
+    """How a location is managed — determines lifecycle and visibility."""
+
+    NODE = "node"
+    """Created/owned by a node. Lifecycle tied to node registration."""
+    LAB = "lab"
+    """Created by lab config or API. Lifecycle managed by operator/integrator."""
 
 
 class LocationRepresentationTemplate(MadsciBaseModel):
@@ -303,6 +313,17 @@ class Location(MadsciBaseModel):
         description="Mapping of abstract role names to concrete node instance names (for traceability).",
         default=None,
     )
+    managed_by: LocationManagement = Field(
+        title="Managed By",
+        description="Whether this location is managed by a node or by the lab configuration.",
+        default=LocationManagement.LAB,
+    )
+    owner: Optional[OwnershipInfo] = Field(
+        title="Owner",
+        description="Ownership provenance for this location. For node-managed locations, "
+        "includes node_id. For lab-managed locations, may include user_id.",
+        default=None,
+    )
 
     is_ulid = field_validator("location_id")(ulid_validator)
     is_url_safe_name = field_validator("location_name")(url_safe_name_validator)
@@ -469,6 +490,62 @@ class LocationTransferCapabilities(MadsciBaseModel):
     )
 
 
+class RepresentationTrainingEntry(MadsciBaseModel):
+    """Add a node's representation to an existing location ('training').
+
+    Used to teach a node (e.g., robot arm) how to access a location it doesn't own
+    (e.g., a liquid handler deck slot).
+    """
+
+    location_name: str = Field(
+        title="Location Name",
+        description="Name of the existing location to add a representation to.",
+    )
+    node_name: str = Field(
+        title="Node Name",
+        description="Name of the node providing the representation.",
+    )
+    representation_template_name: Optional[str] = Field(
+        title="Representation Template Name",
+        description="Optional representation template to use for defaults/schema.",
+        default=None,
+    )
+    overrides: dict[str, Any] = Field(
+        title="Overrides",
+        description="Representation values merged with template defaults.",
+        default_factory=dict,
+    )
+
+
+class LabLocationConfig(MadsciBaseModel):
+    """Schema for the lab-level location configuration file.
+
+    This is a reconcilable living document. The Location Manager re-reads it
+    on each reconciliation cycle and merges contents with the live database.
+    """
+
+    representation_templates: list[LocationRepresentationTemplate] = Field(
+        default_factory=list,
+        title="Representation Templates",
+        description="Lab-level representation templates.",
+    )
+    location_templates: list[LocationTemplate] = Field(
+        default_factory=list,
+        title="Location Templates",
+        description="Reusable location blueprints.",
+    )
+    training: list[RepresentationTrainingEntry] = Field(
+        default_factory=list,
+        title="Training",
+        description="Cross-node representation additions.",
+    )
+    locations: list[Location] = Field(
+        default_factory=list,
+        title="Locations",
+        description="Lab-managed locations.",
+    )
+
+
 class LocationManagerSettings(
     ManagerSettings,
     env_prefix="LOCATION_",
@@ -485,13 +562,6 @@ class LocationManagerSettings(
     )
     _accept_prefixed_keys = prefixed_model_validator("location")
 
-    # Structural config (inline in settings.yaml)
-    seed_locations_file: Optional[str] = Field(
-        default="locations.yaml",
-        title="Seed Locations File",
-        description="Path to a YAML file containing location definitions. Loaded once to seed an empty database on first startup; ignored if locations already exist.",
-        validation_alias=AliasChoices("seed_locations_file", "locations_file_path"),
-    )
     transfer_capabilities: Optional["LocationTransferCapabilities"] = Field(
         default=None,
         title="Transfer Capabilities",
@@ -507,6 +577,13 @@ class LocationManagerSettings(
         title="Reconciliation Enabled",
         description="Whether to enable background reconciliation of unresolved template references.",
         default=True,
+    )
+    lab_config_file: Optional[str] = Field(
+        default="locations.yaml",
+        title="Lab Config File",
+        description="Path to a YAML file defining lab-level locations and training. "
+        "Re-read on each reconciliation cycle with desired-state semantics. "
+        "All locations created from this file are tagged as lab-managed.",
     )
 
     server_url: AnyUrl = Field(
@@ -639,4 +716,19 @@ class LocationManagerHealth(ManagerHealth):
         title="Number of Unresolved Locations",
         description="The number of locations with unresolved template references (resource_id is null but resource_template_name is set).",
         default=0,
+    )
+    num_node_managed_locations: int = Field(
+        title="Node-Managed Locations",
+        description="Number of locations managed by nodes (managed_by='node').",
+        default=0,
+    )
+    num_lab_managed_locations: int = Field(
+        title="Lab-Managed Locations",
+        description="Number of locations managed by the lab config (managed_by='lab').",
+        default=0,
+    )
+    last_reconciliation_at: Optional[str] = Field(
+        title="Last Reconciliation",
+        description="ISO timestamp of the last reconciliation cycle.",
+        default=None,
     )

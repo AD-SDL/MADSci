@@ -481,3 +481,96 @@ def test_close_method_exists(location_client):
     """Verify close method exists and is callable."""
     assert hasattr(location_client, "close")
     assert callable(location_client.close)
+
+
+# --- init_location client method tests ---
+
+
+def test_init_location_method_exists(location_client):
+    """Verify init_location method exists and is callable."""
+    assert hasattr(location_client, "init_location")
+    assert callable(location_client.init_location)
+
+
+def test_init_location_method_signature(location_client):
+    """Test that init_location method has correct signature."""
+    sig = inspect.signature(location_client.init_location)
+    params = list(sig.parameters.keys())
+    assert "location_name" in params
+    assert "representations" in params
+    assert "resource_template_name" in params
+    assert "resource_template_overrides" in params
+    assert "description" in params
+    assert "allow_transfers" in params
+    assert "managed_by" in params
+    assert "owner" in params
+    assert "timeout" in params
+
+    # Check return type annotation
+    assert sig.return_annotation is Location
+
+
+@patch("madsci.client.location_client.create_httpx_client")
+def test_init_location_posts_to_correct_endpoint(mock_create_session):
+    """Verify init_location POSTs to /location/init."""
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_response.json.return_value = {
+        "location_id": test_location_id,
+        "location_name": "my_node_location",
+        "description": "A node-managed location",
+        "representations": {"arm_1": {"joint_angles": [0, 0, 0]}},
+        "allow_transfers": True,
+        "managed_by": "node",
+    }
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.request.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    result = client.init_location(
+        location_name="my_node_location",
+        description="A node-managed location",
+        representations={"arm_1": {"joint_angles": [0, 0, 0]}},
+    )
+
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith("/location/init")
+    assert isinstance(result, Location)
+    assert result.location_name == "my_node_location"
+    assert result.managed_by.value == "node"
+
+
+@patch("madsci.client.location_client.create_httpx_client")
+def test_init_location_returns_location_object(mock_create_session):
+    """Verify init_location returns a properly deserialized Location."""
+    mock_response = Mock()
+    test_location_id = new_ulid_str()
+    mock_response.json.return_value = {
+        "location_id": test_location_id,
+        "location_name": "init_test",
+        "description": "Test init",
+        "representations": {},
+        "allow_transfers": False,
+        "managed_by": "lab",
+    }
+    mock_response.raise_for_status.return_value = None
+
+    mock_session = Mock()
+    mock_session.request.return_value = mock_response
+    mock_create_session.return_value = mock_session
+
+    client = LocationClient(location_server_url="http://test/")
+    result = client.init_location(
+        location_name="init_test",
+        description="Test init",
+        allow_transfers=False,
+    )
+
+    assert isinstance(result, Location)
+    assert result.location_id == test_location_id
+    assert result.location_name == "init_test"
+    assert result.allow_transfers is False

@@ -135,7 +135,7 @@ class TestLocationList:
     def test_list_default(self) -> None:
         loc = _make_location()
         with _patch_client_init(), _patch_client("get_locations", [loc]):
-            runner = CliRunner()
+            runner = CliRunner(env={"COLUMNS": "200"})
             result = runner.invoke(madsci, ["location", "list", *_URL_ARGS])
             assert result.exit_code == 0
             assert "test_loca" in result.output
@@ -1109,3 +1109,304 @@ class TestLocationRegistered:
 
         assert "loc" in AliasedGroup._aliases
         assert AliasedGroup._aliases["loc"] == "location"
+
+
+# ---------------------------------------------------------------------------
+# location list: managed_by column and filter
+# ---------------------------------------------------------------------------
+
+
+class TestLocationListManagedBy:
+    """Tests for managed_by column and --managed-by filter in 'location list'."""
+
+    def test_list_shows_managed_by_column(self) -> None:
+        """The table output should include a 'Managed By' column with LAB value."""
+        loc = _make_location()
+        # Default managed_by is LAB
+        with _patch_client_init(), _patch_client("get_locations", [loc]):
+            runner = CliRunner(env={"COLUMNS": "200"})
+            result = runner.invoke(madsci, ["location", "list", *_URL_ARGS])
+            assert result.exit_code == 0
+            assert "Managed By" in result.output
+            assert "LAB" in result.output
+
+    def test_list_shows_node_managed(self) -> None:
+        """A node-managed location should show NODE in the Managed By column."""
+        from madsci.common.types.location_types import LocationManagement
+
+        loc = _make_location()
+        loc.managed_by = LocationManagement.NODE
+        with _patch_client_init(), _patch_client("get_locations", [loc]):
+            runner = CliRunner(env={"COLUMNS": "200"})
+            result = runner.invoke(madsci, ["location", "list", *_URL_ARGS])
+            assert result.exit_code == 0
+            assert "NODE" in result.output
+
+    def test_list_managed_by_filter_option(self) -> None:
+        """The --managed-by option should be accepted and passed to the client."""
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("get_locations", [loc]) as mock_get,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["location", "list", "--managed-by", "node", *_URL_ARGS]
+            )
+            assert result.exit_code == 0
+            # Verify managed_by parameter was passed to get_locations
+            mock_get.assert_called_once_with(managed_by="node")
+
+    def test_list_managed_by_short_option(self) -> None:
+        """The -m short option should work as alias for --managed-by."""
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("get_locations", [loc]) as mock_get,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["location", "list", "-m", "lab", *_URL_ARGS]
+            )
+            assert result.exit_code == 0
+            mock_get.assert_called_once_with(managed_by="lab")
+
+
+# ---------------------------------------------------------------------------
+# location get: managed_by and owner fields
+# ---------------------------------------------------------------------------
+
+
+class TestLocationGetManagedBy:
+    """Tests for managed_by and owner display in 'location get'."""
+
+    def test_get_shows_managed_by(self) -> None:
+        """Detail output should include Managed By field."""
+        loc = _make_location()
+        with _patch_client_init(), _patch_client("get_location_by_name", loc):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["location", "get", "test_location", *_URL_ARGS]
+            )
+            assert result.exit_code == 0
+            assert "Managed By" in result.output
+            assert "LAB" in result.output
+
+    def test_get_shows_owner_with_node_id(self) -> None:
+        """Detail output should show the owner's node_id when present."""
+        from madsci.common.types.auth_types import OwnershipInfo
+        from madsci.common.types.location_types import LocationManagement
+
+        owner = OwnershipInfo(node_id=new_ulid_str())
+        loc = _make_location()
+        loc.managed_by = LocationManagement.NODE
+        loc.owner = owner
+        with _patch_client_init(), _patch_client("get_location_by_name", loc):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["location", "get", "test_location", *_URL_ARGS]
+            )
+            assert result.exit_code == 0
+            assert "Owner" in result.output
+            assert str(owner.node_id) in result.output
+
+    def test_get_shows_owner_na_when_none(self) -> None:
+        """Detail output should show N/A for owner when it is None."""
+        loc = _make_location()
+        with _patch_client_init(), _patch_client("get_location_by_name", loc):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["location", "get", "test_location", *_URL_ARGS]
+            )
+            assert result.exit_code == 0
+            assert "Owner" in result.output
+            assert "N/A" in result.output
+
+
+# ---------------------------------------------------------------------------
+# location train
+# ---------------------------------------------------------------------------
+
+
+class TestLocationTrain:
+    """Tests for 'location train' subcommand."""
+
+    def test_train_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(madsci, ["location", "train", "--help"])
+        assert result.exit_code == 0
+        assert "LOCATION_NAME" in result.output
+        assert "NODE_NAME" in result.output
+
+    def test_train_basic_with_overrides(self) -> None:
+        """Train with explicit overrides (no template) should call set_representation."""
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("set_representation", loc) as mock_set,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "location",
+                    "train",
+                    "deck_slot_1",
+                    "robot_arm",
+                    "--overrides",
+                    '{"x": 1, "y": 2}',
+                    *_URL_ARGS,
+                ],
+            )
+            assert result.exit_code == 0
+            mock_set.assert_called_once()
+            call_args = mock_set.call_args
+            assert call_args[0][0] == "deck_slot_1"
+            assert call_args[0][1] == "robot_arm"
+            assert call_args[0][2] == {"x": 1, "y": 2}
+
+    def test_train_with_template(self) -> None:
+        """Train with --template should fetch the template and merge defaults with overrides."""
+        from madsci.common.types.location_types import LocationRepresentationTemplate
+
+        template = LocationRepresentationTemplate(
+            template_name="arm_template",
+            default_values={"gripper": "standard", "max_payload": 2.0},
+        )
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("get_representation_template", template),
+            _patch_client("set_representation", loc) as mock_set,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "location",
+                    "train",
+                    "deck_slot_1",
+                    "robot_arm",
+                    "--template",
+                    "arm_template",
+                    "--overrides",
+                    '{"gripper": "wide"}',
+                    *_URL_ARGS,
+                ],
+            )
+            assert result.exit_code == 0
+            mock_set.assert_called_once()
+            # Should be defaults merged with overrides
+            call_data = mock_set.call_args[0][2]
+            assert call_data["gripper"] == "wide"  # override
+            assert call_data["max_payload"] == 2.0  # from template default
+
+    def test_train_with_template_no_overrides(self) -> None:
+        """Train with --template but no overrides should use template defaults as-is."""
+        from madsci.common.types.location_types import LocationRepresentationTemplate
+
+        template = LocationRepresentationTemplate(
+            template_name="arm_template",
+            default_values={"gripper": "standard"},
+        )
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("get_representation_template", template),
+            _patch_client("set_representation", loc) as mock_set,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "location",
+                    "train",
+                    "deck_slot_1",
+                    "robot_arm",
+                    "--template",
+                    "arm_template",
+                    *_URL_ARGS,
+                ],
+            )
+            assert result.exit_code == 0
+            call_data = mock_set.call_args[0][2]
+            assert call_data == {"gripper": "standard"}
+
+    def test_train_invalid_overrides_json(self) -> None:
+        """Invalid JSON in --overrides should produce an error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            madsci,
+            [
+                "location",
+                "train",
+                "deck_slot_1",
+                "robot_arm",
+                "--overrides",
+                "not-json",
+                *_URL_ARGS,
+            ],
+        )
+        assert result.exit_code != 0
+        assert "Invalid JSON" in result.output
+
+    def test_train_no_template_no_overrides(self) -> None:
+        """Train with neither --template nor --overrides should error."""
+        runner = CliRunner()
+        result = runner.invoke(
+            madsci,
+            [
+                "location",
+                "train",
+                "deck_slot_1",
+                "robot_arm",
+                *_URL_ARGS,
+            ],
+        )
+        assert result.exit_code != 0
+
+    def test_train_json_output(self) -> None:
+        """Train with --json output should produce JSON."""
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("set_representation", loc),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "--json",
+                    "location",
+                    "train",
+                    "deck_slot_1",
+                    "robot_arm",
+                    "--overrides",
+                    '{"x": 1}',
+                    *_URL_ARGS,
+                ],
+            )
+            assert result.exit_code == 0
+
+    def test_train_quiet_output(self) -> None:
+        """Train with --quiet output should produce minimal output."""
+        loc = _make_location()
+        with (
+            _patch_client_init(),
+            _patch_client("set_representation", loc),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "--quiet",
+                    "location",
+                    "train",
+                    "deck_slot_1",
+                    "robot_arm",
+                    "--overrides",
+                    '{"x": 1}',
+                    *_URL_ARGS,
+                ],
+            )
+            assert result.exit_code == 0
