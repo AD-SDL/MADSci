@@ -460,8 +460,9 @@ def test_file_datapoint_with_object_storage(document_handler, tmp_path: Path) ->
 
         # Verify the fput_object call arguments
         call_args = mock_minio_client.fput_object.call_args
+        expected_object_name = f"{test_datapoint.datapoint_id}_test_minio_file"
         assert call_args[1]["bucket_name"] == "madsci-test"
-        assert call_args[1]["object_name"] == "test_minio_file"
+        assert call_args[1]["object_name"] == expected_object_name
         assert call_args[1]["content_type"] == "text/plain"
 
         # Verify the returned datapoint has object storage fields and correct data_type
@@ -473,13 +474,15 @@ def test_file_datapoint_with_object_storage(document_handler, tmp_path: Path) ->
         assert "etag" in result
 
         assert result["bucket_name"] == "madsci-test"
-        assert result["object_name"] == "test_minio_file"
+        assert result["object_name"] == expected_object_name
         assert result["storage_endpoint"] == "localhost:8333"
         assert result["etag"] == "test-etag-123"
         assert (
             "localhost:8333" in result["url"]
         )  # Uses same endpoint when no public_endpoint set
-        assert result["url"] == "http://localhost:8333/madsci-test/test_minio_file"
+        assert (
+            result["url"] == f"http://localhost:8333/madsci-test/{expected_object_name}"
+        )
 
         # Verify we can retrieve the datapoint with object storage info
         retrieved_result = test_client.get(
@@ -488,6 +491,60 @@ def test_file_datapoint_with_object_storage(document_handler, tmp_path: Path) ->
         assert retrieved_result["data_type"] == "object_storage"
         assert retrieved_result["bucket_name"] == "madsci-test"
         assert retrieved_result["object_name"] == result["object_name"]
+
+
+def test_object_storage_unique_keys_for_same_label(
+    document_handler, tmp_path: Path
+) -> None:
+    """Regression test: two uploads with the same label must get distinct object keys."""
+    mock_minio_client = MagicMock()
+    mock_minio_client.bucket_exists.return_value = True
+    mock_minio_client.fput_object.return_value = MagicMock(etag="etag-1")
+
+    with patch(
+        "madsci.common.object_storage_helpers.Minio", return_value=mock_minio_client
+    ):
+        settings = DataManagerSettings(
+            manager_name="test_unique_keys",
+            enable_registry_resolution=False,
+        )
+        manager = DataManager(
+            settings=settings,
+            document_handler=document_handler,
+            object_storage_settings=ObjectStorageSettings(
+                endpoint="localhost:8333",
+                access_key="minioadmin",
+                secret_key="minioadmin",
+                secure=False,
+                default_bucket="madsci-test",
+            ),
+        )
+        app = manager.create_server()
+        test_client = TestClient(app)
+
+        # Upload two files with the same label but different content
+        object_names = []
+        for i in range(2):
+            test_file = tmp_path / f"file_{i}.txt"
+            test_file.write_text(f"content {i}")
+
+            dp = FileDataPoint(label="same_label", path=test_file)
+            result = test_client.post(
+                "/datapoint",
+                data={"datapoint": dp.model_dump_json()},
+                files={("files", (str(test_file.name), test_file.open("rb")))},
+            ).json()
+
+            assert result["data_type"] == "object_storage"
+            object_names.append(result["object_name"])
+
+        # The two object names must be different (ULID prefix ensures uniqueness)
+        assert object_names[0] != object_names[1], (
+            "Object names should be unique to prevent overwrites"
+        )
+        # Both should still contain the human-readable label
+        for name in object_names:
+            assert "same_label" in name
 
 
 @pytest.mark.skipif(not is_docker_available(), reason="Docker not available")
@@ -546,7 +603,7 @@ def test_real_object_storage_upload(
     # Verify the response indicates object storage
     assert result["data_type"] == "object_storage"
     assert result["bucket_name"] == "test-bucket"
-    assert result["object_name"] == "real_minio_test"
+    assert result["object_name"] == f"{test_datapoint.datapoint_id}_real_minio_test"
     assert result["size_bytes"] == len(test_content)
     assert "url" in result
 

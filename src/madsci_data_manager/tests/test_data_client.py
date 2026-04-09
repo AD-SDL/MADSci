@@ -397,7 +397,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, object_storage_confi
     # Verify object storage specifics
     if uploaded_datapoint.data_type.value == "object_storage":
         assert uploaded_datapoint.bucket_name == "madsci-test", "Wrong bucket name"
-        assert uploaded_datapoint.object_name == file_path.name, "Wrong object name"
+        assert (
+            uploaded_datapoint.object_name
+            == f"{file_datapoint.datapoint_id}_{file_path.name}"
+        ), "Wrong object name"
     else:
         # Even if data_type still shows as "file", check if it has object storage attributes
         pytest.xfail(
