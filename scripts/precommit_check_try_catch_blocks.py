@@ -20,13 +20,13 @@ def _iter_py_files(paths: list[str]) -> list[Path]:
 
 
 def find_no_qa_lines(file_path: Path) -> set(int):
-    test = tokenize(Path.open(file_path, "rb").readline)
-    tokens = list(test)
-    no_qa_lines = set()
-    for token in tokens:
-        if token.type == COMMENT and "noqa" in token.string:
-            no_qa_lines.add(token.start[0])
-    return no_qa_lines
+    with Path(file_path).open("rb") as f:
+        tokens = list(tokenize(f.readline))
+        no_qa_lines = set()
+        for token in tokens:
+            if token.type == COMMENT and "noqa" in token.string:
+                no_qa_lines.add(token.start[0])
+        return no_qa_lines
 
 
 def sub_walk(
