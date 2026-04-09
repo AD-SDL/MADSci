@@ -19,7 +19,7 @@ def _iter_py_files(paths: list[str]) -> list[Path]:
     return files
 
 
-def find_no_qa_lines(file_path: Path) -> set(int):
+def find_no_qa_lines(file_path: Path) -> set[int]:
     with Path(file_path).open("rb") as f:
         tokens = list(tokenize(f.readline))
         no_qa_lines = set()
