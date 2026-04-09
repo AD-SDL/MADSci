@@ -171,6 +171,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         self,
         file_path: Path,
         filename: str,
+        datapoint_id: str,
         label: Optional[str] = None,
         metadata: Optional[Dict[str, str]] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -181,7 +182,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         oss = self._object_storage_settings or ObjectStorageSettings()
         bucket_name = oss.default_bucket
         self._object_storage_handler.ensure_bucket(bucket_name)
-        object_name = label or filename
+        object_name = datapoint_id + "_" + (label or filename)
         result = self._object_storage_handler.upload_file(
             bucket=bucket_name,
             object_name=object_name,
@@ -254,6 +255,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                         object_storage_info = self._upload_file_to_object_storage(
                             file_path=temp_path,
                             filename=file.filename,
+                            datapoint_id=datapoint_obj.datapoint_id,
                             label=datapoint_obj.label,
                             metadata={
                                 "original_datapoint_id": datapoint_obj.datapoint_id

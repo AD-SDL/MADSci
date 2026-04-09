@@ -305,6 +305,7 @@ class DataClient:
                     label=datapoint.label,
                     metadata={"original_datapoint_id": datapoint.datapoint_id},
                     timeout=timeout,
+                    datapoint_id=datapoint.datapoint_id,
                 )
 
                 # If object storage upload was successful, return the result
@@ -353,6 +354,7 @@ class DataClient:
         label: Optional[str] = None,
         public_endpoint: Optional[str] = None,
         timeout: Optional[float] = None,
+        datapoint_id: Optional[str] = None,
     ) -> DataPoint:
         """Internal method to upload a file to object storage and create a datapoint.
 
@@ -376,6 +378,11 @@ class DataClient:
             raise ValueError("Object storage is not configured.")
 
         # Use the helper function to upload the file
+        naming_strategy = (
+            ObjectNamingStrategy.ULID_PREFIXED
+            if datapoint_id
+            else ObjectNamingStrategy.FILENAME_ONLY
+        )
         object_storage_info = upload_file_to_object_storage(
             storage_client=self._minio_client,
             object_storage_settings=self.object_storage_settings,
@@ -384,9 +391,10 @@ class DataClient:
             object_name=object_name,
             content_type=content_type,
             metadata=metadata,
-            naming_strategy=ObjectNamingStrategy.FILENAME_ONLY,  # Client uses simple naming
+            naming_strategy=naming_strategy,
             public_endpoint=public_endpoint,
             label=label,
+            ulid=datapoint_id,
         )
 
         if object_storage_info is None:
