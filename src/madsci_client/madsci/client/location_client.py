@@ -21,6 +21,7 @@ from madsci.common.types.location_types import (
     LocationManagement,
     LocationRepresentationTemplate,
     LocationTemplate,
+    TransferGraphDetailedResponse,
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -886,6 +887,36 @@ class LocationClient(DualModeClientMixin):
         )
         response.raise_for_status()
         return response.json()
+
+    def get_detailed_transfer_graph(
+        self, timeout: Optional[float] = None
+    ) -> "TransferGraphDetailedResponse":
+        """
+        Get the current transfer graph with detailed edge information.
+
+        Returns edge list with node names that can execute each transfer
+        and the minimum cost for each edge.
+
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+
+        Returns
+        -------
+        TransferGraphDetailedResponse
+            Detailed transfer graph with edges containing node names and costs.
+        """
+        self._validate_server_url()
+
+        response = self._request(
+            "GET",
+            f"{self.location_server_url}transfer/graph/detailed",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return TransferGraphDetailedResponse.model_validate(response.json())
 
     def plan_transfer(
         self,
