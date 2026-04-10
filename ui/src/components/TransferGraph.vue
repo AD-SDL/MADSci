@@ -201,7 +201,7 @@
         <h4>{{ selectedNode.name }}</h4>
         <p><strong>ID:</strong> {{ selectedNode.id }}</p>
         <p><strong>Managed By:</strong> {{ (selectedNode.managedBy || 'lab').toUpperCase() }}</p>
-        <p><strong>Owner:</strong> {{ selectedNode.ownerNodeId || 'N/A' }}</p>
+        <p><strong>Owner:</strong> {{ selectedNode.ownerNodeName || selectedNode.ownerNodeId || 'N/A' }}</p>
         <p><strong>Status:</strong> {{ selectedNode.occupied || 'Unknown' }}</p>
         <p><strong>Resource:</strong> {{ selectedNode.hasResource ? 'Present' : 'None' }}</p>
         <p v-if="selectedNode.quantity !== null"><strong>Quantity:</strong> {{ selectedNode.quantity }} / {{ selectedNode.capacity }}</p>
@@ -244,6 +244,7 @@ interface GraphNode {
   vy: number;
   managedBy: string;
   ownerNodeId: string | null;
+  ownerNodeName: string | null;
   groupId: string;
   hasResource: boolean;
   occupied: string;
@@ -286,7 +287,15 @@ const layoutNodes = computed(() => {
     // Group by management type
     const managedBy = location.managed_by || 'lab';
     const ownerNodeId = location.owner?.node_id || null;
-    const groupId = managedBy === 'node' && ownerNodeId ? `node:${ownerNodeId}` : 'lab';
+    // For node-managed locations, derive a human-readable name from the
+    // first representation key (which is the node name), falling back to
+    // a truncated owner ID.
+    let ownerNodeName: string | null = null;
+    if (managedBy === 'node') {
+      const repKeys = Object.keys(location.representations || {});
+      ownerNodeName = repKeys.length > 0 ? repKeys[0] : (ownerNodeId ? ownerNodeId.slice(0, 8) + '...' : null);
+    }
+    const groupId = managedBy === 'node' && ownerNodeName ? `node:${ownerNodeName}` : 'lab';
 
     nodes.push({
       id: location.location_id || key,
@@ -297,6 +306,7 @@ const layoutNodes = computed(() => {
       vy: 0,
       managedBy,
       ownerNodeId,
+      ownerNodeName,
       groupId,
       hasResource,
       occupied,
@@ -317,7 +327,7 @@ const groups = computed(() => {
   for (const node of layoutNodes.value) {
     if (!groupMap[node.groupId]) {
       const isNodeManaged = node.groupId !== 'lab';
-      const label = isNodeManaged ? `Node: ${node.ownerNodeId}` : 'Lab-Managed';
+      const label = isNodeManaged ? `Node: ${node.ownerNodeName || node.ownerNodeId}` : 'Lab-Managed';
       groupMap[node.groupId] = { nodes: [], isNodeManaged, label };
     }
     groupMap[node.groupId].nodes.push(node);
@@ -413,10 +423,18 @@ function getNodeStroke(node: GraphNode): string {
 }
 
 function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
-  const iterations = 150;
+  const iterations = 200;
   const margin = 80;
   const centerX = svgWidth.value / 2;
   const centerY = svgHeight.value / 2;
+
+  // Build group membership map (stable across iterations)
+  const groupMembers: Record<string, GraphNode[]> = {};
+  for (const n of nodes) {
+    if (!groupMembers[n.groupId]) groupMembers[n.groupId] = [];
+    groupMembers[n.groupId].push(n);
+  }
+  const groupIds = Object.keys(groupMembers);
 
   // Build edges from transferEdges for attraction
   const transferEdgeSet: Array<{ source: GraphNode; target: GraphNode }> = [];
@@ -438,7 +456,8 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
       (node as any).fy = 0;
     }
 
-    // 1. Repulsion forces (stronger between different groups)
+    // 1. Node-level repulsion (same strength for all — group separation
+    //    is handled by centroid repulsion below)
     for (let i = 0; i < nodes.length; i++) {
       for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i];
@@ -446,9 +465,7 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-        const sameGroup = a.groupId === b.groupId;
-        const strength = sameGroup ? 1500 : 2500;
-        const force = strength / (dist * dist);
+        const force = 1500 / (dist * dist);
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         (a as any).fx -= fx;
@@ -458,33 +475,62 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
       }
     }
 
-    // 2. Intra-group attraction (pull group members together)
-    const groupNodes: Record<string, GraphNode[]> = {};
-    for (const n of nodes) {
-      if (!groupNodes[n.groupId]) groupNodes[n.groupId] = [];
-      groupNodes[n.groupId].push(n);
-    }
-    for (const members of Object.values(groupNodes)) {
-      if (members.length < 2) continue;
-      // Compute group centroid
+    // 2. Group centroid repulsion — push entire groups apart
+    //    This is the key force that prevents group overlap.
+    const centroids: Record<string, { cx: number; cy: number; count: number }> = {};
+    for (const gid of groupIds) {
       let cx = 0, cy = 0;
-      for (const m of members) { cx += m.x; cy += m.y; }
-      cx /= members.length; cy /= members.length;
-      for (const m of members) {
-        const dx = cx - m.x;
-        const dy = cy - m.y;
-        (m as any).fx += dx * 0.05;
-        (m as any).fy += dy * 0.05;
+      for (const m of groupMembers[gid]) { cx += m.x; cy += m.y; }
+      const count = groupMembers[gid].length;
+      centroids[gid] = { cx: cx / count, cy: cy / count, count };
+    }
+    for (let i = 0; i < groupIds.length; i++) {
+      for (let j = i + 1; j < groupIds.length; j++) {
+        const ga = centroids[groupIds[i]];
+        const gb = centroids[groupIds[j]];
+        const dx = gb.cx - ga.cx;
+        const dy = gb.cy - ga.cy;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        // Scale force by combined group size so larger groups push harder
+        const combinedSize = ga.count + gb.count;
+        const minSeparation = 180 + combinedSize * 20;
+        if (dist < minSeparation) {
+          const strength = 8.0 * (minSeparation - dist) / minSeparation;
+          const fx = (dx / dist) * strength;
+          const fy = (dy / dist) * strength;
+          // Apply to all members of each group
+          for (const m of groupMembers[groupIds[i]]) {
+            (m as any).fx -= fx;
+            (m as any).fy -= fy;
+          }
+          for (const m of groupMembers[groupIds[j]]) {
+            (m as any).fx += fx;
+            (m as any).fy += fy;
+          }
+        }
       }
     }
 
-    // 3. Transfer edge attraction
+    // 3. Intra-group attraction (pull group members toward their centroid)
+    for (const gid of groupIds) {
+      const members = groupMembers[gid];
+      if (members.length < 2) continue;
+      const c = centroids[gid];
+      for (const m of members) {
+        const dx = c.cx - m.x;
+        const dy = c.cy - m.y;
+        (m as any).fx += dx * 0.08;
+        (m as any).fy += dy * 0.08;
+      }
+    }
+
+    // 4. Transfer edge attraction (weaker — don't override group separation)
     for (const edge of transferEdgeSet) {
       const dx = edge.target.x - edge.source.x;
       const dy = edge.target.y - edge.source.y;
       const dist = Math.sqrt(dx * dx + dy * dy) || 1;
       const idealDist = 120;
-      const force = 0.08 * (dist - idealDist);
+      const force = 0.04 * (dist - idealDist);
       const fx = (dx / dist) * force;
       const fy = (dy / dist) * force;
       (edge.source as any).fx += fx;
@@ -493,13 +539,13 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
       (edge.target as any).fy -= fy;
     }
 
-    // 4. Center gravity
+    // 5. Center gravity
     for (const node of nodes) {
       (node as any).fx += (centerX - node.x) * 0.01;
       (node as any).fy += (centerY - node.y) * 0.01;
     }
 
-    // 5. Apply forces
+    // 6. Apply forces
     for (const node of nodes) {
       node.vx = (node.vx + (node as any).fx * alpha) * 0.8;
       node.vy = (node.vy + (node as any).fy * alpha) * 0.8;
