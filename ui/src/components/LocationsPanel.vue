@@ -95,6 +95,7 @@
        :locations="locations"
        :resources="resources"
        :transferEdges="transfer_edges"
+       :locationIndices="locationIndexMap"
        @node-click="handleNodeClick"
      />
    </div>
@@ -161,6 +162,7 @@
        :locations="locations"
        :resources="resources"
        :transferEdges="transfer_edges"
+       :locationIndices="locationIndexMap"
        @node-click="handleNodeClick"
      />
    </v-col>
