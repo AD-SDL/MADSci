@@ -24,6 +24,7 @@
            <TransferGraph
              :locations="locations"
              :resources="resources"
+             :transferEdges="transfer_edges"
              @node-click="handleNodeClick"
            />
          </v-card-text>
@@ -92,6 +93,7 @@
      <TransferGraph
        :locations="locations"
        :resources="resources"
+       :transferEdges="transfer_edges"
        @node-click="handleNodeClick"
      />
    </div>
@@ -157,6 +159,7 @@
      <TransferGraph
        :locations="locations"
        :resources="resources"
+       :transferEdges="transfer_edges"
        @node-click="handleNodeClick"
      />
    </v-col>
@@ -227,6 +230,7 @@ import { VDataTable } from 'vuetify/components';
 import {
   locations,
   resources,
+  transfer_edges,
   workcell_state,
 } from '@/store';
 
