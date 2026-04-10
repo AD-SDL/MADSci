@@ -414,6 +414,39 @@ class TransferGraphEdge(MadsciBaseModel):
     )
 
 
+class TransferGraphDetailedEdge(MadsciBaseModel):
+    """A transfer edge with all node names that can execute the transfer."""
+
+    source_location_id: str = Field(
+        title="Source Location ID",
+        description="ID of the source location.",
+    )
+    target_location_id: str = Field(
+        title="Target Location ID",
+        description="ID of the target location.",
+    )
+    node_names: list[str] = Field(
+        title="Node Names",
+        description="Names of all nodes that can execute a transfer between these locations.",
+        default_factory=list,
+    )
+    min_cost: float = Field(
+        title="Minimum Cost",
+        description="Lowest cost among available transfer templates for this edge.",
+        default=1.0,
+    )
+
+
+class TransferGraphDetailedResponse(MadsciBaseModel):
+    """Response containing the detailed transfer graph with node information per edge."""
+
+    edges: list[TransferGraphDetailedEdge] = Field(
+        title="Edges",
+        description="List of transfer edges with node names and costs.",
+        default_factory=list,
+    )
+
+
 class TransferTemplateOverrides(MadsciBaseModel):
     """Override transfer templates for specific source/destination patterns."""
 
