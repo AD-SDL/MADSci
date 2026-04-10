@@ -18,6 +18,7 @@ class ObjectNamingStrategy(Enum):
 
     FILENAME_ONLY = "filename_only"  # Just use the filename
     TIMESTAMPED_PATH = "timestamped_path"  # year/month/day/filename structure
+    ULID_PREFIXED = "ulid_prefixed"  # {ulid}_{filename} structure
 
 
 def _normalise_endpoint(endpoint: str, secure: bool) -> tuple[str, bool]:
@@ -126,6 +127,7 @@ def generate_object_name(
     filename: str,
     strategy: ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY,
     prefix: Optional[str] = None,
+    ulid: Optional[str] = None,
 ) -> str:
     """Generate an object name using the specified strategy.
 
@@ -133,11 +135,16 @@ def generate_object_name(
         filename: The original filename
         strategy: Naming strategy to use
         prefix: Optional prefix to add to the object name
+        ulid: ULID to use as a prefix (required for ULID_PREFIXED strategy)
 
     Returns:
         Generated object name
     """
-    if strategy == ObjectNamingStrategy.TIMESTAMPED_PATH:
+    if strategy == ObjectNamingStrategy.ULID_PREFIXED:
+        if not ulid:
+            raise ValueError("ULID_PREFIXED strategy requires a ulid parameter")
+        base_name = f"{ulid}_{filename}"
+    elif strategy == ObjectNamingStrategy.TIMESTAMPED_PATH:
         time = datetime.now()
         base_name = f"{time.year}/{time.month}/{time.day}/{filename}"
     else:  # FILENAME_ONLY
@@ -185,6 +192,7 @@ def upload_file_to_object_storage(
     public_endpoint: Optional[str] = None,
     label: Optional[str] = None,
     object_storage_settings: Optional[ObjectStorageSettings] = None,
+    ulid: Optional[str] = None,
 ) -> Optional[dict[str, Any]]:
     """Upload a file to S3-compatible storage and return storage information.
 
@@ -225,7 +233,9 @@ def upload_file_to_object_storage(
 
     # Use defaults if not specified
     bucket_name = bucket_name or object_storage_settings.default_bucket
-    object_name = object_name or generate_object_name(file_path.name, naming_strategy)
+    object_name = object_name or generate_object_name(
+        file_path.name, naming_strategy, ulid=ulid
+    )
     content_type = content_type or get_content_type(file_path)
     label = label or file_path.name
 

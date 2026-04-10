@@ -21,7 +21,11 @@ from madsci.common.db_handlers.object_storage_handler import (
 )
 from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.object_storage_helpers import create_object_storage_client
+from madsci.common.object_storage_helpers import (
+    ObjectNamingStrategy,
+    create_object_storage_client,
+    generate_object_name,
+)
 from madsci.common.types.datapoint_types import (
     DataManagerHealth,
     DataManagerSettings,
@@ -171,6 +175,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         self,
         file_path: Path,
         filename: str,
+        datapoint_id: str,
         label: Optional[str] = None,
         metadata: Optional[Dict[str, str]] = None,
     ) -> Optional[Dict[str, Any]]:
@@ -181,7 +186,11 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
         oss = self._object_storage_settings or ObjectStorageSettings()
         bucket_name = oss.default_bucket
         self._object_storage_handler.ensure_bucket(bucket_name)
-        object_name = label or filename
+        object_name = generate_object_name(
+            label or filename,
+            ObjectNamingStrategy.ULID_PREFIXED,
+            ulid=datapoint_id,
+        )
         result = self._object_storage_handler.upload_file(
             bucket=bucket_name,
             object_name=object_name,
@@ -254,6 +263,7 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
                         object_storage_info = self._upload_file_to_object_storage(
                             file_path=temp_path,
                             filename=file.filename,
+                            datapoint_id=datapoint_obj.datapoint_id,
                             label=datapoint_obj.label,
                             metadata={
                                 "original_datapoint_id": datapoint_obj.datapoint_id
