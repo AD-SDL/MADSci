@@ -864,6 +864,55 @@ def test_get_transfer_graph_endpoint(transfer_setup):
     assert actual_connections == expected_connections
 
 
+def test_get_detailed_transfer_graph_endpoint(transfer_setup):
+    """Test the detailed transfer graph API endpoint."""
+    client = transfer_setup["client"]
+
+    response = client.get("/transfer/graph/detailed")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "edges" in data
+    edges = data["edges"]
+    assert isinstance(edges, list)
+    assert len(edges) > 0
+
+    # Check edge structure
+    edge = edges[0]
+    assert "source_location_id" in edge
+    assert "target_location_id" in edge
+    assert "node_names" in edge
+    assert isinstance(edge["node_names"], list)
+    assert len(edge["node_names"]) > 0
+    assert "min_cost" in edge
+    assert isinstance(edge["min_cost"], (int, float))
+
+
+def test_get_detailed_transfer_graph_empty(cache_handler):
+    """Test the detailed transfer graph endpoint returns empty edges when no transfer capabilities."""
+    settings = LocationManagerSettings(enable_registry_resolution=False)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    manager.add_location(
+        Location(
+            location_name="location_no_transfer",
+            location_id=new_ulid_str(),
+            representations={"device": "config"},
+        )
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/transfer/graph/detailed")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "edges" in data
+    assert data["edges"] == []
+
+
 def test_plan_transfer_endpoint_direct(transfer_setup):
     """Test the transfer planning API endpoint for direct transfers."""
     client = transfer_setup["client"]

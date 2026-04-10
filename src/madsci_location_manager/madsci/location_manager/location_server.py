@@ -34,6 +34,7 @@ from madsci.common.types.location_types import (
     LocationManagerSettings,
     LocationRepresentationTemplate,
     LocationTemplate,
+    TransferGraphDetailedResponse,
 )
 from madsci.common.types.resource_types import Slot
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
@@ -1412,6 +1413,11 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             Dict mapping location IDs to lists of reachable location IDs
         """
         return self.transfer_planner.get_transfer_graph_adjacency_list()
+
+    @get("/transfer/graph/detailed", tags=["Transfer"])
+    def get_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """Get the current transfer graph with detailed edge information."""
+        return self.transfer_planner.get_detailed_transfer_graph()
 
     @get("/location/{location_name}/resources", tags=["Resources"])
     def get_location_resources(self, location_name: str) -> Optional[ResourceHierarchy]:
