@@ -38,6 +38,7 @@ const locations_url = ref<string>("")
 const representation_templates = ref<any[]>([])
 const location_templates = ref<any[]>([])
 const resource_templates = ref<any[]>([])
+const transfer_edges = ref<any[]>([])
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -67,6 +68,7 @@ watchEffect(async () => {
     updateLocations()
     updateRepresentationTemplates()
     updateLocationTemplates()
+    updateTransferEdges()
     setInterval(updateWorkcellState, 5000)
     setInterval(updateWorkflows, 5000)
     setInterval(updateResources, 5000)
@@ -74,6 +76,7 @@ watchEffect(async () => {
     setInterval(updateLocations, 5000)
     setInterval(updateRepresentationTemplates, 5000)
     setInterval(updateLocationTemplates, 5000)
+    setInterval(updateTransferEdges, 5000)
     setInterval(updateExperiments, 5000);
     // setInterval(updateEvents, 10000);
 
@@ -127,6 +130,20 @@ watchEffect(async () => {
                 location_templates.value = await ((await fetch(baseUrl + "location_templates")).json());
             } catch (error) {
                 console.error("Failed to fetch location templates:", error);
+            }
+        }
+    }
+
+    async function updateTransferEdges() {
+        if (locations_url.value) {
+            try {
+                const baseUrl = locations_url.value.replace(/locations\/?$/, "")
+                const response = await fetch(baseUrl + "transfer/graph/detailed")
+                const data = await response.json()
+                transfer_edges.value = data.edges || []
+            } catch (error) {
+                console.error("Failed to fetch transfer edges:", error);
+                transfer_edges.value = []
             }
         }
     }
@@ -242,6 +259,7 @@ export {
   location_templates,
   locations,
   resource_templates,
+  transfer_edges,
   locations_url,
   representation_templates,
   main_url,
