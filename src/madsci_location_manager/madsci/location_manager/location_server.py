@@ -214,6 +214,46 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 error=str(e),
             )
 
+    def create_server(self, **kwargs: Any) -> FastAPI:
+        """Create the FastAPI server with the reconciliation lifespan.
+
+        Overrides the base class to ensure the periodic reconciliation loop
+        is always started, regardless of whether the server is launched via
+        ``run_server()`` or ``create_app()``.
+        """
+        kwargs.setdefault("lifespan", self._lifespan)
+        app = super().create_server(**kwargs)
+        app.state.manager = self
+        return app
+
+    @asynccontextmanager
+    async def _lifespan(self, _app: FastAPI) -> AsyncGenerator[None, None]:
+        """Application lifespan that runs the background reconciliation loop."""
+        task = None
+
+        if self.settings.reconciliation_enabled:
+
+            async def reconciliation_loop() -> None:
+                interval = self.settings.reconciliation_interval_seconds
+                while True:
+                    await asyncio.sleep(interval)
+                    try:
+                        self._reconcile()
+                    except Exception:
+                        self.logger.warning(
+                            "Background reconciliation failed",
+                            exc_info=True,
+                        )
+
+            task = asyncio.create_task(reconciliation_loop())
+
+        yield
+
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
     def _auto_migrate_from_redis(self) -> None:
         """Auto-migrate locations from old Redis format to document database if document database is empty."""
         existing_locations = self.state_handler.get_locations()
@@ -1415,48 +1455,13 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage the application lifespan with background reconciliation."""
-    manager = getattr(app.state, "manager", None)
-    task = None
-
-    if manager and getattr(manager.settings, "reconciliation_enabled", False):
-
-        async def reconciliation_loop() -> None:
-            interval = manager.settings.reconciliation_interval_seconds
-            while True:
-                await asyncio.sleep(interval)
-                try:
-                    manager._reconcile()
-                except Exception:
-                    manager.logger.warning(
-                        "Background reconciliation failed",
-                        exc_info=True,
-                    )
-
-        task = asyncio.create_task(reconciliation_loop())
-
-    yield
-
-    if task is not None:
-        task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
-
-
 def create_app(
     settings: Optional[LocationManagerSettings] = None,
     document_handler: Optional[DocumentStorageHandler] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
     manager = LocationManager(settings=settings, document_handler=document_handler)
-    app = manager.create_server(
-        version="0.1.0",
-        lifespan=lifespan,
-    )
-    app.state.manager = manager
-    return app
+    return manager.create_server(version="0.1.0")
 
 
 if __name__ == "__main__":

@@ -369,6 +369,62 @@ class TestReconcileLabConfigTraining:
         assert results["training_skipped"] == 1
         assert results["training_applied"] == 0
 
+    def test_training_applied_when_node_location_arrives_later(
+        self, tmp_path, cache_handler, document_handler
+    ):
+        """Training entries are applied once the target location is created (e.g. by a node)."""
+        config = LabLocationConfig(
+            representation_templates=[
+                LocationRepresentationTemplate(
+                    template_name="arm_repr",
+                    default_values={"gripper": "standard", "max_payload": 2.0},
+                ),
+            ],
+            training=[
+                RepresentationTrainingEntry(
+                    location_name="liquidhandler_1.deck_1",
+                    node_name="robotarm_1",
+                    representation_template_name="arm_repr",
+                    overrides={"position": [10, 15, 5]},
+                ),
+            ],
+        )
+        config_path = tmp_path / "locations.yaml"
+        config_path.write_text(yaml.dump(config.model_dump(mode="json")))
+
+        settings = LocationManagerSettings(
+            enable_registry_resolution=False,
+            reconciliation_enabled=False,
+            lab_config_file=str(config_path),
+        )
+        manager = _make_manager(settings, cache_handler, document_handler)
+
+        # Startup: location doesn't exist yet, training skipped
+        manager._lab_config_mtime = None
+        results = manager._reconcile_lab_config()
+        assert results["training_skipped"] == 1
+        assert results["training_applied"] == 0
+
+        # Simulate a node registering its intrinsic location
+        manager.state_handler.add_location(
+            Location(
+                location_name="liquidhandler_1.deck_1",
+                managed_by=LocationManagement.NODE,
+            )
+        )
+
+        # Next reconciliation cycle: training should now be applied
+        manager._lab_config_mtime = None
+        results = manager._reconcile_lab_config()
+        assert results["training_applied"] == 1
+        assert results["training_skipped"] == 0
+
+        loc = manager.state_handler.get_location("liquidhandler_1.deck_1")
+        repr_data = loc.representations["robotarm_1"]
+        assert repr_data["gripper"] == "standard"
+        assert repr_data["max_payload"] == 2.0
+        assert repr_data["position"] == [10, 15, 5]
+
 
 class TestReconcileLabConfigCaching:
     """Lab config file mtime caching behavior."""
