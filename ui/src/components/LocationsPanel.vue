@@ -25,6 +25,7 @@
              :locations="locations"
              :resources="resources"
              :transferEdges="transfer_edges"
+             :locationIndices="locationIndexMap"
              @node-click="handleNodeClick"
            />
          </v-card-text>
@@ -198,6 +199,7 @@
           no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
           <template v-slot:item="{ item }: { item: any }">
             <tr @click="set_modal(item.name || item.location_name, item)">
+              <td><strong>{{ item.graph_index }}</strong></td>
               <td>{{ item.name || item.location_name }}</td>
               <td>
                 <v-chip
@@ -271,8 +273,24 @@ const add_modal = ref(false)
 const create_from_template_modal = ref(false)
 const activeTab = ref('graph') // Default to showing the graph tab
 
-const sortBy: VDataTable['sortBy'] = [{ key: 'occupied', order: 'desc' }];
+// Stable index mapping: location_id -> 1-based index, sorted by name
+const locationIndexMap = computed(() => {
+  const locs = Object.values(locations.value || {}) as any[];
+  const sorted = [...locs].sort((a, b) => {
+    const nameA = (a.name || a.location_name || '').toLowerCase();
+    const nameB = (b.name || b.location_name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+  const map: Record<string, number> = {};
+  sorted.forEach((loc, i) => {
+    map[loc.location_id] = i + 1;
+  });
+  return map;
+});
+
+const sortBy: VDataTable['sortBy'] = [{ key: 'graph_index', order: 'asc' }];
 const location_headers = [
+  { title: '#', key: 'graph_index', width: '50px' },
   { title: 'Name', key: 'name' },
   { title: 'Managed By', key: 'managed_by' },
   { title: 'Occupied', key: 'occupied', sort: (a: string, b: string) => occupied_compare(a, b) },
@@ -326,6 +344,7 @@ function location_items(locations: any, resources: any) {
   Object.values(locations || {}).forEach((location: any) => {
     location["occupied"] = get_resource(resources, location);
     location["name"] = location.name || location.location_name; // Ensure backwards compatibility
+    location["graph_index"] = locationIndexMap.value[location.location_id] ?? '';
     new_locations.push(location);
   })
   // Apply managed_by filter

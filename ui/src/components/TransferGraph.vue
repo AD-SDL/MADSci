@@ -64,9 +64,9 @@
                 :y1="edge.y1"
                 :x2="edge.x2"
                 :y2="edge.y2"
-                stroke="#78909C"
-                :stroke-width="hoveredEdge === edge ? 3 : 2"
-                :stroke-opacity="hoveredEdge === edge ? 0.9 : 0.5"
+                stroke="#90A4AE"
+                :stroke-width="hoveredEdge === edge ? 2.5 : 1"
+                :stroke-opacity="hoveredEdge === edge ? 0.8 : 0.3"
               />
               <!-- Invisible wider line for easier hover targeting -->
               <line
@@ -99,6 +99,18 @@
                 stroke-width="3"
                 class="node-circle"
               />
+              <!-- Index label inside circle -->
+              <text
+                v-if="node.index !== null"
+                text-anchor="middle"
+                dominant-baseline="central"
+                font-size="13"
+                font-weight="bold"
+                :fill="getIndexColor(node)"
+                class="node-index"
+              >
+                {{ node.index }}
+              </text>
             </g>
           </g>
 
@@ -189,7 +201,7 @@
           </v-col>
           <v-col cols="12" md="4">
             <div class="legend-item d-flex align-center mb-2">
-              <svg width="30" height="24"><line x1="0" y1="12" x2="30" y2="12" stroke="#78909C" stroke-width="2" stroke-opacity="0.5" /></svg>
+              <svg width="30" height="24"><line x1="0" y1="12" x2="30" y2="12" stroke="#90A4AE" stroke-width="1" stroke-opacity="0.3" /></svg>
               <span class="ml-2">Transfer Connection</span>
             </div>
           </v-col>
@@ -222,6 +234,7 @@ const props = defineProps<{
     node_names: string[];
     min_cost: number;
   }>;
+  locationIndices?: Record<string, number>;
 }>();
 
 const emit = defineEmits<{
@@ -238,6 +251,7 @@ const hoveredEdge = ref<any>(null);
 interface GraphNode {
   id: string;
   name: string;
+  index: number | null;
   x: number;
   y: number;
   vx: number;
@@ -300,6 +314,7 @@ const layoutNodes = computed(() => {
     nodes.push({
       id: location.location_id || key,
       name: location.name || location.location_name || key,
+      index: props.locationIndices?.[location.location_id] ?? null,
       x: margin + seededRandom() * (svgWidth.value - 2 * margin),
       y: margin + seededRandom() * (svgHeight.value - 2 * margin),
       vx: 0,
@@ -422,6 +437,12 @@ function getNodeStroke(node: GraphNode): string {
   return node.managedBy === 'node' ? '#2196F3' : '#4CAF50';
 }
 
+function getIndexColor(node: GraphNode): string {
+  // Use white text on dark fills, dark text on light fills
+  if (node.fillRatio !== null && node.fillRatio > 0.5) return '#FFFFFF';
+  return '#333333';
+}
+
 function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
   const iterations = 200;
   const margin = 80;
@@ -493,7 +514,7 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
         const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         // Scale force by combined group size so larger groups push harder
         const combinedSize = ga.count + gb.count;
-        const minSeparation = 180 + combinedSize * 20;
+        const minSeparation = 220 + combinedSize * 25;
         if (dist < minSeparation) {
           const strength = 8.0 * (minSeparation - dist) / minSeparation;
           const fx = (dx / dist) * strength;
@@ -539,10 +560,10 @@ function applyForceDirectedLayout(nodes: GraphNode[]): GraphNode[] {
       (edge.target as any).fy -= fy;
     }
 
-    // 5. Center gravity
+    // 5. Center gravity (stronger to fill available space)
     for (const node of nodes) {
-      (node as any).fx += (centerX - node.x) * 0.01;
-      (node as any).fy += (centerY - node.y) * 0.01;
+      (node as any).fx += (centerX - node.x) * 0.02;
+      (node as any).fy += (centerY - node.y) * 0.02;
     }
 
     // 6. Apply forces
@@ -600,6 +621,12 @@ onMounted(() => {
 .location-node:hover .node-circle {
   stroke-width: 4;
   filter: brightness(1.1);
+}
+
+.node-index {
+  pointer-events: none;
+  user-select: none;
+  font-family: 'Roboto', sans-serif;
 }
 
 .node-label-hover {
