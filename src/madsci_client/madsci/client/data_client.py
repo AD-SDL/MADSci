@@ -702,7 +702,7 @@ class DataClient(DualModeClientMixin):
                     "files",
                     (
                         str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).expanduser(), "rb"),
+                        Path.open(Path(datapoint.path).expanduser(), "rb"),  # noqa: ASYNC240
                     ),
                 )
             }
