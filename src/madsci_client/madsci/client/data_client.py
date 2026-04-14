@@ -697,12 +697,17 @@ class DataClient(DualModeClientMixin):
             return datapoint
 
         if datapoint.data_type == DataPointTypeEnum.FILE:
+            # .expanduser() and .name are pure string manipulation (no I/O).
+            # .open() does a blocking syscall, but it's a single open() that
+            # returns immediately; the actual file reading is handled by
+            # httpx's async transport during the request below.
+            file_path = Path(datapoint.path).expanduser()  # noqa: ASYNC240
             files = {
                 (
                     "files",
                     (
-                        str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).expanduser(), "rb"),
+                        file_path.name,
+                        file_path.open("rb"),
                     ),
                 )
             }
