@@ -444,6 +444,9 @@ Classes
 
     ### Instance variables
 
+    `entry_count: int`
+    :   Return the number of unique log entries seen so far.
+
     `follow_mode: Reactive[ReactiveType] | ReactiveType`
     :   Create a reactive attribute.
         

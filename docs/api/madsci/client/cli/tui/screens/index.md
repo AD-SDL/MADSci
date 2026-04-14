@@ -78,6 +78,9 @@ Classes
         Args:
             event: The select changed event.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
+
 `DashboardScreen(name: str | None = None, id: str | None = None, classes: str | None = None)`
 :   Main dashboard screen showing lab overview.
     
@@ -122,6 +125,9 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
 
 `DataBrowserScreen(**kwargs: Any)`
 :   Screen showing data browser with type-aware detail display.
@@ -352,6 +358,12 @@ Classes
     `on_mount(self) ‑> None`
     :   Handle screen mount - load initial logs.
 
+    `on_screen_resume(self) ‑> None`
+    :   Restart the follow timer when the screen is resumed, if follow mode is active.
+
+    `on_screen_suspend(self) ‑> None`
+    :   Pause the follow timer when the screen is suspended.
+
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.
 
@@ -416,6 +428,9 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh node data from workcell manager.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
 
 `ResourceTreeScreen(resource_id: str, resource_client: ResourceClient, **kwargs: Any)`
 :   Screen showing the resource hierarchy as a tree.
@@ -569,7 +584,10 @@ Classes
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses concurrently.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   Update the footer when auto-refresh is toggled.
 
 `StepDetailScreen(workflow_id: str, step_data: dict, step_index: int, **kwargs: Any)`
 :   Detailed view of a single workflow step.

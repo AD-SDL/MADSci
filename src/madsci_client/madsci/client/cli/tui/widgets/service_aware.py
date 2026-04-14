@@ -3,6 +3,9 @@
 Container that gates children behind a service health check. Shows
 children when the service is available, and an "unavailable" panel
 with a retry button when it is not.
+
+.. note:: Not yet used by any screen -- designed for future adoption.
+   See https://github.com/AD-SDL/MADSci/issues/278
 """
 
 from __future__ import annotations

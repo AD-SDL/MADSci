@@ -9,8 +9,12 @@ an interactive shell.
 from __future__ import annotations
 
 import cmd
+import contextlib
 import json
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 import click
 from madsci.client.cli.utils.cli_decorators import (
@@ -52,42 +56,57 @@ def _get_workcell_url(ctx: click.Context, workcell_url: str | None) -> str:
     return resolve_service_url(ctx, workcell_url, "workcell_server_url", 8005)
 
 
-def _make_workcell_client(workcell_url: str, timeout: float) -> Any:
+@contextlib.contextmanager
+def _make_workcell_client(workcell_url: str, timeout: float) -> Iterator[Any]:
     """Create a WorkcellClient configured with the given URL and timeout."""
     from madsci.client.workcell_client import WorkcellClient
     from madsci.common.types.client_types import WorkcellClientConfig
 
     config = WorkcellClientConfig(timeout_default=timeout)
-    return WorkcellClient(workcell_server_url=workcell_url, config=config)
+    client = WorkcellClient(workcell_server_url=workcell_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
+@contextlib.contextmanager
 def _get_node_client(
     workcell_url: str, node_name: str, timeout: float
-) -> tuple[Any, dict]:
-    """Discover node via workcell and return (RestNodeClient, node_data).
+) -> Iterator[tuple[Any, Any]]:
+    """Discover node via workcell and yield (RestNodeClient, node_data).
 
     The node data returned by ``WorkcellClient.get_node`` may be a dict
     or a Pydantic model -- callers should handle both.
+
+    Both the WorkcellClient (used for discovery) and the RestNodeClient
+    are closed when the context manager exits.
     """
     from madsci.client.node.rest_node_client import RestNodeClient
 
-    wc = _make_workcell_client(workcell_url, timeout)
-    node = wc.get_node(node_name)
-    if node is None:
-        raise click.ClickException(f"Node '{node_name}' not found.")
+    with _make_workcell_client(workcell_url, timeout) as wc:
+        node = wc.get_node(node_name)
+        if node is None:
+            raise click.ClickException(f"Node '{node_name}' not found.")
 
-    # Extract node_url from dict or model
-    if hasattr(node, "node_url"):
-        node_url = str(node.node_url)
-    elif isinstance(node, dict):
-        node_url = str(node.get("node_url", ""))
-    else:
-        raise click.ClickException(f"Unable to determine URL for node '{node_name}'.")
+        # Extract node_url from dict or model
+        if hasattr(node, "node_url"):
+            node_url = str(node.node_url)
+        elif isinstance(node, dict):
+            node_url = str(node.get("node_url", ""))
+        else:
+            raise click.ClickException(
+                f"Unable to determine URL for node '{node_name}'."
+            )
 
-    if not node_url:
-        raise click.ClickException(f"Node '{node_name}' has no URL configured.")
+        if not node_url:
+            raise click.ClickException(f"Node '{node_name}' has no URL configured.")
 
-    return RestNodeClient(url=node_url), node
+        node_client = RestNodeClient(url=node_url)
+        try:
+            yield node_client, node
+        finally:
+            node_client.close()
 
 
 def _node_to_dict(node: Any) -> dict:
@@ -260,11 +279,11 @@ def list_nodes(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_workcell_client(url, timeout)
 
-    nodes = client.get_nodes()
-    if not isinstance(nodes, dict):
-        nodes = {}
+    with _make_workcell_client(url, timeout) as client:
+        nodes = client.get_nodes()
+        if not isinstance(nodes, dict):
+            nodes = {}
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, nodes, format=fmt.value)
@@ -346,11 +365,11 @@ def info_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    wc = _make_workcell_client(url, timeout)
 
-    node_data = wc.get_node(name)
-    if node_data is None:
-        raise click.ClickException(f"Node '{name}' not found.")
+    with _make_workcell_client(url, timeout) as wc:
+        node_data = wc.get_node(name)
+        if node_data is None:
+            raise click.ClickException(f"Node '{name}' not found.")
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, _node_to_dict(node_data), format=fmt.value)
@@ -394,9 +413,9 @@ def status_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    status = node_client.get_status()
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        status = node_client.get_status()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         data = (
@@ -480,9 +499,9 @@ def state_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    state = node_client.get_state()
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        state = node_client.get_state()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, state, format=fmt.value)
@@ -554,9 +573,9 @@ def log_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    log_data = node_client.get_log()
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        log_data = node_client.get_log()
 
     # Log may be a dict of {id: event} or a list
     if isinstance(log_data, dict):
@@ -643,10 +662,10 @@ def admin_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    admin_cmd = AdminCommands(command)
-    response = node_client.send_admin_command(admin_cmd)
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        admin_cmd = AdminCommands(command)
+        response = node_client.send_admin_command(admin_cmd)
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         data = (
@@ -765,7 +784,6 @@ def action_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
     # Parse args
     action_args: dict = {}
@@ -794,7 +812,9 @@ def action_node(
     if not no_wait:
         console.print(f"Executing action '{action_name}' on node '{name}'...")
 
-    result = node_client.send_action(request, await_result=not no_wait)
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        result = node_client.send_action(request, await_result=not no_wait)
+
     _render_action_result(console, fmt, result, action_name)
 
 
@@ -827,9 +847,9 @@ def action_result_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    result = node_client.get_action_result(action_id)
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        result = node_client.get_action_result(action_id)
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         data = (
@@ -914,9 +934,9 @@ def action_history_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
-    history = node_client.get_action_history(action_id=action_filter)
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        history = node_client.get_action_history(action_id=action_filter)
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, history, format=fmt.value)
@@ -971,11 +991,11 @@ def config_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    wc = _make_workcell_client(url, timeout)
 
-    node_data = wc.get_node(name)
-    if node_data is None:
-        raise click.ClickException(f"Node '{name}' not found.")
+    with _make_workcell_client(url, timeout) as wc:
+        node_data = wc.get_node(name)
+        if node_data is None:
+            raise click.ClickException(f"Node '{name}' not found.")
 
     # Extract config from node info
     node_info = _extract_attr(node_data, "info", None) or {}
@@ -1038,14 +1058,14 @@ def set_config_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, _node_data = _get_node_client(url, name, timeout)
 
     try:
         config_dict = json.loads(data_json)
     except json.JSONDecodeError as exc:
         raise click.ClickException(f"Invalid JSON in --data: {exc}") from exc
 
-    response = node_client.set_config(config_dict)
+    with _get_node_client(url, name, timeout) as (node_client, _node_data):
+        response = node_client.set_config(config_dict)
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         data = (
@@ -1111,14 +1131,14 @@ def add_node(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     wc_url = _get_workcell_url(ctx, workcell_url)
-    client = _make_workcell_client(wc_url, timeout)
 
-    result = client.add_node(
-        node_name=name,
-        node_url=url_arg,
-        node_description=description,
-        permanent=permanent,
-    )
+    with _make_workcell_client(wc_url, timeout) as client:
+        result = client.add_node(
+            node_name=name,
+            node_url=url_arg,
+            node_description=description,
+            permanent=permanent,
+        )
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, _node_to_dict(result), format=fmt.value)
@@ -1359,7 +1379,7 @@ def shell_node(
         madsci node shell my_robot
     """
     url = _get_workcell_url(ctx, workcell_url)
-    node_client, node_data = _get_node_client(url, name, timeout)
 
-    shell = NodeShell(name, node_client, node_data)
-    shell.cmdloop()
+    with _get_node_client(url, name, timeout) as (node_client, node_data):
+        shell = NodeShell(name, node_client, node_data)
+        shell.cmdloop()

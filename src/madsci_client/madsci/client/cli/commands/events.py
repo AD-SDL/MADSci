@@ -6,10 +6,13 @@ purging, and backup operations.
 
 from __future__ import annotations
 
+import contextlib
 import json
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from madsci.client.event_client import EventClient
 
 import click
@@ -46,10 +49,17 @@ def _get_event_url(ctx: click.Context, event_url: str | None) -> str:
     return resolve_service_url(ctx, event_url, "event_server_url", 8001)
 
 
-def _make_client(event_url: str, timeout: float) -> EventClient:
+@contextlib.contextmanager
+def _make_client(event_url: str, timeout: float) -> Iterator[EventClient]:
     from madsci.client.event_client import EventClient
+    from madsci.common.types.event_types import EventClientConfig
 
-    return EventClient(event_server_url=event_url, timeout_default=timeout)
+    config = EventClientConfig(timeout_default=timeout)
+    client = EventClient(event_server_url=event_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _event_to_row(event) -> dict:  # noqa: ANN001
@@ -160,21 +170,23 @@ def query_events(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
-    client = _make_client(url, timeout)
 
-    if selector:
-        try:
-            parsed_selector = json.loads(selector)
-        except json.JSONDecodeError as exc:
-            raise click.ClickException(f"Invalid JSON in --selector: {exc}") from exc
-        results = client.query_events(parsed_selector)
-    else:
-        level_int = -1
-        if level:
-            import logging
+    with _make_client(url, timeout) as client:
+        if selector:
+            try:
+                parsed_selector = json.loads(selector)
+            except json.JSONDecodeError as exc:
+                raise click.ClickException(
+                    f"Invalid JSON in --selector: {exc}"
+                ) from exc
+            results = client.query_events(parsed_selector)
+        else:
+            level_int = -1
+            if level:
+                import logging
 
-            level_int = getattr(logging, level.upper(), -1)
-        results = client.get_events(number=count, level=level_int)
+                level_int = getattr(logging, level.upper(), -1)
+            results = client.get_events(number=count, level=level_int)
 
     # results is a dict[str, Event]
     event_list = list(results.values()) if isinstance(results, dict) else results
@@ -224,11 +236,11 @@ def get_event(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
-    client = _make_client(url, timeout)
 
-    event = client.get_event(event_id)
-    if event is None:
-        raise click.ClickException(f"Event {event_id} not found.")
+    with _make_client(url, timeout) as client:
+        event = client.get_event(event_id)
+        if event is None:
+            raise click.ClickException(f"Event {event_id} not found.")
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, event, format=fmt.value)
@@ -275,8 +287,6 @@ def archive_events(
         madsci events archive --before-date 2026-01-01
         madsci events archive --ids "id1,id2,id3"
     """
-    from madsci.client.event_client import EventClient
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
@@ -285,15 +295,13 @@ def archive_events(
         raise click.ClickException("Provide --before-date or --ids.")
 
     event_ids_list = [i.strip() for i in ids.split(",")] if ids else None
-    client = EventClient(event_server_url=url)
-    try:
+
+    with _make_client(url, timeout) as client:
         result = client.archive_events(
             before_date=before_date,
             event_ids=event_ids_list,
             timeout=timeout,
         )
-    finally:
-        client.close()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, result, format=fmt.value)
@@ -339,8 +347,6 @@ def purge_events(
         madsci events purge --older-than-days 7
         madsci events purge --older-than-days 90 --yes
     """
-    from madsci.client.event_client import EventClient
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
@@ -351,11 +357,8 @@ def purge_events(
             abort=True,
         )
 
-    client = EventClient(event_server_url=url)
-    try:
+    with _make_client(url, timeout) as client:
         result = client.purge_events(older_than_days=older_than_days, timeout=timeout)
-    finally:
-        client.close()
 
     if fmt in (OutputFormat.JSON, OutputFormat.YAML):
         output_result(console, result, format=fmt.value)
@@ -390,8 +393,6 @@ def backup_events(
         madsci events backup --create
         madsci events backup --status
     """
-    from madsci.client.event_client import EventClient
-
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)
@@ -399,8 +400,7 @@ def backup_events(
     if not do_create and not show_status:
         raise click.ClickException("Provide --create or --status.")
 
-    client = EventClient(event_server_url=url)
-    try:
+    with _make_client(url, timeout) as client:
         if show_status:
             result = client.get_backup_status(timeout=timeout)
             if fmt in (OutputFormat.JSON, OutputFormat.YAML):
@@ -415,5 +415,3 @@ def backup_events(
                 output_result(console, result, format=fmt.value)
             else:
                 success(console, "Event backup created.")
-    finally:
-        client.close()

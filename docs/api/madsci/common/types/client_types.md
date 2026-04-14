@@ -267,6 +267,11 @@ Classes
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
 
+    ### Class variables
+
+    `startup_timeout: float`
+    :
+
 `RestNodeClientConfig(**kwargs: Any)`
 :   Configuration for Node REST clients.
     

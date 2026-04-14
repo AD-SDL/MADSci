@@ -463,11 +463,13 @@ class TestLabClientCleanup:
     async def test_aclose_closes_both_clients(self) -> None:
         """aclose() should close both sync and async clients."""
         client = _make_lab_client()
+        mock_sync = client._client
         mock_async = AsyncMock(spec=httpx.AsyncClient)
         client._async_client = mock_async
 
         await client.aclose()
 
-        client._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
+        assert client._client is None
         mock_async.aclose.assert_called_once()
         assert client._async_client is None

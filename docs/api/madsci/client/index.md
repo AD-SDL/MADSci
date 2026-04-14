@@ -83,7 +83,7 @@ Classes
     :   Set configuration values of the node.
 
 `DataClient(data_server_url: Optional[Union[str, AnyUrl]] = None, object_storage_settings: Optional[ObjectStorageSettings] = None, config: Optional[DataClientConfig] = None)`
-:   Client for the MADSci Experiment Manager.
+:   Client for the MADSci Data Manager.
     
     Create a new Datapoint Client.
     
@@ -264,6 +264,10 @@ Classes
     Initialize the event logger. If no config is provided, use the default config.
     
     Keyword Arguments are used to override the values of the passed in/default config.
+
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
 
     ### Class variables
 
@@ -621,7 +625,13 @@ Classes
             campaign_id: The ID of the campaign to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `async_get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
+    `async_get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Get an experiment by ID asynchronously.
         
         Args:
@@ -693,7 +703,7 @@ Classes
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
+    `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Get an experiment by ID.
         
         Args:

@@ -7,7 +7,9 @@ template management, hierarchy display, and history querying.
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -50,12 +52,17 @@ def _get_resource_url(ctx: click.Context, resource_url: str | None) -> str:
     return resolve_service_url(ctx, resource_url, "resource_server_url", 8003)
 
 
-def _make_client(resource_url: str, timeout: float) -> ResourceClient:
+@contextlib.contextmanager
+def _make_client(resource_url: str, timeout: float) -> Iterator[ResourceClient]:
     from madsci.client.resource_client import ResourceClient
     from madsci.common.types.client_types import ResourceClientConfig
 
     config = ResourceClientConfig(timeout_default=timeout)
-    return ResourceClient(resource_server_url=resource_url, config=config)
+    client = ResourceClient(resource_server_url=resource_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _resource_to_row(r: Any) -> dict:
@@ -147,7 +154,7 @@ def resource() -> None:
     type=int,
     default=50,
     show_default=True,
-    help="Limit number of results returned.",
+    help="Limit number of results returned (applied client-side after fetch).",
 )
 @_RESOURCE_URL_OPTION
 @timeout_option(default=10.0)
@@ -174,40 +181,39 @@ def list_resources(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        resources = client.query_resource(
+            base_type=base_type,
+            multiple=True,
+        )
 
-    resources = client.query_resource(
-        base_type=base_type,
-        multiple=True,
-    )
+        # Ensure we always have a list
+        if not isinstance(resources, list):
+            resources = [resources] if resources else []
 
-    # Ensure we always have a list
-    if not isinstance(resources, list):
-        resources = [resources] if resources else []
+        # Apply limit
+        resources = resources[:limit]
 
-    # Apply limit
-    resources = resources[:limit]
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_resource_to_dict(r) for r in resources]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_resource_to_dict(r) for r in resources]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            for r in resources:
+                rid = getattr(r, "resource_id", "-")
+                name = getattr(r, "resource_name", "-")
+                console.print(f"{rid} {name}")
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for r in resources:
-            rid = getattr(r, "resource_id", "-")
-            name = getattr(r, "resource_name", "-")
-            console.print(f"{rid} {name}")
-        return
+        if not resources:
+            info(console, "No resources found.")
+            return
 
-    if not resources:
-        info(console, "No resources found.")
-        return
-
-    rows = [_resource_to_row(r) for r in resources]
-    output_result(
-        console, rows, format="text", title="Resources", columns=_LIST_COLUMNS
-    )
+        rows = [_resource_to_row(r) for r in resources]
+        output_result(
+            console, rows, format="text", title="Resources", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -237,51 +243,50 @@ def get_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        r = client.get_resource(resource_id)
+        if r is None:
+            raise click.ClickException(f"Resource {resource_id} not found.")
 
-    r = client.get_resource(resource_id)
-    if r is None:
-        raise click.ClickException(f"Resource {resource_id} not found.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            rid = getattr(r, "resource_id", "-")
+            name = getattr(r, "resource_name", "-")
+            console.print(f"{rid} {name}")
+            return
 
-    if fmt == OutputFormat.QUIET:
-        rid = getattr(r, "resource_id", "-")
-        name = getattr(r, "resource_name", "-")
-        console.print(f"{rid} {name}")
-        return
+        # Rich detail display
+        name = getattr(r, "resource_name", "Unnamed Resource")
+        console.print()
+        console.print(f"[bold]{name}[/bold]")
+        console.print(f"  ID:          {getattr(r, 'resource_id', '-')}")
+        bt = getattr(r, "base_type", "-")
+        if hasattr(bt, "value"):
+            bt = bt.value
+        console.print(f"  Type:        {bt}")
+        console.print(f"  Class:       {getattr(r, 'resource_class', '-')}")
+        parent = getattr(r, "parent_id", None)
+        console.print(f"  Parent:      {parent or '-'}")
 
-    # Rich detail display
-    name = getattr(r, "resource_name", "Unnamed Resource")
-    console.print()
-    console.print(f"[bold]{name}[/bold]")
-    console.print(f"  ID:          {getattr(r, 'resource_id', '-')}")
-    bt = getattr(r, "base_type", "-")
-    if hasattr(bt, "value"):
-        bt = bt.value
-    console.print(f"  Type:        {bt}")
-    console.print(f"  Class:       {getattr(r, 'resource_class', '-')}")
-    parent = getattr(r, "parent_id", None)
-    console.print(f"  Parent:      {parent or '-'}")
+        quantity = getattr(r, "quantity", None)
+        capacity = getattr(r, "capacity", None)
+        if quantity is not None:
+            console.print(f"  Quantity:    {quantity}")
+        if capacity is not None:
+            console.print(f"  Capacity:    {capacity}")
 
-    quantity = getattr(r, "quantity", None)
-    capacity = getattr(r, "capacity", None)
-    if quantity is not None:
-        console.print(f"  Quantity:    {quantity}")
-    if capacity is not None:
-        console.print(f"  Capacity:    {capacity}")
+        locked_by = getattr(r, "locked_by", None)
+        if locked_by:
+            console.print(f"  Locked by:   {locked_by}")
 
-    locked_by = getattr(r, "locked_by", None)
-    if locked_by:
-        console.print(f"  Locked by:   {locked_by}")
+        desc = getattr(r, "resource_description", None)
+        if desc:
+            console.print(f"  Description: {desc}")
 
-    desc = getattr(r, "resource_description", None)
-    if desc:
-        console.print(f"  Description: {desc}")
-
-    console.print()
+        console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +336,6 @@ def create_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
 
     overrides: dict | None = None
     if params_json:
@@ -340,19 +344,20 @@ def create_resource(
         except json.JSONDecodeError as exc:
             raise click.ClickException(f"Invalid JSON in --params: {exc}") from exc
 
-    r = client.create_resource_from_template(
-        template_name=template_name,
-        resource_name=resource_name or template_name,
-        overrides=overrides,
-    )
+    with _make_client(url, timeout) as client:
+        r = client.create_resource_from_template(
+            template_name=template_name,
+            resource_name=resource_name or template_name,
+            overrides=overrides,
+        )
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(getattr(r, "resource_id", ""))
-    else:
-        rid = getattr(r, "resource_id", "unknown")
-        success(console, f"Resource created -- ID: {rid}")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(getattr(r, "resource_id", ""))
+        else:
+            rid = getattr(r, "resource_id", "unknown")
+            success(console, f"Resource created -- ID: {rid}")
 
 
 # ---------------------------------------------------------------------------
@@ -390,15 +395,15 @@ def delete_resource(
     if not yes:
         click.confirm(f"Delete resource {resource_id}?", abort=True)
 
-    client = _make_client(url, timeout)
-    r = client.remove_resource(resource_id)
+    with _make_client(url, timeout) as client:
+        r = client.remove_resource(resource_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{resource_id} deleted")
-    else:
-        success(console, f"Resource {resource_id} deleted.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{resource_id} deleted")
+        else:
+            success(console, f"Resource {resource_id} deleted.")
 
 
 # ---------------------------------------------------------------------------
@@ -427,16 +432,15 @@ def restore_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        r = client.restore_deleted_resource(resource_id)
 
-    r = client.restore_deleted_resource(resource_id)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{resource_id} restored")
-    else:
-        success(console, f"Resource {resource_id} restored.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{resource_id} restored")
+        else:
+            success(console, f"Resource {resource_id} restored.")
 
 
 # ---------------------------------------------------------------------------
@@ -470,56 +474,55 @@ def tree_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        hierarchy = client.query_resource_hierarchy(resource_id)
 
-    hierarchy = client.query_resource_hierarchy(resource_id)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, hierarchy, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, hierarchy, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            console.print(resource_id)
+            for parent_id, children in hierarchy.descendant_ids.items():
+                for child_id in children:
+                    console.print(f"  {parent_id} -> {child_id}")
+            return
 
-    if fmt == OutputFormat.QUIET:
-        console.print(resource_id)
-        for parent_id, children in hierarchy.descendant_ids.items():
+        # Build a Rich Tree
+        # Show ancestors as a chain leading to the resource
+        if hierarchy.ancestor_ids:
+            root_label = f"[dim]{hierarchy.ancestor_ids[-1]}[/dim]"
+        else:
+            root_label = f"[bold cyan]{resource_id}[/bold cyan] (root)"
+
+        tree = Tree(root_label)
+
+        if hierarchy.ancestor_ids:
+            # Build ancestor chain from furthest to closest
+            current = tree
+            for anc_id in reversed(
+                hierarchy.ancestor_ids[:-1] if len(hierarchy.ancestor_ids) > 1 else []
+            ):
+                current = current.add(f"[dim]{anc_id}[/dim]")
+
+            # Add the target resource as a highlighted node
+            target_node = current.add(f"[bold cyan]{resource_id}[/bold cyan] (target)")
+        else:
+            target_node = tree
+
+        # Add descendants recursively
+        def _add_descendants(parent_node: Any, parent_id: str) -> None:
+            children = hierarchy.descendant_ids.get(parent_id, [])
             for child_id in children:
-                console.print(f"  {parent_id} -> {child_id}")
-        return
+                child_node = parent_node.add(f"{child_id}")
+                _add_descendants(child_node, child_id)
 
-    # Build a Rich Tree
-    # Show ancestors as a chain leading to the resource
-    if hierarchy.ancestor_ids:
-        root_label = f"[dim]{hierarchy.ancestor_ids[-1]}[/dim]"
-    else:
-        root_label = f"[bold cyan]{resource_id}[/bold cyan] (root)"
+        _add_descendants(target_node, resource_id)
 
-    tree = Tree(root_label)
-
-    if hierarchy.ancestor_ids:
-        # Build ancestor chain from furthest to closest
-        current = tree
-        for anc_id in reversed(
-            hierarchy.ancestor_ids[:-1] if len(hierarchy.ancestor_ids) > 1 else []
-        ):
-            current = current.add(f"[dim]{anc_id}[/dim]")
-
-        # Add the target resource as a highlighted node
-        target_node = current.add(f"[bold cyan]{resource_id}[/bold cyan] (target)")
-    else:
-        target_node = tree
-
-    # Add descendants recursively
-    def _add_descendants(parent_node: Any, parent_id: str) -> None:
-        children = hierarchy.descendant_ids.get(parent_id, [])
-        for child_id in children:
-            child_node = parent_node.add(f"{child_id}")
-            _add_descendants(child_node, child_id)
-
-    _add_descendants(target_node, resource_id)
-
-    console.print()
-    console.print("[bold]Resource Hierarchy[/bold]")
-    console.print(tree)
-    console.print()
+        console.print()
+        console.print("[bold]Resource Hierarchy[/bold]")
+        console.print(tree)
+        console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -565,23 +568,24 @@ def lock_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        result = client.acquire_lock(
+            resource_id,
+            lock_duration=duration,
+            client_id=owner_id,
+        )
 
-    result = client.acquire_lock(
-        resource_id,
-        lock_duration=duration,
-        client_id=owner_id,
-    )
+        if result is None:
+            raise click.ClickException(
+                f"Failed to acquire lock on resource {resource_id}."
+            )
 
-    if result is None:
-        raise click.ClickException(f"Failed to acquire lock on resource {resource_id}.")
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{resource_id} locked")
-    else:
-        success(console, f"Lock acquired on resource {resource_id}.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{resource_id} locked")
+        else:
+            success(console, f"Lock acquired on resource {resource_id}.")
 
 
 # ---------------------------------------------------------------------------
@@ -618,22 +622,23 @@ def unlock_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        result = client.release_lock(
+            resource_id,
+            client_id=owner_id,
+        )
 
-    result = client.release_lock(
-        resource_id,
-        client_id=owner_id,
-    )
+        if result is None:
+            raise click.ClickException(
+                f"Failed to release lock on resource {resource_id}."
+            )
 
-    if result is None:
-        raise click.ClickException(f"Failed to release lock on resource {resource_id}.")
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{resource_id} unlocked")
-    else:
-        success(console, f"Lock released on resource {resource_id}.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{resource_id} unlocked")
+        else:
+            success(console, f"Lock released on resource {resource_id}.")
 
 
 # ---------------------------------------------------------------------------
@@ -676,16 +681,15 @@ def quantity_set(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        r = client.set_quantity(resource_id, value)
 
-    r = client.set_quantity(resource_id, value)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{resource_id} quantity={value}")
-    else:
-        success(console, f"Resource {resource_id} quantity set to {value}.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{resource_id} quantity={value}")
+        else:
+            success(console, f"Resource {resource_id} quantity set to {value}.")
 
 
 @quantity_group.command("adjust")
@@ -712,22 +716,21 @@ def quantity_adjust(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        r = client.change_quantity_by(resource_id, delta)
 
-    r = client.change_quantity_by(resource_id, delta)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(r), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        sign = "+" if delta >= 0 else ""
-        console.print(f"{resource_id} quantity{sign}{delta}")
-    else:
-        sign = "+" if delta >= 0 else ""
-        new_qty = getattr(r, "quantity", "?")
-        success(
-            console,
-            f"Resource {resource_id} quantity adjusted by {sign}{delta} (now {new_qty}).",
-        )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(r), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            sign = "+" if delta >= 0 else ""
+            console.print(f"{resource_id} quantity{sign}{delta}")
+        else:
+            sign = "+" if delta >= 0 else ""
+            new_qty = getattr(r, "quantity", "?")
+            success(
+                console,
+                f"Resource {resource_id} quantity adjusted by {sign}{delta} (now {new_qty}).",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -783,47 +786,46 @@ def template_list(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        templates = client.query_templates(base_type=base_type)
 
-    templates = client.query_templates(base_type=base_type)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_resource_to_dict(t) for t in templates]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_resource_to_dict(t) for t in templates]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            for t in templates:
+                console.print(getattr(t, "resource_name", "-"))
+            return
 
-    if fmt == OutputFormat.QUIET:
+        if not templates:
+            info(console, "No templates found.")
+            return
+
+        rows = []
         for t in templates:
-            console.print(getattr(t, "resource_name", "-"))
-        return
+            bt = getattr(t, "base_type", "-")
+            if hasattr(bt, "value"):
+                bt = bt.value
+            rows.append(
+                {
+                    "name": getattr(t, "resource_name", "-"),
+                    "type": str(bt),
+                    "description": truncate(
+                        getattr(t, "resource_description", "") or "", 40
+                    ),
+                    "version": getattr(t, "version", "-"),
+                }
+            )
 
-    if not templates:
-        info(console, "No templates found.")
-        return
-
-    rows = []
-    for t in templates:
-        bt = getattr(t, "base_type", "-")
-        if hasattr(bt, "value"):
-            bt = bt.value
-        rows.append(
-            {
-                "name": getattr(t, "resource_name", "-"),
-                "type": str(bt),
-                "description": truncate(
-                    getattr(t, "resource_description", "") or "", 40
-                ),
-                "version": getattr(t, "version", "-"),
-            }
+        output_result(
+            console,
+            rows,
+            format="text",
+            title="Resource Templates",
+            columns=_TEMPLATE_LIST_COLUMNS,
         )
-
-    output_result(
-        console,
-        rows,
-        format="text",
-        title="Resource Templates",
-        columns=_TEMPLATE_LIST_COLUMNS,
-    )
 
 
 @template_group.command("get")
@@ -848,23 +850,22 @@ def template_get(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        template_info = client.get_template_info(template_name)
+        if template_info is None:
+            raise click.ClickException(f"Template '{template_name}' not found.")
 
-    template_info = client.get_template_info(template_name)
-    if template_info is None:
-        raise click.ClickException(f"Template '{template_name}' not found.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, template_info, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, template_info, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            console.print(template_name)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        console.print(template_name)
-        return
-
-    output_result(
-        console, template_info, format="text", title=f"Template: {template_name}"
-    )
+        output_result(
+            console, template_info, format="text", title=f"Template: {template_name}"
+        )
 
 
 @template_group.command("create")
@@ -914,26 +915,25 @@ def template_create(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        # Fetch the source resource first
+        source = client.get_resource(from_resource_id)
+        if source is None:
+            raise click.ClickException(f"Resource {from_resource_id} not found.")
 
-    # Fetch the source resource first
-    source = client.get_resource(from_resource_id)
-    if source is None:
-        raise click.ClickException(f"Resource {from_resource_id} not found.")
+        result = client.create_template(
+            resource=source,
+            template_name=template_name,
+            description=description,
+            version=version,
+        )
 
-    result = client.create_template(
-        resource=source,
-        template_name=template_name,
-        description=description,
-        version=version,
-    )
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _resource_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(template_name)
-    else:
-        success(console, f"Template '{template_name}' created.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _resource_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(template_name)
+        else:
+            success(console, f"Template '{template_name}' created.")
 
 
 # ---------------------------------------------------------------------------
@@ -972,40 +972,39 @@ def history_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_resource_url(ctx, resource_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        entries = client.query_history(resource=resource_id, limit=limit)
 
-    entries = client.query_history(resource=resource_id, limit=limit)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, entries, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, entries, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            for entry in entries:
+                console.print(str(entry.get("history_id", entry.get("id", "-"))))
+            return
 
-    if fmt == OutputFormat.QUIET:
+        if not entries:
+            info(console, f"No history found for resource {resource_id}.")
+            return
+
+        rows = []
         for entry in entries:
-            console.print(str(entry.get("history_id", entry.get("id", "-"))))
-        return
+            rows.append(
+                {
+                    "version": str(entry.get("version", "-")),
+                    "change_type": str(entry.get("change_type", "-")),
+                    "timestamp": format_timestamp(
+                        entry.get("changed_at", entry.get("timestamp"))
+                    ),
+                    "details": truncate(str(entry.get("change_description", "")), 50),
+                }
+            )
 
-    if not entries:
-        info(console, f"No history found for resource {resource_id}.")
-        return
-
-    rows = []
-    for entry in entries:
-        rows.append(
-            {
-                "version": str(entry.get("version", "-")),
-                "change_type": str(entry.get("change_type", "-")),
-                "timestamp": format_timestamp(
-                    entry.get("changed_at", entry.get("timestamp"))
-                ),
-                "details": truncate(str(entry.get("change_description", "")), 50),
-            }
+        output_result(
+            console,
+            rows,
+            format="text",
+            title=f"History for {resource_id}",
+            columns=_HISTORY_COLUMNS,
         )
-
-    output_result(
-        console,
-        rows,
-        format="text",
-        title=f"History for {resource_id}",
-        columns=_HISTORY_COLUMNS,
-    )

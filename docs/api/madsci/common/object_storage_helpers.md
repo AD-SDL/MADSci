@@ -42,13 +42,14 @@ Functions
     Returns:
         True if bucket exists or was created successfully, False otherwise
 
-`generate_object_name(filename: str, strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, prefix: str | None = None) ‑> str`
+`generate_object_name(filename: str, strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, prefix: str | None = None, ulid: str | None = None) ‑> str`
 :   Generate an object name using the specified strategy.
     
     Args:
         filename: The original filename
         strategy: Naming strategy to use
         prefix: Optional prefix to add to the object name
+        ulid: ULID to use as a prefix (required for ULID_PREFIXED strategy)
     
     Returns:
         Generated object name
@@ -73,7 +74,7 @@ Functions
     Returns:
         Object data as bytes, or None if retrieval failed
 
-`upload_file_to_object_storage(storage_client: minio.api.Minio, file_path: str | pathlib.Path, bucket_name: str | None = None, object_name: str | None = None, content_type: str | None = None, metadata: dict[str, str] | None = None, naming_strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, public_endpoint: str | None = None, label: str | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None) ‑> dict[str, typing.Any] | None`
+`upload_file_to_object_storage(storage_client: minio.api.Minio, file_path: str | pathlib.Path, bucket_name: str | None = None, object_name: str | None = None, content_type: str | None = None, metadata: dict[str, str] | None = None, naming_strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, public_endpoint: str | None = None, label: str | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, ulid: str | None = None) ‑> dict[str, typing.Any] | None`
 :   Upload a file to S3-compatible storage and return storage information.
     
     Args:
@@ -107,4 +108,7 @@ Classes
     :
 
     `TIMESTAMPED_PATH`
+    :
+
+    `ULID_PREFIXED`
     :

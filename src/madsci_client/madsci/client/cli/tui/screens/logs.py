@@ -5,6 +5,7 @@ Provides real-time log viewing with filtering capabilities.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
@@ -15,6 +16,8 @@ from textual.binding import BindingType
 from textual.containers import Container, Horizontal
 from textual.screen import Screen
 from textual.widgets import Label
+
+logger = logging.getLogger(__name__)
 
 # Map level name strings to Python logging int values.
 _LEVEL_NAME_MAP: dict[str, int] = {
@@ -145,7 +148,7 @@ class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
 
         if not logs:
             if (
-                not log_viewer._seen_ids
+                log_viewer.entry_count == 0
             ):  # Only show message if no logs have been loaded
                 log_viewer.append_entries(
                     [
@@ -195,7 +198,8 @@ class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 entries = [e for e in entries if _matches_search(e, search)]
 
             return entries
-        except Exception:
+        except Exception as exc:
+            logger.debug("Failed to fetch logs: %s", exc)
             return []
 
     async def action_refresh(self) -> None:
@@ -239,6 +243,20 @@ class LogsScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             self._follow_timer.stop()
             self._follow_timer = None
         self.app.switch_screen("dashboard")
+
+    def on_screen_suspend(self) -> None:
+        """Pause the follow timer when the screen is suspended."""
+        if self._follow_timer is not None:
+            self._follow_timer.stop()
+            self._follow_timer = None
+
+    def on_screen_resume(self) -> None:
+        """Restart the follow timer when the screen is resumed, if follow mode is active."""
+        log_viewer = self.query_one("#log-view", LogViewer)
+        if log_viewer.follow_mode and self._follow_timer is None:
+            self._follow_timer = self.set_interval(
+                2.0, self._follow_refresh, name="follow-timer"
+            )
 
     def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:  # noqa: ARG002
         """Handle filter changes from FilterBar."""

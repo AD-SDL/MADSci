@@ -8,6 +8,7 @@ host app and confirm no exception is raised.
 from __future__ import annotations
 
 from typing import ClassVar
+from unittest.mock import patch
 
 import pytest
 
@@ -73,9 +74,12 @@ async def test_resources_screen_composes(mock_app_class) -> None:
     from madsci.client.cli.tui.screens.resources import ResourcesScreen
 
     app = mock_app_class()
-    async with app.run_test() as pilot:
-        await pilot.app.push_screen(ResourcesScreen())
-        assert pilot.app.screen is not None
+    with patch(
+        "madsci.client.resource_client.ResourceClient.__init__", return_value=None
+    ):
+        async with app.run_test() as pilot:
+            await pilot.app.push_screen(ResourcesScreen())
+            assert pilot.app.screen is not None
 
 
 @pytest.mark.asyncio

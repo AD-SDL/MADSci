@@ -20,6 +20,7 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -50,6 +51,9 @@ Classes
 
     `on_mount(self) ‑> None`
     :   Render the detail content on mount.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
 
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
@@ -112,3 +116,6 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh node data from workcell manager.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.

@@ -7,6 +7,7 @@ Workcell Manager and communicating with nodes directly.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
@@ -33,6 +34,8 @@ from textual.binding import BindingType
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
+
+logger = logging.getLogger(__name__)
 
 
 def _get_node_status_name(node_status: NodeStatus) -> str:
@@ -215,7 +218,7 @@ def _build_actions_section(
     return DetailSection("Actions", action_fields)
 
 
-class NodeDetailScreen(Screen):
+class NodeDetailScreen(ServiceURLMixin, Screen):
     """Screen showing details for a single node, pushed on top of NodesScreen."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -238,9 +241,7 @@ class NodeDetailScreen(Screen):
     def _get_workcell_client(self) -> WorkcellClient:
         """Get or create the WorkcellClient instance."""
         if self._workcell_client is None:
-            workcell_url = self.app.service_urls.get(
-                "workcell_manager", "http://localhost:8005/"
-            )
+            workcell_url = self.get_service_url("workcell_manager")
             self._workcell_client = WorkcellClient(
                 workcell_server_url=workcell_url,
             )
@@ -333,9 +334,17 @@ class NodeDetailScreen(Screen):
             self._render_details()
             self.notify("Node refreshed", timeout=2)
             return
-        except Exception:  # noqa: S110
-            pass
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
         self.notify("Could not refresh node data", timeout=2)
+
+    async def on_unmount(self) -> None:
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "close"):
+                    client.close()
 
     def action_go_back(self) -> None:
         """Go back to the nodes list."""
@@ -417,6 +426,10 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             f"Auto-refresh: {state} | 'r' manual | 'Esc' back[/dim]"
         )
 
+    def watch_auto_refresh_enabled(self, _value: bool) -> None:
+        """React to auto_refresh_enabled changes by updating the footer."""
+        self._update_footer()
+
     async def refresh_data(self) -> None:
         """Refresh node data from workcell manager."""
         table = self.query_one("#nodes-table", DataTable)
@@ -430,7 +443,8 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
                 for name, node in nodes.items():
                     self._add_node_row(table, name, node)
             return
-        except Exception:
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
             self.notify("Failed to reach Workcell Manager", timeout=3)
 
         # If we can't reach the workcell manager, show a message

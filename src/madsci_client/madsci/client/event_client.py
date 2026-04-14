@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 
 import httpx
+from madsci.client.http import DualModeClientMixin
 from madsci.client.structlog_config import (
     AnsiStrippingFormatter,
     create_instance_logger,
@@ -54,7 +55,7 @@ def get_madsci_version() -> str:
         return "unknown (development mode)"
 
 
-class EventClient:
+class EventClient(DualModeClientMixin):
     """A logger and event handler for MADSci system components.
 
     Uses structlog for structured logging with context binding support.
@@ -160,15 +161,6 @@ class EventClient:
     def session(self) -> httpx.Client:
         """Backward-compatible accessor for the underlying HTTP client."""
         return self._client
-
-    def _ensure_async_client(self) -> httpx.AsyncClient:
-        """Lazily create the async HTTP client on first use."""
-        if self._async_client is None:
-            self._async_client = create_httpx_client(
-                config=self.config,
-                async_mode=True,
-            )
-        return self._async_client
 
     def _setup_otel(self) -> None:
         try:
@@ -379,23 +371,8 @@ class EventClient:
                     handler.close()
                     self.logger.removeHandler(handler)
 
-        # Close HTTP clients
-        if hasattr(self, "_client") and self._client:
-            with contextlib.suppress(Exception):
-                self._client.close()
-        if hasattr(self, "_async_client") and self._async_client is not None:
-            try:
-                import asyncio  # noqa: PLC0415
-
-                loop = asyncio.get_event_loop()
-                if not loop.is_running():
-                    loop.run_until_complete(self._async_client.aclose())
-                else:
-                    self._async_client = None
-            except Exception:
-                self._async_client = None
-            finally:
-                self._async_client = None
+        # Delegate HTTP client cleanup to mixin
+        super().close()
 
     async def aclose(self) -> None:
         """Close async resources properly.
@@ -408,20 +385,15 @@ class EventClient:
         if getattr(self, "_is_bound_child", False):
             return
 
-        if self._async_client is not None:
-            await self._async_client.aclose()
-            self._async_client = None
-        if self._client is not None:
-            self._client.close()
-            self._client = None
+        # Close file handlers (sync operation, safe to do before async close)
+        if hasattr(self, "logger") and self.logger:
+            for handler in self.logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                    self.logger.removeHandler(handler)
 
-    def __enter__(self) -> "EventClient":
-        """Context manager entry."""
-        return self
-
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Context manager exit - clean up resources."""
-        self.close()
+        # Delegate HTTP client cleanup to mixin
+        await super().aclose()
 
     # ==================== Context Binding ====================
 

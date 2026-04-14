@@ -239,7 +239,7 @@ class ResourceClient(DualModeClientMixin):
         _configured_url = self.resource_server_url
         if self.resource_server_url is not None:
             start_time = time.time()
-            while time.time() - start_time < 20:
+            while time.time() - start_time < self.config.startup_timeout:
                 try:
                     self._client.get(
                         f"{self.resource_server_url}definition",

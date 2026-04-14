@@ -6,7 +6,9 @@ querying metadata, and downloading data from the Data Manager.
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,12 +49,17 @@ def _get_data_url(ctx: click.Context, data_url: str | None) -> str:
     return resolve_service_url(ctx, data_url, "data_server_url", 8004)
 
 
-def _make_client(data_url: str, timeout: float) -> DataClient:
+@contextlib.contextmanager
+def _make_client(data_url: str, timeout: float) -> Iterator[DataClient]:
     from madsci.client.data_client import DataClient
     from madsci.common.types.client_types import DataClientConfig
 
     config = DataClientConfig(timeout_default=timeout)
-    return DataClient(data_server_url=data_url, config=config)
+    client = DataClient(data_server_url=data_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _datapoint_to_row(dp) -> dict:  # noqa: ANN001
@@ -140,31 +147,31 @@ def list_datapoints(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_data_url(ctx, data_url)
-    client = _make_client(url, timeout)
 
-    datapoints = client.get_datapoints(number=count)
+    with _make_client(url, timeout) as client:
+        datapoints = client.get_datapoints(number=count)
 
-    if not datapoints:
+        if not datapoints:
+            if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+                output_result(console, [], format=fmt.value)
+            else:
+                info(console, "No datapoints found.")
+            return
+
         if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-            output_result(console, [], format=fmt.value)
-        else:
-            info(console, "No datapoints found.")
-        return
+            rows = [_datapoint_to_dict(dp) for dp in datapoints]
+            output_result(console, rows, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        rows = [_datapoint_to_dict(dp) for dp in datapoints]
-        output_result(console, rows, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            for dp in datapoints:
+                console.print(f"{dp.datapoint_id} {dp.data_type}")
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for dp in datapoints:
-            console.print(f"{dp.datapoint_id} {dp.data_type}")
-        return
-
-    rows = [_datapoint_to_row(dp) for dp in datapoints]
-    output_result(
-        console, rows, format="text", title="Datapoints", columns=_LIST_COLUMNS
-    )
+        rows = [_datapoint_to_row(dp) for dp in datapoints]
+        output_result(
+            console, rows, format="text", title="Datapoints", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -205,24 +212,24 @@ def get_datapoint(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_data_url(ctx, data_url)
-    client = _make_client(url, timeout)
 
-    if save_to:
-        client.save_datapoint_value(datapoint_id, save_to)
-        success(console, f"Datapoint saved to {save_to}")
-        return
+    with _make_client(url, timeout) as client:
+        if save_to:
+            client.save_datapoint_value(datapoint_id, save_to)
+            success(console, f"Datapoint saved to {save_to}")
+            return
 
-    value = client.get_datapoint_value(datapoint_id)
+        value = client.get_datapoint_value(datapoint_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, value, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(str(value)[:200])
-    # If it's a dict/list, print as JSON; otherwise print raw
-    elif isinstance(value, (dict, list)):
-        output_result(console, value, format="json")
-    else:
-        console.print(str(value))
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, value, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(str(value)[:200])
+        # If it's a dict/list, print as JSON; otherwise print raw
+        elif isinstance(value, (dict, list)):
+            output_result(console, value, format="json")
+        else:
+            console.print(str(value))
 
 
 # ---------------------------------------------------------------------------
@@ -255,16 +262,16 @@ def datapoint_metadata(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_data_url(ctx, data_url)
-    client = _make_client(url, timeout)
 
-    meta = client.get_datapoint_metadata(datapoint_id)
+    with _make_client(url, timeout) as client:
+        meta = client.get_datapoint_metadata(datapoint_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, meta, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{datapoint_id}")
-    else:
-        output_result(console, meta, format="text", title="Datapoint Metadata")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, meta, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{datapoint_id}")
+        else:
+            output_result(console, meta, format="text", title="Datapoint Metadata")
 
 
 # ---------------------------------------------------------------------------
@@ -314,42 +321,42 @@ def submit_datapoint(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_data_url(ctx, data_url)
-    client = _make_client(url, timeout)
 
     if file_path and json_value:
         raise click.ClickException("--file and --value are mutually exclusive.")
     if not file_path and not json_value:
         raise click.ClickException("Provide either --file or --value.")
 
-    if file_path:
-        dp = DataPoint.discriminate(
-            {
-                "data_type": "file",
-                "path": str(Path(file_path).resolve()),
-                "label": label,
-            }
-        )
-    else:
-        try:
-            parsed_value = json.loads(json_value)
-        except json.JSONDecodeError as exc:
-            raise click.ClickException(f"Invalid JSON in --value: {exc}") from exc
-        dp = DataPoint.discriminate(
-            {
-                "data_type": "json",
-                "value": parsed_value,
-                "label": label,
-            }
-        )
+    with _make_client(url, timeout) as client:
+        if file_path:
+            dp = DataPoint.discriminate(
+                {
+                    "data_type": "file",
+                    "path": str(Path(file_path).resolve()),
+                    "label": label,
+                }
+            )
+        else:
+            try:
+                parsed_value = json.loads(json_value)
+            except json.JSONDecodeError as exc:
+                raise click.ClickException(f"Invalid JSON in --value: {exc}") from exc
+            dp = DataPoint.discriminate(
+                {
+                    "data_type": "json",
+                    "value": parsed_value,
+                    "label": label,
+                }
+            )
 
-    result = client.submit_datapoint(dp)
+        result = client.submit_datapoint(dp)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(result.datapoint_id)
-    else:
-        success(console, f"Datapoint submitted -- ID: {result.datapoint_id}")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, result, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(result.datapoint_id)
+        else:
+            success(console, f"Datapoint submitted -- ID: {result.datapoint_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -390,35 +397,35 @@ def query_datapoints(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_data_url(ctx, data_url)
-    client = _make_client(url, timeout)
 
     try:
         parsed_selector = json.loads(selector)
     except json.JSONDecodeError as exc:
         raise click.ClickException(f"Invalid JSON in --selector: {exc}") from exc
 
-    results = client.query_datapoints(parsed_selector)
+    with _make_client(url, timeout) as client:
+        results = client.query_datapoints(parsed_selector)
 
-    # results is a dict[str, DataPoint]
-    datapoints = list(results.values()) if isinstance(results, dict) else results
-    if limit:
-        datapoints = datapoints[:limit]
+        # results is a dict[str, DataPoint]
+        datapoints = list(results.values()) if isinstance(results, dict) else results
+        if limit:
+            datapoints = datapoints[:limit]
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        rows = [_datapoint_to_dict(dp) for dp in datapoints]
-        output_result(console, rows, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            rows = [_datapoint_to_dict(dp) for dp in datapoints]
+            output_result(console, rows, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for dp in datapoints:
-            console.print(f"{dp.datapoint_id} {dp.data_type}")
-        return
+        if fmt == OutputFormat.QUIET:
+            for dp in datapoints:
+                console.print(f"{dp.datapoint_id} {dp.data_type}")
+            return
 
-    if not datapoints:
-        info(console, "No datapoints matched the query.")
-        return
+        if not datapoints:
+            info(console, "No datapoints matched the query.")
+            return
 
-    rows = [_datapoint_to_row(dp) for dp in datapoints]
-    output_result(
-        console, rows, format="text", title="Query Results", columns=_LIST_COLUMNS
-    )
+        rows = [_datapoint_to_row(dp) for dp in datapoints]
+        output_result(
+            console, rows, format="text", title="Query Results", columns=_LIST_COLUMNS
+        )

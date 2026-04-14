@@ -5,6 +5,9 @@ DataTableView widget for MADSci TUI.
 Enhanced DataTable wrapper with declarative column definitions,
 empty state handling, and typed row selection messages.
 
+.. note:: Not yet used by any screen -- designed for future adoption.
+   See https://github.com/AD-SDL/MADSci/issues/278
+
 Classes
 -------
 

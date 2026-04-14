@@ -6,8 +6,10 @@ submitting, pausing, resuming, cancelling, retrying, and resubmitting workflows.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -55,12 +57,17 @@ def _get_workcell_url(ctx: click.Context, workcell_url: str | None) -> str:
     return resolve_service_url(ctx, workcell_url, "workcell_server_url", 8005)
 
 
-def _make_client(workcell_url: str, timeout: float) -> WorkcellClient:
+@contextlib.contextmanager
+def _make_client(workcell_url: str, timeout: float) -> Iterator[WorkcellClient]:
     from madsci.client.workcell_client import WorkcellClient
     from madsci.common.types.client_types import WorkcellClientConfig
 
     config = WorkcellClientConfig(timeout_default=timeout)
-    return WorkcellClient(workcell_server_url=workcell_url, config=config)
+    client = WorkcellClient(workcell_server_url=workcell_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _workflow_status_label(wf: Workflow) -> str:
@@ -114,16 +121,11 @@ def _workflow_to_row(wf: Workflow) -> dict:
 
 def _workflow_to_dict(wf: Workflow) -> dict:
     """Convert a Workflow to a serialisable dict for JSON/YAML output."""
-    return {
-        "workflow_id": wf.workflow_id,
-        "name": wf.name,
-        "status": _workflow_status_label(wf),
-        "progress": _workflow_progress(wf),
-        "current_step": _workflow_step_label(wf),
-        "start_time": str(wf.start_time) if wf.start_time else None,
-        "end_time": str(wf.end_time) if wf.end_time else None,
-        "duration_seconds": wf.duration_seconds,
-    }
+    d = wf.model_dump(mode="json")
+    d["status"] = _workflow_status_label(wf)
+    d["progress"] = _workflow_progress(wf)
+    d["current_step"] = _workflow_step_label(wf)
+    return d
 
 
 _LIST_COLUMNS = [
@@ -209,50 +211,54 @@ def list_workflows(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    workflows: list = []
+    with _make_client(url, timeout) as client:
+        workflows: list = []
 
-    # Determine what to fetch.  Default (no flags) = active + queued.
-    fetch_active = show_all or show_active or (not show_archived and not show_queued)
-    fetch_queued = show_all or show_queued or (not show_archived and not show_active)
-    fetch_archived = show_all or show_archived
-
-    if fetch_active:
-        active = client.get_active_workflows()
-        workflows.extend(active.values())
-
-    if fetch_queued:
-        queued = client.get_workflow_queue()
-        # Avoid duplicates if a queued workflow was already returned as active
-        existing_ids = {wf.workflow_id for wf in workflows}
-        workflows.extend(wf for wf in queued if wf.workflow_id not in existing_ids)
-
-    if fetch_archived:
-        archived = client.get_archived_workflows(number=limit)
-        existing_ids = {wf.workflow_id for wf in workflows}
-        workflows.extend(
-            wf for wf in archived.values() if wf.workflow_id not in existing_ids
+        # Determine what to fetch.  Default (no flags) = active + queued.
+        fetch_active = (
+            show_all or show_active or (not show_archived and not show_queued)
         )
+        fetch_queued = (
+            show_all or show_queued or (not show_archived and not show_active)
+        )
+        fetch_archived = show_all or show_archived
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_workflow_to_dict(wf) for wf in workflows]
-        output_result(console, data, format=fmt.value)
-        return
+        if fetch_active:
+            active = client.get_active_workflows()
+            workflows.extend(active.values())
 
-    if fmt == OutputFormat.QUIET:
-        for wf in workflows:
-            console.print(f"{wf.workflow_id} {_workflow_status_label(wf)}")
-        return
+        if fetch_queued:
+            queued = client.get_workflow_queue()
+            # Avoid duplicates if a queued workflow was already returned as active
+            existing_ids = {wf.workflow_id for wf in workflows}
+            workflows.extend(wf for wf in queued if wf.workflow_id not in existing_ids)
 
-    if not workflows:
-        info(console, "No workflows found.")
-        return
+        if fetch_archived:
+            archived = client.get_archived_workflows(number=limit)
+            existing_ids = {wf.workflow_id for wf in workflows}
+            workflows.extend(
+                wf for wf in archived.values() if wf.workflow_id not in existing_ids
+            )
 
-    rows = [_workflow_to_row(wf) for wf in workflows]
-    output_result(
-        console, rows, format="text", title="Workflows", columns=_LIST_COLUMNS
-    )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_workflow_to_dict(wf) for wf in workflows]
+            output_result(console, data, format=fmt.value)
+            return
+
+        if fmt == OutputFormat.QUIET:
+            for wf in workflows:
+                console.print(f"{wf.workflow_id} {_workflow_status_label(wf)}")
+            return
+
+        if not workflows:
+            info(console, "No workflows found.")
+            return
+
+        rows = [_workflow_to_row(wf) for wf in workflows]
+        output_result(
+            console, rows, format="text", title="Workflows", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -353,31 +359,31 @@ def show_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    wf = client.query_workflow(workflow_id)
-    if wf is None:
-        raise click.ClickException(f"Workflow {workflow_id} not found.")
+    with _make_client(url, timeout) as client:
+        wf = client.query_workflow(workflow_id)
+        if wf is None:
+            raise click.ClickException(f"Workflow {workflow_id} not found.")
 
-    if not follow:
-        _render_workflow(console, wf, fmt, steps)
-        return
-
-    # Follow mode: poll until terminal
-    try:
-        while True:
+        if not follow:
             _render_workflow(console, wf, fmt, steps)
-            if wf.status.terminal:
-                break
-            info(console, "Waiting for workflow to complete... (Ctrl+C to stop)")
-            time.sleep(2)
-            wf = client.query_workflow(workflow_id)
-            if wf is None:
-                raise click.ClickException(
-                    f"Workflow {workflow_id} disappeared while following."
-                )
-    except KeyboardInterrupt:
-        console.print("\n[dim]Stopped following.[/dim]")
+            return
+
+        # Follow mode: poll until terminal
+        try:
+            while True:
+                _render_workflow(console, wf, fmt, steps)
+                if wf.status.terminal:
+                    break
+                info(console, "Waiting for workflow to complete... (Ctrl+C to stop)")
+                time.sleep(2)
+                wf = client.query_workflow(workflow_id)
+                if wf is None:
+                    raise click.ClickException(
+                        f"Workflow {workflow_id} disappeared while following."
+                    )
+        except KeyboardInterrupt:
+            console.print("\n[dim]Stopped following.[/dim]")
 
 
 # ---------------------------------------------------------------------------
@@ -425,54 +431,56 @@ def submit_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    workflow_path = Path(path).resolve()
-    json_inputs = None
-    if parameters_json:
-        try:
-            json_inputs = json.loads(parameters_json)
-        except json.JSONDecodeError as exc:
-            raise click.ClickException(f"Invalid JSON in --parameters: {exc}") from exc
+    with _make_client(url, timeout) as client:
+        workflow_path = Path(path).resolve()
+        json_inputs = None
+        if parameters_json:
+            try:
+                json_inputs = json.loads(parameters_json)
+            except json.JSONDecodeError as exc:
+                raise click.ClickException(
+                    f"Invalid JSON in --parameters: {exc}"
+                ) from exc
 
-    if no_wait:
-        from madsci.common.types.workflow_types import WorkflowDefinition
+        if no_wait:
+            from madsci.common.types.workflow_types import WorkflowDefinition
 
-        wf_def = WorkflowDefinition.from_yaml(workflow_path)
-        if label:
-            wf_def.name = f"{wf_def.name} ({label})"
-        wf_id = client.submit_workflow_definition(wf_def)
+            wf_def = WorkflowDefinition.from_yaml(workflow_path)
+            if label:
+                wf_def.name = f"{wf_def.name} ({label})"
+            wf_id = client.submit_workflow_definition(wf_def)
 
-        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-            output_result(console, {"workflow_id": wf_id}, format=fmt.value)
-        elif fmt == OutputFormat.QUIET:
-            console.print(wf_id)
-        else:
-            success(console, f"Workflow submitted -- ID: {wf_id}")
-        return
+            if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+                output_result(console, {"workflow_id": wf_id}, format=fmt.value)
+            elif fmt == OutputFormat.QUIET:
+                console.print(wf_id)
+            else:
+                success(console, f"Workflow submitted -- ID: {wf_id}")
+            return
 
-    console.print(f"Submitting workflow: [cyan]{workflow_path.name}[/cyan]")
-    console.print("Waiting for workflow to complete...")
+        console.print(f"Submitting workflow: [cyan]{workflow_path.name}[/cyan]")
+        console.print("Waiting for workflow to complete...")
 
-    result = client.start_workflow(
-        workflow_definition=workflow_path,
-        json_inputs=json_inputs,
-        await_completion=True,
-        prompt_on_error=False,
-        raise_on_failed=False,
-        raise_on_cancelled=False,
-    )
-
-    status_label = _workflow_status_label(result)
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{result.workflow_id} {status_label}")
-    else:
-        success(
-            console,
-            f"Workflow finished -- status: {format_status_colored(status_label)}",
+        result = client.start_workflow(
+            workflow_definition=workflow_path,
+            json_inputs=json_inputs,
+            await_completion=True,
+            prompt_on_error=False,
+            raise_on_failed=False,
+            raise_on_cancelled=False,
         )
+
+        status_label = _workflow_status_label(result)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, result, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{result.workflow_id} {status_label}")
+        else:
+            success(
+                console,
+                f"Workflow finished -- status: {format_status_colored(status_label)}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -501,16 +509,16 @@ def pause_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    wf = client.pause_workflow(workflow_id)
+    with _make_client(url, timeout) as client:
+        wf = client.pause_workflow(workflow_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _workflow_to_dict(wf), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{wf.workflow_id} paused")
-    else:
-        success(console, f"Workflow {workflow_id} paused.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _workflow_to_dict(wf), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{wf.workflow_id} paused")
+        else:
+            success(console, f"Workflow {workflow_id} paused.")
 
 
 # ---------------------------------------------------------------------------
@@ -539,16 +547,16 @@ def resume_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    wf = client.resume_workflow(workflow_id)
+    with _make_client(url, timeout) as client:
+        wf = client.resume_workflow(workflow_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _workflow_to_dict(wf), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{wf.workflow_id} resumed")
-    else:
-        success(console, f"Workflow {workflow_id} resumed.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _workflow_to_dict(wf), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{wf.workflow_id} resumed")
+        else:
+            success(console, f"Workflow {workflow_id} resumed.")
 
 
 # ---------------------------------------------------------------------------
@@ -584,15 +592,15 @@ def cancel_workflow(
     if not yes:
         click.confirm(f"Cancel workflow {workflow_id}?", abort=True)
 
-    client = _make_client(url, timeout)
-    wf = client.cancel_workflow(workflow_id)
+    with _make_client(url, timeout) as client:
+        wf = client.cancel_workflow(workflow_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _workflow_to_dict(wf), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{wf.workflow_id} cancelled")
-    else:
-        success(console, f"Workflow {workflow_id} cancelled.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _workflow_to_dict(wf), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{wf.workflow_id} cancelled")
+        else:
+            success(console, f"Workflow {workflow_id} cancelled.")
 
 
 # ---------------------------------------------------------------------------
@@ -637,38 +645,38 @@ def retry_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    # Resolve -1 to the current_step_index of the workflow
-    index = from_step
-    if index == -1:
-        wf = client.query_workflow(workflow_id)
-        if wf is None:
-            raise click.ClickException(f"Workflow {workflow_id} not found.")
-        index = wf.status.current_step_index
+    with _make_client(url, timeout) as client:
+        # Resolve -1 to the current_step_index of the workflow
+        index = from_step
+        if index == -1:
+            wf = client.query_workflow(workflow_id)
+            if wf is None:
+                raise click.ClickException(f"Workflow {workflow_id} not found.")
+            index = wf.status.current_step_index
 
-    if not no_wait:
-        console.print(f"Retrying workflow {workflow_id} from step {index}...")
+        if not no_wait:
+            console.print(f"Retrying workflow {workflow_id} from step {index}...")
 
-    wf = client.retry_workflow(
-        workflow_id,
-        index=index,
-        await_completion=not no_wait,
-        prompt_on_error=False,
-        raise_on_failed=False,
-        raise_on_cancelled=False,
-    )
-
-    status_label = _workflow_status_label(wf)
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _workflow_to_dict(wf), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{wf.workflow_id} {status_label}")
-    else:
-        success(
-            console,
-            f"Workflow {workflow_id} retried -- status: {format_status_colored(status_label)}",
+        wf = client.retry_workflow(
+            workflow_id,
+            index=index,
+            await_completion=not no_wait,
+            prompt_on_error=False,
+            raise_on_failed=False,
+            raise_on_cancelled=False,
         )
+
+        status_label = _workflow_status_label(wf)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _workflow_to_dict(wf), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{wf.workflow_id} {status_label}")
+        else:
+            success(
+                console,
+                f"Workflow {workflow_id} retried -- status: {format_status_colored(status_label)}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -704,26 +712,26 @@ def resubmit_workflow(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_workcell_url(ctx, workcell_url)
-    client = _make_client(url, timeout)
 
-    if not no_wait:
-        console.print(f"Resubmitting workflow {workflow_id}...")
+    with _make_client(url, timeout) as client:
+        if not no_wait:
+            console.print(f"Resubmitting workflow {workflow_id}...")
 
-    wf = client.resubmit_workflow(
-        workflow_id,
-        await_completion=not no_wait,
-        prompt_on_error=False,
-        raise_on_failed=False,
-        raise_on_cancelled=False,
-    )
-
-    status_label = _workflow_status_label(wf)
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _workflow_to_dict(wf), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{wf.workflow_id} {status_label}")
-    else:
-        success(
-            console,
-            f"Workflow resubmitted -- new ID: {wf.workflow_id}, status: {format_status_colored(status_label)}",
+        wf = client.resubmit_workflow(
+            workflow_id,
+            await_completion=not no_wait,
+            prompt_on_error=False,
+            raise_on_failed=False,
+            raise_on_cancelled=False,
         )
+
+        status_label = _workflow_status_label(wf)
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _workflow_to_dict(wf), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{wf.workflow_id} {status_label}")
+        else:
+            success(
+                console,
+                f"Workflow resubmitted -- new ID: {wf.workflow_id}, status: {format_status_colored(status_label)}",
+            )

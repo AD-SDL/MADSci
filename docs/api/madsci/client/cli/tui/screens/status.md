@@ -51,4 +51,7 @@ Classes
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses concurrently.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   Update the footer when auto-refresh is toggled.

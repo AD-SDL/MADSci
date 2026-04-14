@@ -109,7 +109,7 @@ Classes
     :   Toggle the auto-refresh flag and notify the user.
 
     `on_unmount(self) ‑> None`
-    :   Clean up when screen is unmounted.
+    :   Clean up client connections when screen is unmounted.
 
     `refresh_data(self) ‑> None`
     :   Override to define the refresh behaviour.
@@ -140,6 +140,7 @@ Classes
     * madsci.client.cli.tui.screens.experiments.ExperimentsScreen
     * madsci.client.cli.tui.screens.locations.LocationsScreen
     * madsci.client.cli.tui.screens.logs.LogsScreen
+    * madsci.client.cli.tui.screens.nodes.NodeDetailScreen
     * madsci.client.cli.tui.screens.nodes.NodesScreen
     * madsci.client.cli.tui.screens.resources.ResourcesScreen
     * madsci.client.cli.tui.screens.status.StatusScreen

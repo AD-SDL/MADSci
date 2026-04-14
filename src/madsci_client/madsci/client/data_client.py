@@ -34,7 +34,7 @@ from ulid import ULID
 
 
 class DataClient(DualModeClientMixin):
-    """Client for the MADSci Experiment Manager."""
+    """Client for the MADSci Data Manager."""
 
     data_server_url: Optional[AnyUrl]
     _minio_client: Optional[ObjectStorageSettings] = None
@@ -44,7 +44,7 @@ class DataClient(DualModeClientMixin):
         data_server_url: Optional[Union[str, AnyUrl]] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         config: Optional[DataClientConfig] = None,
-    ) -> DataClient:
+    ) -> None:
         """
         Create a new Datapoint Client.
 

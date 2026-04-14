@@ -56,5 +56,11 @@ Classes
     `on_mount(self) ‑> None`
     :   Handle screen mount - load initial logs.
 
+    `on_screen_resume(self) ‑> None`
+    :   Restart the follow timer when the screen is resumed, if follow mode is active.
+
+    `on_screen_suspend(self) ‑> None`
+    :   Pause the follow timer when the screen is suspended.
+
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.

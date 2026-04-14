@@ -53,6 +53,9 @@ Classes
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
 
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
+
 `QuickActionsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing quick action shortcuts.
     
@@ -113,6 +116,9 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the panel.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when panel is unmounted.
 
     `refresh_data(self) ‑> None`
     :   Refresh recent events.

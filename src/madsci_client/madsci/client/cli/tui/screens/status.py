@@ -6,6 +6,7 @@ Provides detailed service status with health information.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
@@ -23,6 +24,8 @@ from textual.binding import BindingType
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
+
+logger = logging.getLogger(__name__)
 
 INFRASTRUCTURE_SERVICES = {
     "ferretdb": ("localhost", 27017),
@@ -118,11 +121,17 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
             )
 
+    def watch_auto_refresh_enabled(self, _value: bool) -> None:
+        """Update the footer when auto-refresh is toggled."""
+        self._update_footer()
+
     async def refresh_data(self) -> None:
-        """Refresh all service statuses."""
-        await self._refresh_managers()
-        await self._refresh_infrastructure()
-        await self._refresh_nodes()
+        """Refresh all service statuses concurrently."""
+        await asyncio.gather(
+            self._refresh_managers(),
+            self._refresh_infrastructure(),
+            self._refresh_nodes(),
+        )
 
     async def _refresh_managers(self) -> None:
         """Refresh manager service statuses."""
@@ -215,8 +224,8 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                         "-",
                     )
             return
-        except Exception:  # noqa: S110
-            pass
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
         with preserve_cursor(table):
             table.clear()
             table.add_row(

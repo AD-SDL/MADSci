@@ -60,3 +60,6 @@ Classes
         
         Args:
             event: The select changed event.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.

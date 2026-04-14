@@ -144,6 +144,7 @@ class ActionExecutorScreen(Screen):
         select = self.query_one("#action-select", Select)
         args_input = self.query_one("#args-input", Input)
         result_panel = self.query_one("#action-result", DetailPanel)
+        execute_btn = self.query_one("#execute-btn", Button)
 
         action_name = select.value
         if not action_name or action_name == Select.BLANK:
@@ -162,6 +163,7 @@ class ActionExecutorScreen(Screen):
                 return
 
         # Execute action
+        execute_btn.disabled = True
         try:
             client = self._get_node_client()
             action_request = ActionRequest(
@@ -189,6 +191,8 @@ class ActionExecutorScreen(Screen):
 
         except Exception as e:
             self.notify(f"Error: {e}", timeout=3)
+        finally:
+            execute_btn.disabled = False
 
     def _show_result(
         self,
@@ -247,6 +251,14 @@ class ActionExecutorScreen(Screen):
             sections.append(DetailSection("Errors", error_fields))
 
         panel.update_content(title=f"Result: {action_name}", sections=sections)
+
+    async def on_unmount(self) -> None:
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "close"):
+                    client.close()
 
     def action_go_back(self) -> None:
         """Go back to the nodes screen."""

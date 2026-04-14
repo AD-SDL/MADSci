@@ -6,6 +6,7 @@ Opened when a workflow row is selected in :class:`WorkflowsScreen`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
@@ -36,6 +37,8 @@ from textual.binding import BindingType
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
+
+logger = logging.getLogger(__name__)
 
 
 class WorkflowDetailScreen(ActionBarMixin, ServiceURLMixin, Screen):
@@ -249,8 +252,8 @@ class WorkflowDetailScreen(ActionBarMixin, ServiceURLMixin, Screen):
                 self._render_steps()
                 self.notify("Workflow refreshed", timeout=2)
                 return
-        except Exception:  # noqa: S110
-            pass
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
         self.notify("Could not refresh workflow data", timeout=2)
 
     async def action_pause_workflow(self) -> None:

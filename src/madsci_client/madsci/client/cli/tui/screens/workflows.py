@@ -51,12 +51,16 @@ def _get_workflow_status_name(status: WorkflowStatus) -> str:
     return "unknown"
 
 
-def _add_workflow_row(table: DataTable, workflow: Workflow) -> None:
+def _add_workflow_row(
+    table: DataTable, workflow: Workflow, *, wf_id: str | None = None
+) -> None:
     """Add a workflow row to a table.
 
     Args:
         table: The DataTable to add to.
         workflow: Workflow model instance.
+        wf_id: Optional workflow ID used as the row key for reliable
+            selection.
     """
     status_name = _get_workflow_status_name(workflow.status)
     icon = format_status_icon(status_name)
@@ -83,7 +87,15 @@ def _add_workflow_row(table: DataTable, workflow: Workflow) -> None:
 
     duration_str = format_duration(workflow.duration_seconds)
 
-    table.add_row(icon, workflow.name, progress, step_name, started_str, duration_str)
+    table.add_row(
+        icon,
+        workflow.name,
+        progress,
+        step_name,
+        started_str,
+        duration_str,
+        key=wf_id,
+    )
 
 
 def _build_timing_section(workflow: Workflow) -> DetailSection | None:
@@ -327,7 +339,7 @@ class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         with preserve_cursor(table):
             table.clear()
             for wf_id in filtered:
-                _add_workflow_row(table, self.workflows_data[wf_id])
+                _add_workflow_row(table, self.workflows_data[wf_id], wf_id=wf_id)
 
             if not filtered:
                 table.add_row(
@@ -371,7 +383,9 @@ class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         with preserve_cursor(archived_table):
             archived_table.clear()
             for wf_id in filtered:
-                _add_workflow_row(archived_table, self.workflows_data[wf_id])
+                _add_workflow_row(
+                    archived_table, self.workflows_data[wf_id], wf_id=wf_id
+                )
 
             if not filtered:
                 archived_table.add_row(
@@ -410,7 +424,7 @@ class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         with preserve_cursor(active_table):
             active_table.clear()
             for wf_id in filtered_active:
-                _add_workflow_row(active_table, self.workflows_data[wf_id])
+                _add_workflow_row(active_table, self.workflows_data[wf_id], wf_id=wf_id)
             if not filtered_active:
                 active_table.add_row(
                     format_status_icon("unknown"),
@@ -436,7 +450,9 @@ class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         with preserve_cursor(archived_table):
             archived_table.clear()
             for wf_id in filtered_archived:
-                _add_workflow_row(archived_table, self.workflows_data[wf_id])
+                _add_workflow_row(
+                    archived_table, self.workflows_data[wf_id], wf_id=wf_id
+                )
             if not filtered_archived:
                 archived_table.add_row(
                     format_status_icon("unknown"),
@@ -458,28 +474,22 @@ class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         if table.id not in ("workflows-table", "archived-table"):
             return
 
-        row = table.get_row(row_key)
-        workflow_name = str(row[1])
+        wf_id = str(row_key.value)
+        wf = self.workflows_data.get(wf_id)
+        if wf is None:
+            return
 
-        # Find workflow by matching name in the appropriate ID list
-        source_ids = (
-            self._active_ids if table.id == "workflows-table" else self._archived_ids
+        self.selected_workflow_id = wf_id
+        from madsci.client.cli.tui.screens.workflow_detail import (
+            WorkflowDetailScreen,
         )
-        for wf_id in source_ids:
-            wf = self.workflows_data.get(wf_id)
-            if wf is not None and wf.name == workflow_name:
-                self.selected_workflow_id = wf_id
-                from madsci.client.cli.tui.screens.workflow_detail import (
-                    WorkflowDetailScreen,
-                )
 
-                self.app.push_screen(
-                    WorkflowDetailScreen(
-                        workflow_id=wf_id,
-                        workflow_data=wf,
-                    )
-                )
-                return
+        self.app.push_screen(
+            WorkflowDetailScreen(
+                workflow_id=wf_id,
+                workflow_data=wf,
+            )
+        )
 
     async def _send_workflow_command(self, command: str) -> None:
         """Send a control command to the selected workflow.

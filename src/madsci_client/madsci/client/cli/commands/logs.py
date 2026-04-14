@@ -193,27 +193,28 @@ def fetch_logs_from_event_manager(
 ) -> list[dict[str, Any]]:
     """Fetch logs from the Event Manager using EventClient.
 
+    Level and grep filters are applied internally (level server-side via
+    EventClient, grep client-side). Callers do **not** need to call
+    ``filter_logs`` again on the returned entries.
+
     Args:
         base_url: Base URL for the Event Manager.
         limit: Maximum number of events to retrieve.
         level: Minimum log level name (e.g. ``"error"``). Passed to
-            EventClient and also applied by the caller via ``filter_logs``.
-        source: Source service name. Not supported server-side; the caller
-            applies this filter after fetching.
+            EventClient as an integer filter.
+        source: Source service name. Applied client-side after fetching.
         since: Only return events after this datetime. Applied client-side.
-        grep: Search pattern. Applied client-side by the caller via
-            ``filter_logs``.
+        grep: Search pattern. Applied client-side after fetching.
         timeout: Request timeout in seconds.
 
     Returns:
         List of log entry dictionaries.
     """
+    client = EventClient(
+        name="cli-logs",
+        event_server_url=base_url,
+    )
     try:
-        client = EventClient(
-            name="cli-logs",
-            event_server_url=base_url,
-        )
-
         # Map the level name to an int for EventClient (-1 means no filter)
         level_int = _LEVEL_NAME_TO_INT.get(level.lower(), -1) if level else -1
 
@@ -241,6 +242,8 @@ def fetch_logs_from_event_manager(
         return entries
     except Exception:
         return []
+    finally:
+        client.close()
 
 
 def _extract_source_name(entry: dict[str, Any]) -> str:
@@ -423,8 +426,6 @@ def logs(  # noqa: C901, PLR0912, PLR0915
             if entry.get("source", entry.get("service", "")) in services
         ]
 
-    log_entries = filter_logs(log_entries, level=level, grep=grep)
-
     # --- Structured output modes ---
     if fmt == OutputFormat.JSON:
         console.print_json(json.dumps({"logs": log_entries}))
@@ -459,7 +460,6 @@ def logs(  # noqa: C901, PLR0912, PLR0915
                     source=services[0] if len(services) == 1 else None,
                     grep=grep,
                 )
-                new_entries = filter_logs(new_entries, level=level, grep=grep)
 
                 for entry in new_entries:
                     entry_id = entry.get(

@@ -77,7 +77,12 @@ class AutoRefreshMixin:
             self.notify(f"Auto-refresh {state}", timeout=2)
 
     async def on_unmount(self) -> None:
-        """Clean up when screen is unmounted."""
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "close"):
+                    client.close()
 
 
 class ServiceURLMixin:

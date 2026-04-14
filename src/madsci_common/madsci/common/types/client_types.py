@@ -212,6 +212,11 @@ class ResourceClientConfig(MadsciClientConfig):
         env_file_encoding="utf-8",
     )
 
+    startup_timeout: float = Field(
+        default=20.0,
+        description="Timeout in seconds for the startup polling loop that checks server availability.",
+    )
+
 
 class LabClientConfig(MadsciClientConfig):
     """Configuration for the Lab (Squid) client."""

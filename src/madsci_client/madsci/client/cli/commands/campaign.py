@@ -6,6 +6,8 @@ viewing campaigns that group related experiments together.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -43,12 +45,17 @@ def _get_experiment_url(ctx: click.Context, experiment_url: str | None) -> str:
     return resolve_service_url(ctx, experiment_url, "experiment_server_url", 8002)
 
 
-def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:
+@contextlib.contextmanager
+def _make_client(experiment_url: str, timeout: float) -> Iterator[ExperimentClient]:
     from madsci.client.experiment_client import ExperimentClient
     from madsci.common.types.client_types import ExperimentClientConfig
 
     config = ExperimentClientConfig(timeout_default=timeout)
-    return ExperimentClient(experiment_server_url=experiment_url, config=config)
+    client = ExperimentClient(experiment_server_url=experiment_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 # ---------------------------------------------------------------------------
@@ -100,47 +107,34 @@ def list_campaigns(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
 
-    campaigns = client.get_campaigns(timeout=timeout)
+    with _make_client(url, timeout) as client:
+        campaigns = client.get_campaigns(timeout=timeout)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, campaigns, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, campaigns, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for camp in campaigns if isinstance(campaigns, list) else []:
-            cid = (
-                camp.get("campaign_id", "")
-                if isinstance(camp, dict)
-                else getattr(camp, "campaign_id", "")
-            )
-            console.print(str(cid))
-        return
+        if fmt == OutputFormat.QUIET:
+            for camp in campaigns:
+                console.print(str(getattr(camp, "campaign_id", "")))
+            return
 
-    if not campaigns:
-        console.print("[dim]No campaigns found.[/dim]")
-        return
+        if not campaigns:
+            console.print("[dim]No campaigns found.[/dim]")
+            return
 
-    rows = []
-    for camp in campaigns if isinstance(campaigns, list) else []:
-        if isinstance(camp, dict):
-            rows.append(
-                {
-                    "id": camp.get("campaign_id", "-"),
-                    "name": camp.get("campaign_name", "-"),
-                }
-            )
-        else:
+        rows = []
+        for camp in campaigns:
             rows.append(
                 {
                     "id": getattr(camp, "campaign_id", "-"),
                     "name": getattr(camp, "campaign_name", "-"),
                 }
             )
-    output_result(
-        console, rows, format="text", title="Campaigns", columns=_LIST_COLUMNS
-    )
+        output_result(
+            console, rows, format="text", title="Campaigns", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -174,32 +168,24 @@ def create_campaign(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
 
-    camp = ExperimentalCampaign(
-        campaign_name=campaign_name,
-        campaign_description=campaign_desc,
-        experiment_ids=[],
-    )
-    result = client.register_campaign(camp)
+    with _make_client(url, timeout) as client:
+        camp = ExperimentalCampaign(
+            campaign_name=campaign_name,
+            campaign_description=campaign_desc,
+            experiment_ids=[],
+        )
+        result = client.register_campaign(camp)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        # result may be a dict or model; handle both
-        cid = (
-            result.get("campaign_id", result)
-            if isinstance(result, dict)
-            else getattr(result, "campaign_id", result)
-        )
-        console.print(str(cid))
-    else:
-        cid = (
-            result.get("campaign_id", "")
-            if isinstance(result, dict)
-            else getattr(result, "campaign_id", "")
-        )
-        success(console, f"Campaign created -- ID: {cid!s}")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, result, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(str(getattr(result, "campaign_id", result)))
+        else:
+            success(
+                console,
+                f"Campaign created -- ID: {getattr(result, 'campaign_id', '')!s}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -229,18 +215,13 @@ def get_campaign(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
 
-    result = client.get_campaign(campaign_id)
+    with _make_client(url, timeout) as client:
+        result = client.get_campaign(campaign_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        cid = (
-            result.get("campaign_id", result)
-            if isinstance(result, dict)
-            else getattr(result, "campaign_id", result)
-        )
-        console.print(str(cid))
-    else:
-        output_result(console, result, format="text", title="Campaign")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, result, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(str(getattr(result, "campaign_id", result)))
+        else:
+            output_result(console, result, format="text", title="Campaign")

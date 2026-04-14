@@ -5,6 +5,7 @@ active workflows, and recent events.
 """
 
 import asyncio
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
@@ -18,6 +19,8 @@ from textual.binding import BindingType
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
+
+logger = logging.getLogger(__name__)
 
 
 class ServicesPanel(Static):
@@ -42,8 +45,8 @@ class ServicesPanel(Static):
                     badge.status = "healthy"
                 else:
                     badge.status = "offline"
-            except Exception:  # noqa: S110
-                pass  # Widget may not exist if service_urls changed
+            except Exception as exc:
+                logger.debug("Refresh failed: %s", exc)
 
 
 class QuickActionsPanel(Static):
@@ -134,6 +137,14 @@ class RecentEventsPanel(Static):
             "[dim]No events loaded. Press 'r' to refresh.[/dim]", id="events-content"
         )
 
+    async def on_unmount(self) -> None:
+        """Clean up client connections when panel is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "close"):
+                    client.close()
+
     async def refresh_data(self) -> None:
         """Refresh recent events."""
         content = self.query_one("#events-content", Label)
@@ -150,7 +161,8 @@ class RecentEventsPanel(Static):
                 content.update("\n".join(lines))
             else:
                 content.update("[dim]No recent events[/dim]")
-        except Exception:
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
             content.update("[dim]Event Manager not available[/dim]")
 
 
@@ -196,6 +208,10 @@ class DashboardScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
             footer.update(
                 "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | '?' help[/dim]"
             )
+
+    def watch_auto_refresh_enabled(self, _value: bool) -> None:
+        """React to auto_refresh_enabled changes by updating the footer."""
+        self._update_footer()
 
     async def refresh_data(self) -> None:
         """Refresh all dashboard data."""

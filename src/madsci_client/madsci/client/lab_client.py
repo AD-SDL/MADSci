@@ -24,7 +24,7 @@ class LabClient(DualModeClientMixin):
         self,
         lab_server_url: Optional[Union[str, AnyUrl]] = None,
         config: Optional[LabClientConfig] = None,
-    ) -> LabClient:
+    ) -> None:
         """
         Create a new Lab Client.
 
