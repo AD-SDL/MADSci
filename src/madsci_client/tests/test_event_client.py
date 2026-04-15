@@ -127,7 +127,7 @@ class TestEventClientLogging:
         mock_response.is_success = True
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -140,9 +140,10 @@ class TestEventClientLogging:
         # Wait for the threaded task to complete (log sends events asynchronously)
         time.sleep(0.1)
 
-        # Verify event was sent to server
-        mock_session.post.assert_called_once()
-        call_args = mock_session.post.call_args
+        # Verify event was sent to server via _request("POST", ...)
+        mock_session.request.assert_called_once()
+        call_args = mock_session.request.call_args
+        assert call_args[0][0] == "POST"
         assert call_args[1]["timeout"] == 10.0
         # Verify the JSON payload contains our event data
         json_data = call_args[1]["json"]
@@ -273,7 +274,7 @@ class TestEventClientLogging:
 
         # Mock failed POST to event server
         mock_session = Mock()
-        mock_session.post.side_effect = httpx.HTTPError("Server error")
+        mock_session.request.side_effect = httpx.HTTPError("Server error")
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -304,14 +305,15 @@ class TestEventClientEventRetrieval:
         mock_response.json.return_value = sample_event.model_dump()
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_event(sample_event.event_id)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             f"http://localhost:8001/event/{sample_event.event_id}",
             timeout=10.0,
         )
@@ -356,7 +358,7 @@ class TestEventClientEventRetrieval:
         )
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -379,14 +381,15 @@ class TestEventClientEventRetrieval:
         }
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_events(number=50, level=logging.INFO)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/events",
             timeout=10.0,
             params={"number": 50, "level": logging.INFO},
@@ -407,14 +410,15 @@ class TestEventClientEventRetrieval:
         mock_response.json.return_value = {}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_events()
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/events",
             timeout=10.0,
             params={"number": 100, "level": 10},  # DEBUG level
@@ -459,7 +463,7 @@ class TestEventClientEventRetrieval:
         )
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -486,19 +490,19 @@ class TestEventClientQueryEvents:
         }
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         # Reset mock after initialization
         mock_session.request.reset_mock()
-        mock_session.post.return_value = mock_response
 
         selector = {"event_type": "test", "source.user": "test_user"}
         result = client.query_events(selector)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             "http://localhost:8001/events/query",
             timeout=10.0,
             params={"selector": selector},
@@ -531,7 +535,7 @@ class TestEventClientQueryEvents:
         )
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -620,7 +624,7 @@ class TestEventClientUtilizationMethods:
         mock_response.json.return_value = {"utilization_data": "test"}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -633,7 +637,8 @@ class TestEventClientUtilizationMethods:
             include_users=True,
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/periods",
             params={
                 "analysis_type": "daily",
@@ -659,7 +664,7 @@ class TestEventClientUtilizationMethods:
         mock_response.text = "date,utilization\\n2025-01-01,50%"
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -678,7 +683,8 @@ class TestEventClientUtilizationMethods:
                 "save_to_file": "true",
                 "output_path": output_path,
             }
-            mock_session.get.assert_called_once_with(
+            mock_session.request.assert_called_once_with(
+                "GET",
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=100.0,
@@ -706,7 +712,7 @@ class TestEventClientUtilizationMethods:
         mock_response.json.return_value = {"sessions": []}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -716,7 +722,8 @@ class TestEventClientUtilizationMethods:
             end_time="2025-01-02T00:00:00Z",
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/sessions",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
@@ -739,7 +746,7 @@ class TestEventClientUtilizationMethods:
         mock_response.text = "session,start,end\\nsession1,2025-01-01,2025-01-02"
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -757,7 +764,8 @@ class TestEventClientUtilizationMethods:
                 "save_to_file": "true",
                 "output_path": output_path,
             }
-            mock_session.get.assert_called_once_with(
+            mock_session.request.assert_called_once_with(
+                "GET",
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=100.0,
@@ -785,7 +793,7 @@ class TestEventClientUtilizationMethods:
         mock_response.json.return_value = {"users": {}}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -795,7 +803,8 @@ class TestEventClientUtilizationMethods:
             end_time="2025-01-02T00:00:00Z",
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/users",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
@@ -821,7 +830,7 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_session = Mock()
-        mock_session.get.side_effect = httpx.HTTPError("Network error")
+        mock_session.request.side_effect = httpx.HTTPError("Network error")
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)

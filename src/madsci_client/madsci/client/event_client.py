@@ -734,7 +734,8 @@ class EventClient(DualModeClientMixin):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.event_server:
-            response = self._client.get(
+            response = self._request(
+                "GET",
                 f"{self.event_server}event/{event_id}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -761,7 +762,8 @@ class EventClient(DualModeClientMixin):
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            response = self._client.get(
+            response = self._request(
+                "GET",
                 f"{self.event_server}events",
                 timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
@@ -800,7 +802,8 @@ class EventClient(DualModeClientMixin):
             payload["before_date"] = before_date
         if event_ids:
             payload["event_ids"] = event_ids
-        response = self._client.post(
+        response = self._request(
+            "POST",
             f"{self.event_server}events/archive",
             json=payload,
             timeout=timeout or 10.0,
@@ -820,7 +823,8 @@ class EventClient(DualModeClientMixin):
         Returns:
             Response dict from the event server (e.g. {"purged_count": N}).
         """
-        response = self._client.delete(
+        response = self._request(
+            "DELETE",
             f"{self.event_server}events/archived",
             params={"older_than_days": older_than_days},
             timeout=timeout or 10.0,
@@ -837,7 +841,8 @@ class EventClient(DualModeClientMixin):
         Returns:
             Response dict from the event server.
         """
-        response = self._client.post(
+        response = self._request(
+            "POST",
             f"{self.event_server}backup",
             timeout=timeout or 30.0,
         )
@@ -853,7 +858,8 @@ class EventClient(DualModeClientMixin):
         Returns:
             Response dict from the event server describing backup status.
         """
-        response = self._client.get(
+        response = self._request(
+            "GET",
             f"{self.event_server}backup",
             timeout=timeout or 10.0,
         )
@@ -874,7 +880,8 @@ class EventClient(DualModeClientMixin):
         """
         events = OrderedDict()
         if self.event_server:
-            response = self._client.post(
+            response = self._request(
+                "POST",
                 f"{self.event_server}events/query",
                 timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
@@ -1001,7 +1008,8 @@ class EventClient(DualModeClientMixin):
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self._client.get(
+            response = self._request(
+                "GET",
                 f"{self.event_server}utilization/periods",
                 params=params,
                 timeout=self.config.timeout_data_operations,
@@ -1070,7 +1078,8 @@ class EventClient(DualModeClientMixin):
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self._client.get(
+            response = self._request(
+                "GET",
                 f"{self.event_server}utilization/sessions",
                 params=params,
                 timeout=self.config.timeout_long_operations,
@@ -1130,7 +1139,8 @@ class EventClient(DualModeClientMixin):
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self._client.get(
+            response = self._request(
+                "GET",
                 f"{self.event_server}utilization/users",
                 params=params,
                 timeout=self.config.timeout_long_operations,
@@ -1178,7 +1188,8 @@ class EventClient(DualModeClientMixin):
             if self._otel_runtime and self._otel_runtime.enabled:
                 with contextlib.suppress(Exception):
                     inject_headers(headers)
-            response = self._client.post(
+            response = self._request(
+                "POST",
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
                 headers=headers,
@@ -1251,8 +1262,8 @@ class EventClient(DualModeClientMixin):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.event_server:
-            client = self._ensure_async_client()
-            response = await client.get(
+            response = await self._async_request(
+                "GET",
                 f"{self.event_server}event/{event_id}",
                 timeout=timeout or self.config.timeout_default,
             )
@@ -1277,8 +1288,8 @@ class EventClient(DualModeClientMixin):
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            client = self._ensure_async_client()
-            response = await client.get(
+            response = await self._async_request(
+                "GET",
                 f"{self.event_server}events",
                 timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
@@ -1308,8 +1319,8 @@ class EventClient(DualModeClientMixin):
         """
         events = OrderedDict()
         if self.event_server:
-            client = self._ensure_async_client()
-            response = await client.post(
+            response = await self._async_request(
+                "POST",
                 f"{self.event_server}events/query",
                 timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
