@@ -734,6 +734,9 @@ Classes
     `on_mount(self) ‑> None`
     :   Set up the steps table and render content.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
+
 `WorkflowsScreen(**kwargs: Any)`
 :   Screen showing workflow visualization and management.
     

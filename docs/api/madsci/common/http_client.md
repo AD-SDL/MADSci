@@ -60,7 +60,8 @@ Classes
 -------
 
 `AsyncRetryTransport(transport: httpx.AsyncHTTPTransport, *, retries: int = 3, status_forcelist: list[int] | None = None, backoff_factor: float = 0.3, allowed_methods: list[str] | None = None)`
-:   Asynchronous transport wrapper that retries on configurable status codes.
+:   Asynchronous transport wrapper that retries on configurable status codes
+    and connection-level transport errors.
     
     Async counterpart of :class:`RetryTransport`.  Uses ``asyncio.sleep``
     for non-blocking backoff delays.
@@ -93,11 +94,14 @@ Classes
     :   Send *request* asynchronously, retrying on qualifying failures.
 
 `RetryTransport(transport: httpx.HTTPTransport, *, retries: int = 3, status_forcelist: list[int] | None = None, backoff_factor: float = 0.3, allowed_methods: list[str] | None = None)`
-:   Synchronous transport wrapper that retries on configurable status codes.
+:   Synchronous transport wrapper that retries on configurable status codes
+    and connection-level transport errors.
     
-    Wraps an ``httpx.HTTPTransport`` and adds status-code-level retry logic
-    with exponential backoff, mirroring the retry behaviour previously provided
-    by ``urllib3.util.retry.Retry`` in the requests-based session factory.
+    Wraps an ``httpx.HTTPTransport`` and adds retry logic with exponential
+    backoff for both HTTP status codes and ``httpx.TransportError`` exceptions
+    (e.g. ``ConnectError``, ``ReadTimeout``), mirroring the retry behaviour
+    previously provided by ``urllib3.util.retry.Retry`` in the requests-based
+    session factory.
     
     Parameters
     ----------
