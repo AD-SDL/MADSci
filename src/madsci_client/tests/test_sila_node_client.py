@@ -342,6 +342,7 @@ class TestGetActionStatus:
         node_client = _make_sila_node_client(mock_client)
 
         mock_instance = MagicMock()
+        mock_instance.done = False
         mock_instance.status = "running"
         node_client._running_commands["test-id"] = (
             mock_instance,
@@ -358,6 +359,7 @@ class TestGetActionStatus:
         node_client = _make_sila_node_client(mock_client)
 
         mock_instance = MagicMock()
+        mock_instance.done = True
         mock_instance.status = "finishedSuccessfully"
         node_client._running_commands["test-id"] = (
             mock_instance,
@@ -374,6 +376,7 @@ class TestGetActionStatus:
         node_client = _make_sila_node_client(mock_client)
 
         mock_instance = MagicMock()
+        mock_instance.done = True
         mock_instance.status = "finishedWithError"
         node_client._running_commands["test-id"] = (
             mock_instance,
@@ -402,6 +405,7 @@ class TestGetActionResult:
         node_client = _make_sila_node_client(mock_client)
 
         mock_instance = MagicMock()
+        mock_instance.done = True
         mock_instance.status = "finishedSuccessfully"
         Resp = namedtuple("Resp", ["Value"])
         mock_instance.get_responses.return_value = Resp(Value=42)
@@ -423,6 +427,7 @@ class TestGetActionResult:
         node_client = _make_sila_node_client(mock_client)
 
         mock_instance = MagicMock()
+        mock_instance.done = False
         mock_instance.status = "running"
         node_client._running_commands["test-id"] = (
             mock_instance,
@@ -507,6 +512,75 @@ class TestGetInfo:
         assert info.module_name == "sila2"
         assert "GreetingProvider.SayHello" in info.actions
         assert "TimerProvider.Countdown" in info.actions
+
+    def test_action_args_populated(self):
+        """Should populate ArgumentDefinition from SiLA command parameters."""
+        mock_client = _make_mock_sila_client()
+
+        # Mock a feature with a command that has parameters
+        greeting_feature = MagicMock()
+        greeting_feature.__dir__ = lambda _self: ["SayHello"]
+
+        # Build mock wrapped command with parameters
+        mock_param = MagicMock()
+        mock_param._identifier = "Name"
+        mock_param._description = "The name to greet."
+        mock_param.data_type = MagicMock()
+        type(mock_param.data_type).__name__ = "String"
+
+        mock_wrapped = MagicMock()
+        mock_wrapped.parameters.fields = [mock_param]
+
+        greeting_feature.SayHello._wrapped_command = mock_wrapped
+        mock_client.GreetingProvider = greeting_feature
+
+        node_client = _make_sila_node_client(mock_client)
+        info = node_client.get_info()
+
+        action_def = info.actions["GreetingProvider.SayHello"]
+        assert "Name" in action_def.args
+        arg = action_def.args["Name"]
+        assert arg.name == "Name"
+        assert arg.description == "The name to greet."
+        assert arg.argument_type == "String"
+        assert arg.required is True
+
+    def test_observable_flag(self):
+        """Should set asynchronous=True for observable commands."""
+        mock_client = _make_mock_sila_client()
+
+        feature = MagicMock()
+        feature.__dir__ = lambda _self: ["CountDown"]
+
+        # ClientObservableCommand class name
+        mock_cmd = MagicMock()
+        mock_cmd.__class__.__name__ = "ClientObservableCommand"
+        mock_cmd._wrapped_command.parameters.fields = []
+        feature.CountDown = mock_cmd
+        mock_client.GreetingProvider = feature
+
+        node_client = _make_sila_node_client(mock_client)
+        info = node_client.get_info()
+
+        assert info.actions["GreetingProvider.CountDown"].asynchronous is True
+
+    def test_unobservable_flag(self):
+        """Should set asynchronous=False for unobservable commands."""
+        mock_client = _make_mock_sila_client()
+
+        feature = MagicMock()
+        feature.__dir__ = lambda _self: ["Greet"]
+
+        mock_cmd = MagicMock()
+        mock_cmd.__class__.__name__ = "ClientUnobservableCommand"
+        mock_cmd._wrapped_command.parameters.fields = []
+        feature.Greet = mock_cmd
+        mock_client.GreetingProvider = feature
+
+        node_client = _make_sila_node_client(mock_client)
+        info = node_client.get_info()
+
+        assert info.actions["GreetingProvider.Greet"].asynchronous is False
 
     def test_server_name_fallback(self):
         """Should use fallback name when SiLAService.ServerName fails."""

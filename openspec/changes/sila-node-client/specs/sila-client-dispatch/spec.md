@@ -12,14 +12,14 @@ The SilaNodeClient SHALL declare `url_protocols = ["sila"]` so that the existing
 - **THEN** it SHALL return `False`
 
 ### Requirement: Conditional registration in NODE_CLIENT_MAP
-The SilaNodeClient SHALL be registered in `NODE_CLIENT_MAP` only when the `unitelabs-sila` package is installed. When the package is not installed, the registration SHALL be silently skipped and other node clients SHALL remain unaffected.
+The SilaNodeClient SHALL be registered in `NODE_CLIENT_MAP` only when the `sila2` package is installed. When the package is not installed, the registration SHALL be silently skipped and other node clients SHALL remain unaffected.
 
 #### Scenario: Registration with sila2 installed
-- **WHEN** the `unitelabs-sila` package is importable
+- **WHEN** the `sila2` package is importable
 - **THEN** `NODE_CLIENT_MAP` SHALL contain `"sila_node_client": SilaNodeClient`
 
 #### Scenario: Registration without sila2 installed
-- **WHEN** the `unitelabs-sila` package is not importable
+- **WHEN** the `sila2` package is not importable
 - **THEN** `NODE_CLIENT_MAP` SHALL not contain a `sila_node_client` entry and no `ImportError` SHALL be raised
 
 ### Requirement: Workcell dispatch for sila URLs
@@ -41,7 +41,7 @@ The client SHALL parse `sila://host:port` URLs, defaulting to port `50052` when 
 - **THEN** it SHALL connect to host `myhost` on port `50052`
 
 ### Requirement: Clear error when sila2 not installed
-If a user attempts to construct a `SilaNodeClient` but the `unitelabs-sila` package is not installed, the client SHALL raise an `ImportError` with installation instructions.
+If a user attempts to construct a `SilaNodeClient` but the `sila2` package is not installed, the client SHALL raise an `ImportError` with installation instructions.
 
 #### Scenario: Construction without sila2
 - **WHEN** `SilaNodeClient(url="sila://localhost:50052")` is called and `unitelabs-sila` is not installed

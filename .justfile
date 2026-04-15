@@ -219,8 +219,14 @@ validate_nb_experiment:
 validate_nb_backup:
   docker compose --profile testing run --rm --no-deps notebook_validator papermill /home/madsci/notebooks/backup_and_migration.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
 
+# Validate the SiLA node example notebook (starts SiLA server, runs notebook, stops server)
+validate_nb_sila:
+  docker compose up -d sila_example_server
+  docker compose --profile testing run --rm --no-deps notebook_validator papermill /home/madsci/notebooks/sila_node_notebook.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
+  docker compose stop sila_example_server
+
 # Validate all example notebooks
-validate_notebooks: validate_nb_node validate_nb_experiment validate_nb_backup
+validate_notebooks: validate_nb_node validate_nb_experiment validate_nb_backup validate_nb_sila
 
 # Start with observability stack
 otel *args: env

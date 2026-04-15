@@ -40,15 +40,16 @@ Map SiLA commands to MADSci action names as `"FeatureName.CommandName"` (e.g., `
 - Slash notation (`Feature/Command`) — less natural, no clear advantage
 - Only qualified names — too strict for simple servers with few features
 
-### 3. SiLA SDK: `unitelabs-sila`
+### 3. SiLA SDK: `sila2`
 
-Use the `unitelabs-sila` package (actively maintained) rather than the original `sila2` package (maintenance-only).
+Use the `sila2` package. While maintenance-only, it provides the only Python SiLA2 client API (`SilaClient` with attribute-style feature access). The `unitelabs-sila` alternative is server-only with no client abstraction.
 
 ### 4. Optional dependency with conditional registration
 
-Add `unitelabs-sila` as an optional extra (`pip install "madsci.client[sila]"`). The client module uses a `try/except ImportError` guard with a `SILA2_AVAILABLE` sentinel. Registration in `NODE_CLIENT_MAP` is conditional. Attempting to construct `SilaNodeClient` without the SDK installed raises a clear `ImportError`.
+Add `sila2` as an optional extra (`pip install "madsci.client[sila]"`). The client module uses a `try/except ImportError` guard with a `SILA2_AVAILABLE` sentinel. Registration in `NODE_CLIENT_MAP` is conditional. Attempting to construct `SilaNodeClient` without the SDK installed raises a clear `ImportError`.
 
 **Alternatives considered:**
+- `unitelabs-sila` — server-only, no client API
 - Making it a hard dependency — too heavy (grpcio, lxml, zeroconf) for users who don't need SiLA
 
 ### 5. Rename MadsciClientConfig to MadsciHttpClientConfig; separate SiLA config
@@ -66,10 +67,11 @@ Store observable command instances in a `_running_commands: dict[action_id, ...]
 
 `get_state()` iterates all SiLA features and reads all property values, returning a dict keyed by `"FeatureName.PropertyName"`. This enables monitoring and debugging. Properties are read on-demand (not cached).
 
-## Risks / Trade-offs
+## Risks / Trade-offs (updated with implementation learnings)
 
-- **SiLA SDK API surface variability** → Pin minimum version in pyproject.toml; validate introspection heuristics against actual SDK during implementation. Prefer `isinstance` checks over `hasattr` where possible.
-- **Observable command detection is heuristic** (`hasattr(result, "status") and hasattr(result, "get_responses")`) → Mitigate by checking for SDK-specific types like `ClientObservableCommandInstance` if importable.
+- **`get_responses()` is non-blocking** (RESOLVED) → In sila2 v0.14.0, `get_responses()` raises `CommandExecutionNotFinished` instead of blocking. The client polls `instance.done` with exponential backoff before calling `get_responses()`.
+- **Feature IDs are fully qualified** (RESOLVED) → `SiLAService.ImplementedFeatures` returns FQIs like `"org.madsci/examples/ExampleDevice/v1"`, not short identifiers. The client extracts the short identifier (penultimate path segment) for attribute access on the SilaClient object.
+- **Observable command detection is heuristic** (`hasattr(result, "status") and hasattr(result, "get_responses")`) → Works correctly with the sila2 SDK's `ClientObservableCommandInstance`.
 - **Memory leak in `_running_commands`** for commands never polled → Acceptable for v1; document that callers should always retrieve results. Add TTL cleanup in a future iteration.
 - **Thread safety of SiLA gRPC client** → gRPC channels are thread-safe; protect client creation with `threading.Lock`. Concurrent command execution should work but needs validation.
 - **`get_state()` could be slow** on servers with many properties → Acceptable trade-off for v1; callers control when they call it.

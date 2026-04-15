@@ -38,7 +38,14 @@
 - [x] 6.4 Add tests for `get_status()`, `get_info()`, `get_state()`: connected/disconnected, feature introspection, property reading
 - [x] 6.5 Add tests for NODE_CLIENT_MAP conditional registration and `find_node_client()` dispatch
 
-## 7. Verification
+## 7. ActionDefinition Args Population
 
-- [x] 7.1 Run full test suite (`pytest`) to verify no regressions
-- [x] 7.2 Run linter (`ruff check`) on all new and modified files
+- [x] 7.1 Update `get_info()` to extract `ArgumentDefinition` entries from each SiLA command's `_wrapped_command.parameters.fields`, mapping `_identifier` → name, `_description` → description, data type class name → argument_type, `required=True`
+- [x] 7.2 Set `ActionDefinition.asynchronous` based on whether the command is observable (`ClientObservableCommand`) vs unobservable (`ClientUnobservableCommand`)
+- [x] 7.3 Add/update tests for `get_info()` verifying that `ActionDefinition.args` contains the expected `ArgumentDefinition` entries
+- [x] 7.4 Verify the SiLA example notebook's `get_info()` output now shows args
+
+## 8. Verification
+
+- [x] 8.1 Run SiLA unit tests (`pytest src/madsci_client/tests/test_sila_node_client.py`)
+- [x] 8.2 Run linter (`ruff check`) on changed files

@@ -4,7 +4,6 @@ Connects to SiLA2 servers via gRPC using the sila2 Python SDK.
 Requires the 'sila' optional dependency: pip install "madsci.client[sila]"
 """
 
-import concurrent.futures
 import contextlib
 import threading
 import time
@@ -21,6 +20,7 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
+    ArgumentDefinition,
 )
 from madsci.common.types.base_types import Error
 from madsci.common.types.event_types import EventType
@@ -107,10 +107,29 @@ def _resolve_sila_command(client: Any, action_name: str) -> tuple[Any, str, str]
     return matches[0]
 
 
+def _fqi_to_short_id(fqi: str) -> str:
+    """Extract the short feature identifier from a fully qualified identifier.
+
+    E.g., "org.madsci/examples/ExampleDevice/v1" -> "ExampleDevice"
+    """
+    parts = str(fqi).split("/")
+    # The identifier is the second-to-last part (before the version)
+    if len(parts) >= 2:
+        return parts[-2]
+    return str(fqi)
+
+
 def _get_feature_ids(client: Any) -> list[str]:
-    """Get the list of implemented feature identifiers from a SiLA client."""
+    """Get the list of implemented feature short identifiers from a SiLA client.
+
+    The SiLAService returns fully qualified identifiers (e.g.,
+    "org.madsci/examples/ExampleDevice/v1"). This function extracts the
+    short identifiers (e.g., "ExampleDevice") which are the attribute names
+    on the SilaClient object.
+    """
     try:
-        return list(client.SiLAService.ImplementedFeatures.get())
+        fqis = client.SiLAService.ImplementedFeatures.get()
+        return [_fqi_to_short_id(fqi) for fqi in fqis]
     except Exception:
         return []
 
@@ -151,6 +170,40 @@ def _serialize_value(value: Any) -> Any:
     if hasattr(value, "_fields"):
         return {f: _serialize_value(getattr(value, f)) for f in value._fields}
     return str(value)
+
+
+def _extract_argument_definitions(command_attr: Any) -> dict[str, ArgumentDefinition]:
+    """Extract ArgumentDefinition entries from a SiLA client command's wrapped command.
+
+    Accesses ``command_attr._wrapped_command.parameters.fields`` to read
+    parameter metadata (identifier, description, data type).
+    """
+    args: dict[str, ArgumentDefinition] = {}
+    with contextlib.suppress(Exception):
+        wrapped = command_attr._wrapped_command
+        for param in wrapped.parameters.fields:
+            name = str(getattr(param, "_identifier", "unknown"))
+            description = str(getattr(param, "_description", ""))
+            arg_type = (
+                type(param.data_type).__name__ if hasattr(param, "data_type") else "Any"
+            )
+            args[name] = ArgumentDefinition(
+                name=name,
+                description=description,
+                argument_type=arg_type,
+                required=True,
+            )
+    return args
+
+
+def _is_command_observable(command_attr: Any) -> bool:
+    """Check if a SiLA client command is observable (vs unobservable).
+
+    Detects by class name since the concrete types are in the sila2 package
+    which may not be installed.
+    """
+    cls_name = type(command_attr).__name__
+    return "Observable" in cls_name and "Unobservable" not in cls_name
 
 
 def _is_observable_instance(result: Any) -> bool:
@@ -343,30 +396,36 @@ class SilaNodeClient(AbstractNodeClient):
         command_name: str,
         timeout: float,
     ) -> ActionResult:
-        """Block until an observable SiLA command completes."""
+        """Block until an observable SiLA command completes by polling instance.done."""
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(instance.get_responses)
-                responses = future.result(timeout=timeout)
+            start_time = time.time()
+            interval = self.config.poll_interval
+            while not instance.done:
+                if time.time() - start_time > timeout:
+                    return ActionResult(
+                        action_id=action_id,
+                        status=ActionStatus.FAILED,
+                        errors=[
+                            Error(
+                                message=(
+                                    f"SiLA observable command '{feature_name}.{command_name}' "
+                                    f"timed out after {timeout}s"
+                                )
+                            )
+                        ],
+                    )
+                time.sleep(interval)
+                interval = min(
+                    interval * self.config.poll_backoff_factor,
+                    self.config.max_poll_interval,
+                )
 
+            responses = instance.get_responses()
             json_result = _response_to_dict(responses)
             return ActionResult(
                 action_id=action_id,
                 status=ActionStatus.SUCCEEDED,
                 json_result=json_result,
-            )
-        except concurrent.futures.TimeoutError:
-            return ActionResult(
-                action_id=action_id,
-                status=ActionStatus.FAILED,
-                errors=[
-                    Error(
-                        message=(
-                            f"SiLA observable command '{feature_name}.{command_name}' "
-                            f"timed out after {timeout}s"
-                        )
-                    )
-                ],
             )
         except Exception as e:
             return ActionResult(
@@ -389,10 +448,10 @@ class SilaNodeClient(AbstractNodeClient):
 
         instance = entry[0]
         try:
-            sila_status = str(instance.status).lower()
-            if "error" in sila_status:
-                return ActionStatus.FAILED
-            if "finished" in sila_status:
+            if instance.done:
+                sila_status = str(instance.status).lower()
+                if "error" in sila_status:
+                    return ActionStatus.FAILED
                 return ActionStatus.SUCCEEDED
             return ActionStatus.RUNNING
         except Exception:
@@ -538,9 +597,13 @@ class SilaNodeClient(AbstractNodeClient):
                 attr = getattr(feature, attr_name, None)
                 if attr is not None and callable(attr):
                     qualified_name = f"{feature_id}.{attr_name}"
+                    args = _extract_argument_definitions(attr)
+                    is_observable = _is_command_observable(attr)
                     actions[qualified_name] = ActionDefinition(
                         name=qualified_name,
                         description=f"SiLA command {attr_name} from feature {feature_id}",
+                        args=args,
+                        asynchronous=is_observable,
                     )
 
         server_name = "SiLA Server"

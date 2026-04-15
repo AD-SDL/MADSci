@@ -97,7 +97,7 @@ workcell_nodes:
   robotarm_1: http://localhost:2002/
   platereader_1: http://localhost:2003/
   advanced_example_node: http://localhost:2004/
-  sila_test: sila://host.docker.internal:50042
+  sila_example: sila://localhost:50052
 
 # Location Manager
 location_server_url: http://localhost:8006/

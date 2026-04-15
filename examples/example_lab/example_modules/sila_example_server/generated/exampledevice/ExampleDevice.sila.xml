@@ -1,0 +1,69 @@
+<Feature xmlns="http://www.sila-standard.org" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Category="examples" FeatureVersion="1.0" MaturityLevel="Draft" Originator="org.madsci" SiLA2Version="1.0" xsi:schemaLocation="http://www.sila-standard.org https://gitlab.com/SiLA2/sila_base/raw/master/schema/FeatureDefinition.xsd">
+  <Identifier>ExampleDevice</Identifier>
+  <DisplayName>Example Device</DisplayName>
+  <Description>A minimal SiLA2 feature for demonstrating MADSci SilaNodeClient capabilities. Provides an unobservable command, an observable command, and a readable property.</Description>
+  <!-- Unobservable Command: Greet -->
+  <Command>
+    <Identifier>Greet</Identifier>
+    <DisplayName>Greet</DisplayName>
+    <Description>Returns a greeting for the given name. Demonstrates unobservable (synchronous) command execution.</Description>
+    <Observable>No</Observable>
+    <Parameter>
+      <Identifier>Name</Identifier>
+      <DisplayName>Name</DisplayName>
+      <Description>The name to greet.</Description>
+      <DataType>
+        <Basic>String</Basic>
+      </DataType>
+    </Parameter>
+    <Response>
+      <Identifier>Greeting</Identifier>
+      <DisplayName>Greeting</DisplayName>
+      <Description>The greeting message.</Description>
+      <DataType>
+        <Basic>String</Basic>
+      </DataType>
+    </Response>
+  </Command>
+  <!-- Observable Command: CountDown -->
+  <Command>
+    <Identifier>CountDown</Identifier>
+    <DisplayName>Count Down</DisplayName>
+    <Description>Counts down from the given number, pausing 1 second between each count. Demonstrates observable (long-running) command execution with status polling.</Description>
+    <Observable>Yes</Observable>
+    <Parameter>
+      <Identifier>Count</Identifier>
+      <DisplayName>Count</DisplayName>
+      <Description>The number to count down from.</Description>
+      <DataType>
+        <Basic>Integer</Basic>
+      </DataType>
+    </Parameter>
+    <Response>
+      <Identifier>Message</Identifier>
+      <DisplayName>Message</DisplayName>
+      <Description>A completion message when the countdown finishes.</Description>
+      <DataType>
+        <Basic>String</Basic>
+      </DataType>
+    </Response>
+    <IntermediateResponse>
+      <Identifier>CurrentCount</Identifier>
+      <DisplayName>Current Count</DisplayName>
+      <Description>The current count value during the countdown.</Description>
+      <DataType>
+        <Basic>Integer</Basic>
+      </DataType>
+    </IntermediateResponse>
+  </Command>
+  <!-- Unobservable Property: ServerUptime -->
+  <Property>
+    <Identifier>ServerUptime</Identifier>
+    <DisplayName>Server Uptime</DisplayName>
+    <Description>The number of seconds since the server started. Demonstrates property reading via get_state().</Description>
+    <Observable>No</Observable>
+    <DataType>
+      <Basic>Real</Basic>
+    </DataType>
+  </Property>
+</Feature>

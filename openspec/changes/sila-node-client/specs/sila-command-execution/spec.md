@@ -12,11 +12,11 @@ The SilaNodeClient SHALL accept an `ActionRequest` and execute the corresponding
 - **THEN** the client SHALL return an `ActionResult` with `status=FAILED` and the exception captured in `errors`
 
 ### Requirement: Execute observable SiLA commands with await
-The SilaNodeClient SHALL support observable (long-running) SiLA commands. When `await_result=True`, the client SHALL block until the command completes and return the final result.
+The SilaNodeClient SHALL support observable (long-running) SiLA commands. When `await_result=True`, the client SHALL poll `instance.done` with exponential backoff until the command completes, then call `instance.get_responses()` to retrieve the result. Note: the sila2 SDK's `get_responses()` is non-blocking and raises `CommandExecutionNotFinished` if called before completion — the client MUST poll rather than block.
 
 #### Scenario: Observable command with await
 - **WHEN** `send_action()` is called with `await_result=True` and the SiLA command is observable
-- **THEN** the client SHALL block until the command finishes (up to the configured timeout) and return an `ActionResult` with `status=SUCCEEDED` and the final response in `json_result`
+- **THEN** the client SHALL poll `instance.done` until `True` (up to the configured timeout), then return an `ActionResult` with `status=SUCCEEDED` and the final response in `json_result`
 
 #### Scenario: Observable command timeout
 - **WHEN** `send_action()` is called with `await_result=True` and the observable command does not complete within the timeout
@@ -30,11 +30,11 @@ When `await_result=False`, the client SHALL return immediately with `status=RUNN
 - **THEN** the client SHALL return an `ActionResult` with `status=RUNNING` and store the observable instance internally keyed by `action_id`
 
 ### Requirement: Retrieve observable command status
-The client SHALL allow querying the status of a previously dispatched observable command.
+The client SHALL allow querying the status of a previously dispatched observable command by checking `instance.done` and `instance.status`.
 
 #### Scenario: Query running command status
-- **WHEN** `get_action_status()` is called with an `action_id` of a tracked observable command
-- **THEN** the client SHALL return the current `ActionStatus` (`RUNNING`, `SUCCEEDED`, or `FAILED`)
+- **WHEN** `get_action_status()` is called with an `action_id` of a tracked observable command where `instance.done` is `False`
+- **THEN** the client SHALL return `ActionStatus.RUNNING`
 
 #### Scenario: Query unknown action_id
 - **WHEN** `get_action_status()` is called with an `action_id` that is not tracked
@@ -52,7 +52,7 @@ The client SHALL allow retrieving the final result of a completed observable com
 - **THEN** the client SHALL return an `ActionResult` with the current status (e.g., `RUNNING`) and no `json_result`
 
 ### Requirement: Await observable command result
-The client SHALL support blocking until an observable command completes, with timeout and exponential backoff polling.
+The client SHALL support blocking until an observable command completes, polling `instance.done` with timeout and exponential backoff.
 
 #### Scenario: Await completes successfully
 - **WHEN** `await_action_result()` is called and the command completes before timeout
