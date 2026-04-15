@@ -44,6 +44,9 @@ class TransferPlanner:
         self.transfer_capabilities = transfer_capabilities
         self.resource_client = resource_client
         self._transfer_graph = self._build_transfer_graph()
+        self._detailed_transfer_graph: TransferGraphDetailedResponse = (
+            self._build_detailed_transfer_graph()
+        )
 
     def _build_transfer_graph(self) -> dict[tuple[str, str], TransferGraphEdge]:
         """
@@ -474,16 +477,8 @@ class TransferPlanner:
                 if pair_key not in pair_costs or cost < pair_costs[pair_key]:
                     pair_costs[pair_key] = cost
 
-    def get_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
-        """
-        Get the current transfer graph with detailed edge information.
-
-        Returns all node names that can execute each transfer and the minimum
-        cost among available templates for each location pair.
-
-        Returns:
-            TransferGraphDetailedResponse with a list of detailed edges
-        """
+    def _build_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """Build the detailed transfer graph with node names and costs per edge."""
         pair_nodes: dict[tuple[str, str], list[str]] = {}
         pair_costs: dict[tuple[str, str], float] = {}
 
@@ -513,9 +508,22 @@ class TransferPlanner:
         ]
         return TransferGraphDetailedResponse(edges=edges)
 
+    def get_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """
+        Get the cached transfer graph with detailed edge information.
+
+        Returns all node names that can execute each transfer and the minimum
+        cost among available templates for each location pair.
+
+        Returns:
+            TransferGraphDetailedResponse with a list of detailed edges
+        """
+        return self._detailed_transfer_graph
+
     def rebuild_transfer_graph(self) -> None:
         """Rebuild the transfer graph, typically called when locations or transfer capabilities change."""
         self._transfer_graph = self._build_transfer_graph()
+        self._detailed_transfer_graph = self._build_detailed_transfer_graph()
 
     def validate_locations_exist(
         self, source_id: str, dest_id: str

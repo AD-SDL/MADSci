@@ -33,31 +33,7 @@
 
        <v-window-item value="table">
          <v-card-text>
-           <div class="d-flex ga-2 mb-3">
-             <v-chip
-               :color="managedByFilter === 'all' ? 'primary' : undefined"
-               :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
-               @click="managedByFilter = 'all'"
-             >
-               All
-             </v-chip>
-             <v-chip
-               :color="managedByFilter === 'node' ? 'info' : undefined"
-               :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
-               @click="managedByFilter = 'node'"
-               prepend-icon="mdi-robot-industrial"
-             >
-               Node-Managed
-             </v-chip>
-             <v-chip
-               :color="managedByFilter === 'lab' ? 'success' : undefined"
-               :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
-               @click="managedByFilter = 'lab'"
-               prepend-icon="mdi-flask"
-             >
-               Lab-Managed
-             </v-chip>
-           </div>
+           <ManagedByFilter v-model="managedByFilter" />
            <v-data-table :headers="location_headers" hover
            :items="location_items(locations, resources)"
            no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
@@ -103,31 +79,7 @@
    <!-- Locations Table Section -->
    <v-card class="pa-1 ma-1" title="Locations">
       <v-card-text>
-        <div class="d-flex ga-2 mb-3">
-          <v-chip
-            :color="managedByFilter === 'all' ? 'primary' : undefined"
-            :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
-            @click="managedByFilter = 'all'"
-          >
-            All
-          </v-chip>
-          <v-chip
-            :color="managedByFilter === 'node' ? 'info' : undefined"
-            :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
-            @click="managedByFilter = 'node'"
-            prepend-icon="mdi-robot-industrial"
-          >
-            Node-Managed
-          </v-chip>
-          <v-chip
-            :color="managedByFilter === 'lab' ? 'success' : undefined"
-            :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
-            @click="managedByFilter = 'lab'"
-            prepend-icon="mdi-flask"
-          >
-            Lab-Managed
-          </v-chip>
-        </div>
+        <ManagedByFilter v-model="managedByFilter" />
         <v-data-table :headers="location_headers" hover
         :items="location_items(locations, resources)"
         no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
@@ -171,31 +123,7 @@
    <v-col cols="12" lg="6" xl="6">
      <v-card class="pa-1 ma-1" title="Locations">
         <v-card-text>
-          <div class="d-flex ga-2 mb-3">
-            <v-chip
-              :color="managedByFilter === 'all' ? 'primary' : undefined"
-              :variant="managedByFilter === 'all' ? 'flat' : 'outlined'"
-              @click="managedByFilter = 'all'"
-            >
-              All
-            </v-chip>
-            <v-chip
-              :color="managedByFilter === 'node' ? 'info' : undefined"
-              :variant="managedByFilter === 'node' ? 'flat' : 'outlined'"
-              @click="managedByFilter = 'node'"
-              prepend-icon="mdi-robot-industrial"
-            >
-              Node-Managed
-            </v-chip>
-            <v-chip
-              :color="managedByFilter === 'lab' ? 'success' : undefined"
-              :variant="managedByFilter === 'lab' ? 'flat' : 'outlined'"
-              @click="managedByFilter = 'lab'"
-              prepend-icon="mdi-flask"
-            >
-              Lab-Managed
-            </v-chip>
-          </div>
+          <ManagedByFilter v-model="managedByFilter" />
           <v-data-table :headers="location_headers" hover
           :items="location_items(locations, resources)"
           no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">

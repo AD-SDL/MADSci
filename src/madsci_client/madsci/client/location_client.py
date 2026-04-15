@@ -171,7 +171,8 @@ class LocationClient(DualModeClientMixin):
         Parameters
         ----------
         managed_by : Optional[str]
-            Filter by management type ('node' or 'lab'). If None, returns all locations.
+            Filter by management type ('node' or 'lab'). If None, returns all
+            locations. Must be a valid LocationManagement value.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 

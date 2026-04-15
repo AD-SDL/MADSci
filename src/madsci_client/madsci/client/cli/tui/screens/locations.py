@@ -59,8 +59,7 @@ def _build_general_section(location: Location) -> DetailSection:
     Returns:
         DetailSection with general fields.
     """
-    managed_by_raw = getattr(location, "managed_by", None)
-    managed_by_str = managed_by_raw.value.upper() if managed_by_raw else "LAB"
+    managed_by_str = location.managed_by.value.upper()
 
     owner = getattr(location, "owner", None)
     if owner and getattr(owner, "node_id", None):
@@ -272,10 +271,7 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             for loc_id in filtered:
                 loc = self.locations_data[loc_id]
                 name = loc.location_name or "Unknown"
-                managed_by_raw = getattr(loc, "managed_by", None)
-                managed_by_str = (
-                    managed_by_raw.value.upper() if managed_by_raw else "LAB"
-                )
+                managed_by_str = loc.managed_by.value.upper()
                 loc_id_str = loc_id or "-"
                 template = loc.location_template_name or "-"
                 resource = loc.resource_id

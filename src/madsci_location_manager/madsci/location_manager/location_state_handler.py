@@ -176,6 +176,10 @@ class LocationStateHandler:
         """Returns the total number of location templates."""
         return self._location_templates_collection.count_documents({})
 
+    def count_locations_by_managed_by(self, managed_by: str) -> int:
+        """Returns the number of locations with the given managed_by value."""
+        return self._locations_collection.count_documents({"managed_by": managed_by})
+
     # Location Management Methods (document database-backed)
 
     def get_location(self, location_name: str) -> Optional[Location]:

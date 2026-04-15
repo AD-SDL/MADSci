@@ -41,6 +41,7 @@ from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 from madsci.location_manager.transfer_planner import TransferPlanner
+from packaging.version import InvalidVersion, Version
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 REPRESENTATION_VAL_BODY = Body(...)
@@ -423,13 +424,16 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 self.state_handler.count_unresolved_locations()
             )
 
-            # Count by management type
-            all_locations = self.state_handler.get_locations()
-            health.num_node_managed_locations = sum(
-                1 for loc in all_locations if loc.managed_by == LocationManagement.NODE
+            # Count by management type (efficient DB-level aggregation)
+            health.num_node_managed_locations = (
+                self.state_handler.count_locations_by_managed_by(
+                    LocationManagement.NODE.value
+                )
             )
-            health.num_lab_managed_locations = sum(
-                1 for loc in all_locations if loc.managed_by == LocationManagement.LAB
+            health.num_lab_managed_locations = (
+                self.state_handler.count_locations_by_managed_by(
+                    LocationManagement.LAB.value
+                )
             )
 
             health.last_reconciliation_at = getattr(
@@ -456,11 +460,13 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         super().close()
 
     @get("/locations", tags=["Locations"])
-    def get_locations(self, managed_by: Optional[str] = None) -> list[Location]:
+    def get_locations(
+        self, managed_by: Optional[LocationManagement] = None
+    ) -> list[Location]:
         """Get all locations, optionally filtered by management type."""
         locations = self.state_handler.get_locations()
         if managed_by is not None:
-            locations = [loc for loc in locations if loc.managed_by.value == managed_by]
+            locations = [loc for loc in locations if loc.managed_by == managed_by]
         return locations
 
     @post("/location", tags=["Locations"])
@@ -497,25 +503,29 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         If a location with the given name exists, return it unchanged.
         If it does not exist, create it with lazy resource resolution.
         """
-        existing = self.state_handler.get_location(location.location_name)
-        if existing is not None:
-            return existing
+        with self.span(
+            "location.init",
+            attributes={"location.name": location.location_name},
+        ):
+            existing = self.state_handler.get_location(location.location_name)
+            if existing is not None:
+                return existing
 
-        # Initialize resource if template specified (lazy tolerance on failure)
-        try:
-            location.resource_id = self._initialize_location_resource(location)
-        except Exception:
-            location.resource_id = None
-            self.logger.info(
-                "Resource template not available, will reconcile later",
-                resource_template_name=location.resource_template_name,
-                location_name=location.location_name,
-            )
+            # Initialize resource if template specified (lazy tolerance on failure)
+            try:
+                location.resource_id = self._initialize_location_resource(location)
+            except Exception:
+                location.resource_id = None
+                self.logger.info(
+                    "Resource template not available, will reconcile later",
+                    resource_template_name=location.resource_template_name,
+                    location_name=location.location_name,
+                )
 
-        self.state_handler.add_location(location)
-        # Rebuild transfer graph since new location may participate in transfers
-        self.transfer_planner.rebuild_transfer_graph()
-        return location
+            self.state_handler.add_location(location)
+            # Rebuild transfer graph since new location may participate in transfers
+            self.transfer_planner.rebuild_transfer_graph()
+            return location
 
     @get("/location", tags=["Locations"])
     def get_location_by_query(
@@ -1106,6 +1116,18 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         self._lab_config_mtime = current_mtime
         return config
 
+    @staticmethod
+    def _is_newer_version(new_version: str, existing_version: str) -> bool:
+        """Return True if new_version is strictly greater than existing_version.
+
+        Uses semantic version comparison when possible, falls back to string
+        inequality for non-semver version strings.
+        """
+        try:
+            return Version(new_version) > Version(existing_version)
+        except InvalidVersion:
+            return new_version != existing_version
+
     def _sync_representation_templates(self, config: LabLocationConfig) -> int:
         """Sync representation templates from lab config. Returns count of templates synced."""
         count = 0
@@ -1117,7 +1139,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 if existing is None:
                     self.state_handler.add_representation_template(tmpl)
                     count += 1
-                elif existing.version != tmpl.version:
+                elif self._is_newer_version(tmpl.version, existing.version):
                     tmpl.template_id = existing.template_id
                     tmpl.updated_at = datetime.now(timezone.utc)
                     self.state_handler.update_representation_template(tmpl)
@@ -1139,7 +1161,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 if existing is None:
                     self.state_handler.add_location_template(tmpl)
                     count += 1
-                elif existing.version != tmpl.version:
+                elif self._is_newer_version(tmpl.version, existing.version):
                     tmpl.template_id = existing.template_id
                     tmpl.updated_at = datetime.now(timezone.utc)
                     self.state_handler.update_location_template(tmpl)
@@ -1161,7 +1183,15 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 if existing is None:
                     loc.managed_by = LocationManagement.LAB
                     if loc.resource_template_name:
-                        self._initialize_location_resource(loc)
+                        try:
+                            loc.resource_id = self._initialize_location_resource(loc)
+                        except Exception:
+                            loc.resource_id = None
+                            self.logger.info(
+                                "Resource template not available during sync, will reconcile later",
+                                resource_template_name=loc.resource_template_name,
+                                location_name=loc.location_name,
+                            )
                     self.state_handler.add_location(loc)
                     count += 1
             except Exception:

@@ -73,12 +73,9 @@ def _location_to_row(loc: Any) -> dict:
     resource_id = getattr(loc, "resource_id", None) or "-"
     transfers = getattr(loc, "allow_transfers", True)
     reservation = getattr(loc, "reservation", None)
-    managed_by = getattr(loc, "managed_by", None)
-    managed_by_str = managed_by.value.upper() if managed_by else "LAB"
-
     return {
         "name": truncate(str(name), 30),
-        "managed_by": managed_by_str,
+        "managed_by": loc.managed_by.value.upper(),
         "id": str(lid),
         "template": truncate(str(template), 20),
         "resource": str(resource_id) if resource_id != "-" else "-",
@@ -244,8 +241,7 @@ def get_location(
 
         # Rich detail display
         name = getattr(loc, "location_name", "Unnamed Location")
-        managed_by = getattr(loc, "managed_by", None)
-        managed_by_str = managed_by.value.upper() if managed_by else "LAB"
+        managed_by_str = loc.managed_by.value.upper()
         owner = getattr(loc, "owner", None)
         owner_str = (
             str(owner.node_id) if owner and getattr(owner, "node_id", None) else "N/A"
