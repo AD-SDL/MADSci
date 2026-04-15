@@ -343,7 +343,9 @@ class NodeDetailScreen(ServiceURLMixin, Screen):
         for attr_name in list(vars(self)):
             if attr_name.endswith("_client"):
                 client = getattr(self, attr_name, None)
-                if client is not None and hasattr(client, "close"):
+                if client is not None and hasattr(client, "aclose"):
+                    await client.aclose()
+                elif client is not None and hasattr(client, "close"):
                     client.close()
 
     def action_go_back(self) -> None:

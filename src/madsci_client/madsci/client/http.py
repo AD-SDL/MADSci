@@ -177,6 +177,7 @@ class DualModeClientMixin:
         """
         if hasattr(self, "_client") and self._client is not None:
             self._client.close()
+            self._client = None
         if hasattr(self, "_async_client") and self._async_client is not None:
             import asyncio  # noqa: PLC0415
 
@@ -187,6 +188,8 @@ class DualModeClientMixin:
             if loop is None:
                 with contextlib.suppress(Exception):
                     asyncio.run(self._async_client.aclose())
+            else:
+                loop.create_task(self._async_client.aclose())
             self._async_client = None
 
     async def aclose(self) -> None:
