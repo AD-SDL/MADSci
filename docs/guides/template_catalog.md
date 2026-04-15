@@ -1,6 +1,6 @@
 # Template Catalog
 
-MADSci includes 25 built-in templates for scaffolding lab components. Browse templates with:
+MADSci includes 33 built-in templates for scaffolding lab components. Browse templates with:
 
 ```bash
 madsci new list                       # Show all templates
@@ -365,6 +365,76 @@ Templates for instrument communication interfaces, used within node modules.
 
 ---
 
+## Addon Templates (8)
+
+Templates for adding optional components to existing module projects via `madsci add`.
+
+### addon/docs
+
+**Add documentation directories (docs/, guides/, API reference stubs).**
+
+```bash
+madsci add docs
+```
+
+### addon/drivers
+
+**Add instrument driver directories with connection boilerplate.**
+
+```bash
+madsci add drivers
+```
+
+### addon/notebooks
+
+**Add testing notebooks (Jupyter notebooks for interactive testing).**
+
+```bash
+madsci add notebooks
+```
+
+### addon/gitignore
+
+**Add a Python .gitignore file.**
+
+```bash
+madsci add gitignore
+```
+
+### addon/compose
+
+**Add a Docker Compose file for containerized deployment.**
+
+```bash
+madsci add compose
+```
+
+### addon/dev_tools
+
+**Add developer tooling configuration (ruff, pytest, pre-commit).**
+
+```bash
+madsci add dev_tools
+```
+
+### addon/agent_config
+
+**Add agentic coding configuration (CLAUDE.md, AGENTS.md).**
+
+```bash
+madsci add agent_config
+```
+
+### addon/all
+
+**Add all available addon components at once.**
+
+```bash
+madsci add all
+```
+
+---
+
 ## Summary
 
 | Category | Count | Templates |
@@ -376,4 +446,5 @@ Templates for instrument communication interfaces, used within node modules.
 | Workflow | 2 | basic, multi_step |
 | Lab | 3 | minimal, standard, distributed |
 | Communication | 5 | serial, socket, rest, sdk, modbus |
-| **Total** | **25** | |
+| Addon | 8 | docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all |
+| **Total** | **33** | |

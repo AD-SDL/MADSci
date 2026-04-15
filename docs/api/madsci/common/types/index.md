@@ -15,6 +15,7 @@ Sub-modules
 * madsci.common.types.datapoint_types
 * madsci.common.types.docker_types
 * madsci.common.types.document_db_migration_types
+* madsci.common.types.error_types
 * madsci.common.types.event_types
 * madsci.common.types.experiment_types
 * madsci.common.types.interface_types

@@ -4,9 +4,12 @@ import time
 from pathlib import Path
 from typing import Any, Callable, Optional, TypeVar, Union
 
+import httpx
 import yaml
 from madsci.client.event_client import EventClient
+from madsci.client.http import DualModeClientMixin
 from madsci.common.context import get_current_madsci_context, get_event_client
+from madsci.common.http_client import create_httpx_client
 from madsci.common.ownership import get_current_ownership_info
 from madsci.common.types.client_types import LocationClientConfig
 from madsci.common.types.event_types import EventType
@@ -19,14 +22,13 @@ from madsci.common.types.location_types import (
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
-from madsci.common.utils import create_http_session
 from madsci.common.warnings import MadsciLocalOnlyWarning
 from pydantic import AnyUrl
 
 _T = TypeVar("_T")
 
 
-class LocationClient:
+class LocationClient(DualModeClientMixin):
     """A client for interacting with the Location Manager to perform location operations."""
 
     location_server_url: Optional[AnyUrl]
@@ -82,9 +84,21 @@ class LocationClient:
         if self.location_server_url and not str(self.location_server_url).endswith("/"):
             self.location_server_url = AnyUrl(str(self.location_server_url) + "/")
 
-        # Store config and create session
+        # Store config and create httpx client
         self.config = config if config is not None else LocationClientConfig()
-        self.session = create_http_session(config=self.config)
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
+
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
+
+    def close(self) -> None:
+        """Close HTTP clients and embedded logger."""
+        super().close()
+        if hasattr(self, "logger") and self.logger is not None:
+            self.logger.close()
 
     def _validate_server_url(self) -> None:
         """
@@ -104,8 +118,6 @@ class LocationClient:
         Used by the idempotent ``init_*`` template methods that run during node
         startup, when the location manager may not be ready yet.
         """
-        import requests  # noqa: PLC0415
-
         max_attempts = self.config.startup_retry_max_attempts
         delay = self.config.startup_retry_initial_delay
         max_delay = self.config.startup_retry_max_delay
@@ -114,7 +126,7 @@ class LocationClient:
         for attempt in range(1, max_attempts + 1):
             try:
                 return fn()
-            except (requests.ConnectionError, ConnectionError) as exc:
+            except (httpx.ConnectError, ConnectionError) as exc:
                 if attempt == max_attempts:
                     raise
                 self.logger.warning(
@@ -141,6 +153,10 @@ class LocationClient:
 
         return headers
 
+    # ------------------------------------------------------------------
+    # Sync methods
+    # ------------------------------------------------------------------
+
     def get_locations(self, timeout: Optional[float] = None) -> list[Location]:
         """
         Get all locations.
@@ -157,7 +173,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}locations",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -185,7 +202,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}location",
             params={"location_id": location_id},
             headers=self._get_headers(),
@@ -214,7 +232,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}location",
             params={"name": location_name},
             headers=self._get_headers(),
@@ -243,7 +262,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}location",
             json=location.model_dump(),
             headers=self._get_headers(),
@@ -301,7 +321,8 @@ class LocationClient:
                 )
             locations = [Location.model_validate(item) for item in location_items]
 
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}locations/import",
             json=[loc.model_dump() for loc in locations],
             params={"overwrite": overwrite},
@@ -327,7 +348,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}locations/export",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -342,7 +364,8 @@ class LocationClient:
     ) -> list[LocationRepresentationTemplate]:
         """Get all representation templates."""
         self._validate_server_url()
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}representation_templates",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -357,7 +380,8 @@ class LocationClient:
     ) -> LocationRepresentationTemplate:
         """Get a representation template by name."""
         self._validate_server_url()
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -372,7 +396,8 @@ class LocationClient:
     ) -> LocationRepresentationTemplate:
         """Create a new representation template."""
         self._validate_server_url()
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}representation_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
@@ -416,7 +441,8 @@ class LocationClient:
         )
 
         def _do_init() -> LocationRepresentationTemplate:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.location_server_url}representation_template/init",
                 json=template.model_dump(mode="json"),
                 headers=self._get_headers(),
@@ -434,7 +460,8 @@ class LocationClient:
     ) -> dict[str, str]:
         """Delete a representation template by name."""
         self._validate_server_url()
-        response = self.session.delete(
+        response = self._request(
+            "DELETE",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -449,7 +476,8 @@ class LocationClient:
     ) -> list[LocationTemplate]:
         """Get all location templates."""
         self._validate_server_url()
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}location_templates",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -462,7 +490,8 @@ class LocationClient:
     ) -> LocationTemplate:
         """Get a location template by name."""
         self._validate_server_url()
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -477,7 +506,8 @@ class LocationClient:
     ) -> LocationTemplate:
         """Create a new location template."""
         self._validate_server_url()
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}location_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
@@ -518,7 +548,8 @@ class LocationClient:
         )
 
         def _do_init() -> LocationTemplate:
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 f"{self.location_server_url}location_template/init",
                 json=template.model_dump(mode="json"),
                 headers=self._get_headers(),
@@ -536,7 +567,8 @@ class LocationClient:
     ) -> dict[str, str]:
         """Delete a location template by name."""
         self._validate_server_url()
-        response = self.session.delete(
+        response = self._request(
+            "DELETE",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -568,7 +600,8 @@ class LocationClient:
             description=description,
             allow_transfers=allow_transfers,
         )
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}location/from_template",
             json=request.model_dump(mode="json"),
             headers=self._get_headers(),
@@ -576,11 +609,6 @@ class LocationClient:
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
-
-    def close(self) -> None:
-        """Release the HTTP session."""
-        if hasattr(self, "session") and self.session:
-            self.session.close()
 
     def delete_location(
         self, location_name: str, timeout: Optional[float] = None
@@ -602,7 +630,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.delete(
+        response = self._request(
+            "DELETE",
             f"{self.location_server_url}location/{location_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -638,7 +667,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}location/{location_name}/set_representation/{node_name}",
             json=representation,
             headers=self._get_headers(),
@@ -672,7 +702,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.delete(
+        response = self._request(
+            "DELETE",
             f"{self.location_server_url}location/{location_name}/remove_representation/{node_name}",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -702,7 +733,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}location/{location_name}/attach_resource",
             params={"resource_id": resource_id},
             headers=self._get_headers(),
@@ -731,7 +763,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.delete(
+        response = self._request(
+            "DELETE",
             f"{self.location_server_url}location/{location_name}/detach_resource",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -758,7 +791,8 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}transfer/graph",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
@@ -801,7 +835,8 @@ class LocationClient:
         if resource_id is not None:
             params["resource_id"] = resource_id
 
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.location_server_url}transfer/plan",
             params=params,
             headers=self._get_headers(),
@@ -830,10 +865,437 @@ class LocationClient:
         """
         self._validate_server_url()
 
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.location_server_url}location/{location_name}/resources",
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
         return ResourceHierarchy.model_validate(response.json())
+
+    # ------------------------------------------------------------------
+    # Async methods
+    # ------------------------------------------------------------------
+
+    async def async_get_locations(
+        self, timeout: Optional[float] = None
+    ) -> list[Location]:
+        """Get all locations asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}locations",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [Location.model_validate(loc) for loc in response.json()]
+
+    async def async_get_location(
+        self, location_id: str, timeout: Optional[float] = None
+    ) -> Location:
+        """Get details of a specific location by ID asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}location",
+            params={"location_id": location_id},
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_get_location_by_name(
+        self, location_name: str, timeout: Optional[float] = None
+    ) -> Location:
+        """Get a specific location by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}location",
+            params={"name": location_name},
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_add_location(
+        self, location: Location, timeout: Optional[float] = None
+    ) -> Location:
+        """Add a location asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}location",
+            json=location.model_dump(),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_export_locations(
+        self, timeout: Optional[float] = None
+    ) -> list[Location]:
+        """Export all locations from the server asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}locations/export",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [Location.model_validate(loc) for loc in response.json()]
+
+    async def async_delete_location(
+        self, location_name: str, timeout: Optional[float] = None
+    ) -> dict[str, str]:
+        """Delete a specific location by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "DELETE",
+            f"{self.location_server_url}location/{location_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def async_set_representation(
+        self,
+        location_name: str,
+        node_name: str,
+        representation: Any,
+        timeout: Optional[float] = None,
+    ) -> Location:
+        """Set a representation for a location for a specific node asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}location/{location_name}/set_representation/{node_name}",
+            json=representation,
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_remove_representation(
+        self,
+        location_name: str,
+        node_name: str,
+        timeout: Optional[float] = None,
+    ) -> Location:
+        """Remove representations for a location for a specific node asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "DELETE",
+            f"{self.location_server_url}location/{location_name}/remove_representation/{node_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_attach_resource(
+        self, location_name: str, resource_id: str, timeout: Optional[float] = None
+    ) -> Location:
+        """Attach a resource to a location asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}location/{location_name}/attach_resource",
+            params={"resource_id": resource_id},
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_detach_resource(
+        self, location_name: str, timeout: Optional[float] = None
+    ) -> Location:
+        """Detach the resource from a location asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "DELETE",
+            f"{self.location_server_url}location/{location_name}/detach_resource",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    async def async_get_transfer_graph(
+        self, timeout: Optional[float] = None
+    ) -> dict[str, list[str]]:
+        """Get the current transfer graph as adjacency list asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}transfer/graph",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def async_plan_transfer(
+        self,
+        source_location_id: str,
+        target_location_id: str,
+        resource_id: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """Plan a transfer from source to target location asynchronously."""
+        self._validate_server_url()
+        params = {
+            "source_location_id": source_location_id,
+            "target_location_id": target_location_id,
+        }
+        if resource_id is not None:
+            params["resource_id"] = resource_id
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}transfer/plan",
+            params=params,
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return WorkflowDefinition.model_validate(response.json())
+
+    async def async_get_location_resources(
+        self, location_name: str, timeout: Optional[float] = None
+    ) -> ResourceHierarchy:
+        """Get the resource hierarchy for resources at a specific location asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}location/{location_name}/resources",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return ResourceHierarchy.model_validate(response.json())
+
+    # --- Async Representation Template Methods ---
+
+    async def async_get_representation_templates(
+        self, timeout: Optional[float] = None
+    ) -> list[LocationRepresentationTemplate]:
+        """Get all representation templates asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}representation_templates",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [
+            LocationRepresentationTemplate.model_validate(t) for t in response.json()
+        ]
+
+    async def async_get_representation_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> LocationRepresentationTemplate:
+        """Get a representation template by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}representation_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationRepresentationTemplate.model_validate(response.json())
+
+    async def async_create_representation_template(
+        self,
+        template: LocationRepresentationTemplate,
+        timeout: Optional[float] = None,
+    ) -> LocationRepresentationTemplate:
+        """Create a new representation template asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}representation_template",
+            json=template.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationRepresentationTemplate.model_validate(response.json())
+
+    async def async_delete_representation_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> dict[str, str]:
+        """Delete a representation template by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "DELETE",
+            f"{self.location_server_url}representation_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # --- Async Location Template Methods ---
+
+    async def async_get_location_templates(
+        self, timeout: Optional[float] = None
+    ) -> list[LocationTemplate]:
+        """Get all location templates asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}location_templates",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [LocationTemplate.model_validate(t) for t in response.json()]
+
+    async def async_get_location_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> LocationTemplate:
+        """Get a location template by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "GET",
+            f"{self.location_server_url}location_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationTemplate.model_validate(response.json())
+
+    async def async_create_location_template(
+        self,
+        template: LocationTemplate,
+        timeout: Optional[float] = None,
+    ) -> LocationTemplate:
+        """Create a new location template asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}location_template",
+            json=template.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationTemplate.model_validate(response.json())
+
+    async def async_delete_location_template(
+        self, template_name: str, timeout: Optional[float] = None
+    ) -> dict[str, str]:
+        """Delete a location template by name asynchronously."""
+        self._validate_server_url()
+        response = await self._async_request(
+            "DELETE",
+            f"{self.location_server_url}location_template/{template_name}",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # --- Async Create Location from Template ---
+
+    async def async_create_location_from_template(
+        self,
+        location_name: str,
+        template_name: str,
+        node_bindings: Optional[dict[str, str]] = None,
+        representation_overrides: Optional[dict[str, dict[str, Any]]] = None,
+        resource_template_overrides: Optional[dict[str, Any]] = None,
+        description: Optional[str] = None,
+        allow_transfers: Optional[bool] = None,
+        timeout: Optional[float] = None,
+    ) -> Location:
+        """Create a location from a LocationTemplate asynchronously."""
+        self._validate_server_url()
+        request = CreateLocationFromTemplateRequest(
+            location_name=location_name,
+            template_name=template_name,
+            node_bindings=node_bindings or {},
+            representation_overrides=representation_overrides or {},
+            resource_template_overrides=resource_template_overrides,
+            description=description,
+            allow_transfers=allow_transfers,
+        )
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}location/from_template",
+            json=request.model_dump(mode="json"),
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Location.model_validate(response.json())
+
+    # --- Async Import ---
+
+    async def async_import_locations(
+        self,
+        location_file_path: Optional[Path] = None,
+        locations: Optional[list[Location]] = None,
+        overwrite: bool = False,
+        timeout: Optional[float] = None,
+    ) -> LocationImportResult:
+        """Import multiple locations from a file or a list asynchronously.
+
+        Parameters
+        ----------
+        location_file_path : Optional[Path]
+            Path to a YAML file containing location definitions.
+        locations : Optional[list[Location]]
+            A list of Location objects to import directly.
+        overwrite : bool
+            If True, overwrite existing locations with the same name.
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+
+        Returns
+        -------
+        LocationImportResult
+            Result with imported/skipped/error counts and imported locations.
+        """
+        self._validate_server_url()
+
+        if locations is None:
+            if location_file_path is None:
+                raise ValueError(
+                    "Either location_file_path or locations must be provided"
+                )
+            with location_file_path.open() as f:
+                raw = yaml.safe_load(f)
+            if raw is None:
+                return LocationImportResult()
+            if isinstance(raw, list):
+                location_items = raw
+            elif isinstance(raw, dict):
+                location_items = list(raw.values())
+            else:
+                raise ValueError(
+                    f"Expected a list or dict of locations, got {type(raw)}"
+                )
+            locations = [Location.model_validate(item) for item in location_items]
+
+        response = await self._async_request(
+            "POST",
+            f"{self.location_server_url}locations/import",
+            json=[loc.model_dump() for loc in locations],
+            params={"overwrite": overwrite},
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return LocationImportResult.model_validate(response.json())

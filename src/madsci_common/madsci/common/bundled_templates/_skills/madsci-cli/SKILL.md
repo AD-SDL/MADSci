@@ -5,18 +5,18 @@ description: Working with the MADSci CLI (the `madsci` command). Use when adding
 
 # MADSci CLI
 
-The `madsci` CLI is built on Click with lazy command loading, Rich output formatting, and a Textual TUI. It provides 17 commands for managing MADSci labs.
+The `madsci` CLI is built on Click with lazy command loading, Rich output formatting, and a Textual TUI. It provides 26 commands for managing MADSci labs.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
 | `src/madsci_client/madsci/client/cli/__init__.py` | Root command, `AliasedGroup`, `_LAZY_COMMANDS` |
-| `src/madsci_client/madsci/client/cli/commands/` | 17 command modules |
+| `src/madsci_client/madsci/client/cli/commands/` | 26 command modules |
 | `src/madsci_client/madsci/client/cli/utils/output.py` | Rich console output helpers |
 | `src/madsci_client/madsci/client/cli/tui/app.py` | Textual TUI application |
 | `src/madsci_client/madsci/client/cli/tui/styles/theme.tcss` | TUI CSS theme |
-| `src/madsci_common/madsci/common/bundled_templates/` | 25 template manifests + Jinja2 files |
+| `src/madsci_common/madsci/common/bundled_templates/` | 33 template manifests + Jinja2 files |
 
 ## Architecture
 
@@ -28,7 +28,7 @@ madsci (AliasedGroup)
       ├── version, doctor (doc), status (s), logs (l)
       ├── tui (ui), registry, migrate, new (n)
       ├── start, stop, init, validate (val)
-      ├── run, completion, backup
+      ├── run, completion, backup, add
       ├── commands (cmd), config (cfg)
       └── [aliases resolve via AliasedGroup]
 ```
@@ -57,6 +57,15 @@ _LAZY_COMMANDS = {
     "backup": ("madsci.client.cli.commands.backup", "backup"),
     "commands": ("madsci.client.cli.commands.commands", "commands"),
     "config": ("madsci.client.cli.commands.config", "config"),
+    "workflow": ("madsci.client.cli.commands.workflow", "workflow"),
+    "resource": ("madsci.client.cli.commands.resource", "resource"),
+    "location": ("madsci.client.cli.commands.location", "location"),
+    "node": ("madsci.client.cli.commands.node", "node"),
+    "experiment": ("madsci.client.cli.commands.experiment", "experiment"),
+    "campaign": ("madsci.client.cli.commands.campaign", "campaign"),
+    "data": ("madsci.client.cli.commands.data", "data"),
+    "events": ("madsci.client.cli.commands.events", "events"),
+    "add": ("madsci.client.cli.commands.add", "add"),
 }
 ```
 
@@ -73,6 +82,14 @@ class AliasedGroup(click.Group):
         "ui": "tui",
         "cmd": "commands",
         "cfg": "config",
+        "wf": "workflow",
+        "res": "resource",
+        "loc": "location",
+        "nd": "node",
+        "exp": "experiment",
+        "camp": "campaign",
+        "dt": "data",
+        "ev": "events",
     }
 ```
 
@@ -141,9 +158,9 @@ View/stream logs from Event Manager.
 - `-f/--follow`, `--tail N`, `--since 5m/1h/1d`, `--level`, `--grep`, `--json`
 
 ### `tui` (alias: `ui`)
-Launch Textual terminal UI with 5 screens (dashboard, status, logs, nodes, workflows).
-- `--screen [dashboard|status|logs|nodes|workflows]`
-- Keybindings: `d/s/l/n/w` (screens), `r` (refresh), `q` (quit), `?` (help), `Ctrl+P` (command palette)
+Launch Textual terminal UI with 9 main screens + 5 detail/modal screens.
+- `--screen [dashboard|status|logs|nodes|workflows|experiments|resources|locations|data]`
+- Keybindings: `d/s/l/n/w/e/i/o/b` (screens), `r` (refresh), `q` (quit), `?` (help), `Ctrl+P` (command palette)
 
 ### `registry`
 Manage ID Registry (ULID mappings for component names).
@@ -197,6 +214,25 @@ Launch Trogon interactive command palette (TUI forms for all commands).
 ### `config` (alias: `cfg`)
 Configuration management with secret redaction.
 - Subcommands: `export [manager_type] [--all] [-o path] [--format yaml|json] [--include-secrets]`, `create manager <type>`
+
+### Manager Interaction Commands
+
+Eight command groups provide direct access to manager APIs. Each resolves the manager URL from the lab context automatically.
+
+| Command | Alias | Subcommands |
+|---------|-------|-------------|
+| `workflow` | `wf` | list, show, submit, pause, resume, cancel, retry, resubmit |
+| `resource` | `res` | list, get, create, delete, restore, tree, lock, unlock, quantity, template, history |
+| `location` | `loc` | list, get, create, create-from-template, delete, resources, attach, detach, set-repr, remove-repr, transfer-graph, plan-transfer, export, import, template, rep-template |
+| `node` | `nd` | list, info, status, state, log, admin, action, action-result, action-history, config, set-config, add, shell |
+| `experiment` | `exp` | list, get, start, run, pause, continue, cancel, end |
+| `campaign` | `camp` | create, get |
+| `data` | `dt` | list, get, metadata, submit, query |
+| `events` | `ev` | query, get, archive, purge, backup |
+
+All commands support `--json` for machine-readable output. URL resolution follows: explicit `--<manager>-url` flag > lab context > localhost default.
+
+Command modules are in `src/madsci_client/madsci/client/cli/commands/` (one file per group).
 
 ## Output Helpers
 
@@ -265,13 +301,14 @@ hooks:
       continue_on_error: true
 ```
 
-**Template categories (25 total):**
+**Template categories (33 total):**
 - `lab/`: minimal lab scaffold
 - `module/`: device, compute modules (full packages with tests, Dockerfile)
 - `node/`: basic node, rest node
 - `interface/`: node interface
 - `experiment/`: script, notebook, tui, node modalities
 - `workflow/`: basic workflow
+- `addon/`: docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all
 
 **Jinja2 filters:** `pascal_case` (converts `my_module` -> `MyModule`)
 
@@ -334,7 +371,7 @@ After detached start, polls `/health` on each service every 2s (timeout: 60s). D
 
 ## TUI Application
 
-5 screens built with Textual:
+9 main screens + 5 detail/modal screens built with Textual:
 
 | Screen | Key | Description |
 |--------|-----|-------------|
@@ -343,6 +380,10 @@ After detached start, polls `/health` on each service every 2s (timeout: 60s). D
 | Logs | `l` | Log viewer with filtering and follow mode |
 | Nodes | `n` | Node registry with status and actions |
 | Workflows | `w` | Workflow history and details |
+| Experiments | `e` | Experiment listing with search/filter and detail panels |
+| Resources | `i` | Resource inventory with search/filter and detail panels |
+| Data Browser | `b` | Data capture browsing and querying |
+| Locations | `o` | Location management with resource attachments |
 
 - Auto-refresh every 5 seconds
 - CSS theming in `tui/styles/theme.tcss`
@@ -377,7 +418,7 @@ def test_command_alias():
     assert result.exit_code in (0, 1)
 ```
 
-**Smoke test pattern:** Verify all 17 commands parse without import errors:
+**Smoke test pattern:** Verify all 26 commands parse without import errors:
 ```python
 @pytest.mark.parametrize("cmd", ["version", "doctor", "status", ...])
 def test_command_help(cmd):

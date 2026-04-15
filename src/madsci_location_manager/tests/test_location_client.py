@@ -98,7 +98,7 @@ def test_get_location_by_name_method_signature(location_client):
     assert sig.return_annotation.__name__ == "Location"
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_get_location_by_name_method_request(mock_create_session):
     """Test that get_location_by_name makes correct HTTP request."""
 
@@ -114,7 +114,7 @@ def test_get_location_by_name_method_request(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create a new client to use mocked session
@@ -124,10 +124,10 @@ def test_get_location_by_name_method_request(mock_create_session):
     result = client.get_location_by_name("test_location_name")
 
     # Verify the request was made correctly
-    mock_session.get.assert_called_once()
-    call_args = mock_session.get.call_args
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
     # Check that the URL is correct and query parameters are used
-    assert call_args[0][0].endswith("/location")
+    assert call_args[0][1].endswith("/location")
     assert call_args[1]["params"] == {"name": "test_location_name"}
 
     # Verify the result is a Location object
@@ -136,7 +136,7 @@ def test_get_location_by_name_method_request(mock_create_session):
     assert result.location_id == test_location_id
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_get_location_by_name_method_error_handling(mock_create_session):
     """Test that get_location_by_name handles errors correctly."""
 
@@ -147,7 +147,7 @@ def test_get_location_by_name_method_error_handling(mock_create_session):
     )
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -158,7 +158,7 @@ def test_get_location_by_name_method_error_handling(mock_create_session):
         location_client.get_location_by_name("nonexistent_location")
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_get_location_resources_empty_hierarchy(mock_create_session):
     """Test get_location_resources returns empty hierarchy when no resources attached."""
     # Mock successful response with empty hierarchy
@@ -172,7 +172,7 @@ def test_get_location_resources_empty_hierarchy(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -183,9 +183,9 @@ def test_get_location_resources_empty_hierarchy(mock_create_session):
     result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
-    mock_session.get.assert_called_once()
-    call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object
     assert isinstance(result, ResourceHierarchy)
@@ -194,7 +194,7 @@ def test_get_location_resources_empty_hierarchy(mock_create_session):
     assert result.descendant_ids == {}
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_get_location_resources_with_resource(mock_create_session):
     """Test get_location_resources returns proper hierarchy with attached resource."""
     # Mock successful response with resource hierarchy
@@ -210,7 +210,7 @@ def test_get_location_resources_with_resource(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -221,9 +221,9 @@ def test_get_location_resources_with_resource(mock_create_session):
     result = client.get_location_resources(test_location_name)
 
     # Verify the request was made correctly
-    mock_session.get.assert_called_once()
-    call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_name}/resources")
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith(f"/location/{test_location_name}/resources")
 
     # Verify the result is a ResourceHierarchy object with correct data
     assert isinstance(result, ResourceHierarchy)
@@ -232,7 +232,7 @@ def test_get_location_resources_with_resource(mock_create_session):
     assert result.descendant_ids == {test_resource_id: [test_child_id]}
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_get_location_resources_error_handling(mock_create_session):
     """Test that get_location_resources handles errors correctly."""
     # Mock 404 response
@@ -242,7 +242,7 @@ def test_get_location_resources_error_handling(mock_create_session):
     )
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -277,7 +277,7 @@ def test_remove_representation_method_signature(location_client):
     assert sig.return_annotation.__name__ == "Location"
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_remove_representation_method_request(mock_create_session):
     """Test that remove_representation makes correct HTTP request."""
     # Mock successful response
@@ -293,7 +293,7 @@ def test_remove_representation_method_request(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.delete.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -303,9 +303,9 @@ def test_remove_representation_method_request(mock_create_session):
     result = client.remove_representation(test_location_id, "robot_1")
 
     # Verify the request was made correctly
-    mock_session.delete.assert_called_once()
-    call_args = mock_session.delete.call_args
-    assert call_args[0][0].endswith(
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith(
         f"/location/{test_location_id}/remove_representation/robot_1"
     )
 
@@ -316,7 +316,7 @@ def test_remove_representation_method_request(mock_create_session):
     assert "robot_2" in result.representations
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_remove_representation_error_handling(mock_create_session):
     """Test that remove_representation handles errors correctly."""
     # Mock 404 response
@@ -326,7 +326,7 @@ def test_remove_representation_error_handling(mock_create_session):
     )
 
     mock_session = Mock()
-    mock_session.delete.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -355,7 +355,7 @@ def test_detach_resource_method_signature(location_client):
     assert sig.return_annotation.__name__ == "Location"
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_detach_resource_method_request(mock_create_session):
     """Test that detach_resource makes correct HTTP request."""
     # Mock successful response
@@ -372,7 +372,7 @@ def test_detach_resource_method_request(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.delete.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -382,9 +382,9 @@ def test_detach_resource_method_request(mock_create_session):
     result = client.detach_resource(test_location_name)
 
     # Verify the request was made correctly
-    mock_session.delete.assert_called_once()
-    call_args = mock_session.delete.call_args
-    assert call_args[0][0].endswith(f"/location/{test_location_name}/detach_resource")
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith(f"/location/{test_location_name}/detach_resource")
 
     # Verify the result is a Location object
     assert isinstance(result, Location)
@@ -392,7 +392,7 @@ def test_detach_resource_method_request(mock_create_session):
     assert result.resource_id is None
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_detach_resource_error_handling(mock_create_session):
     """Test that detach_resource handles errors correctly."""
     # Mock 404 response
@@ -402,7 +402,7 @@ def test_detach_resource_error_handling(mock_create_session):
     )
 
     mock_session = Mock()
-    mock_session.delete.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     # Create client with mocked session
@@ -416,7 +416,7 @@ def test_detach_resource_error_handling(mock_create_session):
 # --- Phase 5: Import/Export client method tests ---
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_import_locations_calls_import_endpoint(mock_create_session):
     """Verify import_locations POSTs to /locations/import."""
     mock_response = Mock()
@@ -429,7 +429,7 @@ def test_import_locations_calls_import_endpoint(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.post.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     client = LocationClient(location_server_url="http://test/")
@@ -439,9 +439,9 @@ def test_import_locations_calls_import_endpoint(mock_create_session):
     ]
     result = client.import_locations(locations=locations)
 
-    mock_session.post.assert_called_once()
-    call_args = mock_session.post.call_args
-    assert call_args[0][0].endswith("/locations/import")
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith("/locations/import")
     assert isinstance(result, LocationImportResult)
     assert result.imported == 2
 
@@ -452,7 +452,7 @@ def test_export_locations_method_exists(location_client):
     assert callable(location_client.export_locations)
 
 
-@patch("madsci.client.location_client.create_http_session")
+@patch("madsci.client.location_client.create_httpx_client")
 def test_export_locations_calls_correct_endpoint(mock_create_session):
     """Verify export_locations GETs /locations/export."""
     mock_response = Mock()
@@ -463,15 +463,15 @@ def test_export_locations_calls_correct_endpoint(mock_create_session):
     mock_response.raise_for_status.return_value = None
 
     mock_session = Mock()
-    mock_session.get.return_value = mock_response
+    mock_session.request.return_value = mock_response
     mock_create_session.return_value = mock_session
 
     client = LocationClient(location_server_url="http://test/")
     result = client.export_locations()
 
-    mock_session.get.assert_called_once()
-    call_args = mock_session.get.call_args
-    assert call_args[0][0].endswith("/locations/export")
+    mock_session.request.assert_called_once()
+    call_args = mock_session.request.call_args
+    assert call_args[0][1].endswith("/locations/export")
     assert isinstance(result, list)
     assert len(result) == 1
     assert isinstance(result[0], Location)

@@ -84,15 +84,16 @@ class TestEventClientOtelIntegration:
 
         captured_headers: dict[str, str] = {}
 
-        def fake_post(*_args, **kwargs):
+        def fake_request(*_args, **kwargs):
             captured_headers.update(kwargs.get("headers") or {})
 
             class Resp:
                 ok = True
+                is_success = True
 
             return Resp()
 
-        client.session.post = fake_post  # type: ignore[method-assign]
+        client._client.request = fake_request  # type: ignore[method-assign]
         assert client._otel_runtime is not None
         with client._otel_runtime.tracer.start_as_current_span("test-span"):
             client._send_event_to_event_server(Event(event_data={}))

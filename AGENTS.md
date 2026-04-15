@@ -417,6 +417,50 @@ with ownership_context(experiment_id="exp-123", workflow_id="wf-456") as info:
     print(info.experiment_id)  # "exp-123"
 ```
 
+### Service Interaction Patterns
+
+When TUI screens, CLI commands, or application code needs to communicate with MADSci manager services, **always use the typed client classes** from `madsci.client`:
+
+| Client | Service | Port |
+|--------|---------|------|
+| `EventClient` | Event Manager | 8001 |
+| `ExperimentClient` | Experiment Manager | 8002 |
+| `ResourceClient` | Resource Manager | 8003 |
+| `DataClient` | Data Manager | 8004 |
+| `WorkcellClient` | Workcell Manager | 8005 |
+| `LocationClient` | Location Manager | 8006 |
+| `RestNodeClient` | Direct node communication | varies |
+
+Client classes handle Pydantic model deserialization (avoiding field alias bugs like `_id` vs `experiment_id`), retry strategies, connection pooling, consistent error handling, and rate limiting.
+
+**Anti-patterns (DO NOT DO):**
+- Creating raw `httpx.Client` or `httpx.AsyncClient` to call manager endpoints
+- Manually parsing JSON responses with `response.json()` instead of using Pydantic models
+- Hardcoding URL paths like `/events` or `/workflows/active` in UI/CLI code
+
+**Correct pattern for TUI screens:**
+```python
+from madsci.client.experiment_client import ExperimentClient
+
+class MyScreen(ServiceURLMixin, Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._experiment_client: ExperimentClient | None = None
+
+    def _get_experiment_client(self) -> ExperimentClient:
+        if self._experiment_client is None:
+            url = self.get_service_url("experiment_manager")
+            self._experiment_client = ExperimentClient(experiment_server_url=url)
+        return self._experiment_client
+
+    async def refresh_data(self) -> None:
+        client = self._get_experiment_client()
+        experiments = await client.async_get_experiments()
+        # experiments is list[Experiment], not a raw dict
+```
+
+See `src/madsci_client/madsci/client/cli/tui/screens/experiments.py` for the canonical example.
+
 ### Testing
 - Uses pytest with in-memory database handlers for most tests (no Docker required)
 - Docker is only needed for end-to-end tests against the full service stack

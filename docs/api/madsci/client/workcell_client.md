@@ -5,7 +5,7 @@ Client for performing workcell actions
 Classes
 -------
 
-`WorkcellClient(workcell_server_url: str | pydantic.networks.AnyUrl | None = None, working_directory: str = './', event_client: madsci.client.event_client.EventClient | None = None, config: madsci.common.types.client_types.WorkcellClientConfig | None = None)`
+`WorkcellClient(workcell_server_url: Optional[Union[str, AnyUrl]] = None, working_directory: str = './', event_client: Optional[EventClient] = None, config: Optional[WorkcellClientConfig] = None)`
 :   A client for interacting with the Workcell Manager to perform various actions.
     
     Initialize the WorkcellClient.
@@ -22,14 +22,23 @@ Classes
         Client configuration for retry strategies, timeouts, and connection pooling.
         If not provided, uses default WorkcellClientConfig settings.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `workcell_server_url: pydantic.networks.AnyUrl | None`
+    `workcell_server_url: Optional[AnyUrl]`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
-    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Add a node to the workcell.
         
         Parameters
@@ -50,7 +59,72 @@ Classes
         Node
             The added node details.
 
-    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: Literal['auto', 'rich', 'jupyter', 'plain'] = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
+    `async_cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Cancel a workflow asynchronously.
+
+    `async_get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get all active workflows asynchronously.
+
+    `async_get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get archived workflows asynchronously.
+
+    `async_get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
+    :   Get details of a specific node asynchronously.
+
+    `async_get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    :   Get all nodes in the workcell asynchronously.
+
+    `async_get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    :   Get the full state of the workcell asynchronously.
+
+    `async_get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    :   Get the definition of a workflow asynchronously.
+
+    `async_get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    :   Get the workflow queue asynchronously.
+
+    `async_pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Pause a workflow asynchronously.
+
+    `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    :   Check the status of a workflow using its ID asynchronously.
+
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
+    `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
+
+    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
         
         Parameters
@@ -73,7 +147,7 @@ Classes
         Workflow
             The completed workflow object.
 
-    `cancel_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Cancel a workflow.
         
         Parameters
@@ -88,7 +162,10 @@ Classes
         Workflow
             The cancelled workflow object.
 
-    `get_active_workflows(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
+    `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -101,7 +178,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_archived_workflows(self, number: int = 20, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -116,7 +193,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_node(self, node_name: str, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Get details of a specific node.
         
         Parameters
@@ -131,7 +208,7 @@ Classes
         Node
             The node details.
 
-    `get_nodes(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    `get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
     :   Get all nodes in the workcell.
         
         Parameters
@@ -144,7 +221,7 @@ Classes
         dict[str, Node]
             A dictionary of node names and their details.
 
-    `get_workcell_state(self, timeout: float | None = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    `get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
     :   Get the full state of the workcell.
         
         Parameters
@@ -157,7 +234,7 @@ Classes
         WorkcellState
             The current state of the workcell.
 
-    `get_workflow_definition(self, workflow_definition_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    `get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Get the definition of a workflow.
         
         Parameters
@@ -172,7 +249,7 @@ Classes
         WorkflowDefinition
             The workflow definition object.
 
-    `get_workflow_queue(self, timeout: float | None = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Get the workflow queue from the workcell.
         
         Parameters
@@ -185,7 +262,7 @@ Classes
         list[Workflow]
             A list of queued workflows.
 
-    `make_paths_absolute(self, files: dict[str, str | pathlib.Path]) ‑> dict[str, pathlib.Path]`
+    `make_paths_absolute(self, files: dict[str, PathLike]) ‑> dict[str, pathlib.Path]`
     :   Extract file paths from a workflow definition.
         
         Parameters
@@ -198,7 +275,7 @@ Classes
         dict[str, Path]
             A dictionary mapping unique file keys to their paths.
 
-    `pause_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Pause a workflow.
         
         Parameters
@@ -213,7 +290,7 @@ Classes
         Workflow
             The paused workflow object.
 
-    `query_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    `query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID.
         
         Parameters
@@ -228,7 +305,7 @@ Classes
         Optional[Workflow]
             The workflow object if found, otherwise None.
 
-    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resubmit a workflow as a brand new workflow run with the same parameters.
         
         Parameters
@@ -251,7 +328,7 @@ Classes
         Workflow
             The new workflow object.
 
-    `resume_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
         
         Parameters
@@ -266,7 +343,7 @@ Classes
         Workflow
             The resumed workflow object.
 
-    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Retry a workflow from a specific step.
         
         Parameters
@@ -291,7 +368,7 @@ Classes
         dict
             The response from the Workcell Manager.
 
-    `start_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `start_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -318,7 +395,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `submit_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -345,7 +422,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a batch of workflows to run concurrently.
         
         Parameters
@@ -360,7 +437,7 @@ Classes
         list[Workflow]
             A list of completed workflow objects.
 
-    `submit_workflow_definition(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, timeout: float | None = None) ‑> str`
+    `submit_workflow_definition(self, workflow_definition: Union[PathLike, WorkflowDefinition], timeout: Optional[float] = None) ‑> str`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -375,7 +452,7 @@ Classes
         str
             The ID of the submitted workflow.
 
-    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a sequence of workflows to run in order.
         
         Parameters

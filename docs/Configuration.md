@@ -457,6 +457,7 @@ Configuration for the Resource Manager client.
 | `RESOURCE_CLIENT_RATE_LIMIT_TRACKING_ENABLED`  | `boolean`             | `true`                  | Whether to track rate limit headers from server responses                               | `true`                  |
 | `RESOURCE_CLIENT_RATE_LIMIT_WARNING_THRESHOLD` | `number`              | `0.8`                   | Threshold (as fraction of limit) at which to log warnings about approaching rate limits | `0.8`                   |
 | `RESOURCE_CLIENT_RATE_LIMIT_RESPECT_LIMITS`    | `boolean`             | `false`                 | Whether to proactively delay requests when approaching rate limits                      | `false`                 |
+| `RESOURCE_CLIENT_STARTUP_TIMEOUT`              | `number`              | `20.0`                  | Timeout in seconds for the startup polling loop that checks server availability.        | `20.0`                  |
 
 ## ExperimentClientConfig
 

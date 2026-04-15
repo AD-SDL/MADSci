@@ -20,8 +20,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings file validation in `madsci validate`**: The validate command now supports `settings.yaml` and `*.settings.yaml` files, validating against per-manager settings classes (Lab, Event, Experiment, Resource, Data, Workcell, Location).
 - **Pydantic-first data modeling guidance**: Added to CLAUDE.md, AGENTS.md, and agent skills to codify the rule that every YAML/JSON config format must have a corresponding Pydantic model.
 
+#### CLI/TUI Buildout
+- **`madsci add` command** with 8 subcommands for adding components to existing module projects (docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all)
+- **8 addon templates** for optional project components: `addon/docs`, `addon/drivers`, `addon/notebooks`, `addon/gitignore`, `addon/compose`, `addon/dev_tools`, `addon/agent_config`, `addon/all`
+- **8 new CLI command groups** for direct manager interaction, each with short aliases:
+  - `madsci workflow` (`wf`): list, show, submit, pause, resume, cancel, retry, resubmit
+  - `madsci resource` (`res`): list, get, create, delete, restore, tree, lock, unlock, quantity, template, history
+  - `madsci location` (`loc`): list, get, create, create-from-template, delete, resources, attach, detach, set-repr, remove-repr, transfer-graph, plan-transfer, export, import, template, rep-template
+  - `madsci node` (`nd`): list, info, status, state, log, admin, action, action-result, action-history, config, set-config, add, shell
+  - `madsci experiment` (`exp`): list, get, start, run, pause, continue, cancel, end
+  - `madsci campaign` (`camp`): create, get
+  - `madsci data` (`dt`): list, get, metadata, submit, query
+  - `madsci events` (`ev`): query, get, archive, purge, backup
+- **4 new TUI main screens**: experiments, resources, locations, data browser — all with search/filter, detail panels, and action bars
+- **5 TUI detail/modal screens**: resource tree, transfer graph, workflow detail, step detail, action executor
+- **TUI node enhancements**: admin command panel and interactive action executor
+- **TUI workflow enhancements**: retry, resubmit, step details, and filtering
+- **Shared CLI/TUI utility layer**: `cli_utils.py` (formatting, health checks, output helpers) and reusable TUI widget library (7 widgets and screen mixins)
+- **httpx client migration**: All 8 service clients migrated from `requests` to `httpx` with `DualModeClientMixin` for sync/async support, configurable retry transports, and rate-limit tracking via `httpx_factory.py`
+- **ResourceClient async methods**: 16 new async methods for TUI integration
+- **LocationClient async methods**: Missing async methods added for TUI integration
+
 ### Changed
 - **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
+- **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
+- **TUI screens migrated** to shared widget library for consistent styling and behavior
+
+### Fixed
+- TUI UX improvements: scrollable layouts, clickable ActionBar, screen discoverability
+- Dashboard scroll behavior and full ULID ID display
+- Transfer graph names, delete confirmation dialog, inventory button label
+- Double-slash URL bug in node client health checks
+- httpx migration fixes: stale `requests` imports, config attribute access, response closing in retry transports, async health checks, broken sync `.close()` call
 
 ## [0.8.0] - 2026-03-31
 

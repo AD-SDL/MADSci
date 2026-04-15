@@ -9,7 +9,19 @@ import click
 @click.command()
 @click.option(
     "--screen",
-    type=click.Choice(["dashboard", "status", "logs", "nodes", "workflows"]),
+    type=click.Choice(
+        [
+            "dashboard",
+            "status",
+            "logs",
+            "nodes",
+            "workflows",
+            "experiments",
+            "resources",
+            "data",
+            "locations",
+        ]
+    ),
     default="dashboard",
     help="Initial screen to display.",
 )

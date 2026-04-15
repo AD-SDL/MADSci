@@ -5,8 +5,8 @@ Client for the MADSci Experiment Manager.
 Classes
 -------
 
-`DataClient(data_server_url: str | pydantic.networks.AnyUrl | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, config: madsci.common.types.client_types.DataClientConfig | None = None)`
-:   Client for the MADSci Experiment Manager.
+`DataClient(data_server_url: Optional[Union[str, AnyUrl]] = None, object_storage_settings: Optional[ObjectStorageSettings] = None, config: Optional[DataClientConfig] = None)`
+:   Client for the MADSci Data Manager.
     
     Create a new Datapoint Client.
     
@@ -15,12 +15,55 @@ Classes
         object_storage_settings: Configuration for S3-compatible object storage. If not provided, defaults will be used.
         config: Client configuration for retry and timeout settings. If not provided, uses default DataClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `data_server_url: pydantic.networks.AnyUrl | None`
+    `data_server_url: Optional[AnyUrl]`
     :
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `async_get_datapoint(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    :   Get a datapoint's metadata by ID asynchronously.
+        
+        Args:
+            datapoint_id: The ID of the datapoint to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_datapoints(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
+    :   Get a list of the latest datapoints asynchronously.
+        
+        Args:
+            number: Number of datapoints to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_query_datapoints(self, selector: Any, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
+    :   Query datapoints based on a selector asynchronously.
+        
+        Args:
+            selector: Query selector for filtering datapoints.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_submit_datapoint(self, datapoint: DataPoint, timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    :   Submit a Datapoint object asynchronously.
+        
+        Args:
+            datapoint: The datapoint to submit.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        
+        Returns:
+            The submitted datapoint with server-assigned IDs if applicable
+
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
 
     `extract_datapoint_ids_from_action_result(self, action_result: Any) ‑> list[str]`
     :   Extract all datapoint IDs from an ActionResult.
@@ -31,7 +74,7 @@ Classes
         Returns:
             List of unique datapoint ULID strings
 
-    `get_datapoint(self, datapoint_id: str | ulid.ULID, timeout: float | None = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    `get_datapoint(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
     :   Get a datapoint's metadata by ID, either from local storage or server.
         
         Args:
@@ -50,7 +93,7 @@ Classes
         Returns:
             Dictionary with metadata fields like label, data_type, data_timestamp
 
-    `get_datapoint_value(self, datapoint_id: str | ulid.ULID, timeout: float | None = None) ‑> Any`
+    `get_datapoint_value(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> Any`
     :   Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.
         Otherwise, returns the raw data as bytes.
         
@@ -58,7 +101,7 @@ Classes
             datapoint_id: The ID of the datapoint to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
-    `get_datapoints(self, number: int = 10, timeout: float | None = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
+    `get_datapoints(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
     :   Get a list of the latest datapoints.
         
         Args:
@@ -89,14 +132,14 @@ Classes
         Returns:
             Dictionary mapping datapoint IDs to metadata dictionaries
 
-    `query_datapoints(self, selector: Any, timeout: float | None = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
+    `query_datapoints(self, selector: Any, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
     :   Query datapoints based on a selector.
         
         Args:
             selector: Query selector for filtering datapoints.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `save_datapoint_value(self, datapoint_id: str | ulid.ULID, output_filepath: str, timeout: float | None = None) ‑> None`
+    `save_datapoint_value(self, datapoint_id: Union[str, ULID], output_filepath: str, timeout: Optional[float] = None) ‑> None`
     :   Get an datapoint value by ID.
         
         Args:
@@ -104,7 +147,7 @@ Classes
             output_filepath: Path where the datapoint value should be saved.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
-    `submit_datapoint(self, datapoint: madsci.common.types.datapoint_types.DataPoint, timeout: float | None = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    `submit_datapoint(self, datapoint: DataPoint, timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
     :   Submit a Datapoint object.
         
         If object storage is configured and the datapoint is a file type,

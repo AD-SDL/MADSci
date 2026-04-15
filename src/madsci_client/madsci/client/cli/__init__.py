@@ -37,6 +37,14 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "backup": ("madsci.client.cli.commands.backup", "backup"),
     "commands": ("madsci.client.cli.commands.commands", "commands"),
     "config": ("madsci.client.cli.commands.config", "config"),
+    "workflow": ("madsci.client.cli.commands.workflow", "workflow"),
+    "resource": ("madsci.client.cli.commands.resource", "resource"),
+    "location": ("madsci.client.cli.commands.location", "location"),
+    "node": ("madsci.client.cli.commands.node", "node"),
+    "experiment": ("madsci.client.cli.commands.experiment", "experiment"),
+    "campaign": ("madsci.client.cli.commands.campaign", "campaign"),
+    "data": ("madsci.client.cli.commands.data", "data"),
+    "events": ("madsci.client.cli.commands.events", "events"),
 }
 
 
@@ -95,6 +103,14 @@ class AliasedGroup(click.Group):
         "ui": "tui",
         "cmd": "commands",
         "cfg": "config",
+        "wf": "workflow",
+        "res": "resource",
+        "loc": "location",
+        "nd": "node",
+        "exp": "experiment",
+        "camp": "campaign",
+        "dt": "data",
+        "ev": "events",
     }
 
     def list_commands(self, ctx: click.Context) -> list[str]:
@@ -132,6 +148,32 @@ class AliasedGroup(click.Group):
         _, cmd, args = super().resolve_command(ctx, args)
         return cmd.name if cmd else None, cmd, args
 
+    def format_commands(
+        self, ctx: click.Context, formatter: click.HelpFormatter
+    ) -> None:
+        """Show commands with their aliases in help output."""
+        # Build reverse alias map: canonical_name -> [aliases]
+        reverse: dict[str, list[str]] = {}
+        for alias, canonical in self._aliases.items():
+            reverse.setdefault(canonical, []).append(alias)
+
+        commands = []
+        for subcommand in self.list_commands(ctx):
+            cmd = self.get_command(ctx, subcommand)
+            if cmd is None or cmd.hidden:
+                continue
+            help_text = cmd.get_short_help_str(limit=150)
+            alias_list = sorted(reverse.get(subcommand, []))
+            if alias_list:
+                display_name = f"{subcommand} ({', '.join(alias_list)})"
+            else:
+                display_name = subcommand
+            commands.append((display_name, help_text))
+
+        if commands:
+            with formatter.section("Commands"):
+                formatter.write_dl(commands)
+
 
 @click.group(cls=AliasedGroup)
 @click.option(
@@ -164,6 +206,12 @@ class AliasedGroup(click.Group):
     is_flag=True,
     help="Output in JSON format (where applicable).",
 )
+@click.option(
+    "--yaml",
+    "yaml_output",
+    is_flag=True,
+    help="Output in YAML format (where applicable).",
+)
 @click.version_option(version=__version__, prog_name="madsci")
 @click.pass_context
 def madsci(
@@ -173,6 +221,7 @@ def madsci(
     quiet: bool,
     no_color: bool,
     json_output: bool,
+    yaml_output: bool,
 ) -> None:
     """MADSci - Modular Autonomous Discovery for Science.
 
@@ -200,6 +249,7 @@ def madsci(
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
     ctx.obj["json"] = json_output
+    ctx.obj["yaml"] = yaml_output
     ctx.obj["no_color"] = no_color
 
     # Create console with appropriate settings

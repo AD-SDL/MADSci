@@ -9,6 +9,7 @@ Sub-modules
 * madsci.client.data_client
 * madsci.client.event_client
 * madsci.client.experiment_client
+* madsci.client.http
 * madsci.client.lab_client
 * madsci.client.location_client
 * madsci.client.node
@@ -81,8 +82,8 @@ Classes
     `set_config(self, config_dict: dict[str, typing.Any]) ‑> madsci.common.types.node_types.NodeSetConfigResponse`
     :   Set configuration values of the node.
 
-`DataClient(data_server_url: str | pydantic.networks.AnyUrl | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, config: madsci.common.types.client_types.DataClientConfig | None = None)`
-:   Client for the MADSci Experiment Manager.
+`DataClient(data_server_url: Optional[Union[str, AnyUrl]] = None, object_storage_settings: Optional[ObjectStorageSettings] = None, config: Optional[DataClientConfig] = None)`
+:   Client for the MADSci Data Manager.
     
     Create a new Datapoint Client.
     
@@ -91,12 +92,55 @@ Classes
         object_storage_settings: Configuration for S3-compatible object storage. If not provided, defaults will be used.
         config: Client configuration for retry and timeout settings. If not provided, uses default DataClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `data_server_url: pydantic.networks.AnyUrl | None`
+    `data_server_url: Optional[AnyUrl]`
     :
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `async_get_datapoint(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    :   Get a datapoint's metadata by ID asynchronously.
+        
+        Args:
+            datapoint_id: The ID of the datapoint to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_datapoints(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
+    :   Get a list of the latest datapoints asynchronously.
+        
+        Args:
+            number: Number of datapoints to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_query_datapoints(self, selector: Any, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
+    :   Query datapoints based on a selector asynchronously.
+        
+        Args:
+            selector: Query selector for filtering datapoints.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_submit_datapoint(self, datapoint: DataPoint, timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    :   Submit a Datapoint object asynchronously.
+        
+        Args:
+            datapoint: The datapoint to submit.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
+        
+        Returns:
+            The submitted datapoint with server-assigned IDs if applicable
+
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
 
     `extract_datapoint_ids_from_action_result(self, action_result: Any) ‑> list[str]`
     :   Extract all datapoint IDs from an ActionResult.
@@ -107,7 +151,7 @@ Classes
         Returns:
             List of unique datapoint ULID strings
 
-    `get_datapoint(self, datapoint_id: str | ulid.ULID, timeout: float | None = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    `get_datapoint(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
     :   Get a datapoint's metadata by ID, either from local storage or server.
         
         Args:
@@ -126,7 +170,7 @@ Classes
         Returns:
             Dictionary with metadata fields like label, data_type, data_timestamp
 
-    `get_datapoint_value(self, datapoint_id: str | ulid.ULID, timeout: float | None = None) ‑> Any`
+    `get_datapoint_value(self, datapoint_id: Union[str, ULID], timeout: Optional[float] = None) ‑> Any`
     :   Get a datapoint value by ID. If the datapoint is JSON, returns the JSON data.
         Otherwise, returns the raw data as bytes.
         
@@ -134,7 +178,7 @@ Classes
             datapoint_id: The ID of the datapoint to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
-    `get_datapoints(self, number: int = 10, timeout: float | None = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
+    `get_datapoints(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.datapoint_types.DataPoint]`
     :   Get a list of the latest datapoints.
         
         Args:
@@ -165,14 +209,14 @@ Classes
         Returns:
             Dictionary mapping datapoint IDs to metadata dictionaries
 
-    `query_datapoints(self, selector: Any, timeout: float | None = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
+    `query_datapoints(self, selector: Any, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.datapoint_types.DataPoint]`
     :   Query datapoints based on a selector.
         
         Args:
             selector: Query selector for filtering datapoints.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `save_datapoint_value(self, datapoint_id: str | ulid.ULID, output_filepath: str, timeout: float | None = None) ‑> None`
+    `save_datapoint_value(self, datapoint_id: Union[str, ULID], output_filepath: str, timeout: Optional[float] = None) ‑> None`
     :   Get an datapoint value by ID.
         
         Args:
@@ -180,7 +224,7 @@ Classes
             output_filepath: Path where the datapoint value should be saved.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
-    `submit_datapoint(self, datapoint: madsci.common.types.datapoint_types.DataPoint, timeout: float | None = None) ‑> madsci.common.types.datapoint_types.DataPoint`
+    `submit_datapoint(self, datapoint: DataPoint, timeout: Optional[float] = None) ‑> madsci.common.types.datapoint_types.DataPoint`
     :   Submit a Datapoint object.
         
         If object storage is configured and the datapoint is a file type,
@@ -221,12 +265,28 @@ Classes
     
     Keyword Arguments are used to override the values of the passed in/default config.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
     `config: madsci.common.types.event_types.EventClientConfig`
     :
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `aclose(self) ‑> None`
+    :   Close async resources properly.
+        
+        Use this method in async contexts for proper cleanup. Bound child
+        clients (created via bind()/unbind()) share resources with their
+        parent and will skip cleanup.
 
     `alert(self, event: madsci.common.types.event_types.Event | str, **kwargs: Any) ‑> None`
     :   Log an event at the alert level (critical with alert flag).
@@ -234,6 +294,39 @@ Classes
         Args:
             event: The event or message to log
             **kwargs: Additional structured data
+
+    `archive_events(self, before_date: str | None = None, event_ids: list[str] | None = None, timeout: float | None = None) ‑> dict`
+    :   Archive events by date or by specific IDs.
+        
+        Args:
+            before_date: Archive events before this ISO date string.
+            event_ids: List of specific event IDs to archive.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"archived_count": N}).
+
+    `async_get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
+    :   Get a specific event by ID asynchronously.
+        
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_events(self, number: int = 100, level: int = -1, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for a certain number of recent events asynchronously.
+        
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for events based on a selector asynchronously.
+        
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
     `bind(self, **context: Any) ‑> madsci.client.event_client.EventClient`
     :   Create a new client with additional bound context.
@@ -264,6 +357,15 @@ Classes
         Note: Bound child clients (created via bind()/unbind()) share resources
         with their parent and will skip cleanup to avoid closing shared resources.
 
+    `create_backup(self, timeout: float | None = None) ‑> dict`
+    :   Create an event backup.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server.
+
     `critical(self, message: str, **kwargs: Any) ‑> None`
     :   Log a critical message.
         
@@ -291,6 +393,15 @@ Classes
         Args:
             message: The log message
             **kwargs: Additional structured data to include in the log entry
+
+    `get_backup_status(self, timeout: float | None = None) ‑> dict`
+    :   Get event backup status.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server describing backup status.
 
     `get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
     :   Get a specific event by ID.
@@ -417,6 +528,16 @@ Classes
             warning_category: Optional warning category for warnings module integration
             **kwargs: Additional structured data
 
+    `purge_events(self, older_than_days: int = 30, timeout: float | None = None) ‑> dict`
+    :   Permanently delete archived events older than specified days.
+        
+        Args:
+            older_than_days: Delete archived events older than this many days.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"purged_count": N}).
+
     `query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
     :   Query the event server for events based on a selector.
         
@@ -450,7 +571,7 @@ Classes
             message: The log message
             **kwargs: Additional structured data to include in the log entry
 
-`ExperimentClient(experiment_server_url: str | pydantic.networks.AnyUrl | None = None, config: madsci.common.types.client_types.ExperimentClientConfig | None = None)`
+`ExperimentClient(experiment_server_url: Optional[Union[str, AnyUrl]] = None, config: Optional[ExperimentClientConfig] = None)`
 :   Client for the MADSci Experiment Manager.
     
     Create a new Experiment Client.
@@ -459,28 +580,109 @@ Classes
         experiment_server_url: The URL of the experiment server. If not provided, will use the URL from the current MADSci context.
         config: Client configuration for retry and timeout settings. If not provided, uses default ExperimentClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `experiment_server_url: pydantic.networks.AnyUrl`
+    `experiment_server_url: AnyUrl`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
-    `cancel_experiment(self, experiment_id: str | ulid.ULID, timeout: float | None = None) ‑> madsci.common.types.experiment_types.Experiment`
+    `async_cancel_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   Cancel an experiment by ID asynchronously.
+        
+        Args:
+            experiment_id: The ID of the experiment to cancel.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_continue_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   Continue an experiment by ID asynchronously.
+        
+        Args:
+            experiment_id: The ID of the experiment to continue.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_end_experiment(self, experiment_id: Union[str, ULID], status: Optional[ExperimentStatus] = None, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   End an experiment by ID asynchronously.
+        
+        Args:
+            experiment_id: The ID of the experiment to end.
+            status: Optional status to set on the experiment.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_campaign(self, campaign_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
+    :   Get an experimental campaign by ID asynchronously.
+        
+        Args:
+            campaign_id: The ID of the campaign to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   Get an experiment by ID asynchronously.
+        
+        Args:
+            experiment_id: The ID of the experiment to get.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_experiments(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.Experiment]`
+    :   Get a list of the latest experiments asynchronously.
+        
+        Args:
+            number: Number of experiments to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_pause_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   Pause an experiment by ID asynchronously.
+        
+        Args:
+            experiment_id: The ID of the experiment to pause.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_register_campaign(self, campaign: ExperimentalCampaign, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
+    :   Register a new experimental campaign asynchronously.
+        
+        Args:
+            campaign: The campaign to register.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_start_experiment(self, experiment_design: ExperimentDesign, run_name: Optional[str] = None, run_description: Optional[str] = None, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
+    :   Start an experiment based on an ExperimentDesign asynchronously.
+        
+        Args:
+            experiment_design: The design of the experiment to start.
+            run_name: Optional name for the experiment run.
+            run_description: Optional description for the experiment run.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `cancel_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Cancel an experiment by ID.
         
         Args:
             experiment_id: The ID of the experiment to cancel.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `continue_experiment(self, experiment_id: str | ulid.ULID, timeout: float | None = None) ‑> madsci.common.types.experiment_types.Experiment`
+    `continue_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Continue an experiment by ID.
         
         Args:
             experiment_id: The ID of the experiment to continue.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `end_experiment(self, experiment_id: str | ulid.ULID, status: madsci.common.types.experiment_types.ExperimentStatus | None = None, timeout: float | None = None) ‑> madsci.common.types.experiment_types.Experiment`
+    `end_experiment(self, experiment_id: Union[str, ULID], status: Optional[ExperimentStatus] = None, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   End an experiment by ID. Optionally, set the status.
         
         Args:
@@ -488,42 +690,48 @@ Classes
             status: Optional status to set on the experiment.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_campaign(self, campaign_id: str, timeout: float | None = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
+    `get_campaign(self, campaign_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
     :   Get an experimental campaign by ID.
         
         Args:
             campaign_id: The ID of the campaign to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_experiment(self, experiment_id: str | ulid.ULID, timeout: float | None = None) ‑> dict`
+    `get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Get an experiment by ID.
         
         Args:
             experiment_id: The ID of the experiment to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_experiments(self, number: int = 10, timeout: float | None = None) ‑> list[madsci.common.types.experiment_types.Experiment]`
+    `get_experiments(self, number: int = 10, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.Experiment]`
     :   Get a list of the latest experiments.
         
         Args:
             number: Number of experiments to retrieve.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `pause_experiment(self, experiment_id: str | ulid.ULID, timeout: float | None = None) ‑> madsci.common.types.experiment_types.Experiment`
+    `pause_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Pause an experiment by ID.
         
         Args:
             experiment_id: The ID of the experiment to pause.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `register_campaign(self, campaign: madsci.common.types.experiment_types.ExperimentalCampaign, timeout: float | None = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
+    `register_campaign(self, campaign: ExperimentalCampaign, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.ExperimentalCampaign`
     :   Register a new experimental campaign.
         
         Args:
             campaign: The campaign to register.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `start_experiment(self, experiment_design: madsci.common.types.experiment_types.ExperimentDesign, run_name: str | None = None, run_description: str | None = None, timeout: float | None = None) ‑> madsci.common.types.experiment_types.Experiment`
+    `start_experiment(self, experiment_design: ExperimentDesign, run_name: Optional[str] = None, run_description: Optional[str] = None, timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Start an experiment based on an ExperimentDesign.
         
         Args:
@@ -532,7 +740,7 @@ Classes
             run_description: Optional description for the experiment run.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-`LabClient(lab_server_url: str | pydantic.networks.AnyUrl | None = None, config: madsci.common.types.client_types.LabClientConfig | None = None)`
+`LabClient(lab_server_url: Optional[Union[str, AnyUrl]] = None, config: Optional[LabClientConfig] = None)`
 :   Client for the MADSci Lab Manager.
     
     Create a new Lab Client.
@@ -541,26 +749,56 @@ Classes
         lab_server_url: The URL of the lab server. If not provided, will use the URL from the current MADSci context.
         config: Client configuration for retry and timeout settings. If not provided, uses default LabClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `lab_server_url: pydantic.networks.AnyUrl`
+    `lab_server_url: AnyUrl`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+        
+        Returns the httpx.Client so that existing code accessing
+        ``client.session`` continues to work.
 
     ### Methods
 
-    `get_lab_context(self, timeout: float | None = None) ‑> madsci.common.types.context_types.MadsciContext`
+    `async_get_lab_context(self, timeout: Optional[float] = None) ‑> madsci.common.types.context_types.MadsciContext`
+    :   Get the lab context asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_lab_health(self, timeout: Optional[float] = None) ‑> madsci.common.types.lab_types.LabHealth`
+    :   Get the health of the lab asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_manager_health(self, timeout: Optional[float] = None) ‑> madsci.common.types.manager_types.ManagerHealth`
+    :   Get the health of the lab manager asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `get_lab_context(self, timeout: Optional[float] = None) ‑> madsci.common.types.context_types.MadsciContext`
     :   Get the lab context.
         
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_lab_health(self, timeout: float | None = None) ‑> madsci.common.types.lab_types.LabHealth`
+    `get_lab_health(self, timeout: Optional[float] = None) ‑> madsci.common.types.lab_types.LabHealth`
     :   Get the health of the lab.
         
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_manager_health(self, timeout: float | None = None) ‑> madsci.common.types.manager_types.ManagerHealth`
+    `get_manager_health(self, timeout: Optional[float] = None) ‑> madsci.common.types.manager_types.ManagerHealth`
     :   Get the health of the lab manager.
         
         Args:
@@ -580,10 +818,19 @@ Classes
     config : Optional[LocationClientConfig]
         Client configuration for retry and timeout settings. If not provided, uses default LocationClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
     `location_server_url: pydantic.networks.AnyUrl | None`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
@@ -601,6 +848,91 @@ Classes
         -------
         Location
             The created location.
+
+    `async_add_location(self, location: madsci.common.types.location_types.Location, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Add a location asynchronously.
+
+    `async_attach_resource(self, location_name: str, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Attach a resource to a location asynchronously.
+
+    `async_create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Create a location from a LocationTemplate asynchronously.
+
+    `async_create_location_template(self, template: madsci.common.types.location_types.LocationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Create a new location template asynchronously.
+
+    `async_create_representation_template(self, template: madsci.common.types.location_types.LocationRepresentationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Create a new representation template asynchronously.
+
+    `async_delete_location(self, location_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a specific location by name asynchronously.
+
+    `async_delete_location_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a location template by name asynchronously.
+
+    `async_delete_representation_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a representation template by name asynchronously.
+
+    `async_detach_resource(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Detach the resource from a location asynchronously.
+
+    `async_export_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Export all locations from the server asynchronously.
+
+    `async_get_location(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Get details of a specific location by ID asynchronously.
+
+    `async_get_location_by_name(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Get a specific location by name asynchronously.
+
+    `async_get_location_resources(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
+    :   Get the resource hierarchy for resources at a specific location asynchronously.
+
+    `async_get_location_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Get a location template by name asynchronously.
+
+    `async_get_location_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationTemplate]`
+    :   Get all location templates asynchronously.
+
+    `async_get_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Get all locations asynchronously.
+
+    `async_get_representation_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Get a representation template by name asynchronously.
+
+    `async_get_representation_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationRepresentationTemplate]`
+    :   Get all representation templates asynchronously.
+
+    `async_get_transfer_graph(self, timeout: float | None = None) ‑> dict[str, list[str]]`
+    :   Get the current transfer graph as adjacency list asynchronously.
+
+    `async_import_locations(self, location_file_path: pathlib.Path | None = None, locations: list[madsci.common.types.location_types.Location] | None = None, overwrite: bool = False, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationImportResult`
+    :   Import multiple locations from a file or a list asynchronously.
+        
+        Parameters
+        ----------
+        location_file_path : Optional[Path]
+            Path to a YAML file containing location definitions.
+        locations : Optional[list[Location]]
+            A list of Location objects to import directly.
+        overwrite : bool
+            If True, overwrite existing locations with the same name.
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        LocationImportResult
+            Result with imported/skipped/error counts and imported locations.
+
+    `async_plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    :   Plan a transfer from source to target location asynchronously.
+
+    `async_remove_representation(self, location_name: str, node_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Remove representations for a location for a specific node asynchronously.
+
+    `async_set_representation(self, location_name: str, node_name: str, representation: Any, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Set a representation for a location for a specific node asynchronously.
 
     `attach_resource(self, location_name: str, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Attach a resource to a location.
@@ -620,7 +952,7 @@ Classes
             The updated location.
 
     `close(self) ‑> None`
-    :   Release the HTTP session.
+    :   Close HTTP clients and embedded logger.
 
     `create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Create a location from a LocationTemplate.
@@ -1062,9 +1394,13 @@ Classes
         event_client: Optional EventClient for logging. If not provided, creates a new one.
         config: Client configuration for retry and timeout settings. If not provided, uses default ResourceClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `local_resources: dict[str, madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    `local_resources: dict[str, typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)]]`
     :
 
     `local_templates: ClassVar[dict[str, dict]]`
@@ -1072,6 +1408,11 @@ Classes
 
     `resource_server_url: pydantic.networks.AnyUrl | None`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
@@ -1107,6 +1448,185 @@ Classes
         Returns:
             Resource: The added resource as returned by the server.
 
+    `async_acquire_lock(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], lock_duration: float = 300.0, client_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Acquire a lock on a resource asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            lock_duration: Lock duration in seconds (default 5 minutes).
+            client_id: Client identifier (auto-generated if not provided).
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The locked resource, or None if lock acquisition failed.
+
+    `async_add_resource(self, resource: madsci.common.types.resource_types.Resource, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource`
+    :   Add a resource to the server asynchronously.
+        
+        Args:
+            resource: The resource to add.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Resource: The added resource as returned by the server.
+
+    `async_change_quantity_by(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], amount: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Change the quantity of a resource by a given amount asynchronously.
+        
+        Args:
+            resource: The resource or its ID.
+            amount: The quantity to change by.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource.
+
+    `async_create_resource_from_template(self, template_name: str, resource_name: str, overrides: dict[str, typing.Any] | None = None, add_to_database: bool = True, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Create a resource from a template asynchronously.
+        
+        Args:
+            template_name: Name of the template to use.
+            resource_name: Name for the new resource.
+            overrides: Values to override template defaults.
+            add_to_database: Whether to add the resource to the database.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The created resource.
+
+    `async_get_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Retrieve a resource from the server asynchronously.
+        
+        Args:
+            resource: The resource object or ID to retrieve.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The retrieved resource.
+
+    `async_get_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Get a template by name asynchronously.
+        
+        Args:
+            template_name: Name of the template to retrieve.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The template resource if found, None otherwise.
+
+    `async_is_locked(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> tuple[bool, str | None]`
+    :   Check if a resource is currently locked asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            tuple[bool, Optional[str]]: (is_locked, locked_by)
+
+    `async_query_all_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    :   Query all resource templates asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            list[ResourceDataModels]: List of template resources.
+
+    `async_query_history(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, version: int | None = None, change_type: str | None = None, removed: bool | None = None, start_date: datetime.datetime | None = None, end_date: datetime.datetime | None = None, limit: int | None = 100, timeout: float | None = None) ‑> list[dict[str, typing.Any]]`
+    :   Retrieve the history of a resource with flexible filters asynchronously.
+        
+        Args:
+            resource: The resource or resource ID to query history for.
+            version: Filter by specific version number.
+            change_type: Filter by change type.
+            removed: Filter by removed status.
+            start_date: Filter by start date.
+            end_date: Filter by end date.
+            limit: Maximum number of history entries to return.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            list[dict[str, Any]]: History entries matching the query.
+
+    `async_query_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)] | None = None, resource_name: str | None = None, parent_id: str | None = None, resource_class: str | None = None, base_type: str | None = None, unique: bool | None = False, multiple: bool | None = False, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
+    :   Query for one or more resources matching specific properties asynchronously.
+        
+        Args:
+            resource: The (ID of) the resource to retrieve.
+            resource_name: The name of the resource to retrieve.
+            parent_id: The ID of the parent resource.
+            resource_class: The class of the resource.
+            base_type: The base type of the resource.
+            unique: Whether to require a unique resource or not.
+            multiple: Whether to return multiple resources or just the first.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Resource or list of Resources matching the query.
+
+    `async_query_resource_hierarchy(self, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
+    :   Query the hierarchical relationships of a resource asynchronously.
+        
+        Args:
+            resource_id: The ID of the resource to query hierarchy for.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceHierarchy: Hierarchy information with ancestor_ids, resource_id, and descendant_ids.
+
+    `async_release_lock(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], client_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot | None`
+    :   Release a lock on a resource asynchronously.
+        
+        Args:
+            resource: Resource object or resource ID.
+            client_id: Client identifier.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Optional[ResourceDataModels]: The unlocked resource, or None if release failed.
+
+    `async_remove_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Remove a resource asynchronously by moving it to the history table.
+        
+        Args:
+            resource: The resource or resource ID to remove.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The removed resource.
+
+    `async_restore_deleted_resource(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Restore a deleted resource from the history table asynchronously.
+        
+        Args:
+            resource: The resource or resource ID to restore.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The restored resource.
+
+    `async_set_quantity(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], quantity: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Set the quantity of a resource asynchronously.
+        
+        Args:
+            resource: The resource or its ID.
+            quantity: The quantity to set.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource.
+
+    `async_update_resource(self, resource: typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
+    :   Update a resource on the server asynchronously.
+        
+        Args:
+            resource: The resource to update.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            ResourceDataModels: The updated resource as returned by the server.
+
     `change_quantity_by(self, resource: str | typing.Annotated[typing.Annotated[madsci.common.types.resource_types.Resource, Tag(tag='resource')] | typing.Annotated[madsci.common.types.resource_types.Asset, Tag(tag='asset')] | typing.Annotated[madsci.common.types.resource_types.Consumable, Tag(tag='consumable')] | typing.Annotated[madsci.common.types.resource_types.DiscreteConsumable, Tag(tag='discrete_consumable')] | typing.Annotated[madsci.common.types.resource_types.ContinuousConsumable, Tag(tag='continuous_consumable')] | typing.Annotated[madsci.common.types.resource_types.Container, Tag(tag='container')] | typing.Annotated[madsci.common.types.resource_types.Collection, Tag(tag='collection')] | typing.Annotated[madsci.common.types.resource_types.Row, Tag(tag='row')] | typing.Annotated[madsci.common.types.resource_types.Grid, Tag(tag='grid')] | typing.Annotated[madsci.common.types.resource_types.VoxelGrid, Tag(tag='voxel_grid')] | typing.Annotated[madsci.common.types.resource_types.Stack, Tag(tag='stack')] | typing.Annotated[madsci.common.types.resource_types.Queue, Tag(tag='queue')] | typing.Annotated[madsci.common.types.resource_types.Pool, Tag(tag='pool')] | typing.Annotated[madsci.common.types.resource_types.Slot, Tag(tag='slot')], Discriminator(discriminator='base_type', custom_error_type=None, custom_error_message=None, custom_error_context=None)], amount: float | int, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Change the quantity of a resource by a given amount.
         
@@ -1117,6 +1637,9 @@ Classes
         
         Returns:
             ResourceDataModels: The updated resource.
+
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
 
     `create_resource_from_template(self, template_name: str, resource_name: str, overrides: dict[str, typing.Any] | None = None, add_to_database: bool = True, timeout: float | None = None) ‑> madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot`
     :   Create a resource from a template.
@@ -1357,7 +1880,7 @@ Classes
         
         Raises:
             ValueError: If resource not found.
-            requests.HTTPError: If server request fails.
+            httpx.HTTPStatusError: If server request fails.
 
     `query_templates(self, base_type: str | None = None, tags: list[str] | None = None, created_by: str | None = None, timeout: float | None = None) ‑> list[madsci.common.types.resource_types.Resource | madsci.common.types.resource_types.Asset | madsci.common.types.resource_types.Consumable | madsci.common.types.resource_types.DiscreteConsumable | madsci.common.types.resource_types.ContinuousConsumable | madsci.common.types.resource_types.Container | madsci.common.types.resource_types.Collection | madsci.common.types.resource_types.Row | madsci.common.types.resource_types.Grid | madsci.common.types.resource_types.VoxelGrid | madsci.common.types.resource_types.Stack | madsci.common.types.resource_types.Queue | madsci.common.types.resource_types.Pool | madsci.common.types.resource_types.Slot]`
     :   List templates with optional filtering.
@@ -1503,9 +2026,69 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.http.DualModeClientMixin
     * madsci.client.node.abstract_node_client.AbstractNodeClient
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `async_get_action_history(self, action_id: str | None = None, timeout: float | None = None) ‑> dict[str, list[madsci.common.types.action_types.ActionResult]]`
+    :   Get action history asynchronously.
+
+    `async_get_action_result(self, action_id: str, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action on the node asynchronously.
+        
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+        
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
+    `async_get_action_result_by_name(self, action_name: str, action_id: str, include_files: bool = True, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action by name asynchronously.
+        
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
+    `async_get_info(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeInfo`
+    :   Get information about the node asynchronously.
+
+    `async_get_log(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Get the log from the node asynchronously.
+
+    `async_get_state(self, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    :   Get the state of the node asynchronously.
+
+    `async_get_status(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeStatus`
+    :   Get the status of the node asynchronously.
+
+    `async_send_action(self, action_request: madsci.common.types.action_types.ActionRequest, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Send an action to the node asynchronously.
+        
+        Unlike the synchronous ``send_action``, this method does **not** poll or
+        wait for the action to reach a terminal state.  It creates the action,
+        starts it, and returns the initial ``ActionResult`` immediately.
+        
+        Args:
+            action_request: The action request to send.
+            timeout: Optional timeout override in seconds for individual HTTP
+                requests.  If ``None``, uses ``config.timeout_data_operations``.
+
+    `async_send_admin_command(self, admin_command: madsci.common.types.admin_command_types.AdminCommands, timeout: float | None = None) ‑> madsci.common.types.admin_command_types.AdminCommandResponse`
+    :   Perform an administrative command on the node asynchronously.
+
+    `async_set_config(self, new_config: dict[str, typing.Any], timeout: float | None = None) ‑> madsci.common.types.node_types.NodeSetConfigResponse`
+    :   Update configuration values of the node asynchronously.
 
     `await_action_result(self, action_id: str, timeout: float | None = None, request_timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
     :   Wait for an action to complete and return the result. Optionally, specify a timeout in seconds.
@@ -1612,7 +2195,7 @@ Classes
             new_config: Dictionary of configuration values to update.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
 
-`WorkcellClient(workcell_server_url: str | pydantic.networks.AnyUrl | None = None, working_directory: str = './', event_client: madsci.client.event_client.EventClient | None = None, config: madsci.common.types.client_types.WorkcellClientConfig | None = None)`
+`WorkcellClient(workcell_server_url: Optional[Union[str, AnyUrl]] = None, working_directory: str = './', event_client: Optional[EventClient] = None, config: Optional[WorkcellClientConfig] = None)`
 :   A client for interacting with the Workcell Manager to perform various actions.
     
     Initialize the WorkcellClient.
@@ -1629,14 +2212,23 @@ Classes
         Client configuration for retry strategies, timeouts, and connection pooling.
         If not provided, uses default WorkcellClientConfig settings.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `workcell_server_url: pydantic.networks.AnyUrl | None`
+    `workcell_server_url: Optional[AnyUrl]`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
-    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Add a node to the workcell.
         
         Parameters
@@ -1657,7 +2249,72 @@ Classes
         Node
             The added node details.
 
-    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: Literal['auto', 'rich', 'jupyter', 'plain'] = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
+    `async_cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Cancel a workflow asynchronously.
+
+    `async_get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get all active workflows asynchronously.
+
+    `async_get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get archived workflows asynchronously.
+
+    `async_get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
+    :   Get details of a specific node asynchronously.
+
+    `async_get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    :   Get all nodes in the workcell asynchronously.
+
+    `async_get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    :   Get the full state of the workcell asynchronously.
+
+    `async_get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    :   Get the definition of a workflow asynchronously.
+
+    `async_get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    :   Get the workflow queue asynchronously.
+
+    `async_pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Pause a workflow asynchronously.
+
+    `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    :   Check the status of a workflow using its ID asynchronously.
+
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
+    `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
+
+    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
         
         Parameters
@@ -1680,7 +2337,7 @@ Classes
         Workflow
             The completed workflow object.
 
-    `cancel_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Cancel a workflow.
         
         Parameters
@@ -1695,7 +2352,10 @@ Classes
         Workflow
             The cancelled workflow object.
 
-    `get_active_workflows(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
+    `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -1708,7 +2368,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_archived_workflows(self, number: int = 20, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -1723,7 +2383,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_node(self, node_name: str, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Get details of a specific node.
         
         Parameters
@@ -1738,7 +2398,7 @@ Classes
         Node
             The node details.
 
-    `get_nodes(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    `get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
     :   Get all nodes in the workcell.
         
         Parameters
@@ -1751,7 +2411,7 @@ Classes
         dict[str, Node]
             A dictionary of node names and their details.
 
-    `get_workcell_state(self, timeout: float | None = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    `get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
     :   Get the full state of the workcell.
         
         Parameters
@@ -1764,7 +2424,7 @@ Classes
         WorkcellState
             The current state of the workcell.
 
-    `get_workflow_definition(self, workflow_definition_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    `get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Get the definition of a workflow.
         
         Parameters
@@ -1779,7 +2439,7 @@ Classes
         WorkflowDefinition
             The workflow definition object.
 
-    `get_workflow_queue(self, timeout: float | None = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Get the workflow queue from the workcell.
         
         Parameters
@@ -1792,7 +2452,7 @@ Classes
         list[Workflow]
             A list of queued workflows.
 
-    `make_paths_absolute(self, files: dict[str, str | pathlib.Path]) ‑> dict[str, pathlib.Path]`
+    `make_paths_absolute(self, files: dict[str, PathLike]) ‑> dict[str, pathlib.Path]`
     :   Extract file paths from a workflow definition.
         
         Parameters
@@ -1805,7 +2465,7 @@ Classes
         dict[str, Path]
             A dictionary mapping unique file keys to their paths.
 
-    `pause_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Pause a workflow.
         
         Parameters
@@ -1820,7 +2480,7 @@ Classes
         Workflow
             The paused workflow object.
 
-    `query_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    `query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID.
         
         Parameters
@@ -1835,7 +2495,7 @@ Classes
         Optional[Workflow]
             The workflow object if found, otherwise None.
 
-    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resubmit a workflow as a brand new workflow run with the same parameters.
         
         Parameters
@@ -1858,7 +2518,7 @@ Classes
         Workflow
             The new workflow object.
 
-    `resume_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
         
         Parameters
@@ -1873,7 +2533,7 @@ Classes
         Workflow
             The resumed workflow object.
 
-    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Retry a workflow from a specific step.
         
         Parameters
@@ -1898,7 +2558,7 @@ Classes
         dict
             The response from the Workcell Manager.
 
-    `start_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `start_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -1925,7 +2585,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `submit_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -1952,7 +2612,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a batch of workflows to run concurrently.
         
         Parameters
@@ -1967,7 +2627,7 @@ Classes
         list[Workflow]
             A list of completed workflow objects.
 
-    `submit_workflow_definition(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, timeout: float | None = None) ‑> str`
+    `submit_workflow_definition(self, workflow_definition: Union[PathLike, WorkflowDefinition], timeout: Optional[float] = None) ‑> str`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -1982,7 +2642,7 @@ Classes
         str
             The ID of the submitted workflow.
 
-    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a sequence of workflows to run in order.
         
         Parameters
@@ -1997,7 +2657,7 @@ Classes
         list[Workflow]
             A list of submitted workflow objects.
 
-`WorkflowClient(workcell_server_url: str | pydantic.networks.AnyUrl | None = None, working_directory: str = './', event_client: madsci.client.event_client.EventClient | None = None, config: madsci.common.types.client_types.WorkcellClientConfig | None = None)`
+`WorkflowClient(workcell_server_url: Optional[Union[str, AnyUrl]] = None, working_directory: str = './', event_client: Optional[EventClient] = None, config: Optional[WorkcellClientConfig] = None)`
 :   A client for interacting with the Workcell Manager to perform various actions.
     
     Initialize the WorkcellClient.
@@ -2014,14 +2674,23 @@ Classes
         Client configuration for retry strategies, timeouts, and connection pooling.
         If not provided, uses default WorkcellClientConfig settings.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
-    `workcell_server_url: pydantic.networks.AnyUrl | None`
+    `workcell_server_url: Optional[AnyUrl]`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
-    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `add_node(self, node_name: str, node_url: str, node_description: str = 'A Node', permanent: bool = False, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Add a node to the workcell.
         
         Parameters
@@ -2042,7 +2711,72 @@ Classes
         Node
             The added node details.
 
-    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: Literal['auto', 'rich', 'jupyter', 'plain'] = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
+    `async_cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Cancel a workflow asynchronously.
+
+    `async_get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get all active workflows asynchronously.
+
+    `async_get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    :   Get archived workflows asynchronously.
+
+    `async_get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
+    :   Get details of a specific node asynchronously.
+
+    `async_get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    :   Get all nodes in the workcell asynchronously.
+
+    `async_get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    :   Get the full state of the workcell asynchronously.
+
+    `async_get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    :   Get the definition of a workflow asynchronously.
+
+    `async_get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    :   Get the workflow queue asynchronously.
+
+    `async_pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Pause a workflow asynchronously.
+
+    `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    :   Check the status of a workflow using its ID asynchronously.
+
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
+    `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
+
+    `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
         
         Parameters
@@ -2065,7 +2799,7 @@ Classes
         Workflow
             The completed workflow object.
 
-    `cancel_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `cancel_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Cancel a workflow.
         
         Parameters
@@ -2080,7 +2814,10 @@ Classes
         Workflow
             The cancelled workflow object.
 
-    `get_active_workflows(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
+    `get_active_workflows(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -2093,7 +2830,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_archived_workflows(self, number: int = 20, timeout: float | None = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
+    `get_archived_workflows(self, number: int = 20, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.workflow_types.Workflow]`
     :   Get all workflows from the Workcell Manager.
         
         Parameters
@@ -2108,7 +2845,7 @@ Classes
         dict[str, Workflow]
             A dictionary of workflow IDs and their details.
 
-    `get_node(self, node_name: str, timeout: float | None = None) ‑> madsci.common.types.node_types.Node`
+    `get_node(self, node_name: str, timeout: Optional[float] = None) ‑> madsci.common.types.node_types.Node`
     :   Get details of a specific node.
         
         Parameters
@@ -2123,7 +2860,7 @@ Classes
         Node
             The node details.
 
-    `get_nodes(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.node_types.Node]`
+    `get_nodes(self, timeout: Optional[float] = None) ‑> dict[str, madsci.common.types.node_types.Node]`
     :   Get all nodes in the workcell.
         
         Parameters
@@ -2136,7 +2873,7 @@ Classes
         dict[str, Node]
             A dictionary of node names and their details.
 
-    `get_workcell_state(self, timeout: float | None = None) ‑> madsci.common.types.workcell_types.WorkcellState`
+    `get_workcell_state(self, timeout: Optional[float] = None) ‑> madsci.common.types.workcell_types.WorkcellState`
     :   Get the full state of the workcell.
         
         Parameters
@@ -2149,7 +2886,7 @@ Classes
         WorkcellState
             The current state of the workcell.
 
-    `get_workflow_definition(self, workflow_definition_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
+    `get_workflow_definition(self, workflow_definition_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Get the definition of a workflow.
         
         Parameters
@@ -2164,7 +2901,7 @@ Classes
         WorkflowDefinition
             The workflow definition object.
 
-    `get_workflow_queue(self, timeout: float | None = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `get_workflow_queue(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Get the workflow queue from the workcell.
         
         Parameters
@@ -2177,7 +2914,7 @@ Classes
         list[Workflow]
             A list of queued workflows.
 
-    `make_paths_absolute(self, files: dict[str, str | pathlib.Path]) ‑> dict[str, pathlib.Path]`
+    `make_paths_absolute(self, files: dict[str, PathLike]) ‑> dict[str, pathlib.Path]`
     :   Extract file paths from a workflow definition.
         
         Parameters
@@ -2190,7 +2927,7 @@ Classes
         dict[str, Path]
             A dictionary mapping unique file keys to their paths.
 
-    `pause_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `pause_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Pause a workflow.
         
         Parameters
@@ -2205,7 +2942,7 @@ Classes
         Workflow
             The paused workflow object.
 
-    `query_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow | None`
+    `query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID.
         
         Parameters
@@ -2220,7 +2957,7 @@ Classes
         Optional[Workflow]
             The workflow object if found, otherwise None.
 
-    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resubmit_workflow(self, workflow_id: str, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resubmit a workflow as a brand new workflow run with the same parameters.
         
         Parameters
@@ -2243,7 +2980,7 @@ Classes
         Workflow
             The new workflow object.
 
-    `resume_workflow(self, workflow_id: str, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
         
         Parameters
@@ -2258,7 +2995,7 @@ Classes
         Workflow
             The resumed workflow object.
 
-    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `retry_workflow(self, workflow_id: str, index: int = 0, await_completion: bool = True, raise_on_cancelled: bool = True, raise_on_failed: bool = True, prompt_on_error: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Retry a workflow from a specific step.
         
         Parameters
@@ -2283,7 +3020,7 @@ Classes
         dict
             The response from the Workcell Manager.
 
-    `start_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `start_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -2310,7 +3047,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, json_inputs: dict[str, typing.Any] | None = None, file_inputs: dict[str, str | pathlib.Path] | None = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: float | None = None) ‑> madsci.common.types.workflow_types.Workflow`
+    `submit_workflow(self, workflow_definition: Union[str, PathLike, WorkflowDefinition], json_inputs: Optional[dict[str, Any]] = None, file_inputs: Optional[dict[str, PathLike]] = None, await_completion: bool = True, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -2337,7 +3074,7 @@ Classes
         Workflow
             The submitted workflow object.
 
-    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_batch(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a batch of workflows to run concurrently.
         
         Parameters
@@ -2352,7 +3089,7 @@ Classes
         list[Workflow]
             A list of completed workflow objects.
 
-    `submit_workflow_definition(self, workflow_definition: str | pathlib.Path | madsci.common.types.workflow_types.WorkflowDefinition, timeout: float | None = None) ‑> str`
+    `submit_workflow_definition(self, workflow_definition: Union[PathLike, WorkflowDefinition], timeout: Optional[float] = None) ‑> str`
     :   Submit a workflow to the Workcell Manager.
         
         Parameters
@@ -2367,7 +3104,7 @@ Classes
         str
             The ID of the submitted workflow.
 
-    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, typing.Any]] = [], file_inputs: list[dict[str, str | pathlib.Path]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
+    `submit_workflow_sequence(self, workflows: list[str], json_inputs: list[dict[str, Any]] = [], file_inputs: list[dict[str, PathLike]] = []) ‑> list[madsci.common.types.workflow_types.Workflow]`
     :   Submit a sequence of workflows to run in order.
         
         Parameters

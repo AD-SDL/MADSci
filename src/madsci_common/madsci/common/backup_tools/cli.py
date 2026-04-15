@@ -87,9 +87,9 @@ def create(
     """Create a new database backup.
 
     Examples:
-        madsci-backup create --db-url postgresql://localhost/mydb
+        madsci backup create --db-url postgresql://localhost/mydb
 
-        madsci-backup create --db-url mongodb://localhost/mydb --name pre-deploy
+        madsci backup create --db-url mongodb://localhost/mydb --name pre-deploy
     """
     try:
         # Resolve backup_dir default via sentry
@@ -152,7 +152,7 @@ def restore(backup: str, db_url: str, db_type: Optional[str]) -> None:
     """Restore from a backup.
 
     Examples:
-        madsci-backup restore --backup /path/to/backup.dump --db-url postgresql://localhost/mydb
+        madsci backup restore --backup /path/to/backup.dump --db-url postgresql://localhost/mydb
     """
     try:
         backup_path = Path(backup)
@@ -205,7 +205,7 @@ def validate(backup: str, db_url: str, db_type: Optional[str]) -> None:
     """Validate backup integrity.
 
     Examples:
-        madsci-backup validate --backup /path/to/backup.dump --db-url postgresql://localhost/mydb
+        madsci backup validate --backup /path/to/backup.dump --db-url postgresql://localhost/mydb
     """
     try:
         backup_path = Path(backup)

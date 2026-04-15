@@ -16,6 +16,10 @@ Screen {
     padding: 1 2;
 }
 
+#main-content DataTable {
+    max-height: 50%;
+}
+
 .panel {
     border: solid $primary;
     padding: 1 2;
@@ -70,7 +74,7 @@ RecentEventsPanel {
 
 /* ===== Status Screen ===== */
 
-ServiceDetailPanel {
+StatusScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
@@ -79,23 +83,12 @@ ServiceDetailPanel {
 
 /* ===== Logs Screen ===== */
 
-FilterPanel {
-    height: 5;
+LogsScreen FilterBar {
+    height: auto;
+    min-height: 5;
+    max-height: 7;
     padding: 1 2;
     border: solid $primary;
-}
-
-FilterPanel Horizontal {
-    height: 3;
-}
-
-FilterPanel Select {
-    width: 20;
-    margin-right: 2;
-}
-
-FilterPanel Input {
-    width: 30;
 }
 
 LogsScreen #log-view {
@@ -106,7 +99,7 @@ LogsScreen #log-view {
 
 /* ===== Nodes Screen ===== */
 
-NodeDetailScreen #node-detail-content {
+NodeDetailScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
@@ -115,11 +108,22 @@ NodeDetailScreen #node-detail-content {
 
 /* ===== Workflows Screen ===== */
 
-WorkflowDetailPanel {
+/* ===== Workflow Detail Screen ===== */
+
+WorkflowDetailScreen DetailPanel {
     border: solid $primary;
     padding: 1 2;
     height: auto;
-    min-height: 14;
+    min-height: 12;
+}
+
+/* ===== Step Detail Screen ===== */
+
+StepDetailScreen DetailPanel {
+    border: solid $primary;
+    padding: 1 2;
+    height: auto;
+    min-height: 12;
 }
 
 /* ===== Template Browser ===== */
@@ -156,4 +160,49 @@ TemplateBrowserScreen #search-bar {
 .auto-refresh-paused {
     color: $text-muted;
     text-style: dim;
+}
+
+/* ===== Data Browser ===== */
+
+DataBrowserScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Experiments Screen ===== */
+
+ExperimentsScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Locations Screen ===== */
+
+LocationsScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+/* ===== Resources Screen ===== */
+
+ResourcesScreen .panel {
+    border: round $primary;
+    padding: 1;
+}
+
+ResourceTreeScreen {
+    padding: 1;
+}
+
+/* ===== Transfer Graph ===== */
+
+TransferGraphScreen {
+    padding: 1;
+}
+
+/* ===== Action Executor ===== */
+
+ActionExecutorScreen .panel {
+    border: round $primary;
+    padding: 1;
 }

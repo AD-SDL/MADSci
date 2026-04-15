@@ -1,5 +1,6 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
+import contextlib
 import json
 import warnings
 from contextlib import asynccontextmanager
@@ -276,8 +277,15 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             total_nodes = len(self.settings.nodes or {})
             health.total_nodes = total_nodes
 
-            # TODO: Implement actual node reachability checks
-            health.nodes_reachable = total_nodes
+            # Check actual node reachability by querying status
+            reachable = 0
+            for node in (self.settings.nodes or {}).values():
+                with contextlib.suppress(Exception):
+                    client = find_node_client(node.node_url)
+                    if client is not None:
+                        client.get_status()
+                        reachable += 1
+            health.nodes_reachable = reachable
 
             health.healthy = True
             health.description = "Workcell Manager is running normally"

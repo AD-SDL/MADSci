@@ -84,9 +84,69 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.http.DualModeClientMixin
     * madsci.client.node.abstract_node_client.AbstractNodeClient
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `async_get_action_history(self, action_id: str | None = None, timeout: float | None = None) ‑> dict[str, list[madsci.common.types.action_types.ActionResult]]`
+    :   Get action history asynchronously.
+
+    `async_get_action_result(self, action_id: str, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action on the node asynchronously.
+        
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+        
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
+    `async_get_action_result_by_name(self, action_name: str, action_id: str, include_files: bool = True, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action by name asynchronously.
+        
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
+    `async_get_info(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeInfo`
+    :   Get information about the node asynchronously.
+
+    `async_get_log(self, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Get the log from the node asynchronously.
+
+    `async_get_state(self, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    :   Get the state of the node asynchronously.
+
+    `async_get_status(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeStatus`
+    :   Get the status of the node asynchronously.
+
+    `async_send_action(self, action_request: madsci.common.types.action_types.ActionRequest, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Send an action to the node asynchronously.
+        
+        Unlike the synchronous ``send_action``, this method does **not** poll or
+        wait for the action to reach a terminal state.  It creates the action,
+        starts it, and returns the initial ``ActionResult`` immediately.
+        
+        Args:
+            action_request: The action request to send.
+            timeout: Optional timeout override in seconds for individual HTTP
+                requests.  If ``None``, uses ``config.timeout_data_operations``.
+
+    `async_send_admin_command(self, admin_command: madsci.common.types.admin_command_types.AdminCommands, timeout: float | None = None) ‑> madsci.common.types.admin_command_types.AdminCommandResponse`
+    :   Perform an administrative command on the node asynchronously.
+
+    `async_set_config(self, new_config: dict[str, typing.Any], timeout: float | None = None) ‑> madsci.common.types.node_types.NodeSetConfigResponse`
+    :   Update configuration values of the node asynchronously.
 
     `await_action_result(self, action_id: str, timeout: float | None = None, request_timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
     :   Wait for an action to complete and return the result. Optionally, specify a timeout in seconds.

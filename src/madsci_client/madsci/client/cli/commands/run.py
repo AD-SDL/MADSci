@@ -1,6 +1,7 @@
 """MADSci CLI run command.
 
-Convenience commands for running workflows and experiments.
+Convenience commands for running workflows and experiments, using the shared
+utility layer for error handling and common CLI options.
 """
 
 from __future__ import annotations
@@ -8,6 +9,10 @@ from __future__ import annotations
 from pathlib import Path
 
 import click
+from madsci.client.cli.utils.cli_decorators import (
+    timeout_option,
+    with_service_error_handling,
+)
 
 
 @click.group()
@@ -40,13 +45,16 @@ def run() -> None:
     is_flag=True,
     help="Submit the workflow and return immediately.",
 )
+@timeout_option(default=10.0)
 @click.pass_context
+@with_service_error_handling
 def workflow(
     ctx: click.Context,
     path: str,
     workcell_url: str,
     parameters_json: str | None,
     no_wait: bool,
+    timeout: float,
 ) -> None:
     """Submit a workflow to the workcell manager.
 
@@ -55,12 +63,18 @@ def workflow(
         madsci run workflow ./workflows/example.workflow.yaml
         madsci run workflow ./workflows/example.workflow.yaml --no-wait
         madsci run workflow ./wf.yaml --parameters '{"source": "plate_1"}'
+        madsci run workflow ./wf.yaml --timeout 30
     """
     import json
 
     from madsci.client.cli.utils.output import get_console
 
     console = get_console(ctx)
+
+    console.print(
+        "[yellow]Note: 'madsci run workflow' is deprecated. "
+        "Use 'madsci workflow submit' instead.[/yellow]"
+    )
 
     if workcell_url is None:
         context = ctx.obj.get("context") if ctx.obj else None
@@ -82,30 +96,39 @@ def workflow(
 
     try:
         from madsci.client.workcell_client import WorkcellClient
+        from madsci.common.types.client_types import WorkcellClientConfig
 
-        client = WorkcellClient(workcell_server_url=workcell_url)
+        client_config = WorkcellClientConfig(timeout_default=timeout)
+        client = WorkcellClient(workcell_server_url=workcell_url, config=client_config)
 
-        if no_wait:
-            wf_id = client.submit_workflow_definition(workflow_path)
-            console.print(f"[green]\u2713[/green] Workflow submitted — ID: {wf_id}")
-        else:
-            console.print("Waiting for workflow to complete...")
-            result = client.start_workflow(
-                workflow_definition=workflow_path,
-                json_inputs=json_inputs,
-                await_completion=True,
-                prompt_on_error=False,
-                raise_on_failed=False,
-                raise_on_cancelled=False,
-            )
-            console.print(
-                f"[green]\u2713[/green] Workflow finished — status: {result.status}"
-            )
+        try:
+            if no_wait:
+                wf_id = client.submit_workflow_definition(workflow_path)
+                console.print(
+                    f"[green]\u2713[/green] Workflow submitted \u2014 ID: {wf_id}"
+                )
+            else:
+                console.print("Waiting for workflow to complete...")
+                result = client.start_workflow(
+                    workflow_definition=workflow_path,
+                    json_inputs=json_inputs,
+                    await_completion=True,
+                    prompt_on_error=False,
+                    raise_on_failed=False,
+                    raise_on_cancelled=False,
+                )
+                console.print(
+                    f"[green]\u2713[/green] Workflow finished \u2014 status: {result.status}"
+                )
+        finally:
+            client.close()
     except ConnectionError as exc:
         raise click.ClickException(
             f"Cannot connect to workcell manager at {workcell_url}\n"
             "  Is the lab running? Try: madsci start"
         ) from exc
+    except click.ClickException:
+        raise
     except Exception as exc:
         raise click.ClickException(f"Workflow execution failed: {exc}") from exc
 
@@ -132,6 +155,11 @@ def experiment(
     from madsci.client.cli.utils.output import get_console
 
     console = get_console(ctx)
+
+    console.print(
+        "[yellow]Note: 'madsci run experiment' is deprecated. "
+        "Use 'madsci experiment run' instead.[/yellow]"
+    )
 
     script_path = Path(path).resolve()
     console.print(f"Running experiment: [cyan]{script_path.name}[/cyan]")

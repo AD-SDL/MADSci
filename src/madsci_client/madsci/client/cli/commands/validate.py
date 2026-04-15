@@ -307,7 +307,7 @@ def _format_json(results: list[ValidationResult]) -> str:
             "total": len(results),
             "valid": sum(1 for r in results if r.valid),
             "errors": sum(1 for r in results if r.errors),
-            "warnings": sum(1 for r in results if r.warnings and r.valid),
+            "warnings": sum(1 for r in results if r.warnings),
         },
     }
     return json.dumps(output)
@@ -385,6 +385,10 @@ def validate(
 
     if as_json or (ctx.obj and ctx.obj.get("json")):
         console.print_json(_format_json(results))
+        error_count = sum(1 for r in results if r.errors)
+        warn_count = sum(1 for r in results if r.warnings)
+        if error_count > 0 or (strict and warn_count > 0):
+            ctx.exit(1)
         return
 
     if not results:

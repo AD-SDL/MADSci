@@ -4,67 +4,49 @@ Provides an overview of the lab status including services, nodes,
 active workflows, and recent events.
 """
 
+import asyncio
+import logging
 from typing import Any, ClassVar
 
-import httpx
+from madsci.client.cli.tui.mixins import AutoRefreshMixin, ServiceURLMixin
+from madsci.client.cli.tui.widgets import StatusBadge
+from madsci.client.cli.utils.formatting import truncate
+from madsci.client.cli.utils.service_health import check_all_services_async
+from madsci.client.event_client import EventClient
+from madsci.common.types.event_types import Event
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
-
-class ServiceStatusWidget(Static):
-    """Widget displaying status of a single service."""
-
-    def __init__(self, name: str, url: str, **kwargs: Any) -> None:
-        """Initialize the service status widget.
-
-        Args:
-            name: Service name.
-            url: Service URL.
-        """
-        super().__init__(**kwargs)
-        self.service_name = name
-        self.service_url = url
-        self.status = "unknown"
-
-    def compose(self) -> ComposeResult:
-        """Compose the widget."""
-        yield Label(f"\u25cb {self.service_name}", id=f"status-{self.service_name}")
-
-    async def check_health(self) -> None:
-        """Check service health and update display."""
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.get(f"{self.service_url.rstrip('/')}/health")
-                if response.status_code == 200:
-                    self.status = "healthy"
-                    icon = "[green]\u25cf[/green]"
-                else:
-                    self.status = "unhealthy"
-                    icon = "[yellow]\u25cf[/yellow]"
-        except Exception:
-            self.status = "offline"
-            icon = "[red]\u25cb[/red]"
-
-        label = self.query_one(f"#status-{self.service_name}", Label)
-        label.update(f"{icon} {self.service_name}")
+logger = logging.getLogger(__name__)
 
 
 class ServicesPanel(Static):
-    """Panel showing all service statuses."""
+    """Panel showing all service statuses using StatusBadge widgets."""
 
     def compose(self) -> ComposeResult:
         """Compose the panel."""
         yield Label("[bold]Services[/bold]")
-        for name, url in self.app.service_urls.items():
-            yield ServiceStatusWidget(name, url)
+        for name in self.app.service_urls:
+            yield StatusBadge("unknown", id=f"svc-badge-{name}")
+            yield Label(f" {name}", id=f"svc-label-{name}")
 
     async def refresh_data(self) -> None:
-        """Refresh all service statuses."""
-        for widget in self.query(ServiceStatusWidget):
-            await widget.check_health()
+        """Refresh all service statuses using shared health check."""
+        service_urls = getattr(self.app, "service_urls", {})
+        results = await check_all_services_async(service_urls)
+
+        for name, result in results.items():
+            try:
+                badge = self.query_one(f"#svc-badge-{name}", StatusBadge)
+                if result.is_available:
+                    badge.status = "healthy"
+                else:
+                    badge.status = "offline"
+            except Exception as exc:
+                logger.debug("Refresh failed: %s", exc)
 
 
 class QuickActionsPanel(Static):
@@ -77,6 +59,10 @@ class QuickActionsPanel(Static):
         yield Button("(l) Logs", id="action-logs", variant="default")
         yield Button("(n) Nodes", id="action-nodes", variant="default")
         yield Button("(w) Workflows", id="action-workflows", variant="default")
+        yield Button("(e) Experiments", id="action-experiments", variant="default")
+        yield Button("(i) Resource Inventory", id="action-resources", variant="default")
+        yield Button("(b) Data Browser", id="action-data", variant="default")
+        yield Button("(o) Locations", id="action-locations", variant="default")
         yield Button("(r) Refresh", id="action-refresh", variant="default")
         yield Button("(q) Quit", id="action-quit", variant="error")
 
@@ -87,6 +73,10 @@ class QuickActionsPanel(Static):
             "action-logs": "logs",
             "action-nodes": "nodes",
             "action-workflows": "workflows",
+            "action-experiments": "experiments",
+            "action-resources": "resources",
+            "action-data": "data",
+            "action-locations": "locations",
         }
         button_id = event.button.id
         if button_id in action_map:
@@ -114,16 +104,31 @@ def _format_level(level: object) -> str:
     return str(level)[:5]
 
 
-def _extract_message(event: dict) -> str:
-    """Extract the message string from an Event dict."""
-    event_data = event.get("event_data", {})
+def _extract_message(event: Event) -> str:
+    """Extract the message string from an Event model instance."""
+    event_data = event.event_data
     if isinstance(event_data, dict):
-        return event_data.get("message", str(event_data))[:50]
-    return str(event_data)[:50]
+        return truncate(event_data.get("message", str(event_data)), max_len=50)
+    return truncate(str(event_data), max_len=50)
 
 
 class RecentEventsPanel(Static):
     """Panel showing recent events."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the panel."""
+        super().__init__(**kwargs)
+        self._event_client: EventClient | None = None
+
+    def _get_event_client(self) -> EventClient:
+        """Get or create the EventClient instance."""
+        if self._event_client is None:
+            url = self.app.service_urls.get("event_manager", "http://localhost:8001/")
+            self._event_client = EventClient(
+                name="tui-dashboard",
+                event_server_url=url,
+            )
+        return self._event_client
 
     def compose(self) -> ComposeResult:
         """Compose the panel."""
@@ -132,43 +137,38 @@ class RecentEventsPanel(Static):
             "[dim]No events loaded. Press 'r' to refresh.[/dim]", id="events-content"
         )
 
+    async def on_unmount(self) -> None:
+        """Clean up client connections when panel is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "aclose"):
+                    await client.aclose()
+                elif client is not None and hasattr(client, "close"):
+                    client.close()
+
     async def refresh_data(self) -> None:
         """Refresh recent events."""
         content = self.query_one("#events-content", Label)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                event_url = self.app.service_urls.get(
-                    "event_manager", "http://localhost:8001/"
-                )
-                response = await client.get(
-                    f"{event_url.rstrip('/')}/events",
-                    params={"number": 5},
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    # Event Manager returns Dict[str, Event]
-                    if isinstance(data, dict) and data:
-                        events = list(data.values())
-                    elif isinstance(data, list):
-                        events = data
-                    else:
-                        events = []
-                    if events:
-                        lines = []
-                        for event in events[:5]:
-                            msg = _extract_message(event)
-                            level = _format_level(event.get("log_level", 20))
-                            lines.append(f"  [{level}] {msg}")
-                        content.update("\n".join(lines))
-                    else:
-                        content.update("[dim]No recent events[/dim]")
-                else:
-                    content.update("[dim]Could not load events[/dim]")
-        except Exception:
+            client = self._get_event_client()
+            events_dict = await client.async_get_events(number=5)
+            events = list(events_dict.values())
+            if events:
+                lines = []
+                for event in events[:5]:
+                    msg = _extract_message(event)
+                    level = _format_level(event.log_level)
+                    lines.append(f"  [{level}] {msg}")
+                content.update("\n".join(lines))
+            else:
+                content.update("[dim]No recent events[/dim]")
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
             content.update("[dim]Event Manager not available[/dim]")
 
 
-class DashboardScreen(Screen):
+class DashboardScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
     """Main dashboard screen showing lab overview."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -176,14 +176,9 @@ class DashboardScreen(Screen):
         ("a", "toggle_auto_refresh", "Auto-refresh"),
     ]
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the dashboard screen."""
-        super().__init__(**kwargs)
-        self.auto_refresh_enabled = True
-
     def compose(self) -> ComposeResult:
         """Compose the dashboard layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]MADSci Lab Dashboard[/bold blue]")
             yield Label("")
 
@@ -216,22 +211,21 @@ class DashboardScreen(Screen):
                 "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | '?' help[/dim]"
             )
 
+    def watch_auto_refresh_enabled(self, _value: bool) -> None:
+        """React to auto_refresh_enabled changes by updating the footer."""
+        self._update_footer()
+
     async def refresh_data(self) -> None:
         """Refresh all dashboard data."""
         services_panel = self.query_one("#services-panel", ServicesPanel)
         events_panel = self.query_one("#events-panel", RecentEventsPanel)
 
-        await services_panel.refresh_data()
-        await events_panel.refresh_data()
+        await asyncio.gather(
+            services_panel.refresh_data(),
+            events_panel.refresh_data(),
+        )
 
     async def action_refresh(self) -> None:
         """Refresh dashboard data."""
         await self.refresh_data()
         self.notify("Dashboard refreshed", timeout=2)
-
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()

@@ -82,8 +82,8 @@ Covers the `madsci` command-line interface architecture and extension.
 **Key topics:**
 - Click-based CLI with `AliasedGroup` and lazy loading via `_LAZY_COMMANDS`
 - Step-by-step guide for adding new commands
-- 17 commands with aliases and key flags
-- Template system (26 templates, `template.yaml` manifests, Jinja2)
+- 26 commands with aliases and key flags
+- Template system (33 templates, `template.yaml` manifests, Jinja2)
 - Start/stop lifecycle (Docker vs local mode, PID tracking, health polling)
 - Output helpers (`get_console()`, `success()`, `error()`, etc.)
 - Testing with Click's `CliRunner`

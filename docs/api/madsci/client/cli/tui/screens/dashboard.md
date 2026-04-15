@@ -8,13 +8,20 @@ active workflows, and recent events.
 Classes
 -------
 
-`DashboardScreen(**kwargs: Any)`
+`DashboardScreen(name: str | None = None, id: str | None = None, classes: str | None = None)`
 :   Main dashboard screen showing lab overview.
     
-    Initialize the dashboard screen.
+    Initialize the screen.
+    
+    Args:
+        name: The name of the screen.
+        id: The ID of the screen in the DOM.
+        classes: The CSS classes for the screen.
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.AutoRefreshMixin
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -37,9 +44,6 @@ Classes
     `action_refresh(self) ‑> None`
     :   Refresh dashboard data.
 
-    `action_toggle_auto_refresh(self) ‑> None`
-    :   Toggle auto-refresh on/off.
-
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the dashboard layout.
 
@@ -48,6 +52,9 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
 
 `QuickActionsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
 :   Panel showing quick action shortcuts.
@@ -85,18 +92,10 @@ Classes
     `on_button_pressed(self, event: textual.widgets._button.Button.Pressed) ‑> None`
     :   Handle quick action button presses.
 
-`RecentEventsPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
+`RecentEventsPanel(**kwargs: Any)`
 :   Panel showing recent events.
     
-    Initialize a Widget.
-    
-    Args:
-        *children: Child widgets.
-        name: The name of the widget.
-        id: The ID of the widget in the DOM.
-        classes: The CSS classes for the widget.
-        disabled: Whether the widget is disabled or not.
-        markup: Enable content markup?
+    Initialize the panel.
 
     ### Ancestors (in MRO)
 
@@ -117,44 +116,15 @@ Classes
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the panel.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when panel is unmounted.
 
     `refresh_data(self) ‑> None`
     :   Refresh recent events.
 
-`ServiceStatusWidget(name: str, url: str, **kwargs: Any)`
-:   Widget displaying status of a single service.
-    
-    Initialize the service status widget.
-    
-    Args:
-        name: Service name.
-        url: Service URL.
-
-    ### Ancestors (in MRO)
-
-    * textual.widgets._static.Static
-    * textual.widget.Widget
-    * textual.dom.DOMNode
-    * textual.message_pump.MessagePump
-
-    ### Class variables
-
-    `can_focus`
-    :
-
-    `can_focus_children`
-    :
-
-    ### Methods
-
-    `check_health(self) ‑> None`
-    :   Check service health and update display.
-
-    `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the widget.
-
 `ServicesPanel(content: VisualType = '', *, expand: bool = False, shrink: bool = False, markup: bool = True, name: str | None = None, id: str | None = None, classes: str | None = None, disabled: bool = False)`
-:   Panel showing all service statuses.
+:   Panel showing all service statuses using StatusBadge widgets.
     
     Initialize a Widget.
     
@@ -187,4 +157,4 @@ Classes
     :   Compose the panel.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses using shared health check.

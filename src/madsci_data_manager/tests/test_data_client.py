@@ -55,28 +55,26 @@ def test_client(document_handler) -> TestClient:
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[DataClient, None, None]:
     """Fixture for DataClient patched to use TestClient"""
-    with patch("madsci.client.data_client.create_http_session") as mock_create_session:
+    with patch("madsci.client.data_client.create_httpx_client") as mock_create_client:
+        method_map = {
+            "GET": test_client.get,
+            "POST": test_client.post,
+            "PUT": test_client.put,
+            "DELETE": test_client.delete,
+        }
 
-        def add_ok_property(resp: Any) -> Any:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
+        def request_via_test_client(method: str, url: str, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            handler = method_map.get(method.upper(), test_client.get)
+            resp = handler(url, **kwargs)
+            if not hasattr(resp, "is_success"):
+                resp.is_success = resp.status_code < 400
             return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
-
-        # Create a mock session that routes to TestClient
-        mock_session = type("MockSession", (), {})()
-        mock_session.post = post_no_timeout
-        mock_session.get = get_no_timeout
-        mock_create_session.return_value = mock_session
+        # Create a mock client that routes to TestClient
+        mock_client = type("MockClient", (), {})()
+        mock_client.request = request_via_test_client
+        mock_create_client.return_value = mock_client
 
         yield DataClient(data_server_url="http://testserver")
 
@@ -610,6 +608,126 @@ def test_s3_provider_configurations():
 
     # AWS should have region
     assert aws_config.region == "us-west-2"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for get_datapoints (C1/C2 fix — sorted() and params key)
+# ---------------------------------------------------------------------------
+
+
+class TestGetDatapointsLocalMode:
+    """Regression tests for get_datapoints in local mode (data_server_url=None).
+
+    Covers the bugs fixed in commit ed4b4544:
+      C1: list.sort() returns None — slicing crashed with TypeError
+      C2: params={number: number} used int as dict key
+    """
+
+    @pytest.fixture
+    def local_client(self):
+        """Create a DataClient in local-only mode."""
+        with pytest.warns(MadsciLocalOnlyWarning):
+            client = DataClient()
+        return client
+
+    def test_get_datapoints_returns_list(self, local_client):
+        """get_datapoints must return a list, not None (C1 regression)."""
+        # Submit a few datapoints so the local store is non-empty
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        dp3 = ValueDataPoint(label="c", value="v3")
+        local_client.submit_datapoint(dp1)
+        local_client.submit_datapoint(dp2)
+        local_client.submit_datapoint(dp3)
+
+        result = local_client.get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 3
+
+    def test_get_datapoints_empty_store(self, local_client):
+        """get_datapoints on empty store returns empty list, not None."""
+        result = local_client.get_datapoints(number=5)
+        assert result == []
+
+    def test_get_datapoints_respects_number_limit(self, local_client):
+        """get_datapoints slices to the requested number."""
+        for i in range(5):
+            local_client.submit_datapoint(ValueDataPoint(label=f"dp{i}", value=f"v{i}"))
+
+        result = local_client.get_datapoints(number=3)
+        assert len(result) == 3
+
+    def test_get_datapoints_sorted_descending(self, local_client):
+        """get_datapoints returns datapoints sorted by ID descending."""
+        dps = []
+        for i in range(3):
+            dp = ValueDataPoint(label=f"dp{i}", value=f"v{i}")
+            local_client.submit_datapoint(dp)
+            dps.append(dp)
+
+        result = local_client.get_datapoints(number=10)
+        ids = [dp.datapoint_id for dp in result]
+        assert ids == sorted(ids, reverse=True)
+
+
+class TestGetDatapointsRemoteMode:
+    """Regression tests for get_datapoints in remote mode (with server URL).
+
+    Covers C2: params key must be the string "number", not the int variable.
+    """
+
+    def test_get_datapoints_sends_correct_params(self, client):
+        """get_datapoints passes params={'number': N} to the server (C2 regression)."""
+        # Submit some datapoints via the test server
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        client.submit_datapoint(dp1)
+        client.submit_datapoint(dp2)
+
+        # Fetch — this exercises the real HTTP path with the test client
+        result = client.get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_get_datapoints_returns_empty_for_no_data(self, client):
+        """get_datapoints returns empty list when no datapoints exist."""
+        result = client.get_datapoints(number=10)
+        assert result == []
+
+
+@pytest.mark.asyncio
+class TestAsyncGetDatapointsLocalMode:
+    """Regression tests for async_get_datapoints in local mode."""
+
+    @pytest.fixture
+    def local_client(self):
+        with pytest.warns(MadsciLocalOnlyWarning):
+            client = DataClient()
+        return client
+
+    async def test_async_get_datapoints_returns_list(self, local_client):
+        """async_get_datapoints must return a list, not None (C1 regression)."""
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        local_client.submit_datapoint(dp1)
+        local_client.submit_datapoint(dp2)
+
+        result = await local_client.async_get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    async def test_async_get_datapoints_empty_store(self, local_client):
+        """async_get_datapoints on empty store returns empty list."""
+        result = await local_client.async_get_datapoints(number=5)
+        assert result == []
+
+    async def test_async_get_datapoints_respects_limit(self, local_client):
+        """async_get_datapoints slices to the requested number."""
+        for i in range(5):
+            local_client.submit_datapoint(ValueDataPoint(label=f"dp{i}", value=f"v{i}"))
+
+        result = await local_client.async_get_datapoints(number=2)
+        assert len(result) == 2
 
 
 # Additional tests for improved data client functionality
