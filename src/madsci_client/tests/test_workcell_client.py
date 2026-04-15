@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx import HTTPStatusError, Request, Response
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.db_handlers import (
     InMemoryCacheHandler,
@@ -191,23 +191,23 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
 def test_get_nodes(client: WorkcellClient) -> None:
     """Test retrieving nodes from the workcell."""
     response = client.add_node("node1", "http://node1/")
-    assert response["node_url"] == "http://node1/"
+    assert str(response.node_url) == "http://node1/"
     nodes = client.get_nodes()
     assert "node1" in nodes
-    assert nodes["node1"]["node_url"] == "http://node1/"
+    assert str(nodes["node1"].node_url) == "http://node1/"
 
 
 def test_get_node(client: WorkcellClient) -> None:
     """Test retrieving a specific node."""
     client.add_node("node1", "http://node1/")
     node = client.get_node("node1")
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_add_node(client: WorkcellClient) -> None:
     """Test adding a node to the workcell."""
     node = client.add_node("node1", "http://node1/")
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_get_nodes_empty(client: WorkcellClient) -> None:
@@ -222,7 +222,7 @@ def test_add_node_with_description(client: WorkcellClient) -> None:
     node = client.add_node(
         "node1", "http://node1/", node_description="Custom Node", permanent=True
     )
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_get_active_workflows(client: WorkcellClient) -> None:
@@ -668,11 +668,69 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     """Test error handling when adding nodes."""
     # Add a node to verify the method works
     node = client.add_node("test_node", "http://test_node/")
-    assert node["node_url"] == "http://test_node/"
+    assert str(node.node_url) == "http://test_node/"
 
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
-    assert retrieved_node["node_url"] == "http://test_node/"
+    assert str(retrieved_node.node_url) == "http://test_node/"
+
+
+# ------------------------------------------------------------------
+# Sync node method model-validation tests
+# ------------------------------------------------------------------
+
+
+class TestGetNodesReturnsValidatedModels:
+    """Tests that sync get_nodes() returns validated Node models, not raw dicts."""
+
+    def test_get_nodes_returns_validated_models(self, client: WorkcellClient) -> None:
+        """get_nodes() should return dict[str, Node] with validated Node instances."""
+        client.add_node("node1", "http://node1/")
+        nodes = client.get_nodes()
+        assert isinstance(nodes, dict)
+        assert "node1" in nodes
+        assert isinstance(nodes["node1"], Node), (
+            f"Expected Node instance, got {type(nodes['node1'])}"
+        )
+        assert str(nodes["node1"].node_url) == "http://node1/"
+
+
+class TestGetNodeReturnsValidatedModel:
+    """Tests that sync get_node() returns a validated Node model, not a raw dict."""
+
+    def test_get_node_returns_validated_model(self, client: WorkcellClient) -> None:
+        """get_node() should return a Node instance, not a raw dict."""
+        client.add_node("node1", "http://node1/")
+        node = client.get_node("node1")
+        assert isinstance(node, Node), f"Expected Node instance, got {type(node)}"
+        assert str(node.node_url) == "http://node1/"
+
+
+class TestAddNodeReturnsValidatedModel:
+    """Tests that sync add_node() returns a validated Node model, not a raw dict."""
+
+    def test_add_node_returns_validated_model(self, client: WorkcellClient) -> None:
+        """add_node() should return a Node instance, not a raw dict."""
+        node = client.add_node("node1", "http://node1/")
+        assert isinstance(node, Node), f"Expected Node instance, got {type(node)}"
+        assert str(node.node_url) == "http://node1/"
+
+
+class TestGetNodesRaisesOnError:
+    """Tests that sync get_nodes() raises on HTTP errors via raise_for_status()."""
+
+    def test_get_nodes_raises_on_error(self, async_client: WorkcellClient) -> None:
+        """get_nodes() should call raise_for_status() to surface HTTP errors."""
+        mock_resp = _make_mock_response({}, status_code=500)
+        mock_resp.raise_for_status.side_effect = HTTPStatusError(
+            "Internal Server Error",
+            request=Request("GET", "http://testserver/nodes"),
+            response=mock_resp,
+        )
+        async_client._client.request = MagicMock(return_value=mock_resp)
+
+        with pytest.raises(HTTPStatusError):
+            async_client.get_nodes()
 
 
 # ------------------------------------------------------------------

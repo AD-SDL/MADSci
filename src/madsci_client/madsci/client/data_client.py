@@ -352,26 +352,26 @@ class DataClient(DualModeClientMixin):
             return datapoint
 
         if datapoint.data_type == DataPointTypeEnum.FILE:
-            files = {
-                (
-                    "files",
-                    (
-                        str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).expanduser(), "rb"),
-                    ),
-                )
-            }
+            file_path = Path(datapoint.path).expanduser()
+            file_handle = file_path.open("rb")
+            files = {("files", (file_path.name, file_handle))}
         else:
+            file_handle = None
             files = {}
-        response = self._request(
-            "POST",
-            f"{self.data_server_url}datapoint",
-            data={"datapoint": datapoint.model_dump_json()},
-            files=files,
-            timeout=timeout or self.config.timeout_data_operations,
-        )
-        response.raise_for_status()
-        return DataPoint.discriminate(response.json())
+
+        try:
+            response = self._request(
+                "POST",
+                f"{self.data_server_url}datapoint",
+                data={"datapoint": datapoint.model_dump_json()},
+                files=files,
+                timeout=timeout or self.config.timeout_data_operations,
+            )
+            response.raise_for_status()
+            return DataPoint.discriminate(response.json())
+        finally:
+            if file_handle is not None:
+                file_handle.close()
 
     def _upload_to_object_storage(
         self,
@@ -702,23 +702,22 @@ class DataClient(DualModeClientMixin):
             # returns immediately; the actual file reading is handled by
             # httpx's async transport during the request below.
             file_path = Path(datapoint.path).expanduser()  # noqa: ASYNC240
-            files = {
-                (
-                    "files",
-                    (
-                        file_path.name,
-                        file_path.open("rb"),
-                    ),
-                )
-            }
+            file_handle = file_path.open("rb")
+            files = {("files", (file_path.name, file_handle))}
         else:
+            file_handle = None
             files = {}
-        response = await self._async_request(
-            "POST",
-            f"{self.data_server_url}datapoint",
-            data={"datapoint": datapoint.model_dump_json()},
-            files=files,
-            timeout=timeout or self.config.timeout_data_operations,
-        )
-        response.raise_for_status()
-        return DataPoint.discriminate(response.json())
+
+        try:
+            response = await self._async_request(
+                "POST",
+                f"{self.data_server_url}datapoint",
+                data={"datapoint": datapoint.model_dump_json()},
+                files=files,
+                timeout=timeout or self.config.timeout_data_operations,
+            )
+            response.raise_for_status()
+            return DataPoint.discriminate(response.json())
+        finally:
+            if file_handle is not None:
+                file_handle.close()

@@ -101,24 +101,27 @@ def workflow(
         client_config = WorkcellClientConfig(timeout_default=timeout)
         client = WorkcellClient(workcell_server_url=workcell_url, config=client_config)
 
-        if no_wait:
-            wf_id = client.submit_workflow_definition(workflow_path)
-            console.print(
-                f"[green]\u2713[/green] Workflow submitted \u2014 ID: {wf_id}"
-            )
-        else:
-            console.print("Waiting for workflow to complete...")
-            result = client.start_workflow(
-                workflow_definition=workflow_path,
-                json_inputs=json_inputs,
-                await_completion=True,
-                prompt_on_error=False,
-                raise_on_failed=False,
-                raise_on_cancelled=False,
-            )
-            console.print(
-                f"[green]\u2713[/green] Workflow finished \u2014 status: {result.status}"
-            )
+        try:
+            if no_wait:
+                wf_id = client.submit_workflow_definition(workflow_path)
+                console.print(
+                    f"[green]\u2713[/green] Workflow submitted \u2014 ID: {wf_id}"
+                )
+            else:
+                console.print("Waiting for workflow to complete...")
+                result = client.start_workflow(
+                    workflow_definition=workflow_path,
+                    json_inputs=json_inputs,
+                    await_completion=True,
+                    prompt_on_error=False,
+                    raise_on_failed=False,
+                    raise_on_cancelled=False,
+                )
+                console.print(
+                    f"[green]\u2713[/green] Workflow finished \u2014 status: {result.status}"
+                )
+        finally:
+            client.close()
     except ConnectionError as exc:
         raise click.ClickException(
             f"Cannot connect to workcell manager at {workcell_url}\n"

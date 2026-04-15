@@ -658,7 +658,10 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}nodes",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return {
+            key: Node.model_validate(value) for key, value in response.json().items()
+        }
 
     def get_node(self, node_name: str, timeout: Optional[float] = None) -> Node:
         """
@@ -681,7 +684,8 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}node/{node_name}",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return Node.model_validate(response.json())
 
     def add_node(
         self,
@@ -723,7 +727,8 @@ class WorkcellClient(DualModeClientMixin):
             },
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return Node.model_validate(response.json())
 
     def get_active_workflows(
         self, timeout: Optional[float] = None
