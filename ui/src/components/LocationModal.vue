@@ -2,7 +2,16 @@
   <v-dialog class="pa-3" v-slot:default="{ isActive }" max-width="800px">
     <v-card>
       <v-card-title class="d-flex justify-space-between align-center">
-        <h2 class="title">Location: {{ location_name }}</h2>
+        <div class="d-flex align-center ga-2">
+          <h2 class="title">Location: {{ location_name }}</h2>
+          <v-chip
+            :color="(location.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+            size="small"
+            :prepend-icon="(location.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+          >
+            {{ (location.managed_by || 'lab').toUpperCase() }}
+          </v-chip>
+        </div>
         <v-btn
           icon
           color="error"
@@ -21,6 +30,18 @@
             <v-chip color="primary" variant="outlined">
               <strong>ID:</strong> {{ location.location_id }}
             </v-chip>
+          </v-col>
+        </v-row>
+
+        <!-- Owner Info (node_id) -->
+        <v-row v-if="location.owner && location.owner.node_id" class="mb-3">
+          <v-col>
+            <v-card variant="outlined" density="compact" class="pa-2">
+              <div class="d-flex align-center ga-2">
+                <v-icon size="small" color="info">mdi-robot-industrial</v-icon>
+                <span class="text-body-2"><strong>Owner Node:</strong> {{ location.owner.node_id }}</span>
+              </div>
+            </v-card>
           </v-col>
         </v-row>
 

@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from madsci.common.types.node_types import (
     NodeInfo,
-    NodeLocationTemplateDefinition,
     NodeRepresentationTemplateDefinition,
     NodeResourceTemplateDefinition,
     RestNodeConfig,
@@ -62,18 +61,6 @@ class TemplateTestNode(RestNode):
         ),
     ]
 
-    location_templates: ClassVar[list[NodeLocationTemplateDefinition]] = [
-        NodeLocationTemplateDefinition(
-            template_name="test_location_template",
-            representation_templates={"role": "test_repr_template"},
-            resource_template_name="test_resource_template",
-            default_allow_transfers=True,
-            tags=["test"],
-            version="1.0.0",
-            description="A test location template",
-        ),
-    ]
-
     def startup_handler(self) -> None:
         """Minimal startup handler."""
         self.startup_has_run = True
@@ -109,7 +96,6 @@ def mock_location_client():
     """Create a mock location client."""
     client = MagicMock()
     client.init_representation_template.return_value = MagicMock()
-    client.init_location_template.return_value = MagicMock()
     return client
 
 
@@ -175,31 +161,14 @@ class TestTemplateHandlerRegistration:
         assert call_kwargs.kwargs["description"] == "A test representation template"
         assert call_kwargs.kwargs["created_by"] == template_node.node_info.node_id
 
-    def test_location_template_registered(self, template_node, mock_location_client):
-        """Location templates are registered via location_client.init_location_template."""
-        template_node.template_handler()
-
-        mock_location_client.init_location_template.assert_called_once()
-        call_kwargs = mock_location_client.init_location_template.call_args
-        assert call_kwargs.kwargs["template_name"] == "test_location_template"
-        assert call_kwargs.kwargs["representation_templates"] == {
-            "role": "test_repr_template"
-        }
-        assert call_kwargs.kwargs["resource_template_name"] == "test_resource_template"
-        assert call_kwargs.kwargs["default_allow_transfers"] is True
-        assert call_kwargs.kwargs["tags"] == ["test"]
-        assert call_kwargs.kwargs["version"] == "1.0.0"
-        assert call_kwargs.kwargs["description"] == "A test location template"
-        assert call_kwargs.kwargs["created_by"] == template_node.node_info.node_id
-
 
 class TestTemplateHandlerErrorIsolation:
     """Test that per-template errors do not prevent other templates or startup."""
 
-    def test_resource_template_failure_does_not_prevent_others(
+    def test_resource_template_failure_does_not_prevent_repr_templates(
         self, template_node, mock_resource_client, mock_location_client
     ):
-        """If a resource template registration fails, representation and location templates still register."""
+        """If a resource template registration fails, representation templates still register."""
         mock_resource_client.init_template.side_effect = ConnectionError(
             "server unavailable"
         )
@@ -207,21 +176,8 @@ class TestTemplateHandlerErrorIsolation:
         # Should not raise
         template_node.template_handler()
 
-        # Other template types should still be called
+        # Representation templates should still be called
         mock_location_client.init_representation_template.assert_called_once()
-        mock_location_client.init_location_template.assert_called_once()
-
-    def test_representation_failure_does_not_prevent_location_templates(
-        self, template_node, mock_location_client
-    ):
-        """If a representation template fails, location templates still register."""
-        mock_location_client.init_representation_template.side_effect = RuntimeError(
-            "schema error"
-        )
-
-        template_node.template_handler()
-
-        mock_location_client.init_location_template.assert_called_once()
 
     def test_template_handler_never_raises(
         self, template_node, mock_resource_client, mock_location_client
@@ -231,7 +187,6 @@ class TestTemplateHandlerErrorIsolation:
         mock_location_client.init_representation_template.side_effect = Exception(
             "crash"
         )
-        mock_location_client.init_location_template.side_effect = Exception("fail")
 
         # Should not raise
         template_node.template_handler()
@@ -248,7 +203,6 @@ class TestTemplateHandlerEmptyLists:
 
         mock_resource_client.init_template.assert_not_called()
         mock_location_client.init_representation_template.assert_not_called()
-        mock_location_client.init_location_template.assert_not_called()
 
 
 class TestTemplateHandlerCallOrder:
@@ -323,34 +277,9 @@ class TestTemplateHandlerErrorLogging:
             assert len(repr_calls) == 1
             assert repr_calls[0].kwargs["template_name"] == "test_repr_template"
 
-    def test_location_template_error_logged_with_name(
-        self, template_node, mock_location_client
-    ):
-        """Failed location template registration logs a warning with template name."""
-        mock_location_client.init_location_template.side_effect = ValueError("bad")
-
-        with patch.object(template_node.logger, "warning") as mock_warning:
-            template_node.template_handler()
-
-            loc_calls = [
-                c
-                for c in mock_warning.call_args_list
-                if c.kwargs.get("template_type") == "location"
-            ]
-            assert len(loc_calls) == 1
-            assert loc_calls[0].kwargs["template_name"] == "test_location_template"
-
 
 class TestNodeInfoTemplatePopulation:
     """Test that NodeInfo is populated with template definitions from the class."""
-
-    def test_node_info_has_location_templates(self, template_node):
-        """NodeInfo.location_templates is populated from the class variable."""
-        assert len(template_node.node_info.location_templates) == 1
-        assert (
-            template_node.node_info.location_templates[0].template_name
-            == "test_location_template"
-        )
 
     def test_node_info_has_representation_templates(self, template_node):
         """NodeInfo.location_representation_templates is populated from the class variable."""
@@ -362,34 +291,21 @@ class TestNodeInfoTemplatePopulation:
 
     def test_empty_node_has_empty_template_lists(self, empty_template_node):
         """NodeInfo has empty lists when node declares no templates."""
-        assert empty_template_node.node_info.location_templates == []
         assert empty_template_node.node_info.location_representation_templates == []
 
     def test_node_info_template_serialization_roundtrip(self, template_node):
         """NodeInfo with templates can be serialized and deserialized."""
         dumped = template_node.node_info.model_dump(mode="json")
-        assert "location_templates" in dumped
         assert "location_representation_templates" in dumped
-        assert len(dumped["location_templates"]) == 1
         assert len(dumped["location_representation_templates"]) == 1
 
         # Round-trip
         restored = NodeInfo.model_validate(dumped)
-        assert len(restored.location_templates) == 1
-        assert restored.location_templates[0].template_name == "test_location_template"
         assert len(restored.location_representation_templates) == 1
         assert (
             restored.location_representation_templates[0].template_name
             == "test_repr_template"
         )
-
-    def test_node_info_templates_are_copies(self, template_node):
-        """NodeInfo template lists are copies, not references to the class variable."""
-        template_node.node_info.location_templates.append(
-            NodeLocationTemplateDefinition(template_name="extra")
-        )
-        # Class variable should not be affected
-        assert len(TemplateTestNode.location_templates) == 1
 
 
 class TestNodeTemplateDefinitionTypes:
@@ -441,33 +357,6 @@ class TestNodeTemplateDefinitionTypes:
         assert defn.default_values == {}
         assert defn.schema_def is None
         assert defn.required_overrides is None
-        assert defn.tags is None
-        assert defn.version == "1.0.0"
-        assert defn.description is None
-
-    def test_location_template_definition(self):
-        """NodeLocationTemplateDefinition can be created with all fields."""
-        defn = NodeLocationTemplateDefinition(
-            template_name="test_loc",
-            representation_templates={"role": "repr"},
-            resource_template_name="res_tmpl",
-            resource_template_overrides={"cap": 2},
-            default_allow_transfers=False,
-            tags=["loc"],
-            version="1.0.0",
-            description="A loc template",
-        )
-        assert defn.template_name == "test_loc"
-        assert defn.default_allow_transfers is False
-        assert defn.resource_template_overrides == {"cap": 2}
-
-    def test_location_template_definition_defaults(self):
-        """NodeLocationTemplateDefinition has sensible defaults."""
-        defn = NodeLocationTemplateDefinition(template_name="test_loc")
-        assert defn.representation_templates is None
-        assert defn.resource_template_name is None
-        assert defn.resource_template_overrides is None
-        assert defn.default_allow_transfers is True
         assert defn.tags is None
         assert defn.version == "1.0.0"
         assert defn.description is None

@@ -11,14 +11,17 @@ from madsci.client.http import DualModeClientMixin
 from madsci.common.context import get_current_madsci_context, get_event_client
 from madsci.common.http_client import create_httpx_client
 from madsci.common.ownership import get_current_ownership_info
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.client_types import LocationClientConfig
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     CreateLocationFromTemplateRequest,
     Location,
     LocationImportResult,
+    LocationManagement,
     LocationRepresentationTemplate,
     LocationTemplate,
+    TransferGraphDetailedResponse,
 )
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
@@ -157,12 +160,19 @@ class LocationClient(DualModeClientMixin):
     # Sync methods
     # ------------------------------------------------------------------
 
-    def get_locations(self, timeout: Optional[float] = None) -> list[Location]:
+    def get_locations(
+        self,
+        managed_by: Optional[str] = None,
+        timeout: Optional[float] = None,
+    ) -> list[Location]:
         """
         Get all locations.
 
         Parameters
         ----------
+        managed_by : Optional[str]
+            Filter by management type ('node' or 'lab'). If None, returns all
+            locations. Must be a valid LocationManagement value.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
 
@@ -173,9 +183,14 @@ class LocationClient(DualModeClientMixin):
         """
         self._validate_server_url()
 
+        params: dict[str, str] = {}
+        if managed_by is not None:
+            params["managed_by"] = managed_by
+
         response = self._request(
             "GET",
             f"{self.location_server_url}locations",
+            params=params or None,
             headers=self._get_headers(),
             timeout=timeout or self.config.timeout_default,
         )
@@ -271,6 +286,80 @@ class LocationClient(DualModeClientMixin):
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
+
+    def init_location(
+        self,
+        location_name: str,
+        representations: Optional[dict[str, Any]] = None,
+        resource_template_name: Optional[str] = None,
+        resource_template_overrides: Optional[dict[str, Any]] = None,
+        description: Optional[str] = None,
+        allow_transfers: bool = True,
+        managed_by: Optional[LocationManagement] = None,
+        owner: Optional[OwnershipInfo] = None,
+        timeout: Optional[float] = None,
+    ) -> Location:
+        """Idempotent init: get-or-create a location.
+
+        If a location with the given name exists, returns it unchanged.
+        If it does not exist, creates it with the provided data.
+
+        Retries with exponential backoff on connection errors to tolerate
+        Location Manager starting after the calling node.
+
+        Parameters
+        ----------
+        location_name : str
+            The name of the location to get or create.
+        representations : Optional[dict[str, Any]]
+            Node-specific representation data for the location.
+        resource_template_name : Optional[str]
+            Name of the resource template to use for creating a container resource.
+        resource_template_overrides : Optional[dict[str, Any]]
+            Overrides to apply when creating a resource from the template.
+        description : Optional[str]
+            Description of the location.
+        allow_transfers : bool
+            Whether this location participates in transfers (default True).
+        managed_by : Optional[LocationManagement]
+            How this location is managed (node or lab). Defaults to LAB.
+        owner : Optional[OwnershipInfo]
+            Ownership provenance for this location.
+        timeout : Optional[float]
+            Optional timeout override in seconds.
+
+        Returns
+        -------
+        Location
+            The existing or newly created location.
+        """
+        self._validate_server_url()
+
+        location = Location(
+            location_name=location_name,
+            representations=representations or {},
+            resource_template_name=resource_template_name,
+            resource_template_overrides=resource_template_overrides,
+            description=description,
+            allow_transfers=allow_transfers,
+            managed_by=managed_by or LocationManagement.LAB,
+            owner=owner,
+        )
+
+        def _do_init() -> Location:
+            response = self._request(
+                "POST",
+                f"{self.location_server_url}location/init",
+                json=location.model_dump(mode="json"),
+                headers=self._get_headers(),
+                timeout=timeout or self.config.timeout_default,
+            )
+            response.raise_for_status()
+            return Location.model_validate(response.json())
+
+        return self._call_with_startup_retry(
+            _do_init, f"init_location({location_name!r})"
+        )
 
     def import_locations(
         self,
@@ -799,6 +888,36 @@ class LocationClient(DualModeClientMixin):
         )
         response.raise_for_status()
         return response.json()
+
+    def get_detailed_transfer_graph(
+        self, timeout: Optional[float] = None
+    ) -> "TransferGraphDetailedResponse":
+        """
+        Get the current transfer graph with detailed edge information.
+
+        Returns edge list with node names that can execute each transfer
+        and the minimum cost for each edge.
+
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+
+        Returns
+        -------
+        TransferGraphDetailedResponse
+            Detailed transfer graph with edges containing node names and costs.
+        """
+        self._validate_server_url()
+
+        response = self._request(
+            "GET",
+            f"{self.location_server_url}transfer/graph/detailed",
+            headers=self._get_headers(),
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return TransferGraphDetailedResponse.model_validate(response.json())
 
     def plan_transfer(
         self,

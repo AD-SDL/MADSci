@@ -55,6 +55,9 @@ Classes
     `count_locations(self) ‑> int`
     :   Returns the total number of locations.
 
+    `count_locations_by_managed_by(self, managed_by: str) ‑> int`
+    :   Returns the number of locations with the given managed_by value.
+
     `count_representation_templates(self) ‑> int`
     :   Returns the total number of representation templates.
 

@@ -216,6 +216,45 @@ class SchemaUpgrader:
 
         return result
 
+    def upgrade_2_to_3(self) -> MigrationResult:
+        """Upgrade schema from 2.0.0 to 3.0.0.
+
+        Additive: adds managed_by and owner fields to existing location documents.
+        Existing locations default to managed_by="lab" (they predate the distinction).
+        Idempotent -- safe to run multiple times.
+        """
+        result = MigrationResult()
+        try:
+            locations_coll = self._document_handler.get_collection("locations")
+
+            # Update all documents missing managed_by field
+            updated = locations_coll.update_many(
+                {"managed_by": {"$exists": False}},
+                {"$set": {"managed_by": "lab", "owner": None}},
+            )
+            if updated and hasattr(updated, "modified_count"):
+                result.migrated = updated.modified_count
+
+            # Record migration version
+            versions_coll = self._document_handler.get_collection("schema_versions")
+            existing = versions_coll.find_one({"version": "3.0.0"})
+            if existing is None:
+                from datetime import datetime, timezone  # noqa: PLC0415
+
+                versions_coll.insert_one(
+                    {
+                        "version": "3.0.0",
+                        "applied_at": datetime.now(timezone.utc).isoformat(),
+                        "description": "Added managed_by and owner fields to locations",
+                    }
+                )
+                self._log("Schema upgraded to 3.0.0")
+            else:
+                self._log("Schema 3.0.0 already applied, skipping")
+        except Exception as e:
+            result.errors.append(f"Schema upgrade 2.0.0 → 3.0.0 failed: {e}")
+        return result
+
 
 def main() -> None:
     """CLI entry point for manual migration."""

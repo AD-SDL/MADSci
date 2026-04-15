@@ -31,6 +31,7 @@ from madsci.common.types.action_types import ActionCancelled, ActionPaused
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import (
+    NodeIntrinsicLocationDefinition,
     NodeRepresentationTemplateDefinition,
     NodeResourceTemplateDefinition,
     RestNodeConfig,
@@ -268,6 +269,19 @@ class LiquidHandlerNode(RestNode):
             version="1.1.0",
             description="Liquid handler deck slot representation with position and type",
         ),
+    ]
+
+    # Intrinsic locations — auto-created on startup with '{node_name}.' prefix
+    intrinsic_locations: ClassVar[list[NodeIntrinsicLocationDefinition]] = [
+        NodeIntrinsicLocationDefinition(
+            location_name=f"deck_{i}",
+            description=f"Deck slot {i}",
+            representation_template_name="lh_deck_repr",
+            representation_overrides={"deck_position": i},
+            resource_template_name="liquid_handler_deck_slot",
+            allow_transfers=True,
+        )
+        for i in range(1, 5)
     ]
 
     def __init__(self) -> None:

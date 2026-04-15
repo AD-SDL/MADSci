@@ -12,7 +12,6 @@ from madsci.common.types.location_types import (
     LocationRepresentationTemplate,
     LocationTemplate,
 )
-from madsci.common.utils import new_ulid_str
 from madsci.location_manager.location_server import LocationManager
 
 
@@ -212,55 +211,12 @@ class TestReconcileOnInit:
         assert loc.representations["node_1"]["custom"] == "data"
 
 
-class TestSeedFileWithLazyResolution:
-    """Tests for seed file loading with lazy resource template resolution."""
+class TestStartupWithoutResourceServer:
+    """Tests that the manager starts without crashing when resource server is unavailable."""
 
-    def test_seed_list_format_handles_missing_resource_template(
-        self, cache_handler, document_handler, tmp_path
-    ):
-        """Seed file with list format loads even if resource template is unavailable."""
-        import yaml  # noqa: PLC0415
-
-        seed_file = tmp_path / "locations.yaml"
-        seed_data = [
-            {
-                "location_name": "lazy_loc",
-                "location_id": new_ulid_str(),
-                "resource_template_name": "nonexistent_template",
-                "representations": {"node1": {"key": "val"}},
-            },
-        ]
-        with seed_file.open("w") as f:
-            yaml.dump(seed_data, f)
-
-        settings = LocationManagerSettings(
-            enable_registry_resolution=False,
-            seed_locations_file=str(seed_file),
-            reconciliation_enabled=False,
-        )
-        manager = LocationManager(
-            settings=settings,
-            cache_handler=cache_handler,
-            document_handler=document_handler,
-        )
-        app = manager.create_server(version="0.1.0")
-
-        with TestClient(app) as test_client:
-            response = test_client.get("/locations")
-            assert response.status_code == 200
-            locations = response.json()
-            assert len(locations) == 1
-            loc = locations[0]
-            assert loc["location_name"] == "lazy_loc"
-            # Resource ID should be None (template unavailable)
-            assert loc["resource_id"] is None
-
-    def test_register_default_resource_template_removed(self):
-        """The _register_default_resource_template method should still exist (not removed yet)
-        but doesn't prevent startup if resource manager is unavailable."""
-        # This test verifies that the startup doesn't crash even without
-        # a resource server. The _register_default_resource_template is
-        # still called but failures are caught.
+    def test_startup_without_resource_server(self):
+        """Manager doesn't crash on startup even without a resource server."""
+        # The _register_default_resource_template is still called but failures are caught.
         settings = LocationManagerSettings(enable_registry_resolution=False)
         handler = InMemoryDocumentStorageHandler(database_name="test")
         cache = InMemoryCacheHandler()

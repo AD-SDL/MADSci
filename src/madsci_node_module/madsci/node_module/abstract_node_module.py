@@ -42,16 +42,18 @@ from madsci.common.types.action_types import (
     LocationArgumentDefinition,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.base_types import Error
 from madsci.common.types.datapoint_types import DataPoint, FileDataPoint, ValueDataPoint
 from madsci.common.types.event_types import Event, EventType
+from madsci.common.types.location_types import LocationManagement
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeCapabilities,
     NodeClientCapabilities,
     NodeConfig,
     NodeInfo,
-    NodeLocationTemplateDefinition,
+    NodeIntrinsicLocationDefinition,
     NodeRepresentationTemplateDefinition,
     NodeResourceTemplateDefinition,
     NodeSetConfigResponse,
@@ -110,8 +112,8 @@ class AbstractNode(MadsciClientMixin):
     ] = []
     """Declarative location representation template definitions to register on startup."""
 
-    location_templates: ClassVar[list[NodeLocationTemplateDefinition]] = []
-    """Declarative location template definitions to register on startup."""
+    intrinsic_locations: ClassVar[list[NodeIntrinsicLocationDefinition]] = []
+    """Intrinsic location definitions to register on startup."""
 
     def __init__(
         self,
@@ -132,8 +134,8 @@ class AbstractNode(MadsciClientMixin):
             module_name=module_name,
         )
 
-        # * Populate location template definitions from class variables
-        self.node_info.location_templates = list(self.__class__.location_templates)
+        # * Populate intrinsic location definitions from class variables
+        self.node_info.intrinsic_locations = list(self.__class__.intrinsic_locations)
         self.node_info.location_representation_templates = list(
             self.__class__.location_representation_templates
         )
@@ -213,11 +215,11 @@ class AbstractNode(MadsciClientMixin):
     def template_handler(self) -> None:
         """Register declarative templates with the resource and location managers.
 
-        Iterates over ``resource_templates``, ``location_representation_templates``,
-        and ``location_templates`` class members. Each template is registered via the
-        appropriate client API. Errors are caught and logged per-template (with the
-        template name and type clearly identified) so that a single failed registration
-        does not prevent the node from starting.
+        Iterates over ``resource_templates`` and ``location_representation_templates``
+        class members. Each template is registered via the appropriate client API.
+        Errors are caught and logged per-template (with the template name and type
+        clearly identified) so that a single failed registration does not prevent the
+        node from starting.
         """
         # 1. Resource templates (via resource_client.init_template)
         for defn in self.resource_templates:
@@ -274,32 +276,42 @@ class AbstractNode(MadsciClientMixin):
                     error=str(e),
                 )
 
-        # 3. Location templates (via location_client.init_location_template)
-        for defn in self.location_templates:
+    def intrinsic_location_handler(self) -> None:
+        """Register intrinsic locations with the Location Manager.
+
+        Iterates over ``intrinsic_locations`` class variable. Each location is
+        registered via location_client.init_location() with automatic
+        '{node_name}.' prefix. Errors are caught per-location so a single
+        failure does not prevent the node from starting.
+        """
+        for defn in self.intrinsic_locations:
             try:
-                self.location_client.init_location_template(
-                    template_name=defn.template_name,
-                    representation_templates=defn.representation_templates,
+                location_name = f"{self.node_info.node_name}.{defn.location_name}"
+                representations = {
+                    self.node_info.node_name: defn.representation_overrides
+                }
+                owner = OwnershipInfo(node_id=self.node_info.node_id)
+
+                self.location_client.init_location(
+                    location_name=location_name,
+                    representations=representations,
                     resource_template_name=defn.resource_template_name,
                     resource_template_overrides=defn.resource_template_overrides,
-                    default_allow_transfers=defn.default_allow_transfers,
-                    tags=defn.tags,
-                    created_by=self.node_info.node_id,
-                    version=defn.version,
                     description=defn.description,
+                    allow_transfers=defn.allow_transfers,
+                    managed_by=LocationManagement.NODE,
+                    owner=owner,
                 )
                 self.logger.info(
-                    "Registered location template",
+                    "Registered intrinsic location",
                     event_type=EventType.LOG_INFO,
-                    template_name=defn.template_name,
-                    template_type="location",
+                    location_name=location_name,
                 )
             except Exception as e:
                 self.logger.warning(
-                    "Failed to register location template",
+                    "Failed to register intrinsic location",
                     event_type=EventType.LOG_WARNING,
-                    template_name=defn.template_name,
-                    template_type="location",
+                    location_name=defn.location_name,
                     error=str(e),
                 )
 
@@ -1462,6 +1474,7 @@ class AbstractNode(MadsciClientMixin):
             self.node_status.paused = False
             self.node_status.stopped = False
             self.template_handler()
+            self.intrinsic_location_handler()
             self.startup_handler()
             # * Start status and state update loops
             repeat_on_interval(

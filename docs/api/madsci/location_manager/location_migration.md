@@ -63,3 +63,10 @@ Classes
         Additive only: creates new collections (representation_templates,
         location_templates) and their indexes. Existing locations data is
         not modified. Idempotent — safe to run multiple times.
+
+    `upgrade_2_to_3(self) ‑> madsci.location_manager.location_migration.MigrationResult`
+    :   Upgrade schema from 2.0.0 to 3.0.0.
+        
+        Additive: adds managed_by and owner fields to existing location documents.
+        Existing locations default to managed_by="lab" (they predate the distinction).
+        Idempotent -- safe to run multiple times.

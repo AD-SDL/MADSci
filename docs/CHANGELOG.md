@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`madsci new workcell` subcommand**: The workcell template generated an orphaned YAML format that didn't correspond to any Pydantic model. Workcell configuration is handled by `WorkcellManagerSettings` via `settings.yaml`.
 - **`LabClient.get_definition()`**: The Lab Manager no longer serves a `/definition` endpoint. Use `get_lab_context()` or `get_lab_health()` instead.
 - **`WORKCELL` template category**: Removed from `TemplateCategory` enum.
+- **`NodeLocationTemplateDefinition`**: Replaced by `NodeIntrinsicLocationDefinition` for declaring node-intrinsic locations. Location templates are now defined as `LocationTemplate` objects (via lab config file or API) rather than on node classes.
+- **`seed_locations_file` setting**: Replaced by `lab_config_file` on `LocationManagerSettings`. The new `LabLocationConfig` format supports representation templates, location templates, training entries, and locations in a single reconcilable file.
 
 ### Deprecated
 - **`LabManagerDefinition`**: Now emits `MadsciDeprecationWarning` on instantiation (v0.7.0 removal). Use `LabManagerSettings` for configuration.
@@ -19,6 +21,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`target_model` field on `TemplateManifest`**: Templates that generate YAML/JSON config can now declare which Pydantic model the output should validate against. Automated tests verify template output matches the declared model.
 - **Settings file validation in `madsci validate`**: The validate command now supports `settings.yaml` and `*.settings.yaml` files, validating against per-manager settings classes (Lab, Event, Experiment, Resource, Data, Workcell, Location).
 - **Pydantic-first data modeling guidance**: Added to CLAUDE.md, AGENTS.md, and agent skills to codify the rule that every YAML/JSON config format must have a corresponding Pydantic model.
+
+#### Layered Location Ownership Model
+- **`NodeIntrinsicLocationDefinition`**: Nodes declare locations intrinsic to their hardware via the `intrinsic_locations` ClassVar. Location names are auto-prefixed with `{node_name}.` for uniqueness (e.g., `deck_1` becomes `liquidhandler_1.deck_1`).
+- **`LocationManagement` enum**: Every location now tracks whether it is managed by a node (`NODE`) or by the lab configuration (`LAB`) via the `managed_by` field on `Location`.
+- **`owner` field on `Location`**: `OwnershipInfo` provenance tracking. Node-managed locations automatically set `owner.node_id`.
+- **`POST /location/init` endpoint**: Idempotent get-or-create for location registration, used by nodes during startup.
+- **`GET /locations?managed_by=node|lab` filtering**: Query locations by management type.
+- **`GET /reconciliation/status` endpoint**: Returns last reconciliation timestamp, results, and configuration.
+- **`LabLocationConfig`**: Reconcilable lab config file format (`locations.yaml`) with `representation_templates`, `location_templates`, `training`, and `locations` sections. Replaces the old `seed_locations_file` mechanism.
+- **`RepresentationTrainingEntry`**: Teaches a node how to access locations it does not own (e.g., robot arm coordinates for a liquid handler deck slot). Defined in the `training` section of the lab config file.
+- **`lab_config_file` setting**: `LocationManagerSettings` field (default: `locations.yaml`) for the lab config file path, discovered via walk-up search. Replaces `seed_locations_file`.
+- **Health endpoint enrichment**: `LocationManagerHealth` now includes `num_node_managed_locations`, `num_lab_managed_locations`, and `last_reconciliation_at` fields.
+- **`intrinsic_location_handler()` on `AbstractNode`**: Lifecycle method that registers intrinsic locations with the Location Manager at startup, after `template_handler()` and before `startup_handler()`.
+- **`NodeInfo.intrinsic_locations` field**: Exposes a node's declared intrinsic locations through its `/info` endpoint.
+- **Location Manager schema upgrade 2.0.0 to 3.0.0**: Adds `managed_by` (default `"lab"`) and `owner` (default `null`) fields to all existing location documents, plus a `managed_by_idx` index.
 
 #### CLI/TUI Buildout
 - **`madsci add` command** with 8 subcommands for adding components to existing module projects (docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all)
@@ -45,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
 - **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
 - **TUI screens migrated** to shared widget library for consistent styling and behavior
+- **Example lab location management**: Inline `location_locations` definitions in `settings.yaml` replaced by a standalone `locations.yaml` lab config file using `LabLocationConfig` format. Node-intrinsic locations (liquid handler deck slots) are now auto-created by nodes on startup. Lab-managed locations (storage rack, plate carriage) and training entries (robot arm coordinates for LH deck slots) are defined in `locations.yaml`.
+- **Location Manager reconciliation**: Now processes the lab config file (`LabLocationConfig`) on each cycle, syncing representation templates, location templates, locations, and training entries with the live database.
 
 ### Fixed
 - TUI UX improvements: scrollable layouts, clickable ActionBar, screen discoverability

@@ -1,16 +1,17 @@
 """Tests for the LocationManager server."""
 
 import pytest
-import yaml
 from fastapi.testclient import TestClient
 from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
+from madsci.common.types.auth_types import OwnershipInfo
 from madsci.common.types.location_types import (
     CapacityCostConfig,
     Location,
     LocationImportResult,
+    LocationManagement,
     LocationManagerHealth,
     LocationManagerSettings,
     LocationTransferCapabilities,
@@ -287,6 +288,106 @@ def test_location_state_persistence(client, sample_location):
     assert "test_robot" in location.representations
     assert location.representations["test_robot"] == representation
     assert location.resource_id == resource_id
+
+
+# --- Init Location Tests ---
+
+
+def test_init_location_creates_new(client):
+    """Test that POST /location/init creates a new location when none exists."""
+    location = Location(
+        location_name="init_new_location",
+        description="Created via init",
+        representations={"node_a": {"pos": 1}},
+        allow_transfers=True,
+    )
+
+    response = client.post("/location/init", json=location.model_dump(mode="json"))
+    assert response.status_code == 200
+
+    returned = Location.model_validate(response.json())
+    assert returned.location_name == "init_new_location"
+    assert returned.description == "Created via init"
+    assert returned.representations == {"node_a": {"pos": 1}}
+    assert returned.allow_transfers is True
+
+    # Verify the location was actually persisted
+    get_response = client.get("/location/init_new_location")
+    assert get_response.status_code == 200
+
+
+def test_init_location_returns_existing_unchanged(client):
+    """Test that POST /location/init returns existing location unchanged if name matches."""
+    # First, create a location via init
+    location = Location(
+        location_name="idempotent_location",
+        description="Original description",
+        representations={"node_x": {"val": 42}},
+    )
+    response1 = client.post("/location/init", json=location.model_dump(mode="json"))
+    assert response1.status_code == 200
+    original = Location.model_validate(response1.json())
+
+    # Second init with different data but same name should return original unchanged
+    modified = Location(
+        location_name="idempotent_location",
+        description="Modified description",
+        representations={"node_y": {"val": 99}},
+    )
+    response2 = client.post("/location/init", json=modified.model_dump(mode="json"))
+    assert response2.status_code == 200
+    returned = Location.model_validate(response2.json())
+
+    # Should match the original, not the modified data
+    assert returned.location_id == original.location_id
+    assert returned.description == "Original description"
+    assert returned.representations == {"node_x": {"val": 42}}
+
+
+def test_init_location_sets_managed_by(client):
+    """Test that init_location correctly persists the managed_by field."""
+    location = Location(
+        location_name="node_managed_loc",
+        managed_by=LocationManagement.NODE,
+    )
+
+    response = client.post("/location/init", json=location.model_dump(mode="json"))
+    assert response.status_code == 200
+
+    returned = Location.model_validate(response.json())
+    assert returned.managed_by == LocationManagement.NODE
+
+
+def test_init_location_sets_owner(client):
+    """Test that init_location correctly persists the owner field."""
+    node_id = new_ulid_str()
+    owner = OwnershipInfo(node_id=node_id)
+    location = Location(
+        location_name="owned_location",
+        owner=owner,
+    )
+
+    response = client.post("/location/init", json=location.model_dump(mode="json"))
+    assert response.status_code == 200
+
+    returned = Location.model_validate(response.json())
+    assert returned.owner is not None
+    assert returned.owner.node_id == node_id
+
+
+def test_init_location_without_resource_template(client):
+    """Test that init without resource_template_name creates location without resource."""
+    location = Location(
+        location_name="no_resource_loc",
+        description="No resource template",
+    )
+
+    response = client.post("/location/init", json=location.model_dump(mode="json"))
+    assert response.status_code == 200
+
+    returned = Location.model_validate(response.json())
+    assert returned.resource_id is None
+    assert returned.resource_template_name is None
 
 
 # Transfer Graph Tests
@@ -761,6 +862,55 @@ def test_get_transfer_graph_endpoint(transfer_setup):
     }
     actual_connections = set(graph_data[pickup_id])
     assert actual_connections == expected_connections
+
+
+def test_get_detailed_transfer_graph_endpoint(transfer_setup):
+    """Test the detailed transfer graph API endpoint."""
+    client = transfer_setup["client"]
+
+    response = client.get("/transfer/graph/detailed")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "edges" in data
+    edges = data["edges"]
+    assert isinstance(edges, list)
+    assert len(edges) > 0
+
+    # Check edge structure
+    edge = edges[0]
+    assert "source_location_id" in edge
+    assert "target_location_id" in edge
+    assert "node_names" in edge
+    assert isinstance(edge["node_names"], list)
+    assert len(edge["node_names"]) > 0
+    assert "min_cost" in edge
+    assert isinstance(edge["min_cost"], (int, float))
+
+
+def test_get_detailed_transfer_graph_empty(cache_handler):
+    """Test the detailed transfer graph endpoint returns empty edges when no transfer capabilities."""
+    settings = LocationManagerSettings(enable_registry_resolution=False)
+    manager = LocationManager(
+        settings=settings,
+        cache_handler=cache_handler,
+        document_handler=InMemoryDocumentStorageHandler(database_name="test_locations"),
+    )
+    manager.add_location(
+        Location(
+            location_name="location_no_transfer",
+            location_id=new_ulid_str(),
+            representations={"device": "config"},
+        )
+    )
+    client = TestClient(manager.create_server())
+
+    response = client.get("/transfer/graph/detailed")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "edges" in data
+    assert data["edges"] == []
 
 
 def test_plan_transfer_endpoint_direct(transfer_setup):
@@ -3191,83 +3341,161 @@ def test_export_locations(client):
     assert len(locations) == 3
 
 
-def test_seed_file_loads_on_empty_db(tmp_path, cache_handler):
-    """Seed file should be loaded when MongoDB is empty."""
-    seed_file = tmp_path / "locations.yaml"
-    seed_data = [
-        {"location_name": "seeded_a", "description": "From seed"},
-        {"location_name": "seeded_b", "description": "From seed"},
-    ]
+# --- Phase 3: Health counts, location filtering, reconciliation status ---
 
-    with seed_file.open("w") as f:
-        yaml.dump(seed_data, f)
 
-    settings = LocationManagerSettings(
-        enable_registry_resolution=False,
-        seed_locations_file=str(seed_file),
-    )
-    manager = LocationManager(
-        settings=settings,
-        cache_handler=cache_handler,
-        document_handler=InMemoryDocumentStorageHandler(database_name="test_seed"),
-    )
-    client = TestClient(manager.create_server())
+def test_health_counts_node_and_lab_managed(client):
+    """Health endpoint should report correct counts for node-managed and lab-managed locations."""
+    # Create node-managed locations
+    for i in range(2):
+        loc = Location(
+            location_name=f"node_loc_{i}",
+            location_id=new_ulid_str(),
+            managed_by=LocationManagement.NODE,
+        )
+        client.post("/location", json=loc.model_dump(mode="json"))
 
-    response = client.get("/locations")
+    # Create lab-managed locations
+    for i in range(3):
+        loc = Location(
+            location_name=f"lab_loc_{i}",
+            location_id=new_ulid_str(),
+            managed_by=LocationManagement.LAB,
+        )
+        client.post("/location", json=loc.model_dump(mode="json"))
+
+    response = client.get("/health")
     assert response.status_code == 200
-    locations = response.json()
-    assert len(locations) == 2
-    names = {loc["location_name"] for loc in locations}
-    assert names == {"seeded_a", "seeded_b"}
-    client.close()
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.num_node_managed_locations == 2
+    assert health.num_lab_managed_locations == 3
+    assert health.num_locations == 5
 
 
-def test_seed_file_skipped_when_db_has_locations(tmp_path, cache_handler):
-    """Seed file should be ignored when MongoDB already has data."""
-    seed_file = tmp_path / "locations.yaml"
-
-    with seed_file.open("w") as f:
-        yaml.dump([{"location_name": "should_not_appear"}], f)
-
-    mongo = InMemoryDocumentStorageHandler(database_name="test_seed_skip")
-    settings = LocationManagerSettings(
-        enable_registry_resolution=False,
-        seed_locations_file=str(seed_file),
+def test_health_counts_default_managed_by(client):
+    """Locations with default managed_by (LAB) should be counted as lab-managed."""
+    loc = Location(
+        location_name="default_mgmt_loc",
+        location_id=new_ulid_str(),
     )
+    client.post("/location", json=loc.model_dump(mode="json"))
 
-    # Pre-populate MongoDB with a location
-    loc = Location(location_name="existing_loc", location_id=new_ulid_str())
-    mongo.get_collection("locations").insert_one(loc.model_dump(mode="json"))
-
-    manager = LocationManager(
-        settings=settings,
-        cache_handler=cache_handler,
-        document_handler=mongo,
-    )
-    client = TestClient(manager.create_server())
-
-    response = client.get("/locations")
+    response = client.get("/health")
     assert response.status_code == 200
-    locations = response.json()
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.num_node_managed_locations == 0
+    assert health.num_lab_managed_locations == 1
+
+
+def test_health_last_reconciliation_at_initially_none(client):
+    """Before any reconciliation, last_reconciliation_at should be None."""
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    # Startup reconciliation may or may not set this depending on config
+    # but with no lab_config_file found, it should remain None
+    assert health.last_reconciliation_at is None
+
+
+def test_get_locations_filter_by_managed_by_node(client):
+    """GET /locations?managed_by=node should return only node-managed locations."""
+    loc_node = Location(
+        location_name="filter_node_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.NODE,
+    )
+    loc_lab = Location(
+        location_name="filter_lab_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.LAB,
+    )
+    client.post("/location", json=loc_node.model_dump(mode="json"))
+    client.post("/location", json=loc_lab.model_dump(mode="json"))
+
+    response = client.get("/locations", params={"managed_by": "node"})
+    assert response.status_code == 200
+    locations = [Location.model_validate(loc) for loc in response.json()]
     assert len(locations) == 1
-    assert locations[0]["location_name"] == "existing_loc"
-    client.close()
+    assert locations[0].location_name == "filter_node_loc"
+    assert locations[0].managed_by == LocationManagement.NODE
 
 
-def test_seed_file_missing_no_error(cache_handler):
-    """No error if seed file path doesn't exist."""
-    settings = LocationManagerSettings(
-        enable_registry_resolution=False,
-        seed_locations_file="/nonexistent/path/locations.yaml",
+def test_get_locations_filter_by_managed_by_lab(client):
+    """GET /locations?managed_by=lab should return only lab-managed locations."""
+    loc_node = Location(
+        location_name="filter2_node_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.NODE,
     )
-    manager = LocationManager(
-        settings=settings,
-        cache_handler=cache_handler,
-        document_handler=InMemoryDocumentStorageHandler(database_name="test_no_seed"),
+    loc_lab = Location(
+        location_name="filter2_lab_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.LAB,
     )
-    client = TestClient(manager.create_server())
+    client.post("/location", json=loc_node.model_dump(mode="json"))
+    client.post("/location", json=loc_lab.model_dump(mode="json"))
+
+    response = client.get("/locations", params={"managed_by": "lab"})
+    assert response.status_code == 200
+    locations = [Location.model_validate(loc) for loc in response.json()]
+    assert len(locations) == 1
+    assert locations[0].location_name == "filter2_lab_loc"
+    assert locations[0].managed_by == LocationManagement.LAB
+
+
+def test_get_locations_no_filter_returns_all(client):
+    """GET /locations without managed_by returns all locations."""
+    loc_node = Location(
+        location_name="all_node_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.NODE,
+    )
+    loc_lab = Location(
+        location_name="all_lab_loc",
+        location_id=new_ulid_str(),
+        managed_by=LocationManagement.LAB,
+    )
+    client.post("/location", json=loc_node.model_dump(mode="json"))
+    client.post("/location", json=loc_lab.model_dump(mode="json"))
 
     response = client.get("/locations")
     assert response.status_code == 200
-    assert response.json() == []
-    client.close()
+    locations = [Location.model_validate(loc) for loc in response.json()]
+    assert len(locations) == 2
+
+
+def test_reconciliation_status_endpoint(client):
+    """GET /reconciliation/status should return reconciliation metadata."""
+    response = client.get("/reconciliation/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert "last_reconciliation_at" in data
+    assert "last_results" in data
+    assert "reconciliation_enabled" in data
+    assert "reconciliation_interval_seconds" in data
+    assert "lab_config_file" in data
+
+
+def test_reconciliation_status_after_trigger(client):
+    """After POST /reconcile, GET /reconciliation/status should show results and timestamp."""
+    # Trigger reconciliation
+    response = client.post("/reconcile")
+    assert response.status_code == 200
+
+    # Check status
+    response = client.get("/reconciliation/status")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["last_reconciliation_at"] is not None
+    assert data["last_results"] is not None
+
+
+def test_health_last_reconciliation_at_after_reconcile(client):
+    """After POST /reconcile, health should show last_reconciliation_at."""
+    # Trigger reconciliation
+    client.post("/reconcile")
+
+    response = client.get("/health")
+    assert response.status_code == 200
+    health = LocationManagerHealth.model_validate(response.json())
+    assert health.last_reconciliation_at is not None

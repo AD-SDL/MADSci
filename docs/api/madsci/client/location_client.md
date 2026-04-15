@@ -213,6 +213,22 @@ Classes
         list[Location]
             All locations managed by the location server.
 
+    `get_detailed_transfer_graph(self, timeout: float | None = None) ‑> madsci.common.types.location_types.TransferGraphDetailedResponse`
+    :   Get the current transfer graph with detailed edge information.
+        
+        Returns edge list with node names that can execute each transfer
+        and the minimum cost for each edge.
+        
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        TransferGraphDetailedResponse
+            Detailed transfer graph with edges containing node names and costs.
+
     `get_location(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Get details of a specific location by ID.
         
@@ -264,11 +280,14 @@ Classes
     `get_location_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationTemplate]`
     :   Get all location templates.
 
-    `get_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    `get_locations(self, managed_by: str | None = None, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
     :   Get all locations.
         
         Parameters
         ----------
+        managed_by : Optional[str]
+            Filter by management type ('node' or 'lab'). If None, returns all
+            locations. Must be a valid LocationManagement value.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
         
@@ -317,6 +336,41 @@ Classes
         -------
         LocationImportResult
             Result with imported/skipped/error counts and imported locations.
+
+    `init_location(self, location_name: str, representations: dict[str, typing.Any] | None = None, resource_template_name: str | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool = True, managed_by: madsci.common.types.location_types.LocationManagement | None = None, owner: madsci.common.types.auth_types.OwnershipInfo | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Idempotent init: get-or-create a location.
+        
+        If a location with the given name exists, returns it unchanged.
+        If it does not exist, creates it with the provided data.
+        
+        Retries with exponential backoff on connection errors to tolerate
+        Location Manager starting after the calling node.
+        
+        Parameters
+        ----------
+        location_name : str
+            The name of the location to get or create.
+        representations : Optional[dict[str, Any]]
+            Node-specific representation data for the location.
+        resource_template_name : Optional[str]
+            Name of the resource template to use for creating a container resource.
+        resource_template_overrides : Optional[dict[str, Any]]
+            Overrides to apply when creating a resource from the template.
+        description : Optional[str]
+            Description of the location.
+        allow_transfers : bool
+            Whether this location participates in transfers (default True).
+        managed_by : Optional[LocationManagement]
+            How this location is managed (node or lab). Defaults to LAB.
+        owner : Optional[OwnershipInfo]
+            Ownership provenance for this location.
+        timeout : Optional[float]
+            Optional timeout override in seconds.
+        
+        Returns
+        -------
+        Location
+            The existing or newly created location.
 
     `init_location_template(self, template_name: str, representation_templates: dict[str, str] | None = None, resource_template_name: str | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, default_allow_transfers: bool = True, tags: list[str] | None = None, created_by: str | None = None, version: str = '1.0.0', description: str | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
     :   Idempotent init: get-or-create, version-update for a location template.

@@ -9,6 +9,8 @@ from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
     Location,
     LocationTransferCapabilities,
+    TransferGraphDetailedEdge,
+    TransferGraphDetailedResponse,
     TransferGraphEdge,
     TransferStepTemplate,
     TransferTemplateOverrides,
@@ -42,6 +44,9 @@ class TransferPlanner:
         self.transfer_capabilities = transfer_capabilities
         self.resource_client = resource_client
         self._transfer_graph = self._build_transfer_graph()
+        self._detailed_transfer_graph: TransferGraphDetailedResponse = (
+            self._build_detailed_transfer_graph()
+        )
 
     def _build_transfer_graph(self) -> dict[tuple[str, str], TransferGraphEdge]:
         """
@@ -448,9 +453,77 @@ class TransferPlanner:
 
         return adjacency_list
 
+    def _collect_pair_nodes_and_costs(
+        self,
+        source_location: Location,
+        dest_location: Location,
+        pair_nodes: dict[tuple[str, str], list[str]],
+        pair_costs: dict[tuple[str, str], float],
+    ) -> None:
+        """Collect node names and minimum costs for a single location pair."""
+        applicable_templates = self._get_applicable_templates(
+            source_location, dest_location
+        )
+        pair_key = (source_location.location_id, dest_location.location_id)
+        for template in applicable_templates:
+            if self._can_transfer_between_locations(
+                source_location, dest_location, template
+            ):
+                if pair_key not in pair_nodes:
+                    pair_nodes[pair_key] = []
+                if template.node_name not in pair_nodes[pair_key]:
+                    pair_nodes[pair_key].append(template.node_name)
+                cost = template.cost_weight or 1.0
+                if pair_key not in pair_costs or cost < pair_costs[pair_key]:
+                    pair_costs[pair_key] = cost
+
+    def _build_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """Build the detailed transfer graph with node names and costs per edge."""
+        pair_nodes: dict[tuple[str, str], list[str]] = {}
+        pair_costs: dict[tuple[str, str], float] = {}
+
+        if self.transfer_capabilities:
+            locations = self.state_handler.get_locations()
+            for source_location in locations:
+                for dest_location in locations:
+                    if source_location.location_id == dest_location.location_id:
+                        continue
+                    if (
+                        not source_location.allow_transfers
+                        or not dest_location.allow_transfers
+                    ):
+                        continue
+                    self._collect_pair_nodes_and_costs(
+                        source_location, dest_location, pair_nodes, pair_costs
+                    )
+
+        edges = [
+            TransferGraphDetailedEdge(
+                source_location_id=src_id,
+                target_location_id=dst_id,
+                node_names=pair_nodes[(src_id, dst_id)],
+                min_cost=pair_costs[(src_id, dst_id)],
+            )
+            for src_id, dst_id in pair_nodes
+        ]
+        return TransferGraphDetailedResponse(edges=edges)
+
+    def get_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """
+        Get the cached transfer graph with detailed edge information.
+
+        Returns all node names that can execute each transfer and the minimum
+        cost among available templates for each location pair.
+
+        Returns:
+            TransferGraphDetailedResponse with a list of detailed edges
+        """
+        return self._detailed_transfer_graph
+
     def rebuild_transfer_graph(self) -> None:
         """Rebuild the transfer graph, typically called when locations or transfer capabilities change."""
         self._transfer_graph = self._build_transfer_graph()
+        self._detailed_transfer_graph = self._build_detailed_transfer_graph()
 
     def validate_locations_exist(
         self, source_id: str, dest_id: str

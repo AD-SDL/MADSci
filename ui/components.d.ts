@@ -27,7 +27,6 @@ declare module 'vue' {
     NodeOverviewTab: typeof import('./src/components/NodeOverviewTab.vue')['default']
     NodesPanel: typeof import('./src/components/NodesPanel.vue')['default']
     PauseResumeButton: typeof import('./src/components/AdminButtons/PauseResumeButton.vue')['default']
-    ProgressBar: typeof import('primevue/progressbar')['default']
     RepresentationTemplatesPanel: typeof import('./src/components/RepresentationTemplatesPanel.vue')['default']
     ResetButton: typeof import('./src/components/AdminButtons/ResetButton.vue')['default']
     Resource: typeof import('./src/components/ResourceComponents/Resource.vue')['default']

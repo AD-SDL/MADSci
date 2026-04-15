@@ -93,6 +93,51 @@ async def test_dashboard_screen_composes(mock_app_class) -> None:
         assert pilot.app.screen is not None
 
 
+@pytest.mark.asyncio
+async def test_locations_screen_has_managed_by_column(mock_app_class) -> None:
+    """LocationsScreen table should include a 'Managed By' column."""
+    from madsci.client.cli.tui.screens.locations import LocationsScreen
+
+    app = mock_app_class()
+    async with app.run_test() as pilot:
+        screen = LocationsScreen()
+        await pilot.app.push_screen(screen)
+        from textual.widgets import DataTable
+
+        table = screen.query_one("#locations-table", DataTable)
+        column_labels = [col.label.plain for col in table.columns.values()]
+        assert "Managed By" in column_labels
+
+
+def test_locations_detail_panel_shows_managed_by() -> None:
+    """LocationsScreen detail panel should display Managed By field."""
+    from madsci.client.cli.tui.screens.locations import _build_general_section
+    from madsci.common.types.location_types import Location, LocationManagement
+
+    loc = Location(location_name="test", managed_by=LocationManagement.NODE)
+    section = _build_general_section(loc)
+    assert "Managed By" in section.fields
+    assert section.fields["Managed By"] == "NODE"
+
+
+def test_locations_detail_panel_shows_owner() -> None:
+    """LocationsScreen detail panel should display Owner field."""
+    from madsci.client.cli.tui.screens.locations import _build_general_section
+    from madsci.common.types.auth_types import OwnershipInfo
+    from madsci.common.types.location_types import Location, LocationManagement
+    from madsci.common.utils import new_ulid_str
+
+    node_id = new_ulid_str()
+    loc = Location(
+        location_name="test",
+        managed_by=LocationManagement.NODE,
+        owner=OwnershipInfo(node_id=node_id),
+    )
+    section = _build_general_section(loc)
+    assert "Owner" in section.fields
+    assert node_id in section.fields["Owner"]
+
+
 def test_dashboard_no_httpx_import() -> None:
     """RecentEventsPanel should use EventClient, not raw httpx."""
     import importlib

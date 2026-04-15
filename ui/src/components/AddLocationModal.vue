@@ -149,6 +149,7 @@ function removeField(index: any) {
 function submitLocation() {
     var location: any = {}
     location["name"] = location_name.value
+    location["managed_by"] = "lab"
     var new_representations: any  = {}
     Object.keys(representations.value).forEach((key: string) => {new_representations[key] = JSON.parse(representations.value[key])})
     location["representations"] = new_representations

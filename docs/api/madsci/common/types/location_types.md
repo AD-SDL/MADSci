@@ -91,6 +91,41 @@ Classes
         Allows alphanumeric characters, underscores, dots, and hyphens.
         Rejects empty strings.
 
+`LabLocationConfig(**data: Any)`
+:   Schema for the lab-level location configuration file.
+    
+    This is a reconcilable living document. The Location Manager re-reads it
+    on each reconciliation cycle and merges contents with the live database.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `location_templates: list[madsci.common.types.location_types.LocationTemplate]`
+    :
+
+    `locations: list[madsci.common.types.location_types.Location]`
+    :
+
+    `model_config`
+    :
+
+    `representation_templates: list[madsci.common.types.location_types.LocationRepresentationTemplate]`
+    :
+
+    `training: list[madsci.common.types.location_types.RepresentationTrainingEntry]`
+    :
+
 `Location(**data: Any)`
 :   A location in the lab.
     
@@ -123,10 +158,16 @@ Classes
     `location_template_name: str | None`
     :
 
+    `managed_by: madsci.common.types.location_types.LocationManagement`
+    :
+
     `model_config`
     :
 
     `node_bindings: dict[str, str] | None`
+    :
+
+    `owner: madsci.common.types.auth_types.OwnershipInfo | None`
     :
 
     `representations: dict[str, typing.Any]`
@@ -235,6 +276,22 @@ Classes
     `skipped: int`
     :
 
+`LocationManagement(value, names=None, *, module=None, qualname=None, type=None, start=1)`
+:   How a location is managed — determines lifecycle and visibility.
+
+    ### Ancestors (in MRO)
+
+    * builtins.str
+    * enum.Enum
+
+    ### Class variables
+
+    `LAB`
+    :   Created by lab config or API. Lifecycle managed by operator/integrator.
+
+    `NODE`
+    :   Created/owned by a node. Lifecycle tied to node registration.
+
 `LocationManagerDefinition(**data: Any)`
 :   Definition for a LocationManager.
     
@@ -294,13 +351,22 @@ Classes
     `document_db_connected: bool | None`
     :
 
+    `last_reconciliation_at: str | None`
+    :
+
     `model_config`
+    :
+
+    `num_lab_managed_locations: int`
     :
 
     `num_location_templates: int`
     :
 
     `num_locations: int`
+    :
+
+    `num_node_managed_locations: int`
     :
 
     `num_representation_templates: int`
@@ -352,6 +418,9 @@ Classes
     `document_db_url: pydantic.networks.AnyUrl`
     :
 
+    `lab_config_file: str | None`
+    :
+
     `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
@@ -359,9 +428,6 @@ Classes
     :
 
     `reconciliation_interval_seconds: float`
-    :
-
-    `seed_locations_file: str | None`
     :
 
     `server_url: pydantic.networks.AnyUrl`
@@ -565,6 +631,96 @@ Classes
     :
 
     `transfer_templates: list[madsci.common.types.location_types.TransferStepTemplate]`
+    :
+
+`RepresentationTrainingEntry(**data: Any)`
+:   Add a node's representation to an existing location ('training').
+    
+    Used to teach a node (e.g., robot arm) how to access a location it doesn't own
+    (e.g., a liquid handler deck slot).
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `location_name: str`
+    :
+
+    `model_config`
+    :
+
+    `node_name: str`
+    :
+
+    `overrides: dict[str, typing.Any]`
+    :
+
+    `representation_template_name: str | None`
+    :
+
+`TransferGraphDetailedEdge(**data: Any)`
+:   A transfer edge with all node names that can execute the transfer.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `min_cost: float`
+    :
+
+    `model_config`
+    :
+
+    `node_names: list[str]`
+    :
+
+    `source_location_id: str`
+    :
+
+    `target_location_id: str`
+    :
+
+`TransferGraphDetailedResponse(**data: Any)`
+:   Response containing the detailed transfer graph with node information per edge.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `edges: list[madsci.common.types.location_types.TransferGraphDetailedEdge]`
+    :
+
+    `model_config`
     :
 
 `TransferGraphEdge(**data: Any)`
