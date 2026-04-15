@@ -89,6 +89,54 @@
         }
       }
     },
+    "openspec@latest": {
+      "last_modified": "2026-03-27T11:17:38Z",
+      "resolved": "github:NixOS/nixpkgs/832efc09b4caf6b4569fbf9dc01bec3082a00611#openspec",
+      "source": "devbox-search",
+      "version": "1.2.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/2w1n8b825bh8nln9zjjiyc2ims5jw3ix-openspec-1.2.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/2w1n8b825bh8nln9zjjiyc2ims5jw3ix-openspec-1.2.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/pc98k48238dvi4cvwvyz21w14x402qs3-openspec-1.2.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/pc98k48238dvi4cvwvyz21w14x402qs3-openspec-1.2.0"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/y7zfprg5kl0fvafiw6salysmxmfbraxx-openspec-1.2.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/y7zfprg5kl0fvafiw6salysmxmfbraxx-openspec-1.2.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/7y3qnxp47rsm26ah8ad6gm2vi0jh3c7l-openspec-1.2.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/7y3qnxp47rsm26ah8ad6gm2vi0jh3c7l-openspec-1.2.0"
+        }
+      }
+    },
     "pdm@latest": {
       "last_modified": "2026-01-20T02:11:35Z",
       "resolved": "github:NixOS/nixpkgs/ed142ab1b3a092c4d149245d0c4126a5d7ea00b0#pdm",
