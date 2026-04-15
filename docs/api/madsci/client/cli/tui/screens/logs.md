@@ -24,7 +24,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -50,11 +50,17 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the logs screen layout.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from FilterBar.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - load initial logs.
+
+    `on_screen_resume(self) ‑> None`
+    :   Restart the follow timer when the screen is resumed, if follow mode is active.
+
+    `on_screen_suspend(self) ‑> None`
+    :   Pause the follow timer when the screen is suspended.
 
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.

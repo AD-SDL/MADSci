@@ -29,7 +29,7 @@ class ExperimentClient(DualModeClientMixin):
         self,
         experiment_server_url: Optional[Union[str, AnyUrl]] = None,
         config: Optional[ExperimentClientConfig] = None,
-    ) -> ExperimentClient:
+    ) -> None:
         """
         Create a new Experiment Client.
 
@@ -63,7 +63,7 @@ class ExperimentClient(DualModeClientMixin):
 
     def get_experiment(
         self, experiment_id: Union[str, ULID], timeout: Optional[float] = None
-    ) -> dict:
+    ) -> Experiment:
         """
         Get an experiment by ID.
 
@@ -221,7 +221,7 @@ class ExperimentClient(DualModeClientMixin):
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
-        return response.json()
+        return ExperimentalCampaign.model_validate(response.json())
 
     def get_campaign(
         self, campaign_id: str, timeout: Optional[float] = None
@@ -239,7 +239,7 @@ class ExperimentClient(DualModeClientMixin):
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
-        return response.json()
+        return ExperimentalCampaign.model_validate(response.json())
 
     def get_campaigns(
         self, timeout: Optional[float] = None
@@ -256,7 +256,7 @@ class ExperimentClient(DualModeClientMixin):
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
-        return response.json()
+        return [ExperimentalCampaign.model_validate(c) for c in response.json()]
 
     # ------------------------------------------------------------------
     # Async methods
@@ -264,7 +264,7 @@ class ExperimentClient(DualModeClientMixin):
 
     async def async_get_experiment(
         self, experiment_id: Union[str, ULID], timeout: Optional[float] = None
-    ) -> dict:
+    ) -> Experiment:
         """
         Get an experiment by ID asynchronously.
 
@@ -422,7 +422,7 @@ class ExperimentClient(DualModeClientMixin):
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
-        return response.json()
+        return ExperimentalCampaign.model_validate(response.json())
 
     async def async_get_campaign(
         self, campaign_id: str, timeout: Optional[float] = None
@@ -440,4 +440,21 @@ class ExperimentClient(DualModeClientMixin):
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()
-        return response.json()
+        return ExperimentalCampaign.model_validate(response.json())
+
+    async def async_get_campaigns(
+        self, timeout: Optional[float] = None
+    ) -> list[ExperimentalCampaign]:
+        """
+        Get a list of all experimental campaigns asynchronously.
+
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        response = await self._async_request(
+            "GET",
+            f"{self.experiment_server_url}campaigns",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return [ExperimentalCampaign.model_validate(c) for c in response.json()]

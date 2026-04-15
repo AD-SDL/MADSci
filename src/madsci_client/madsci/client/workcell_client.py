@@ -658,7 +658,10 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}nodes",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return {
+            key: Node.model_validate(value) for key, value in response.json().items()
+        }
 
     def get_node(self, node_name: str, timeout: Optional[float] = None) -> Node:
         """
@@ -681,7 +684,8 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}node/{node_name}",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return Node.model_validate(response.json())
 
     def add_node(
         self,
@@ -723,7 +727,8 @@ class WorkcellClient(DualModeClientMixin):
             },
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return Node.model_validate(response.json())
 
     def get_active_workflows(
         self, timeout: Optional[float] = None
@@ -957,7 +962,10 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}nodes",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return {
+            key: Node.model_validate(value) for key, value in response.json().items()
+        }
 
     async def async_get_node(
         self, node_name: str, timeout: Optional[float] = None
@@ -968,7 +976,8 @@ class WorkcellClient(DualModeClientMixin):
             f"{self.workcell_server_url}node/{node_name}",
             timeout=timeout or self.config.timeout_default,
         )
-        return response.json()
+        response.raise_for_status()
+        return Node.model_validate(response.json())
 
     async def async_get_active_workflows(
         self, timeout: Optional[float] = None
@@ -1064,6 +1073,69 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/cancel",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    async def async_retry_workflow(
+        self,
+        workflow_id: str,
+        index: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> Workflow:
+        """
+        Retry a workflow from a specific step asynchronously.
+
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
+        """
+        url = f"{self.workcell_server_url}workflow/{workflow_id}/retry"
+        params = {"index": index} if index is not None else {}
+        response = await self._async_request(
+            "POST",
+            url,
+            params=params,
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return Workflow.model_validate(response.json())
+
+    async def async_resubmit_workflow(
+        self,
+        workflow_id: str,
+        timeout: Optional[float] = None,
+    ) -> Workflow:
+        """
+        Resubmit a workflow as a brand new workflow run asynchronously.
+
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+        """
+        url = f"{self.workcell_server_url}workflow/{workflow_id}/resubmit"
+        response = await self._async_request(
+            "POST",
+            url,
             timeout=timeout or self.config.timeout_default,
         )
         response.raise_for_status()

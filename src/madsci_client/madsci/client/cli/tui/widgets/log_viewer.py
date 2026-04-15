@@ -143,6 +143,11 @@ class LogViewer(Widget):
         self._seen_ids: OrderedDict[str, None] = OrderedDict()
         self._formatter: Callable[[dict[str, Any]], str] = _default_formatter
 
+    @property
+    def entry_count(self) -> int:
+        """Return the number of unique log entries seen so far."""
+        return len(self._seen_ids)
+
     def compose(self) -> ComposeResult:
         """Compose the log viewer."""
         yield RichLog(id="log-viewer-richlog", highlight=True, markup=True)

@@ -24,7 +24,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -44,11 +44,14 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the status screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the table.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses concurrently.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   Update the footer when auto-refresh is toggled.

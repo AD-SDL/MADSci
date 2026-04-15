@@ -127,7 +127,7 @@ class StepDetailScreen(Screen):
     def __init__(
         self,
         workflow_id: str,
-        step_data: dict,
+        step_data: dict,  # TODO(#279): Accept typed WorkflowStep model instead of raw dict
         step_index: int,
         **kwargs: Any,
     ) -> None:

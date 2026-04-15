@@ -334,17 +334,32 @@ class TestExperimentRun:
         result = runner.invoke(madsci, ["experiment", "run", "/nonexistent/path.py"])
         assert result.exit_code != 0
 
-    def test_run_script(self, tmp_path) -> None:
-        script = tmp_path / "test_exp.py"
-        script.write_text("print('hello from experiment')\n")
+    def test_run_rejects_non_python_file(self, tmp_path) -> None:
+        """C1: Only .py files should be accepted for experiment run."""
+        script = tmp_path / "test_exp.sh"
+        script.write_text("echo hello\n")
 
         runner = CliRunner()
         result = runner.invoke(
             madsci,
             ["experiment", "run", str(script)],
         )
-        assert result.exit_code == 0
-        assert "completed" in result.output.lower()
+        assert result.exit_code != 0
+        assert ".py" in result.output
+
+    def test_run_script(self, tmp_path) -> None:
+        script = tmp_path / "test_exp.py"
+        script.write_text("print('hello from experiment')\n")
+
+        with patch("subprocess.run") as mock_run:
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                ["experiment", "run", str(script)],
+            )
+            assert result.exit_code == 0
+            assert "completed" in result.output.lower()
+            mock_run.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -505,14 +520,15 @@ class TestRunExperimentDeprecation:
         script = tmp_path / "test_exp.py"
         script.write_text("print('hello')\n")
 
-        runner = CliRunner()
-        result = runner.invoke(
-            madsci,
-            ["run", "experiment", str(script)],
-        )
-        assert result.exit_code == 0
-        assert "deprecated" in result.output.lower()
-        assert "madsci experiment run" in result.output
+        with patch("subprocess.run"):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                ["run", "experiment", str(script)],
+            )
+            assert result.exit_code == 0
+            assert "deprecated" in result.output.lower()
+            assert "madsci experiment run" in result.output
 
 
 # ---------------------------------------------------------------------------

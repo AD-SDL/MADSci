@@ -74,6 +74,63 @@ class _AsyncStubTransport(httpx.AsyncBaseTransport):
         pass
 
 
+class _ErrorThenSuccessTransport(httpx.BaseTransport):
+    """Sync transport that raises exceptions for a number of calls, then returns responses.
+
+    Parameters
+    ----------
+    errors : list[Exception]
+        Exceptions to raise on successive calls.  Once exhausted, responses
+        from *responses* are returned in order.
+    responses : list[httpx.Response]
+        Responses to return after all errors have been raised.
+    """
+
+    def __init__(
+        self,
+        errors: list[Exception],
+        responses: list[httpx.Response],
+    ) -> None:
+        self._errors = list(errors)
+        self._responses = list(responses)
+        self._call_count = 0
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        idx = self._call_count
+        self._call_count += 1
+        if idx < len(self._errors):
+            raise self._errors[idx]
+        resp_idx = min(idx - len(self._errors), len(self._responses) - 1)
+        return self._responses[resp_idx]
+
+    def close(self) -> None:
+        pass
+
+
+class _AsyncErrorThenSuccessTransport(httpx.AsyncBaseTransport):
+    """Async transport that raises exceptions for a number of calls, then returns responses."""
+
+    def __init__(
+        self,
+        errors: list[Exception],
+        responses: list[httpx.Response],
+    ) -> None:
+        self._errors = list(errors)
+        self._responses = list(responses)
+        self._call_count = 0
+
+    async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
+        idx = self._call_count
+        self._call_count += 1
+        if idx < len(self._errors):
+            raise self._errors[idx]
+        resp_idx = min(idx - len(self._errors), len(self._responses) - 1)
+        return self._responses[resp_idx]
+
+    async def aclose(self) -> None:
+        pass
+
+
 # ---------------------------------------------------------------------------
 # RetryTransport tests
 # ---------------------------------------------------------------------------
@@ -231,6 +288,39 @@ class TestRetryTransport:
         # The failed response must have been closed to avoid FD leaks
         failed_response.close.assert_called_once()
 
+    def test_retries_on_connect_error(self) -> None:
+        """Transport should retry when underlying transport raises ConnectError."""
+        stub = _ErrorThenSuccessTransport(
+            errors=[httpx.ConnectError("Connection refused")],
+            responses=[_ok_response()],
+        )
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.0)
+
+        request = httpx.Request("GET", "http://example.com/")
+        response = transport.handle_request(request)
+
+        assert response.status_code == 200
+        assert stub._call_count == 2  # 1 error + 1 success
+
+    def test_raises_after_exhausting_retries_on_connect_error(self) -> None:
+        """Transport should re-raise ConnectError when all retries are exhausted."""
+        stub = _ErrorThenSuccessTransport(
+            errors=[
+                httpx.ConnectError("Connection refused"),
+                httpx.ConnectError("Connection refused"),
+                httpx.ConnectError("Connection refused"),
+            ],
+            responses=[_ok_response()],
+        )
+        transport = RetryTransport(stub, retries=2, backoff_factor=0.0)
+
+        request = httpx.Request("GET", "http://example.com/")
+        with pytest.raises(httpx.ConnectError):
+            transport.handle_request(request)
+
+        # 1 initial + 2 retries = 3 attempts, all raised
+        assert stub._call_count == 3
+
 
 # ---------------------------------------------------------------------------
 # AsyncRetryTransport tests
@@ -333,6 +423,41 @@ class TestAsyncRetryTransport:
         assert result.status_code == 200
         # The failed response must have been async-closed to avoid FD leaks
         failed_response.aclose.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_retries_on_connect_error(self) -> None:
+        """Async transport should retry when underlying transport raises ConnectError."""
+        stub = _AsyncErrorThenSuccessTransport(
+            errors=[httpx.ConnectError("Connection refused")],
+            responses=[_ok_response()],
+        )
+        transport = AsyncRetryTransport(stub, retries=3, backoff_factor=0.0)
+
+        request = httpx.Request("GET", "http://example.com/")
+        response = await transport.handle_async_request(request)
+
+        assert response.status_code == 200
+        assert stub._call_count == 2  # 1 error + 1 success
+
+    @pytest.mark.asyncio
+    async def test_async_raises_after_exhausting_retries_on_connect_error(self) -> None:
+        """Async transport should re-raise ConnectError when all retries are exhausted."""
+        stub = _AsyncErrorThenSuccessTransport(
+            errors=[
+                httpx.ConnectError("Connection refused"),
+                httpx.ConnectError("Connection refused"),
+                httpx.ConnectError("Connection refused"),
+            ],
+            responses=[_ok_response()],
+        )
+        transport = AsyncRetryTransport(stub, retries=2, backoff_factor=0.0)
+
+        request = httpx.Request("GET", "http://example.com/")
+        with pytest.raises(httpx.ConnectError):
+            await transport.handle_async_request(request)
+
+        # 1 initial + 2 retries = 3 attempts, all raised
+        assert stub._call_count == 3
 
 
 # ---------------------------------------------------------------------------

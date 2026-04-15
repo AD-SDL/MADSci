@@ -5,10 +5,10 @@ a detail panel for selected experiments, and actions for pause,
 continue, and cancel operations.
 """
 
-from datetime import datetime
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     ActionBarMixin,
     AutoRefreshMixin,
@@ -31,6 +31,8 @@ from madsci.client.cli.utils.formatting import (
     format_timestamp,
     truncate,
 )
+from madsci.client.experiment_client import ExperimentClient
+from madsci.common.types.experiment_types import Experiment
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -38,158 +40,140 @@ from textual.screen import Screen
 from textual.widgets import DataTable, Label
 
 
-def _get_experiment_status(data: dict) -> str:
-    """Extract a canonical status name from experiment data.
+def _get_experiment_name(experiment: Experiment) -> str:
+    """Extract the experiment name from an Experiment model.
 
     Args:
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
-        Lowercase status name string.
+        Experiment name string, or ``"Unknown"`` if not available.
     """
-    status = data.get("status", "unknown")
-    if isinstance(status, str):
-        return status.lower()
-    if isinstance(status, dict):
-        for key in ("completed", "failed", "cancelled", "paused", "in_progress"):
-            if status.get(key):
-                return key
-    return "unknown"
+    if experiment.experiment_design and experiment.experiment_design.experiment_name:
+        return experiment.experiment_design.experiment_name
+    return "Unknown"
 
 
 def _matches_filter(
-    exp_data: dict,
+    experiment: Experiment,
     search: str,
     filters: dict[str, Any],
 ) -> bool:
     """Check whether an experiment matches the current filter criteria.
 
     Args:
-        exp_data: Experiment data dictionary.
-        search: Search text (matched against experiment_name, case-insensitive).
+        experiment: Experiment model instance.
+        search: Search text (matched against experiment name, case-insensitive).
         filters: Filter dict; supports ``"status"`` key.
 
     Returns:
         True if the experiment passes the filters.
     """
     status_filter = filters.get("status", "all")
-    if status_filter and status_filter != "all":
-        status = _get_experiment_status(exp_data)
-        if status != status_filter:
-            return False
+    if (
+        status_filter not in {"", "all", None}
+        and experiment.status.value != status_filter
+    ):
+        return False
 
     if search:
-        name = exp_data.get("experiment_name", "")
+        name = _get_experiment_name(experiment)
         if search.lower() not in name.lower():
             return False
 
     return True
 
 
-def _calculate_duration(data: dict) -> str:
+def _calculate_duration(experiment: Experiment) -> str:
     """Calculate duration from started_at and ended_at timestamps.
 
     Args:
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
         Formatted duration string.
     """
-    duration = data.get("duration_seconds")
-    if duration is not None:
-        return format_duration(duration)
-
-    started = data.get("started_at")
-    ended = data.get("ended_at")
-    if started and ended:
-        try:
-            start_dt = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
-            end_dt = datetime.fromisoformat(str(ended).replace("Z", "+00:00"))
-            delta = (end_dt - start_dt).total_seconds()
-            return format_duration(delta)
-        except (ValueError, TypeError):
-            pass
+    if experiment.started_at and experiment.ended_at:
+        delta = (experiment.ended_at - experiment.started_at).total_seconds()
+        return format_duration(delta)
     return "-"
 
 
-def _build_general_section(exp_id: str, data: dict) -> DetailSection:
+def _build_general_section(experiment: Experiment) -> DetailSection:
     """Build the general info section for the detail panel.
 
     Args:
-        exp_id: Experiment ID.
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
         DetailSection with general fields.
     """
-    status = _get_experiment_status(data)
     fields: dict[str, str] = {
-        "ID": exp_id,
-        "Status": format_status_colored(status),
-        "Name": data.get("experiment_name", "Unknown"),
+        "ID": experiment.experiment_id,
+        "Status": format_status_colored(experiment.status.value),
+        "Name": _get_experiment_name(experiment),
     }
     return DetailSection("General", fields)
 
 
-def _build_run_section(data: dict) -> DetailSection | None:
+def _build_run_section(experiment: Experiment) -> DetailSection | None:
     """Build the run info section for the detail panel.
 
     Args:
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
         DetailSection if run info exists, else None.
     """
     fields: dict[str, str] = {}
-    run_name = data.get("run_name")
-    if run_name:
-        fields["Run Name"] = str(run_name)
-    run_desc = data.get("run_description")
-    if run_desc:
-        fields["Description"] = truncate(str(run_desc), 100)
+    if experiment.run_name:
+        fields["Run Name"] = experiment.run_name
+    if experiment.run_description:
+        fields["Description"] = truncate(experiment.run_description, 100)
     if fields:
         return DetailSection("Run", fields)
     return None
 
 
-def _build_design_section(data: dict) -> DetailSection | None:
+def _build_design_section(experiment: Experiment) -> DetailSection | None:
     """Build the design/description section for the detail panel.
 
     Args:
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
         DetailSection if design info exists, else None.
     """
     fields: dict[str, str] = {}
-    desc = data.get("experiment_description")
-    if desc:
-        fields["Description"] = truncate(str(desc), 100)
-    resource_conditions = data.get("resource_conditions")
-    if isinstance(resource_conditions, (list, dict)):
-        fields["Resource Conditions"] = str(len(resource_conditions))
+    if experiment.experiment_design:
+        if experiment.experiment_design.experiment_description:
+            fields["Description"] = truncate(
+                experiment.experiment_design.experiment_description, 100
+            )
+        if experiment.experiment_design.resource_conditions:
+            fields["Resource Conditions"] = str(
+                len(experiment.experiment_design.resource_conditions)
+            )
     if fields:
         return DetailSection("Design", fields)
     return None
 
 
-def _build_timing_section(data: dict) -> DetailSection | None:
+def _build_timing_section(experiment: Experiment) -> DetailSection | None:
     """Build the timing section for the detail panel.
 
     Args:
-        data: Experiment data dictionary.
+        experiment: Experiment model instance.
 
     Returns:
         DetailSection if timing info exists, else None.
     """
     fields: dict[str, str] = {}
-    started = data.get("started_at")
-    ended = data.get("ended_at")
-    if started:
-        fields["Started"] = format_timestamp(started, short=True)
-    if ended:
-        fields["Ended"] = format_timestamp(ended, short=True)
-    duration_str = _calculate_duration(data)
+    if experiment.started_at:
+        fields["Started"] = format_timestamp(experiment.started_at, short=True)
+    if experiment.ended_at:
+        fields["Ended"] = format_timestamp(experiment.ended_at, short=True)
+    duration_str = _calculate_duration(experiment)
     if duration_str != "-":
         fields["Duration"] = duration_str
     if fields:
@@ -212,11 +196,21 @@ class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.experiments_data: dict[str, dict] = {}
+        self.experiments_data: dict[str, Experiment] = {}
         self.selected_experiment_id: str | None = None
         self._experiment_ids: list[str] = []
         self._current_search: str = ""
         self._current_filters: dict[str, Any] = {}
+        self._experiment_client: ExperimentClient | None = None
+
+    def _get_experiment_client(self) -> ExperimentClient:
+        """Get or create the ExperimentClient instance."""
+        if self._experiment_client is None:
+            url = self.get_service_url("experiment_manager")
+            self._experiment_client = ExperimentClient(
+                experiment_server_url=url,
+            )
+        return self._experiment_client
 
     def compose(self) -> ComposeResult:
         """Compose the experiments screen layout."""
@@ -275,25 +269,11 @@ class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
         self._experiment_ids.clear()
 
         try:
-            experiment_url = self.get_service_url("experiment_manager")
-            client = self.get_async_client(experiment_url)
-            response = await client.get(
-                f"{experiment_url.rstrip('/')}/experiments",
-                params={"number": 50},
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, dict):
-                    for exp_id, exp_data in data.items():
-                        if isinstance(exp_data, dict):
-                            self.experiments_data[exp_id] = exp_data
-                            self._experiment_ids.append(exp_id)
-                elif isinstance(data, list):
-                    for exp_data in data:
-                        exp_id = exp_data.get("experiment_id", "")
-                        if exp_id:
-                            self.experiments_data[exp_id] = exp_data
-                            self._experiment_ids.append(exp_id)
+            client = self._get_experiment_client()
+            experiments = await client.async_get_experiments(number=50)
+            for experiment in experiments:
+                self.experiments_data[experiment.experiment_id] = experiment
+                self._experiment_ids.append(experiment.experiment_id)
         except Exception:
             self.notify("Failed to reach Experiment Manager", timeout=3)
 
@@ -319,13 +299,16 @@ class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
 
             for exp_id in filtered:
                 exp = self.experiments_data[exp_id]
-                status = _get_experiment_status(exp)
+                status = exp.status.value
                 icon = format_status_icon(status)
-                name = exp.get("experiment_name", "Unknown")
+                name = _get_experiment_name(exp)
                 exp_id_str = exp_id or "-"
-                run_name = exp.get("run_name", "-") or "-"
-                started = exp.get("started_at")
-                started_str = format_timestamp(started, short=True) if started else "-"
+                run_name = exp.run_name or "-"
+                started_str = (
+                    format_timestamp(exp.started_at, short=True)
+                    if exp.started_at
+                    else "-"
+                )
                 duration_str = _calculate_duration(exp)
                 table.add_row(
                     icon, name, exp_id_str, run_name, started_str, duration_str
@@ -366,39 +349,38 @@ class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
         row_id = str(row[2])
 
         # Find experiment by matching full ID
-        for exp_id, exp_data in self.experiments_data.items():
-            if exp_id == row_id:
-                self.selected_experiment_id = exp_id
-                self._update_detail_panel(exp_id, exp_data)
-                break
+        if row_id in self.experiments_data:
+            self.selected_experiment_id = row_id
+            self._update_detail_panel(self.experiments_data[row_id])
 
-    def _update_detail_panel(self, experiment_id: str, data: dict) -> None:
+    def _update_detail_panel(self, experiment: Experiment) -> None:
         """Update the detail panel with experiment data.
 
         Args:
-            experiment_id: Experiment ID.
-            data: Experiment data dictionary.
+            experiment: Experiment model instance.
         """
         detail_panel = self.query_one("#experiment-detail-panel", DetailPanel)
-        name = data.get("experiment_name", "Unknown")
+        name = _get_experiment_name(experiment)
 
         sections: list[DetailSection] = [
-            _build_general_section(experiment_id, data),
+            _build_general_section(experiment),
         ]
 
-        run_section = _build_run_section(data)
+        run_section = _build_run_section(experiment)
         if run_section:
             sections.append(run_section)
 
-        design_section = _build_design_section(data)
+        design_section = _build_design_section(experiment)
         if design_section:
             sections.append(design_section)
 
-        timing_section = _build_timing_section(data)
+        timing_section = _build_timing_section(experiment)
         if timing_section:
             sections.append(timing_section)
 
-        ownership_items = build_ownership_section(data)
+        ownership_items = build_ownership_section(
+            experiment.model_dump(mode="json"),
+        )
         if ownership_items:
             sections.append(DetailSection("Ownership", dict(ownership_items)))
 
@@ -415,20 +397,19 @@ class ExperimentsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Scree
             return
 
         try:
-            experiment_url = self.get_service_url("experiment_manager")
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.post(
-                    f"{experiment_url.rstrip('/')}/experiment/"
-                    f"{self.selected_experiment_id}/{command}"
-                )
-                if response.status_code == 200:
-                    self.notify(f"Experiment {command} successful", timeout=2)
-                    await self.refresh_data()
-                else:
-                    self.notify(
-                        f"Failed to {command} experiment: HTTP {response.status_code}",
-                        timeout=3,
-                    )
+            client = self._get_experiment_client()
+            command_methods = {
+                "pause": client.async_pause_experiment,
+                "continue": client.async_continue_experiment,
+                "cancel": client.async_cancel_experiment,
+            }
+            method = command_methods.get(command)
+            if method:
+                await method(self.selected_experiment_id)
+                self.notify(f"Experiment {command} successful", timeout=2)
+                await self.refresh_data()
+            else:
+                self.notify(f"Unknown command: {command}", timeout=3)
         except Exception as e:
             self.notify(f"Error: {e}", timeout=3)
 

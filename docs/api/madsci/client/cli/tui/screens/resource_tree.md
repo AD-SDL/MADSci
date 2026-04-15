@@ -8,14 +8,14 @@ a resource using Textual's Tree widget.
 Classes
 -------
 
-`ResourceTreeScreen(resource_id: str, resource_url: str, **kwargs: Any)`
+`ResourceTreeScreen(resource_id: str, resource_client: ResourceClient, **kwargs: Any)`
 :   Screen showing the resource hierarchy as a tree.
     
     Initialize the resource tree screen.
     
     Args:
         resource_id: ID of the resource to display hierarchy for.
-        resource_url: Base URL of the resource manager.
+        resource_client: ResourceClient instance for API calls.
         **kwargs: Additional keyword arguments forwarded to Screen.
 
     ### Ancestors (in MRO)
@@ -28,7 +28,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`

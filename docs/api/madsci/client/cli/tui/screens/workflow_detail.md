@@ -8,14 +8,14 @@ Opened when a workflow row is selected in :class:`WorkflowsScreen`.
 Classes
 -------
 
-`WorkflowDetailScreen(workflow_id: str, workflow_data: dict, **kwargs: Any)`
+`WorkflowDetailScreen(workflow_id: str, workflow_data: Workflow, **kwargs: Any)`
 :   Screen showing details for a single workflow, pushed on top of WorkflowsScreen.
     
     Initialize the detail screen.
     
     Args:
         workflow_id: Workflow ID.
-        workflow_data: Workflow data dictionary.
+        workflow_data: Workflow model instance.
 
     ### Ancestors (in MRO)
 
@@ -29,7 +29,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -64,8 +64,11 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the detail screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle step row selection — push step detail screen.
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
+    :   Handle step row selection -- push step detail screen.
 
     `on_mount(self) ‑> None`
     :   Set up the steps table and render content.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.

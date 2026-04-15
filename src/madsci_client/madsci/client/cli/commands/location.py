@@ -7,7 +7,9 @@ transfer graph/planning, import/export, and template management.
 
 from __future__ import annotations
 
+import contextlib
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -50,12 +52,17 @@ def _get_location_url(ctx: click.Context, location_url: str | None) -> str:
     return resolve_service_url(ctx, location_url, "location_server_url", 8006)
 
 
-def _make_client(location_url: str, timeout: float) -> LocationClient:
+@contextlib.contextmanager
+def _make_client(location_url: str, timeout: float) -> Iterator[LocationClient]:
     from madsci.client.location_client import LocationClient
     from madsci.common.types.client_types import LocationClientConfig
 
     config = LocationClientConfig(timeout_default=timeout)
-    return LocationClient(location_server_url=location_url, config=config)
+    client = LocationClient(location_server_url=location_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _location_to_row(loc: Any) -> dict:
@@ -166,30 +173,30 @@ def list_locations(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    locations = client.get_locations(managed_by=managed_by)
+    with _make_client(url, timeout) as client:
+        locations = client.get_locations(managed_by=managed_by)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_location_to_dict(loc) for loc in locations]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_location_to_dict(loc) for loc in locations]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for loc in locations:
-            lid = getattr(loc, "location_id", "-")
-            name = getattr(loc, "location_name", "-")
-            console.print(f"{lid} {name}")
-        return
+        if fmt == OutputFormat.QUIET:
+            for loc in locations:
+                lid = getattr(loc, "location_id", "-")
+                name = getattr(loc, "location_name", "-")
+                console.print(f"{lid} {name}")
+            return
 
-    if not locations:
-        info(console, "No locations found.")
-        return
+        if not locations:
+            info(console, "No locations found.")
+            return
 
-    rows = [_location_to_row(loc) for loc in locations]
-    output_result(
-        console, rows, format="text", title="Locations", columns=_LIST_COLUMNS
-    )
+        rows = [_location_to_row(loc) for loc in locations]
+        output_result(
+            console, rows, format="text", title="Locations", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -219,61 +226,61 @@ def get_location(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    loc = client.get_location_by_name(location_name)
-    if loc is None:
-        raise click.ClickException(f"Location '{location_name}' not found.")
+    with _make_client(url, timeout) as client:
+        loc = client.get_location_by_name(location_name)
+        if loc is None:
+            raise click.ClickException(f"Location '{location_name}' not found.")
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(loc), format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(loc), format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        lid = getattr(loc, "location_id", "-")
-        name = getattr(loc, "location_name", "-")
-        console.print(f"{lid} {name}")
-        return
+        if fmt == OutputFormat.QUIET:
+            lid = getattr(loc, "location_id", "-")
+            name = getattr(loc, "location_name", "-")
+            console.print(f"{lid} {name}")
+            return
 
-    # Rich detail display
-    name = getattr(loc, "location_name", "Unnamed Location")
-    managed_by = getattr(loc, "managed_by", None)
-    managed_by_str = managed_by.value.upper() if managed_by else "LAB"
-    owner = getattr(loc, "owner", None)
-    owner_str = (
-        str(owner.node_id) if owner and getattr(owner, "node_id", None) else "N/A"
-    )
+        # Rich detail display
+        name = getattr(loc, "location_name", "Unnamed Location")
+        managed_by = getattr(loc, "managed_by", None)
+        managed_by_str = managed_by.value.upper() if managed_by else "LAB"
+        owner = getattr(loc, "owner", None)
+        owner_str = (
+            str(owner.node_id) if owner and getattr(owner, "node_id", None) else "N/A"
+        )
 
-    console.print()
-    console.print(f"[bold]{name}[/bold]")
-    console.print(f"  ID:          {getattr(loc, 'location_id', '-')}")
-    console.print(f"  Managed By:  {managed_by_str}")
-    console.print(f"  Owner:       {owner_str}")
-    console.print(
-        f"  Template:    {getattr(loc, 'location_template_name', None) or '-'}"
-    )
-    console.print(f"  Resource:    {getattr(loc, 'resource_id', None) or '-'}")
-    console.print(
-        f"  Transfers:   {'yes' if getattr(loc, 'allow_transfers', True) else 'no'}"
-    )
+        console.print()
+        console.print(f"[bold]{name}[/bold]")
+        console.print(f"  ID:          {getattr(loc, 'location_id', '-')}")
+        console.print(f"  Managed By:  {managed_by_str}")
+        console.print(f"  Owner:       {owner_str}")
+        console.print(
+            f"  Template:    {getattr(loc, 'location_template_name', None) or '-'}"
+        )
+        console.print(f"  Resource:    {getattr(loc, 'resource_id', None) or '-'}")
+        console.print(
+            f"  Transfers:   {'yes' if getattr(loc, 'allow_transfers', True) else 'no'}"
+        )
 
-    node_bindings = getattr(loc, "node_bindings", None)
-    if node_bindings:
-        console.print(f"  Bindings:    {node_bindings}")
+        node_bindings = getattr(loc, "node_bindings", None)
+        if node_bindings:
+            console.print(f"  Bindings:    {node_bindings}")
 
-    representations = getattr(loc, "representations", {})
-    if representations:
-        console.print(f"  Repr keys:   {list(representations.keys())}")
+        representations = getattr(loc, "representations", {})
+        if representations:
+            console.print(f"  Repr keys:   {list(representations.keys())}")
 
-    reservation = getattr(loc, "reservation", None)
-    if reservation:
-        console.print(f"  Reservation: {reservation}")
+        reservation = getattr(loc, "reservation", None)
+        if reservation:
+            console.print(f"  Reservation: {reservation}")
 
-    desc = getattr(loc, "description", None)
-    if desc:
-        console.print(f"  Description: {desc}")
+        desc = getattr(loc, "description", None)
+        if desc:
+            console.print(f"  Description: {desc}")
 
-    console.print()
+        console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -324,22 +331,22 @@ def create_location(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    loc = Location(
-        location_name=location_name,
-        description=description,
-        allow_transfers=allow_transfers,
-    )
-    result = client.add_location(loc)
+    with _make_client(url, timeout) as client:
+        loc = Location(
+            location_name=location_name,
+            description=description,
+            allow_transfers=allow_transfers,
+        )
+        result = client.add_location(loc)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(getattr(result, "location_id", ""))
-    else:
-        lid = getattr(result, "location_id", "unknown")
-        success(console, f"Location created -- ID: {lid}")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(getattr(result, "location_id", ""))
+        else:
+            lid = getattr(result, "location_id", "unknown")
+            success(console, f"Location created -- ID: {lid}")
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +404,6 @@ def create_from_template(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
     bindings: dict[str, str] | None = None
     if bindings_json:
@@ -415,24 +421,25 @@ def create_from_template(
                 f"Invalid JSON in --repr-overrides: {exc}"
             ) from exc
 
-    result = client.create_location_from_template(
-        location_name=location_name,
-        template_name=template_name,
-        node_bindings=bindings,
-        representation_overrides=repr_overrides,
-        description=description,
-    )
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(getattr(result, "location_id", ""))
-    else:
-        lid = getattr(result, "location_id", "unknown")
-        success(
-            console,
-            f"Location created from template '{template_name}' -- ID: {lid}",
+    with _make_client(url, timeout) as client:
+        result = client.create_location_from_template(
+            location_name=location_name,
+            template_name=template_name,
+            node_bindings=bindings,
+            representation_overrides=repr_overrides,
+            description=description,
         )
+
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(getattr(result, "location_id", ""))
+        else:
+            lid = getattr(result, "location_id", "unknown")
+            success(
+                console,
+                f"Location created from template '{template_name}' -- ID: {lid}",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -468,15 +475,15 @@ def delete_location(
     if not yes:
         click.confirm(f"Delete location '{location_name}'?", abort=True)
 
-    client = _make_client(url, timeout)
-    result = client.delete_location(location_name)
+    with _make_client(url, timeout) as client:
+        result = client.delete_location(location_name)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, result, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} deleted")
-    else:
-        success(console, f"Location '{location_name}' deleted.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, result, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} deleted")
+        else:
+            success(console, f"Location '{location_name}' deleted.")
 
 
 # ---------------------------------------------------------------------------
@@ -506,38 +513,38 @@ def location_resources(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    hierarchy = client.get_location_resources(location_name)
+    with _make_client(url, timeout) as client:
+        hierarchy = client.get_location_resources(location_name)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = (
-            hierarchy.model_dump(mode="json")
-            if hasattr(hierarchy, "model_dump")
-            else hierarchy
-        )
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = (
+                hierarchy.model_dump(mode="json")
+                if hasattr(hierarchy, "model_dump")
+                else hierarchy
+            )
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        rid = getattr(hierarchy, "resource_id", "-")
-        console.print(str(rid))
-        return
+        if fmt == OutputFormat.QUIET:
+            rid = getattr(hierarchy, "resource_id", "-")
+            console.print(str(rid))
+            return
 
-    rid = getattr(hierarchy, "resource_id", None)
-    if not rid:
-        info(console, f"No resources attached to location '{location_name}'.")
-        return
+        rid = getattr(hierarchy, "resource_id", None)
+        if not rid:
+            info(console, f"No resources attached to location '{location_name}'.")
+            return
 
-    console.print()
-    console.print(f"[bold]Resources at '{location_name}'[/bold]")
-    console.print(f"  Root resource: {rid}")
-    descendants = getattr(hierarchy, "descendant_ids", {})
-    if descendants:
-        for parent_id, children in descendants.items():
-            for child_id in children:
-                console.print(f"    {parent_id} -> {child_id}")
-    console.print()
+        console.print()
+        console.print(f"[bold]Resources at '{location_name}'[/bold]")
+        console.print(f"  Root resource: {rid}")
+        descendants = getattr(hierarchy, "descendant_ids", {})
+        if descendants:
+            for parent_id, children in descendants.items():
+                for child_id in children:
+                    console.print(f"    {parent_id} -> {child_id}")
+        console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -568,16 +575,16 @@ def attach_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    result = client.attach_resource(location_name, resource_id)
+    with _make_client(url, timeout) as client:
+        result = client.attach_resource(location_name, resource_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} attached {resource_id}")
-    else:
-        success(console, f"Resource {resource_id} attached to '{location_name}'.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} attached {resource_id}")
+        else:
+            success(console, f"Resource {resource_id} attached to '{location_name}'.")
 
 
 # ---------------------------------------------------------------------------
@@ -606,16 +613,16 @@ def detach_resource(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    result = client.detach_resource(location_name)
+    with _make_client(url, timeout) as client:
+        result = client.detach_resource(location_name)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} detached")
-    else:
-        success(console, f"Resource detached from '{location_name}'.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} detached")
+        else:
+            success(console, f"Resource detached from '{location_name}'.")
 
 
 # ---------------------------------------------------------------------------
@@ -653,23 +660,24 @@ def set_repr(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
     try:
         data = json.loads(data_json)
     except json.JSONDecodeError as exc:
         raise click.ClickException(f"Invalid JSON in --data: {exc}") from exc
 
-    result = client.set_representation(location_name, node_name, data)
+    with _make_client(url, timeout) as client:
+        result = client.set_representation(location_name, node_name, data)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} repr set for {node_name}")
-    else:
-        success(
-            console, f"Representation set for node '{node_name}' on '{location_name}'."
-        )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} repr set for {node_name}")
+        else:
+            success(
+                console,
+                f"Representation set for node '{node_name}' on '{location_name}'.",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -700,19 +708,19 @@ def remove_repr(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    result = client.remove_representation(location_name, node_name)
+    with _make_client(url, timeout) as client:
+        result = client.remove_representation(location_name, node_name)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} repr removed for {node_name}")
-    else:
-        success(
-            console,
-            f"Representation removed for node '{node_name}' from '{location_name}'.",
-        )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} repr removed for {node_name}")
+        else:
+            success(
+                console,
+                f"Representation removed for node '{node_name}' from '{location_name}'.",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -745,35 +753,39 @@ def transfer_graph(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    graph = client.get_transfer_graph()
+    with _make_client(url, timeout) as client:
+        graph = client.get_transfer_graph()
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, graph, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, graph, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
+        if fmt == OutputFormat.QUIET:
+            for src, targets in graph.items():
+                console.print(f"{src} -> {', '.join(targets)}")
+            return
+
+        if not graph:
+            info(console, "Transfer graph is empty.")
+            return
+
+        rows = []
         for src, targets in graph.items():
-            console.print(f"{src} -> {', '.join(targets)}")
-        return
+            rows.append(
+                {
+                    "source": str(src),
+                    "targets": ", ".join(str(t) for t in targets) if targets else "-",
+                }
+            )
 
-    if not graph:
-        info(console, "Transfer graph is empty.")
-        return
-
-    rows = []
-    for src, targets in graph.items():
-        rows.append(
-            {
-                "source": str(src),
-                "targets": ", ".join(str(t) for t in targets) if targets else "-",
-            }
+        output_result(
+            console,
+            rows,
+            format="text",
+            title="Transfer Graph",
+            columns=_GRAPH_COLUMNS,
         )
-
-    output_result(
-        console, rows, format="text", title="Transfer Graph", columns=_GRAPH_COLUMNS
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -814,44 +826,44 @@ def plan_transfer(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    workflow = client.plan_transfer(source, target, resource_id=resource_id)
+    with _make_client(url, timeout) as client:
+        workflow = client.plan_transfer(source, target, resource_id=resource_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = (
-            workflow.model_dump(mode="json")
-            if hasattr(workflow, "model_dump")
-            else workflow
-        )
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = (
+                workflow.model_dump(mode="json")
+                if hasattr(workflow, "model_dump")
+                else workflow
+            )
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
-        wf_name = getattr(workflow, "name", "-")
-        console.print(str(wf_name))
-        return
+        if fmt == OutputFormat.QUIET:
+            wf_name = getattr(workflow, "name", "-")
+            console.print(str(wf_name))
+            return
 
-    # Rich detail display
-    console.print()
-    console.print("[bold]Transfer Plan[/bold]")
-    console.print(f"  Source: {source}")
-    console.print(f"  Target: {target}")
-    if resource_id:
-        console.print(f"  Resource: {resource_id}")
+        # Rich detail display
+        console.print()
+        console.print("[bold]Transfer Plan[/bold]")
+        console.print(f"  Source: {source}")
+        console.print(f"  Target: {target}")
+        if resource_id:
+            console.print(f"  Resource: {resource_id}")
 
-    wf_name = getattr(workflow, "name", None)
-    if wf_name:
-        console.print(f"  Workflow: {wf_name}")
+        wf_name = getattr(workflow, "name", None)
+        if wf_name:
+            console.print(f"  Workflow: {wf_name}")
 
-    steps = getattr(workflow, "steps", [])
-    if steps:
-        console.print(f"  Steps: {len(steps)}")
-        for i, step in enumerate(steps):
-            step_name = getattr(step, "name", f"step_{i}")
-            console.print(f"    {i + 1}. {step_name}")
+        steps = getattr(workflow, "steps", [])
+        if steps:
+            console.print(f"  Steps: {len(steps)}")
+            for i, step in enumerate(steps):
+                step_name = getattr(step, "name", f"step_{i}")
+                console.print(f"    {i + 1}. {step_name}")
 
-    console.print()
+        console.print()
 
 
 # ---------------------------------------------------------------------------
@@ -904,7 +916,6 @@ def train_location(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
     # Parse overrides
     overrides: dict[str, Any] | None = None
@@ -919,26 +930,27 @@ def train_location(
             "At least one of --template or --overrides must be provided."
         )
 
-    # Build the representation data
-    data: dict[str, Any] = {}
-    if template_name:
-        template = client.get_representation_template(template_name)
-        data = dict(getattr(template, "default_values", {}) or {})
+    with _make_client(url, timeout) as client:
+        # Build the representation data
+        data: dict[str, Any] = {}
+        if template_name:
+            template = client.get_representation_template(template_name)
+            data = dict(getattr(template, "default_values", {}) or {})
 
-    if overrides:
-        data.update(overrides)
+        if overrides:
+            data.update(overrides)
 
-    result = client.set_representation(location_name, node_name, data)
+        result = client.set_representation(location_name, node_name, data)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _location_to_dict(result), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{location_name} trained for {node_name}")
-    else:
-        success(
-            console,
-            f"Location '{location_name}' trained for node '{node_name}'.",
-        )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _location_to_dict(result), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{location_name} trained for {node_name}")
+        else:
+            success(
+                console,
+                f"Location '{location_name}' trained for node '{node_name}'.",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -977,22 +989,22 @@ def export_locations(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    locations = client.export_locations()
-    data = [_location_to_dict(loc) for loc in locations]
+    with _make_client(url, timeout) as client:
+        locations = client.export_locations()
+        data = [_location_to_dict(loc) for loc in locations]
 
-    if output_file:
-        with Path(output_file).open("w") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
-        success(console, f"Exported {len(locations)} locations to {output_file}.")
-        return
+        if output_file:
+            with Path(output_file).open("w") as f:
+                yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            success(console, f"Exported {len(locations)} locations to {output_file}.")
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, data, format=fmt.value)
-    else:
-        # Default to YAML for export
-        output_result(console, data, format="yaml")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, data, format=fmt.value)
+        else:
+            # Default to YAML for export
+            output_result(console, data, format="yaml")
 
 
 # ---------------------------------------------------------------------------
@@ -1025,31 +1037,33 @@ def import_locations(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    result = client.import_locations(
-        location_file_path=Path(file),
-        overwrite=overwrite,
-    )
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = (
-            result.model_dump(mode="json") if hasattr(result, "model_dump") else result
+    with _make_client(url, timeout) as client:
+        result = client.import_locations(
+            location_file_path=Path(file),
+            overwrite=overwrite,
         )
-        output_result(console, data, format=fmt.value)
-        return
 
-    if fmt == OutputFormat.QUIET:
-        console.print(f"{result.imported} imported")
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = (
+                result.model_dump(mode="json")
+                if hasattr(result, "model_dump")
+                else result
+            )
+            output_result(console, data, format=fmt.value)
+            return
 
-    success(
-        console,
-        f"Import complete: {result.imported} imported, {result.skipped} skipped, {len(result.errors)} errors.",
-    )
-    if result.errors:
-        for err in result.errors:
-            console.print(f"  [red]{err}[/red]")
+        if fmt == OutputFormat.QUIET:
+            console.print(f"{result.imported} imported")
+            return
+
+        success(
+            console,
+            f"Import complete: {result.imported} imported, {result.skipped} skipped, {len(result.errors)} errors.",
+        )
+        if result.errors:
+            for err in result.errors:
+                console.print(f"  [red]{err}[/red]")
 
 
 # ---------------------------------------------------------------------------
@@ -1096,44 +1110,44 @@ def template_list(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    templates = client.get_location_templates()
+    with _make_client(url, timeout) as client:
+        templates = client.get_location_templates()
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_location_to_dict(t) for t in templates]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_location_to_dict(t) for t in templates]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
+        if fmt == OutputFormat.QUIET:
+            for t in templates:
+                console.print(getattr(t, "template_name", "-"))
+            return
+
+        if not templates:
+            info(console, "No location templates found.")
+            return
+
+        rows = []
         for t in templates:
-            console.print(getattr(t, "template_name", "-"))
-        return
+            rows.append(
+                {
+                    "name": getattr(t, "template_name", "-"),
+                    "description": truncate(getattr(t, "description", "") or "", 40),
+                    "version": getattr(t, "version", "-"),
+                    "transfers": "yes"
+                    if getattr(t, "default_allow_transfers", True)
+                    else "no",
+                }
+            )
 
-    if not templates:
-        info(console, "No location templates found.")
-        return
-
-    rows = []
-    for t in templates:
-        rows.append(
-            {
-                "name": getattr(t, "template_name", "-"),
-                "description": truncate(getattr(t, "description", "") or "", 40),
-                "version": getattr(t, "version", "-"),
-                "transfers": "yes"
-                if getattr(t, "default_allow_transfers", True)
-                else "no",
-            }
+        output_result(
+            console,
+            rows,
+            format="text",
+            title="Location Templates",
+            columns=_TEMPLATE_LIST_COLUMNS,
         )
-
-    output_result(
-        console,
-        rows,
-        format="text",
-        title="Location Templates",
-        columns=_TEMPLATE_LIST_COLUMNS,
-    )
 
 
 @template_group.command("get")
@@ -1158,25 +1172,27 @@ def template_get(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    template_info = client.get_location_template(template_name)
-    if template_info is None:
-        raise click.ClickException(f"Location template '{template_name}' not found.")
+    with _make_client(url, timeout) as client:
+        template_info = client.get_location_template(template_name)
+        if template_info is None:
+            raise click.ClickException(
+                f"Location template '{template_name}' not found."
+            )
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = _location_to_dict(template_info)
+            output_result(console, data, format=fmt.value)
+            return
+
+        if fmt == OutputFormat.QUIET:
+            console.print(template_name)
+            return
+
         data = _location_to_dict(template_info)
-        output_result(console, data, format=fmt.value)
-        return
-
-    if fmt == OutputFormat.QUIET:
-        console.print(template_name)
-        return
-
-    data = _location_to_dict(template_info)
-    output_result(
-        console, data, format="text", title=f"Location Template: {template_name}"
-    )
+        output_result(
+            console, data, format="text", title=f"Location Template: {template_name}"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1223,42 +1239,42 @@ def rep_template_list(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    templates = client.get_representation_templates()
+    with _make_client(url, timeout) as client:
+        templates = client.get_representation_templates()
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_location_to_dict(t) for t in templates]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_location_to_dict(t) for t in templates]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt == OutputFormat.QUIET:
+        if fmt == OutputFormat.QUIET:
+            for t in templates:
+                console.print(getattr(t, "template_name", "-"))
+            return
+
+        if not templates:
+            info(console, "No representation templates found.")
+            return
+
+        rows = []
         for t in templates:
-            console.print(getattr(t, "template_name", "-"))
-        return
+            rows.append(
+                {
+                    "name": getattr(t, "template_name", "-"),
+                    "description": truncate(getattr(t, "description", "") or "", 40),
+                    "version": getattr(t, "version", "-"),
+                    "created_by": getattr(t, "created_by", None) or "-",
+                }
+            )
 
-    if not templates:
-        info(console, "No representation templates found.")
-        return
-
-    rows = []
-    for t in templates:
-        rows.append(
-            {
-                "name": getattr(t, "template_name", "-"),
-                "description": truncate(getattr(t, "description", "") or "", 40),
-                "version": getattr(t, "version", "-"),
-                "created_by": getattr(t, "created_by", None) or "-",
-            }
+        output_result(
+            console,
+            rows,
+            format="text",
+            title="Representation Templates",
+            columns=_REP_TEMPLATE_LIST_COLUMNS,
         )
-
-    output_result(
-        console,
-        rows,
-        format="text",
-        title="Representation Templates",
-        columns=_REP_TEMPLATE_LIST_COLUMNS,
-    )
 
 
 @rep_template_group.command("get")
@@ -1283,24 +1299,27 @@ def rep_template_get(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_location_url(ctx, location_url)
-    client = _make_client(url, timeout)
 
-    template_info = client.get_representation_template(template_name)
-    if template_info is None:
-        raise click.ClickException(
-            f"Representation template '{template_name}' not found."
-        )
+    with _make_client(url, timeout) as client:
+        template_info = client.get_representation_template(template_name)
+        if template_info is None:
+            raise click.ClickException(
+                f"Representation template '{template_name}' not found."
+            )
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = _location_to_dict(template_info)
+            output_result(console, data, format=fmt.value)
+            return
+
+        if fmt == OutputFormat.QUIET:
+            console.print(template_name)
+            return
+
         data = _location_to_dict(template_info)
-        output_result(console, data, format=fmt.value)
-        return
-
-    if fmt == OutputFormat.QUIET:
-        console.print(template_name)
-        return
-
-    data = _location_to_dict(template_info)
-    output_result(
-        console, data, format="text", title=f"Representation Template: {template_name}"
-    )
+        output_result(
+            console,
+            data,
+            format="text",
+            title=f"Representation Template: {template_name}",
+        )

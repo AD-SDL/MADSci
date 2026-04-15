@@ -47,6 +47,7 @@ Classes
     ### Descendants
 
     * madsci.client.data_client.DataClient
+    * madsci.client.event_client.EventClient
     * madsci.client.experiment_client.ExperimentClient
     * madsci.client.lab_client.LabClient
     * madsci.client.location_client.LocationClient

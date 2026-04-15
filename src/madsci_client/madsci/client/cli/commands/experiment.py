@@ -6,6 +6,8 @@ starting, running, pausing, continuing, cancelling, and ending experiments.
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Iterator
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -50,12 +52,17 @@ def _get_experiment_url(ctx: click.Context, experiment_url: str | None) -> str:
     return resolve_service_url(ctx, experiment_url, "experiment_server_url", 8002)
 
 
-def _make_client(experiment_url: str, timeout: float) -> ExperimentClient:
+@contextlib.contextmanager
+def _make_client(experiment_url: str, timeout: float) -> Iterator[ExperimentClient]:
     from madsci.client.experiment_client import ExperimentClient
     from madsci.common.types.client_types import ExperimentClientConfig
 
     config = ExperimentClientConfig(timeout_default=timeout)
-    return ExperimentClient(experiment_server_url=experiment_url, config=config)
+    client = ExperimentClient(experiment_server_url=experiment_url, config=config)
+    try:
+        yield client
+    finally:
+        client.close()
 
 
 def _experiment_status_label(exp) -> str:  # noqa: ANN001
@@ -144,7 +151,7 @@ def experiment() -> None:
     "--status",
     "filter_status",
     default=None,
-    help="Filter by status (in_progress, completed, failed, paused, cancelled).",
+    help="Filter by status (in_progress, completed, failed, paused, cancelled). Applied client-side after fetch.",
 )
 @_EXPERIMENT_URL_OPTION
 @timeout_option(default=10.0)
@@ -169,34 +176,33 @@ def list_experiments(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        experiments = client.get_experiments(number=count)
 
-    experiments = client.get_experiments(number=count)
+        # Client-side status filter
+        if filter_status:
+            experiments = [
+                e for e in experiments if _experiment_status_label(e) == filter_status
+            ]
 
-    # Client-side status filter
-    if filter_status:
-        experiments = [
-            e for e in experiments if _experiment_status_label(e) == filter_status
-        ]
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            data = [_experiment_to_dict(e) for e in experiments]
+            output_result(console, data, format=fmt.value)
+            return
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        data = [_experiment_to_dict(e) for e in experiments]
-        output_result(console, data, format=fmt.value)
-        return
+        if fmt == OutputFormat.QUIET:
+            for e in experiments:
+                console.print(f"{e.experiment_id} {_experiment_status_label(e)}")
+            return
 
-    if fmt == OutputFormat.QUIET:
-        for e in experiments:
-            console.print(f"{e.experiment_id} {_experiment_status_label(e)}")
-        return
+        if not experiments:
+            info(console, "No experiments found.")
+            return
 
-    if not experiments:
-        info(console, "No experiments found.")
-        return
-
-    rows = [_experiment_to_row(e) for e in experiments]
-    output_result(
-        console, rows, format="text", title="Experiments", columns=_LIST_COLUMNS
-    )
+        rows = [_experiment_to_row(e) for e in experiments]
+        output_result(
+            console, rows, format="text", title="Experiments", columns=_LIST_COLUMNS
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -226,18 +232,17 @@ def get_experiment(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        exp = client.get_experiment(experiment_id)
 
-    exp = client.get_experiment(experiment_id)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, exp, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{exp.experiment_id} {_experiment_status_label(exp)}")
-    else:
-        output_result(
-            console, _experiment_to_dict(exp), format="text", title="Experiment"
-        )
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, exp, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{exp.experiment_id} {_experiment_status_label(exp)}")
+        else:
+            output_result(
+                console, _experiment_to_dict(exp), format="text", title="Experiment"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -285,31 +290,30 @@ def start_experiment(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        if design_file:
+            design = ExperimentDesign.from_yaml(Path(design_file).resolve())
+        elif exp_name:
+            design = ExperimentDesign(
+                experiment_name=exp_name,
+                experiment_description=exp_desc,
+            )
+        else:
+            raise click.ClickException(
+                "Provide --design <file> or --name <name> to start an experiment."
+            )
 
-    if design_file:
-        design = ExperimentDesign.from_yaml(Path(design_file).resolve())
-    elif exp_name:
-        design = ExperimentDesign(
-            experiment_name=exp_name,
-            experiment_description=exp_desc,
+        exp = client.start_experiment(
+            experiment_design=design,
+            run_name=run_name,
         )
-    else:
-        raise click.ClickException(
-            "Provide --design <file> or --name <name> to start an experiment."
-        )
 
-    exp = client.start_experiment(
-        experiment_design=design,
-        run_name=run_name,
-    )
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, exp, format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(exp.experiment_id)
-    else:
-        success(console, f"Experiment started -- ID: {exp.experiment_id}")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, exp, format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(exp.experiment_id)
+        else:
+            success(console, f"Experiment started -- ID: {exp.experiment_id}")
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +342,10 @@ def run_experiment(
     console = get_console(ctx)
 
     resolved = Path(script_path).resolve()
+    if resolved.suffix.lower() != ".py":
+        raise click.ClickException(
+            f"Only .py files can be executed, got: {resolved.suffix!r}"
+        )
     console.print(f"Running experiment: [cyan]{resolved.name}[/cyan]")
 
     try:
@@ -381,16 +389,15 @@ def pause_experiment(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        exp = client.pause_experiment(experiment_id)
 
-    exp = client.pause_experiment(experiment_id)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _experiment_to_dict(exp), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{exp.experiment_id} paused")
-    else:
-        success(console, f"Experiment {experiment_id} paused.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _experiment_to_dict(exp), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{exp.experiment_id} paused")
+        else:
+            success(console, f"Experiment {experiment_id} paused.")
 
 
 # ---------------------------------------------------------------------------
@@ -419,16 +426,15 @@ def continue_experiment(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        exp = client.continue_experiment(experiment_id)
 
-    exp = client.continue_experiment(experiment_id)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _experiment_to_dict(exp), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{exp.experiment_id} continued")
-    else:
-        success(console, f"Experiment {experiment_id} continued.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _experiment_to_dict(exp), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{exp.experiment_id} continued")
+        else:
+            success(console, f"Experiment {experiment_id} continued.")
 
 
 # ---------------------------------------------------------------------------
@@ -464,15 +470,15 @@ def cancel_experiment(
     if not yes:
         click.confirm(f"Cancel experiment {experiment_id}?", abort=True)
 
-    client = _make_client(url, timeout)
-    exp = client.cancel_experiment(experiment_id)
+    with _make_client(url, timeout) as client:
+        exp = client.cancel_experiment(experiment_id)
 
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _experiment_to_dict(exp), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{exp.experiment_id} cancelled")
-    else:
-        success(console, f"Experiment {experiment_id} cancelled.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _experiment_to_dict(exp), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{exp.experiment_id} cancelled")
+        else:
+            success(console, f"Experiment {experiment_id} cancelled.")
 
 
 # ---------------------------------------------------------------------------
@@ -513,14 +519,13 @@ def end_experiment(
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_experiment_url(ctx, experiment_url)
-    client = _make_client(url, timeout)
+    with _make_client(url, timeout) as client:
+        status = ExperimentStatus(end_status) if end_status else None
+        exp = client.end_experiment(experiment_id, status=status)
 
-    status = ExperimentStatus(end_status) if end_status else None
-    exp = client.end_experiment(experiment_id, status=status)
-
-    if fmt in (OutputFormat.JSON, OutputFormat.YAML):
-        output_result(console, _experiment_to_dict(exp), format=fmt.value)
-    elif fmt == OutputFormat.QUIET:
-        console.print(f"{exp.experiment_id} ended")
-    else:
-        success(console, f"Experiment {experiment_id} ended.")
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            output_result(console, _experiment_to_dict(exp), format=fmt.value)
+        elif fmt == OutputFormat.QUIET:
+            console.print(f"{exp.experiment_id} ended")
+        else:
+            success(console, f"Experiment {experiment_id} ended.")

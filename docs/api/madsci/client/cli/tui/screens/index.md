@@ -78,6 +78,9 @@ Classes
         Args:
             event: The select changed event.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
+
 `DashboardScreen(name: str | None = None, id: str | None = None, classes: str | None = None)`
 :   Main dashboard screen showing lab overview.
     
@@ -123,6 +126,9 @@ Classes
     `refresh_data(self) ‑> None`
     :   Refresh all dashboard data.
 
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
+
 `DataBrowserScreen(**kwargs: Any)`
 :   Screen showing data browser with type-aware detail display.
     
@@ -141,7 +147,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -161,13 +167,13 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the data browser screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the data table.
         
         Args:
             event: The row selected event.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
         
         Args:
@@ -197,7 +203,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -226,13 +232,13 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the experiments screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the experiments table.
         
         Args:
             event: The row selected event.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
         
         Args:
@@ -320,7 +326,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -346,11 +352,17 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the logs screen layout.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from FilterBar.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - load initial logs.
+
+    `on_screen_resume(self) ‑> None`
+    :   Restart the follow timer when the screen is resumed, if follow mode is active.
+
+    `on_screen_suspend(self) ‑> None`
+    :   Pause the follow timer when the screen is suspended.
 
     `refresh_data(self) ‑> None`
     :   Fetch and display logs.
@@ -373,7 +385,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -408,7 +420,7 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`
@@ -417,14 +429,17 @@ Classes
     `refresh_data(self) ‑> None`
     :   Refresh node data from workcell manager.
 
-`ResourceTreeScreen(resource_id: str, resource_url: str, **kwargs: Any)`
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.
+
+`ResourceTreeScreen(resource_id: str, resource_client: ResourceClient, **kwargs: Any)`
 :   Screen showing the resource hierarchy as a tree.
     
     Initialize the resource tree screen.
     
     Args:
         resource_id: ID of the resource to display hierarchy for.
-        resource_url: Base URL of the resource manager.
+        resource_client: ResourceClient instance for API calls.
         **kwargs: Additional keyword arguments forwarded to Screen.
 
     ### Ancestors (in MRO)
@@ -437,7 +452,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -475,7 +490,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -507,13 +522,13 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the resources screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the resources table.
         
         Args:
             event: The row selected event.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
         
         Args:
@@ -542,7 +557,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -562,14 +577,17 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the status screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the table.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses concurrently.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   Update the footer when auto-refresh is toggled.
 
 `StepDetailScreen(workflow_id: str, step_data: dict, step_index: int, **kwargs: Any)`
 :   Detailed view of a single workflow step.
@@ -612,13 +630,13 @@ Classes
     `on_mount(self) ‑> None`
     :   Render the step detail content on mount.
 
-`TransferGraphScreen(location_url: str, **kwargs: Any)`
+`TransferGraphScreen(location_client: madsci.client.location_client.LocationClient, **kwargs: Any)`
 :   Screen showing the transfer adjacency graph.
     
     Initialize the transfer graph screen.
     
     Args:
-        location_url: Base URL of the location manager.
+        location_client: LocationClient instance for fetching data.
         **kwargs: Additional keyword arguments forwarded to Screen.
 
     ### Ancestors (in MRO)
@@ -654,14 +672,14 @@ Classes
     `on_mount(self) ‑> None`
     :   Handle mount - set up table and fetch graph data.
 
-`WorkflowDetailScreen(workflow_id: str, workflow_data: dict, **kwargs: Any)`
+`WorkflowDetailScreen(workflow_id: str, workflow_data: Workflow, **kwargs: Any)`
 :   Screen showing details for a single workflow, pushed on top of WorkflowsScreen.
     
     Initialize the detail screen.
     
     Args:
         workflow_id: Workflow ID.
-        workflow_data: Workflow data dictionary.
+        workflow_data: Workflow model instance.
 
     ### Ancestors (in MRO)
 
@@ -675,7 +693,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -710,11 +728,14 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the detail screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle step row selection — push step detail screen.
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
+    :   Handle step row selection -- push step detail screen.
 
     `on_mount(self) ‑> None`
     :   Set up the steps table and render content.
+
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
 
 `WorkflowsScreen(**kwargs: Any)`
 :   Screen showing workflow visualization and management.
@@ -734,7 +755,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -769,10 +790,10 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the workflows screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
-    :   Handle row selection — push workflow detail screen.
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
+    :   Handle row selection -- push workflow detail screen.
 
-    `on_filter_bar_filter_changed(self, event: madsci.client.cli.tui.widgets.filter_bar.FilterBar.FilterChanged) ‑> None`
+    `on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) ‑> None`
     :   Handle filter changes from the FilterBar.
         
         Args:

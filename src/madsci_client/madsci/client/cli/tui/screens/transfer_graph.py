@@ -6,8 +6,8 @@ Location Manager as a DataTable.
 
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import preserve_cursor
+from madsci.client.location_client import LocationClient
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container
@@ -25,17 +25,17 @@ class TransferGraphScreen(Screen):
 
     def __init__(
         self,
-        location_url: str,
+        location_client: LocationClient,
         **kwargs: Any,
     ) -> None:
         """Initialize the transfer graph screen.
 
         Args:
-            location_url: Base URL of the location manager.
+            location_client: LocationClient instance for fetching data.
             **kwargs: Additional keyword arguments forwarded to Screen.
         """
         super().__init__(**kwargs)
-        self.location_url = location_url
+        self._location_client = location_client
 
     def compose(self) -> ComposeResult:
         """Compose the transfer graph screen layout."""
@@ -50,35 +50,17 @@ class TransferGraphScreen(Screen):
         table.add_columns("Source", "Connected Targets")
         await self._refresh_graph()
 
-    async def _fetch_location_names(self, client: httpx.AsyncClient) -> dict[str, str]:
+    async def _fetch_location_names(self) -> dict[str, str]:
         """Fetch a mapping of location IDs to names.
-
-        Args:
-            client: httpx async client to use.
 
         Returns:
             Dict mapping location_id to location_name.
         """
         try:
-            response = await client.get(f"{self.location_url.rstrip('/')}/locations")
-            if response.status_code == 200:
-                data = response.json()
-                names: dict[str, str] = {}
-                if isinstance(data, dict):
-                    for loc_id, loc_data in data.items():
-                        if isinstance(loc_data, dict):
-                            names[loc_id] = loc_data.get("location_name", loc_id)
-                        else:
-                            names[loc_id] = str(loc_id)
-                elif isinstance(data, list):
-                    for loc in data:
-                        lid = loc.get("location_id", "")
-                        if lid:
-                            names[lid] = loc.get("location_name", lid)
-                return names
-        except Exception:  # noqa: S110
-            pass
-        return {}
+            locations = await self._location_client.async_get_locations()
+            return {loc.location_id: loc.location_name for loc in locations}
+        except Exception:
+            return {}
 
     def _resolve_name(self, loc_id: str, names: dict[str, str]) -> str:
         """Resolve a location ID to a display string with name.
@@ -99,41 +81,24 @@ class TransferGraphScreen(Screen):
         """Fetch and display the transfer adjacency graph."""
         table = self.query_one("#graph-table", DataTable)
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                # Fetch both graph and location names
-                response = await client.get(
-                    f"{self.location_url.rstrip('/')}/transfer/graph"
-                )
-                if response.status_code == 200:
-                    graph = response.json()
-                    names = await self._fetch_location_names(client)
-                    with preserve_cursor(table):
-                        table.clear()
-                        if isinstance(graph, dict):
-                            for source, targets in graph.items():
-                                source_display = self._resolve_name(source, names)
-                                if isinstance(targets, list):
-                                    targets_str = (
-                                        ", ".join(
-                                            self._resolve_name(t, names)
-                                            for t in targets
-                                        )
-                                        if targets
-                                        else "[dim]none[/dim]"
-                                    )
-                                else:
-                                    targets_str = self._resolve_name(
-                                        str(targets), names
-                                    )
-                                table.add_row(source_display, targets_str)
-                        if not graph:
-                            table.add_row("[dim]No transfer edges found[/dim]", "")
-                else:
-                    with preserve_cursor(table):
-                        table.clear()
-                        table.add_row(
-                            f"[dim]Error: HTTP {response.status_code}[/dim]", ""
-                        )
+            graph = await self._location_client.async_get_transfer_graph()
+            names = await self._fetch_location_names()
+            with preserve_cursor(table):
+                table.clear()
+                if isinstance(graph, dict):
+                    for source, targets in graph.items():
+                        source_display = self._resolve_name(source, names)
+                        if isinstance(targets, list):
+                            targets_str = (
+                                ", ".join(self._resolve_name(t, names) for t in targets)
+                                if targets
+                                else "[dim]none[/dim]"
+                            )
+                        else:
+                            targets_str = self._resolve_name(str(targets), names)
+                        table.add_row(source_display, targets_str)
+                if not graph:
+                    table.add_row("[dim]No transfer edges found[/dim]", "")
         except Exception:
             with preserve_cursor(table):
                 table.clear()

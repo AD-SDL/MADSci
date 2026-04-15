@@ -6,9 +6,23 @@ from unittest.mock import patch
 
 from click.testing import CliRunner
 from madsci.client.cli import madsci
+from madsci.common.types.experiment_types import ExperimentalCampaign
 from madsci.common.utils import new_ulid_str
 
 _CAMPAIGN_ID = new_ulid_str()
+
+
+def _make_campaign(
+    *,
+    campaign_id: str | None = None,
+    campaign_name: str = "Test Campaign",
+) -> ExperimentalCampaign:
+    """Build a minimal ExperimentalCampaign for testing."""
+    return ExperimentalCampaign(
+        campaign_id=campaign_id or _CAMPAIGN_ID,
+        campaign_name=campaign_name,
+        experiment_ids=[],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +83,7 @@ class TestCampaignCreate:
         assert "--desc" in result.output
 
     def test_create_basic(self) -> None:
-        mock_result = {"campaign_id": _CAMPAIGN_ID, "campaign_name": "My Campaign"}
+        mock_result = _make_campaign(campaign_name="My Campaign")
         with _patch_client_init(), _patch_client("register_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(
@@ -87,7 +101,7 @@ class TestCampaignCreate:
             assert "created" in result.output.lower()
 
     def test_create_with_desc(self) -> None:
-        mock_result = {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Test"}
+        mock_result = _make_campaign(campaign_name="Test")
         with _patch_client_init(), _patch_client("register_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(
@@ -106,7 +120,7 @@ class TestCampaignCreate:
             assert result.exit_code == 0
 
     def test_create_json(self) -> None:
-        mock_result = {"campaign_id": _CAMPAIGN_ID, "campaign_name": "JSON Test"}
+        mock_result = _make_campaign(campaign_name="JSON Test")
         with _patch_client_init(), _patch_client("register_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(
@@ -137,7 +151,7 @@ class TestCampaignCreate:
         assert result.exit_code != 0
 
     def test_create_quiet(self) -> None:
-        mock_result = {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Quiet"}
+        mock_result = _make_campaign(campaign_name="Quiet")
         with _patch_client_init(), _patch_client("register_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(
@@ -187,7 +201,7 @@ class TestCampaignList:
 
     def test_list_campaigns_with_results(self) -> None:
         mock_campaigns = [
-            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Alpha"},
+            _make_campaign(campaign_name="Campaign Alpha"),
         ]
         with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
             runner = CliRunner()
@@ -205,7 +219,7 @@ class TestCampaignList:
 
     def test_list_campaigns_json(self) -> None:
         mock_campaigns = [
-            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Beta"},
+            _make_campaign(campaign_name="Campaign Beta"),
         ]
         with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
             runner = CliRunner()
@@ -223,7 +237,7 @@ class TestCampaignList:
 
     def test_list_campaigns_quiet(self) -> None:
         mock_campaigns = [
-            {"campaign_id": _CAMPAIGN_ID, "campaign_name": "Campaign Gamma"},
+            _make_campaign(campaign_name="Campaign Gamma"),
         ]
         with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
             runner = CliRunner()
@@ -255,11 +269,7 @@ class TestCampaignGet:
         assert result.exit_code == 0
 
     def test_get_basic(self) -> None:
-        mock_result = {
-            "campaign_id": _CAMPAIGN_ID,
-            "campaign_name": "Test Campaign",
-            "campaign_description": "A test",
-        }
+        mock_result = _make_campaign(campaign_name="Test Campaign")
         with _patch_client_init(), _patch_client("get_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(
@@ -276,7 +286,7 @@ class TestCampaignGet:
             assert "Test Campaign" in result.output
 
     def test_get_json(self) -> None:
-        mock_result = {"campaign_id": _CAMPAIGN_ID, "campaign_name": "JSON"}
+        mock_result = _make_campaign(campaign_name="JSON")
         with _patch_client_init(), _patch_client("get_campaign", mock_result):
             runner = CliRunner()
             result = runner.invoke(

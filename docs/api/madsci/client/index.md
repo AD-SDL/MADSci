@@ -83,7 +83,7 @@ Classes
     :   Set configuration values of the node.
 
 `DataClient(data_server_url: Optional[Union[str, AnyUrl]] = None, object_storage_settings: Optional[ObjectStorageSettings] = None, config: Optional[DataClientConfig] = None)`
-:   Client for the MADSci Experiment Manager.
+:   Client for the MADSci Data Manager.
     
     Create a new Datapoint Client.
     
@@ -264,6 +264,10 @@ Classes
     Initialize the event logger. If no config is provided, use the default config.
     
     Keyword Arguments are used to override the values of the passed in/default config.
+
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
 
     ### Class variables
 
@@ -621,7 +625,13 @@ Classes
             campaign_id: The ID of the campaign to get.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `async_get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
+    `async_get_campaigns(self, timeout: Optional[float] = None) ‑> list[madsci.common.types.experiment_types.ExperimentalCampaign]`
+    :   Get a list of all experimental campaigns asynchronously.
+        
+        Args:
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Get an experiment by ID asynchronously.
         
         Args:
@@ -693,7 +703,7 @@ Classes
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
-    `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> dict`
+    `get_experiment(self, experiment_id: Union[str, ULID], timeout: Optional[float] = None) ‑> madsci.common.types.experiment_types.Experiment`
     :   Get an experiment by ID.
         
         Args:
@@ -2029,6 +2039,27 @@ Classes
     `async_get_action_history(self, action_id: str | None = None, timeout: float | None = None) ‑> dict[str, list[madsci.common.types.action_types.ActionResult]]`
     :   Get action history asynchronously.
 
+    `async_get_action_result(self, action_id: str, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action on the node asynchronously.
+        
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+        
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
+    `async_get_action_result_by_name(self, action_name: str, action_id: str, include_files: bool = True, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Get the result of an action by name asynchronously.
+        
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+
     `async_get_info(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeInfo`
     :   Get information about the node asynchronously.
 
@@ -2040,6 +2071,18 @@ Classes
 
     `async_get_status(self, timeout: float | None = None) ‑> madsci.common.types.node_types.NodeStatus`
     :   Get the status of the node asynchronously.
+
+    `async_send_action(self, action_request: madsci.common.types.action_types.ActionRequest, timeout: float | None = None) ‑> madsci.common.types.action_types.ActionResult`
+    :   Send an action to the node asynchronously.
+        
+        Unlike the synchronous ``send_action``, this method does **not** poll or
+        wait for the action to reach a terminal state.  It creates the action,
+        starts it, and returns the initial ``ActionResult`` immediately.
+        
+        Args:
+            action_request: The action request to send.
+            timeout: Optional timeout override in seconds for individual HTTP
+                requests.  If ``None``, uses ``config.timeout_data_operations``.
 
     `async_send_admin_command(self, admin_command: madsci.common.types.admin_command_types.AdminCommands, timeout: float | None = None) ‑> madsci.common.types.admin_command_types.AdminCommandResponse`
     :   Perform an administrative command on the node asynchronously.
@@ -2236,8 +2279,40 @@ Classes
     `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID asynchronously.
 
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
     `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
 
     `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.
@@ -2666,8 +2741,40 @@ Classes
     `async_query_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow | None`
     :   Check the status of a workflow using its ID asynchronously.
 
+    `async_resubmit_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to resubmit.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The new workflow object.
+
     `async_resume_workflow(self, workflow_id: str, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow asynchronously.
+
+    `async_retry_workflow(self, workflow_id: str, index: Optional[int] = None, timeout: Optional[float] = None) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Retry a workflow from a specific step asynchronously.
+        
+        Parameters
+        ----------
+        workflow_id : str
+            The ID of the workflow to retry.
+        index : Optional[int]
+            The step index to retry from. If not provided, retries from the current step.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+        
+        Returns
+        -------
+        Workflow
+            The retried workflow object.
 
     `await_workflow(self, workflow_id: str, prompt_on_error: bool = True, raise_on_failed: bool = True, raise_on_cancelled: bool = True, query_frequency: float = 2.0, display_mode: DisplayMode = 'auto') ‑> madsci.common.types.workflow_types.Workflow`
     :   Wait for a workflow to complete.

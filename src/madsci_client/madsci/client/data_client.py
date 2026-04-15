@@ -34,7 +34,7 @@ from ulid import ULID
 
 
 class DataClient(DualModeClientMixin):
-    """Client for the MADSci Experiment Manager."""
+    """Client for the MADSci Data Manager."""
 
     data_server_url: Optional[AnyUrl]
     _minio_client: Optional[ObjectStorageSettings] = None
@@ -44,7 +44,7 @@ class DataClient(DualModeClientMixin):
         data_server_url: Optional[Union[str, AnyUrl]] = None,
         object_storage_settings: Optional[ObjectStorageSettings] = None,
         config: Optional[DataClientConfig] = None,
-    ) -> DataClient:
+    ) -> None:
         """
         Create a new Datapoint Client.
 
@@ -352,26 +352,26 @@ class DataClient(DualModeClientMixin):
             return datapoint
 
         if datapoint.data_type == DataPointTypeEnum.FILE:
-            files = {
-                (
-                    "files",
-                    (
-                        str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).expanduser(), "rb"),
-                    ),
-                )
-            }
+            file_path = Path(datapoint.path).expanduser()
+            file_handle = file_path.open("rb")
+            files = {("files", (file_path.name, file_handle))}
         else:
+            file_handle = None
             files = {}
-        response = self._request(
-            "POST",
-            f"{self.data_server_url}datapoint",
-            data={"datapoint": datapoint.model_dump_json()},
-            files=files,
-            timeout=timeout or self.config.timeout_data_operations,
-        )
-        response.raise_for_status()
-        return DataPoint.discriminate(response.json())
+
+        try:
+            response = self._request(
+                "POST",
+                f"{self.data_server_url}datapoint",
+                data={"datapoint": datapoint.model_dump_json()},
+                files=files,
+                timeout=timeout or self.config.timeout_data_operations,
+            )
+            response.raise_for_status()
+            return DataPoint.discriminate(response.json())
+        finally:
+            if file_handle is not None:
+                file_handle.close()
 
     def _upload_to_object_storage(
         self,
@@ -697,23 +697,27 @@ class DataClient(DualModeClientMixin):
             return datapoint
 
         if datapoint.data_type == DataPointTypeEnum.FILE:
-            files = {
-                (
-                    "files",
-                    (
-                        str(Path(datapoint.path).name),
-                        Path.open(Path(datapoint.path).expanduser(), "rb"),  # noqa: ASYNC240
-                    ),
-                )
-            }
+            # .expanduser() and .name are pure string manipulation (no I/O).
+            # .open() does a blocking syscall, but it's a single open() that
+            # returns immediately; the actual file reading is handled by
+            # httpx's async transport during the request below.
+            file_path = Path(datapoint.path).expanduser()  # noqa: ASYNC240
+            file_handle = file_path.open("rb")
+            files = {("files", (file_path.name, file_handle))}
         else:
+            file_handle = None
             files = {}
-        response = await self._async_request(
-            "POST",
-            f"{self.data_server_url}datapoint",
-            data={"datapoint": datapoint.model_dump_json()},
-            files=files,
-            timeout=timeout or self.config.timeout_data_operations,
-        )
-        response.raise_for_status()
-        return DataPoint.discriminate(response.json())
+
+        try:
+            response = await self._async_request(
+                "POST",
+                f"{self.data_server_url}datapoint",
+                data={"datapoint": datapoint.model_dump_json()},
+                files=files,
+                timeout=timeout or self.config.timeout_data_operations,
+            )
+            response.raise_for_status()
+            return DataPoint.discriminate(response.json())
+        finally:
+            if file_handle is not None:
+                file_handle.close()

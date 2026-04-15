@@ -41,6 +41,10 @@ Classes
     
     Keyword Arguments are used to override the values of the passed in/default config.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
     `config: madsci.common.types.event_types.EventClientConfig`

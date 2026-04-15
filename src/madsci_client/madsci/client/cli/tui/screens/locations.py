@@ -21,6 +21,8 @@ from madsci.client.cli.tui.widgets import (
     FilterBar,
 )
 from madsci.client.cli.utils.formatting import format_timestamp
+from madsci.client.location_client import LocationClient
+from madsci.common.types.location_types import Location
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -29,90 +31,84 @@ from textual.widgets import DataTable, Label
 
 
 def _matches_filter(
-    loc_data: dict,
+    location: Location,
     search: str,
 ) -> bool:
     """Check whether a location matches the current search text.
 
     Args:
-        loc_data: Location data dictionary.
+        location: Location model instance.
         search: Search text (matched against location_name, case-insensitive).
 
     Returns:
         True if the location passes the filter.
     """
     if search:
-        name = loc_data.get("location_name", "")
+        name = location.location_name
         if search.lower() not in name.lower():
             return False
     return True
 
 
-def _build_general_section(loc_id: str, data: dict) -> DetailSection:
+def _build_general_section(location: Location) -> DetailSection:
     """Build the general info section for the detail panel.
 
     Args:
-        loc_id: Location ID.
-        data: Location data dictionary.
+        location: Location model instance.
 
     Returns:
         DetailSection with general fields.
     """
-    managed_by_raw = data.get("managed_by", "lab")
-    managed_by_str = str(managed_by_raw).upper() if managed_by_raw else "LAB"
+    managed_by_raw = getattr(location, "managed_by", None)
+    managed_by_str = managed_by_raw.value.upper() if managed_by_raw else "LAB"
 
-    owner = data.get("owner")
-    if owner and isinstance(owner, dict):
-        node_id = owner.get("node_id")
-        owner_str = str(node_id) if node_id else "N/A"
+    owner = getattr(location, "owner", None)
+    if owner and getattr(owner, "node_id", None):
+        owner_str = str(owner.node_id)
     else:
         owner_str = "N/A"
 
     fields: dict[str, str] = {
-        "Name": data.get("location_name", "Unknown"),
-        "ID": loc_id,
+        "Name": location.location_name or "Unknown",
+        "ID": location.location_id,
         "Managed By": managed_by_str,
         "Owner": owner_str,
-        "Allow Transfers": str(data.get("allow_transfers", True)),
+        "Allow Transfers": str(location.allow_transfers),
     }
-    template_name = data.get("location_template_name")
-    if template_name:
-        fields["Template"] = str(template_name)
-    desc = data.get("description")
-    if desc:
-        fields["Description"] = str(desc)[:100]
+    if location.location_template_name:
+        fields["Template"] = str(location.location_template_name)
+    if location.description:
+        fields["Description"] = str(location.description)[:100]
     return DetailSection("General", fields)
 
 
-def _build_resource_section(data: dict) -> DetailSection:
+def _build_resource_section(location: Location) -> DetailSection:
     """Build the resource section for the detail panel.
 
     Args:
-        data: Location data dictionary.
+        location: Location model instance.
 
     Returns:
         DetailSection with resource attachment info.
     """
-    resource_id = data.get("resource_id")
     fields: dict[str, str] = {
-        "Resource ID": str(resource_id) if resource_id else "None",
+        "Resource ID": str(location.resource_id) if location.resource_id else "None",
     }
-    resource_template = data.get("resource_template_name")
-    if resource_template:
-        fields["Resource Template"] = str(resource_template)
+    if location.resource_template_name:
+        fields["Resource Template"] = str(location.resource_template_name)
     return DetailSection("Resource", fields)
 
 
-def _build_representations_section(data: dict) -> DetailSection | None:
+def _build_representations_section(location: Location) -> DetailSection | None:
     """Build the representations section for the detail panel.
 
     Args:
-        data: Location data dictionary.
+        location: Location model instance.
 
     Returns:
         DetailSection if representations exist, else None.
     """
-    representations = data.get("representations") or {}
+    representations = location.representations or {}
     if not isinstance(representations, dict) or not representations:
         return None
     fields: dict[str, str] = {}
@@ -121,45 +117,45 @@ def _build_representations_section(data: dict) -> DetailSection | None:
     return DetailSection("Representations", fields)
 
 
-def _build_node_bindings_section(data: dict) -> DetailSection | None:
+def _build_node_bindings_section(location: Location) -> DetailSection | None:
     """Build the node bindings section for the detail panel.
 
     Args:
-        data: Location data dictionary.
+        location: Location model instance.
 
     Returns:
         DetailSection if node bindings exist, else None.
     """
-    bindings = data.get("node_bindings") or {}
+    bindings = location.node_bindings or {}
     if not isinstance(bindings, dict) or not bindings:
         return None
     fields: dict[str, str] = {str(role): str(node) for role, node in bindings.items()}
     return DetailSection("Node Bindings", fields)
 
 
-def _build_reservation_section(data: dict) -> DetailSection | None:
+def _build_reservation_section(location: Location) -> DetailSection | None:
     """Build the reservation section for the detail panel.
 
     Args:
-        data: Location data dictionary.
+        location: Location model instance.
 
     Returns:
         DetailSection if a reservation exists, else None.
     """
-    reservation = data.get("reservation")
-    if not reservation or not isinstance(reservation, dict):
+    reservation = location.reservation
+    if not reservation:
         return None
     fields: dict[str, str] = {}
-    owned_by = reservation.get("owned_by")
-    if owned_by and isinstance(owned_by, dict):
+    owned_by = reservation.owned_by
+    if owned_by:
         for key in ("user_id", "experiment_id", "campaign_id"):
-            value = owned_by.get(key)
+            value = getattr(owned_by, key, None)
             if value:
                 fields[key.replace("_", " ").title()] = str(value)
-    created = reservation.get("created")
+    created = reservation.created
     if created:
         fields["Created"] = format_timestamp(created, short=True)
-    expires = reservation.get("expires")
+    expires = reservation.expires
     if expires:
         fields["Expires"] = format_timestamp(expires, short=True)
     if fields:
@@ -180,10 +176,20 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.locations_data: dict[str, dict] = {}
+        self.locations_data: dict[str, Location] = {}
         self.selected_location_id: str | None = None
         self._location_ids: list[str] = []
         self._current_search: str = ""
+        self._location_client: LocationClient | None = None
+
+    def _get_location_client(self) -> LocationClient:
+        """Get or create the LocationClient instance."""
+        if self._location_client is None:
+            url = self.get_service_url("location_manager")
+            self._location_client = LocationClient(
+                location_server_url=url,
+            )
+        return self._location_client
 
     def compose(self) -> ComposeResult:
         """Compose the locations screen layout."""
@@ -236,19 +242,11 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         self._location_ids.clear()
 
         try:
-            location_url = self.get_service_url("location_manager")
-            client = self.get_async_client(location_url)
-            response = await client.get(
-                f"{location_url.rstrip('/')}/locations",
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    for loc in data:
-                        loc_id = loc.get("location_id", "")
-                        if loc_id:
-                            self.locations_data[loc_id] = loc
-                            self._location_ids.append(loc_id)
+            client = self._get_location_client()
+            locations = await client.async_get_locations()
+            for location in locations:
+                self.locations_data[location.location_id] = location
+                self._location_ids.append(location.location_id)
         except Exception:
             self.notify("Failed to reach Location Manager", timeout=3)
 
@@ -273,17 +271,17 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
 
             for loc_id in filtered:
                 loc = self.locations_data[loc_id]
-                name = loc.get("location_name", "Unknown")
-                managed_by_raw = loc.get("managed_by", "lab")
+                name = loc.location_name or "Unknown"
+                managed_by_raw = getattr(loc, "managed_by", None)
                 managed_by_str = (
-                    str(managed_by_raw).upper() if managed_by_raw else "LAB"
+                    managed_by_raw.value.upper() if managed_by_raw else "LAB"
                 )
                 loc_id_str = loc_id or "-"
-                template = loc.get("location_template_name", "-") or "-"
-                resource = loc.get("resource_id", "")
+                template = loc.location_template_name or "-"
+                resource = loc.resource_id
                 resource_display = resource or "None"
-                transfers = "Yes" if loc.get("allow_transfers", True) else "No"
-                reservation = "Reserved" if loc.get("reservation") else "-"
+                transfers = "Yes" if loc.allow_transfers else "No"
+                reservation = "Reserved" if loc.reservation else "-"
                 table.add_row(
                     name,
                     managed_by_str,
@@ -329,34 +327,31 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         row_id = str(row[2])
 
         # Find location by matching full ID
-        for loc_id, loc_data in self.locations_data.items():
-            if loc_id == row_id:
-                self.selected_location_id = loc_id
-                self._update_detail_panel(loc_id, loc_data)
-                break
+        if row_id in self.locations_data:
+            self.selected_location_id = row_id
+            self._update_detail_panel(self.locations_data[row_id])
 
-    def _update_detail_panel(self, location_id: str, data: dict) -> None:
+    def _update_detail_panel(self, location: Location) -> None:
         """Update the detail panel with location data.
 
         Args:
-            location_id: Location ID.
-            data: Location data dictionary.
+            location: Location model instance.
         """
         detail_panel = self.query_one("#location-detail-panel", DetailPanel)
-        name = data.get("location_name", "Unknown")
+        name = location.location_name or "Unknown"
 
-        sections: list[DetailSection] = [_build_general_section(location_id, data)]
-        sections.append(_build_resource_section(data))
+        sections: list[DetailSection] = [_build_general_section(location)]
+        sections.append(_build_resource_section(location))
 
-        representations_section = _build_representations_section(data)
+        representations_section = _build_representations_section(location)
         if representations_section:
             sections.append(representations_section)
 
-        bindings_section = _build_node_bindings_section(data)
+        bindings_section = _build_node_bindings_section(location)
         if bindings_section:
             sections.append(bindings_section)
 
-        reservation_section = _build_reservation_section(data)
+        reservation_section = _build_reservation_section(location)
         if reservation_section:
             sections.append(reservation_section)
 
@@ -369,8 +364,8 @@ class LocationsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
 
     def action_show_transfer_graph(self) -> None:
         """Show the transfer graph screen."""
-        location_url = self.get_service_url("location_manager")
-        self.app.push_screen(TransferGraphScreen(location_url=location_url))
+        client = self._get_location_client()
+        self.app.push_screen(TransferGraphScreen(location_client=client))
 
     def _get_action_map(self) -> dict:
         """Return action map for the ActionBarMixin dispatcher."""

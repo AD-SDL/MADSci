@@ -6,7 +6,7 @@ Classes
 -------
 
 `DataClient(data_server_url: Optional[Union[str, AnyUrl]] = None, object_storage_settings: Optional[ObjectStorageSettings] = None, config: Optional[DataClientConfig] = None)`
-:   Client for the MADSci Experiment Manager.
+:   Client for the MADSci Data Manager.
     
     Create a new Datapoint Client.
     

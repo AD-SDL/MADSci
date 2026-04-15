@@ -31,7 +31,9 @@ Usage
 
 from __future__ import annotations
 
+import contextlib
 import logging
+import threading
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -65,6 +67,9 @@ class DualModeClientMixin:
     config: MadsciClientConfig
     _client: httpx.Client
     _async_client: httpx.AsyncClient | None
+
+    # Module-level lock guards per-instance lock creation in _ensure_async_client
+    _class_lock: threading.Lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Sync request
@@ -106,19 +111,26 @@ class DualModeClientMixin:
         """
         Lazily create the async HTTP client on first use.
 
+        This method is thread-safe: a per-instance lock ensures that
+        concurrent callers do not create duplicate async clients.
+
         Returns
         -------
         httpx.AsyncClient
             The (possibly newly created) async client.
         """
-        if self._async_client is None:
-            from madsci.common.http_client import create_httpx_client  # noqa: PLC0415
+        with self._class_lock:
+            if not hasattr(self, "_async_client_lock"):
+                self._async_client_lock = threading.Lock()
+        with self._async_client_lock:
+            if self._async_client is None:
+                from madsci.common.http_client import create_httpx_client  # noqa: I001, PLC0415
 
-            self._async_client = create_httpx_client(
-                config=self.config,
-                async_mode=True,
-            )
-        return self._async_client
+                self._async_client = create_httpx_client(
+                    config=self.config,
+                    async_mode=True,
+                )
+            return self._async_client
 
     async def _async_request(
         self, method: str, url: str, **kwargs: Any
@@ -165,19 +177,20 @@ class DualModeClientMixin:
         """
         if hasattr(self, "_client") and self._client is not None:
             self._client.close()
+            self._client = None
         if hasattr(self, "_async_client") and self._async_client is not None:
-            try:
-                import asyncio  # noqa: PLC0415
+            import asyncio  # noqa: PLC0415
 
-                loop = asyncio.get_event_loop()
-                if not loop.is_running():
-                    loop.run_until_complete(self._async_client.aclose())
-                else:
-                    self._async_client = None
-            except Exception:
-                self._async_client = None
-            finally:
-                self._async_client = None
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is None:
+                with contextlib.suppress(Exception):
+                    asyncio.run(self._async_client.aclose())
+            else:
+                loop.create_task(self._async_client.aclose())
+            self._async_client = None
 
     async def aclose(self) -> None:
         """
@@ -187,6 +200,7 @@ class DualModeClientMixin:
         """
         if hasattr(self, "_client") and self._client is not None:
             self._client.close()
+            self._client = None
         if hasattr(self, "_async_client") and self._async_client is not None:
             await self._async_client.aclose()
             self._async_client = None

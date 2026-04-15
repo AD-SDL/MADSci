@@ -9,9 +9,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Callable, Generator
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
-import httpx
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
 from textual.reactive import reactive
 from textual.widgets import DataTable
@@ -78,9 +77,14 @@ class AutoRefreshMixin:
             self.notify(f"Auto-refresh {state}", timeout=2)
 
     async def on_unmount(self) -> None:
-        """Clean up when screen is unmounted."""
-        if hasattr(self, "close_async_clients"):
-            await self.close_async_clients()
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "aclose"):
+                    await client.aclose()
+                elif client is not None and hasattr(client, "close"):
+                    client.close()
 
 
 class ServiceURLMixin:
@@ -95,10 +99,9 @@ class ServiceURLMixin:
         class MyScreen(ServiceURLMixin, Screen):
             async def fetch_data(self):
                 url = self.get_service_url("event_manager")
-                ...
+                client = MyClient(server_url=url)
+                data = await client.async_get_data()
     """
-
-    _async_clients: ClassVar[dict[str, httpx.AsyncClient]] = {}
 
     def get_service_url(self, service_name: str) -> str:
         """Get the URL for a named service.
@@ -120,18 +123,6 @@ class ServiceURLMixin:
             )
         except Exception:
             return DEFAULT_SERVICES.get(service_name, "http://localhost:8000/")
-
-    def get_async_client(self, service_url: str) -> httpx.AsyncClient:
-        """Get or create a cached async HTTP client for a service URL."""
-        if service_url not in self._async_clients:
-            self._async_clients[service_url] = httpx.AsyncClient(timeout=5.0)
-        return self._async_clients[service_url]
-
-    async def close_async_clients(self) -> None:
-        """Close all cached async clients."""
-        for client in self._async_clients.values():
-            await client.aclose()
-        self._async_clients.clear()
 
 
 class ActionBarMixin:

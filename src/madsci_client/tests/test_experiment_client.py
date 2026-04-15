@@ -498,8 +498,8 @@ class TestExperimentClientCampaignMethods:
             json=campaign.model_dump(mode="json"),
             timeout=10.0,
         )
-        # Note: This method returns response.json() directly, not a validated model
-        assert result == campaign.model_dump()
+        assert isinstance(result, ExperimentalCampaign)
+        assert result.campaign_id == campaign.campaign_id
 
     @patch("madsci.client.experiment_client.create_httpx_client")
     def test_register_campaign_http_error(self, mock_create_session, campaign):
@@ -540,8 +540,8 @@ class TestExperimentClientCampaignMethods:
             f"http://localhost:8002/campaign/{campaign.campaign_id}",
             timeout=10.0,
         )
-        # Note: This method returns response.json() directly, not a validated model
-        assert result == campaign.model_dump()
+        assert isinstance(result, ExperimentalCampaign)
+        assert result.campaign_id == campaign.campaign_id
 
     @patch("madsci.client.experiment_client.create_httpx_client")
     def test_get_campaign_http_error(self, mock_create_session):

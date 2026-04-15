@@ -32,11 +32,14 @@ logger = logging.getLogger(__name__)
 
 class RetryTransport(httpx.BaseTransport):
     """
-    Synchronous transport wrapper that retries on configurable status codes.
+    Synchronous transport wrapper that retries on configurable status codes
+    and connection-level transport errors.
 
-    Wraps an ``httpx.HTTPTransport`` and adds status-code-level retry logic
-    with exponential backoff, mirroring the retry behaviour previously provided
-    by ``urllib3.util.retry.Retry`` in the requests-based session factory.
+    Wraps an ``httpx.HTTPTransport`` and adds retry logic with exponential
+    backoff for both HTTP status codes and ``httpx.TransportError`` exceptions
+    (e.g. ``ConnectError``, ``ReadTimeout``), mirroring the retry behaviour
+    previously provided by ``urllib3.util.retry.Retry`` in the requests-based
+    session factory.
 
     Parameters
     ----------
@@ -84,7 +87,25 @@ class RetryTransport(httpx.BaseTransport):
 
         last_response: httpx.Response | None = None
         for attempt in range(1 + self._retries):
-            response = self._transport.handle_request(request)
+            try:
+                response = self._transport.handle_request(request)
+            except httpx.TransportError:
+                if last_response is not None:
+                    last_response.close()
+                    last_response = None
+                if attempt < self._retries:
+                    delay = self._backoff_factor * (2**attempt)
+                    logger.debug(
+                        "Retry %d/%d for %s %s (transport error), sleeping %.2fs",
+                        attempt + 1,
+                        self._retries,
+                        request.method,
+                        request.url,
+                        delay,
+                    )
+                    time.sleep(delay)
+                    continue
+                raise
 
             if response.status_code not in self._status_forcelist:
                 if last_response is not None:
@@ -127,7 +148,8 @@ class RetryTransport(httpx.BaseTransport):
 
 class AsyncRetryTransport(httpx.AsyncBaseTransport):
     """
-    Asynchronous transport wrapper that retries on configurable status codes.
+    Asynchronous transport wrapper that retries on configurable status codes
+    and connection-level transport errors.
 
     Async counterpart of :class:`RetryTransport`.  Uses ``asyncio.sleep``
     for non-blocking backoff delays.
@@ -176,7 +198,25 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 
         last_response: httpx.Response | None = None
         for attempt in range(1 + self._retries):
-            response = await self._transport.handle_async_request(request)
+            try:
+                response = await self._transport.handle_async_request(request)
+            except httpx.TransportError:
+                if last_response is not None:
+                    await last_response.aclose()
+                    last_response = None
+                if attempt < self._retries:
+                    delay = self._backoff_factor * (2**attempt)
+                    logger.debug(
+                        "Async retry %d/%d for %s %s (transport error), sleeping %.2fs",
+                        attempt + 1,
+                        self._retries,
+                        request.method,
+                        request.url,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                raise
 
             if response.status_code not in self._status_forcelist:
                 if last_response is not None:
@@ -223,13 +263,30 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 
 def _make_rate_limit_hook(
     tracker: RateLimitTracker,
-) -> Callable[[httpx.Response], None]:
+    *,
+    async_mode: bool = False,
+) -> Callable:
     """
     Create an httpx response event hook that feeds headers into *tracker*.
 
     The returned callable has the signature expected by ``httpx.Client``'s
     ``event_hooks={"response": [hook]}``.
+
+    Parameters
+    ----------
+    tracker : RateLimitTracker
+        The rate limit tracker to feed response headers into.
+    async_mode : bool
+        If ``True``, return an async hook suitable for ``httpx.AsyncClient``.
+        Async clients require event hooks to be coroutines.
     """
+
+    if async_mode:
+
+        async def _async_hook(response: httpx.Response) -> None:
+            tracker.update_from_headers(response.headers)
+
+        return _async_hook
 
     def _hook(response: httpx.Response) -> None:
         # Pass the httpx Headers object directly -- it is a case-insensitive
@@ -326,7 +383,9 @@ def create_httpx_client(
             warning_threshold=config.rate_limit_warning_threshold,
             respect_limits=config.rate_limit_respect_limits,
         )
-        event_hooks["response"].append(_make_rate_limit_hook(rate_limit_tracker))
+        event_hooks["response"].append(
+            _make_rate_limit_hook(rate_limit_tracker, async_mode=async_mode)
+        )
 
     # -- Build transport & client -------------------------------------------
     retry_kwargs = {

@@ -9,17 +9,18 @@ Workcell Manager and communicating with nodes directly.
 Classes
 -------
 
-`NodeDetailScreen(node_name: str, node_data: dict, **kwargs: Any)`
+`NodeDetailScreen(node_name: str, node_data: Node, **kwargs: Any)`
 :   Screen showing details for a single node, pushed on top of NodesScreen.
     
     Initialize the detail screen.
     
     Args:
         node_name: Name of the node.
-        node_data: Node data dictionary.
+        node_data: Node model instance.
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -28,7 +29,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -51,6 +52,9 @@ Classes
     `on_mount(self) ‑> None`
     :   Render the detail content on mount.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
+
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
     
@@ -69,7 +73,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -104,7 +108,7 @@ Classes
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`
@@ -112,3 +116,6 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh node data from workcell manager.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.

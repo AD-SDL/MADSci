@@ -5,9 +5,10 @@ a detail panel for selected resources, and actions for delete,
 lock/unlock, and tree visualization.
 """
 
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
 from madsci.client.cli.tui.mixins import (
     ActionBarMixin,
     AutoRefreshMixin,
@@ -24,6 +25,8 @@ from madsci.client.cli.tui.widgets import (
     FilterDef,
 )
 from madsci.client.cli.utils.formatting import build_ownership_section, format_timestamp
+from madsci.client.resource_client import ResourceClient
+from madsci.common.types.resource_types import ResourceDataModels
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Horizontal, VerticalScroll
@@ -32,14 +35,14 @@ from textual.widgets import Button, DataTable, Label
 
 
 def _matches_filter(
-    res_data: dict,
+    resource: ResourceDataModels,
     search: str,
     filters: dict[str, Any],
 ) -> bool:
     """Check whether a resource matches the current filter criteria.
 
     Args:
-        res_data: Resource data dictionary.
+        resource: Resource model instance.
         search: Search text (matched against resource_name, case-insensitive).
         filters: Filter dict; supports ``"type"`` key.
 
@@ -47,54 +50,48 @@ def _matches_filter(
         True if the resource passes the filters.
     """
     type_filter = filters.get("type", "all")
-    if (
-        type_filter
-        and type_filter != "all"
-        and res_data.get("base_type", "") != type_filter
-    ):
+    if type_filter and type_filter not in {"all", resource.base_type}:
         return False
 
     if search:
-        name = res_data.get("resource_name", "")
+        name = resource.resource_name or ""
         if search.lower() not in name.lower():
             return False
 
     return True
 
 
-def _build_general_section(res_id: str, data: dict) -> DetailSection:
+def _build_general_section(resource: ResourceDataModels) -> DetailSection:
     """Build the general info section for the detail panel.
 
     Args:
-        res_id: Resource ID.
-        data: Resource data dictionary.
+        resource: Resource model instance.
 
     Returns:
         DetailSection with general fields.
     """
     fields: dict[str, str] = {
-        "Name": data.get("resource_name", "Unknown"),
-        "ID": res_id,
-        "Base Type": data.get("base_type", "unknown"),
-        "Class": data.get("resource_class", "-") or "-",
+        "Name": resource.resource_name or "Unknown",
+        "ID": resource.resource_id,
+        "Base Type": resource.base_type.value if resource.base_type else "unknown",
+        "Class": resource.resource_class or "-",
     }
-    desc = data.get("resource_description")
-    if desc:
-        fields["Description"] = str(desc)[:100]
+    if resource.resource_description:
+        fields["Description"] = str(resource.resource_description)[:100]
     return DetailSection("General", fields)
 
 
-def _build_state_section(data: dict) -> DetailSection | None:
+def _build_state_section(resource: ResourceDataModels) -> DetailSection | None:
     """Build the quantity/capacity state section.
 
     Args:
-        data: Resource data dictionary.
+        resource: Resource model instance.
 
     Returns:
         DetailSection if quantity or capacity exists, else None.
     """
-    quantity = data.get("quantity")
-    capacity = data.get("capacity")
+    quantity = getattr(resource, "quantity", None)
+    capacity = getattr(resource, "capacity", None)
     if quantity is None and capacity is None:
         return None
 
@@ -118,65 +115,61 @@ def _build_state_section(data: dict) -> DetailSection | None:
         except (ValueError, TypeError):
             pass
 
-    unit = data.get("unit")
+    unit = getattr(resource, "unit", None)
     if unit:
         fields["Unit"] = str(unit)
 
     return DetailSection("State", fields)
 
 
-def _build_hierarchy_section(data: dict) -> DetailSection | None:
+def _build_hierarchy_section(resource: ResourceDataModels) -> DetailSection | None:
     """Build the hierarchy section.
 
     Args:
-        data: Resource data dictionary.
+        resource: Resource model instance.
 
     Returns:
         DetailSection if parent or children info exists, else None.
     """
     fields: dict[str, str] = {}
-    parent_id = data.get("parent_id")
-    if parent_id:
-        fields["Parent ID"] = str(parent_id)
-    key = data.get("key")
-    if key:
-        fields["Key"] = str(key)
+    if resource.parent_id:
+        fields["Parent ID"] = str(resource.parent_id)
+    if resource.key:
+        fields["Key"] = str(resource.key)
     if fields:
         return DetailSection("Hierarchy", fields)
     return None
 
 
-def _build_timestamps_section(data: dict) -> DetailSection | None:
+def _build_timestamps_section(resource: ResourceDataModels) -> DetailSection | None:
     """Build the timestamps section.
 
     Args:
-        data: Resource data dictionary.
+        resource: Resource model instance.
 
     Returns:
         DetailSection if any timestamp exists, else None.
     """
     fields: dict[str, str] = {}
-    created = data.get("created_at")
-    updated = data.get("updated_at")
-    if created:
-        fields["Created"] = format_timestamp(created, short=True)
-    if updated:
-        fields["Updated"] = format_timestamp(updated, short=True)
+    if resource.created_at:
+        fields["Created"] = format_timestamp(resource.created_at, short=True)
+    if resource.updated_at:
+        fields["Updated"] = format_timestamp(resource.updated_at, short=True)
     if fields:
         return DetailSection("Timestamps", fields)
     return None
 
 
-def _build_attributes_section(data: dict) -> DetailSection | None:
+def _build_attributes_section(resource: ResourceDataModels) -> DetailSection | None:
     """Build the custom attributes section.
 
     Args:
-        data: Resource data dictionary.
+        resource: Resource model instance.
 
     Returns:
         DetailSection if custom attributes exist, else None.
     """
-    attrs = data.get("attributes") or {}
+    attrs = resource.attributes or {}
     if not isinstance(attrs, dict) or not attrs:
         return None
     fields = {str(k): str(v)[:80] for k, v in attrs.items()}
@@ -243,11 +236,21 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.resources_data: dict[str, dict] = {}
+        self.resources_data: dict[str, ResourceDataModels] = {}
         self.selected_resource_id: str | None = None
         self._resource_ids: list[str] = []
         self._current_search: str = ""
         self._current_filters: dict[str, Any] = {}
+        self._resource_client: ResourceClient | None = None
+
+    def _get_resource_client(self) -> ResourceClient:
+        """Get or create the ResourceClient instance."""
+        if self._resource_client is None:
+            url = self.get_service_url("resource_manager")
+            self._resource_client = ResourceClient(
+                resource_server_url=url,
+            )
+        return self._resource_client
 
     def compose(self) -> ComposeResult:
         """Compose the resources screen layout."""
@@ -316,20 +319,14 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         self._resource_ids.clear()
 
         try:
-            resource_url = self.get_service_url("resource_manager")
-            client = self.get_async_client(resource_url)
-            response = await client.post(
-                f"{resource_url.rstrip('/')}/resource/query",
-                json={"multiple": True},
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    for res in data:
-                        res_id = res.get("resource_id", "")
-                        if res_id:
-                            self.resources_data[res_id] = res
-                            self._resource_ids.append(res_id)
+            client = self._get_resource_client()
+            resources = await client.async_query_resource(multiple=True)
+            if isinstance(resources, list):
+                for resource in resources:
+                    res_id = resource.resource_id
+                    if res_id:
+                        self.resources_data[res_id] = resource
+                        self._resource_ids.append(res_id)
         except Exception:
             self.notify("Failed to reach Resource Manager", timeout=3)
 
@@ -355,20 +352,14 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
 
             for res_id in filtered:
                 res = self.resources_data[res_id]
-                name = res.get("resource_name", "Unknown")
+                name = res.resource_name or "Unknown"
                 res_id_str = res_id or "-"
-                base_type = res.get("base_type", "unknown")
-                quantity = (
-                    str(res.get("quantity", "-"))
-                    if res.get("quantity") is not None
-                    else "-"
-                )
-                capacity = (
-                    str(res.get("capacity", "-"))
-                    if res.get("capacity") is not None
-                    else "-"
-                )
-                parent = str(res.get("parent_id", "")) if res.get("parent_id") else "-"
+                base_type = res.base_type.value if res.base_type else "unknown"
+                quantity_val = getattr(res, "quantity", None)
+                quantity = str(quantity_val) if quantity_val is not None else "-"
+                capacity_val = getattr(res, "capacity", None)
+                capacity = str(capacity_val) if capacity_val is not None else "-"
+                parent = str(res.parent_id) if res.parent_id else "-"
                 lock = ""  # Lock status requires a separate API call
                 table.add_row(
                     name, res_id_str, base_type, quantity, capacity, parent, lock
@@ -404,41 +395,40 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
         row_id = str(row[1])
 
         # Find resource by matching full ID
-        for res_id, res_data in self.resources_data.items():
-            if res_id == row_id:
-                self.selected_resource_id = res_id
-                self._update_detail_panel(res_id, res_data)
-                break
+        if row_id in self.resources_data:
+            self.selected_resource_id = row_id
+            self._update_detail_panel(self.resources_data[row_id])
 
-    def _update_detail_panel(self, resource_id: str, data: dict) -> None:
+    def _update_detail_panel(self, resource: ResourceDataModels) -> None:
         """Update the detail panel with resource data.
 
         Args:
-            resource_id: Resource ID.
-            data: Resource data dictionary.
+            resource: Resource model instance.
         """
         detail_panel = self.query_one("#resource-detail-panel", DetailPanel)
-        name = data.get("resource_name", "Unknown")
+        name = resource.resource_name or "Unknown"
 
-        sections: list[DetailSection] = [_build_general_section(resource_id, data)]
+        sections: list[DetailSection] = [_build_general_section(resource)]
 
-        state_section = _build_state_section(data)
+        state_section = _build_state_section(resource)
         if state_section:
             sections.append(state_section)
 
-        hierarchy_section = _build_hierarchy_section(data)
+        hierarchy_section = _build_hierarchy_section(resource)
         if hierarchy_section:
             sections.append(hierarchy_section)
 
-        ownership_items = build_ownership_section(data)
+        ownership_items = build_ownership_section(
+            resource.model_dump(mode="json"),
+        )
         if ownership_items:
             sections.append(DetailSection("Ownership", dict(ownership_items)))
 
-        timestamps_section = _build_timestamps_section(data)
+        timestamps_section = _build_timestamps_section(resource)
         if timestamps_section:
             sections.append(timestamps_section)
 
-        attributes_section = _build_attributes_section(data)
+        attributes_section = _build_attributes_section(resource)
         if attributes_section:
             sections.append(attributes_section)
 
@@ -462,8 +452,8 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             self.notify("No resource selected", timeout=2)
             return
 
-        res_data = self.resources_data.get(self.selected_resource_id, {})
-        name = res_data.get("resource_name", self.selected_resource_id)
+        resource = self.resources_data.get(self.selected_resource_id)
+        name = resource.resource_name if resource else self.selected_resource_id
 
         self.app.push_screen(
             ConfirmDeleteScreen(
@@ -484,22 +474,13 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             return
 
         try:
-            resource_url = self.get_service_url("resource_manager")
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.delete(
-                    f"{resource_url.rstrip('/')}/resource/{self.selected_resource_id}"
-                )
-                if response.status_code == 200:
-                    self.notify("Resource deleted", timeout=2)
-                    self.selected_resource_id = None
-                    detail_panel = self.query_one("#resource-detail-panel", DetailPanel)
-                    detail_panel.clear_content()
-                    await self.refresh_data()
-                else:
-                    self.notify(
-                        f"Failed to delete resource: HTTP {response.status_code}",
-                        timeout=3,
-                    )
+            client = self._get_resource_client()
+            await client.async_remove_resource(self.selected_resource_id)
+            self.notify("Resource deleted", timeout=2)
+            self.selected_resource_id = None
+            detail_panel = self.query_one("#resource-detail-panel", DetailPanel)
+            detail_panel.clear_content()
+            await self.refresh_data()
         except Exception as e:
             self.notify(f"Error deleting resource: {e}", timeout=3)
 
@@ -510,47 +491,25 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             return
 
         try:
-            resource_url = self.get_service_url("resource_manager")
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                # Check current lock status
-                check_response = await client.get(
-                    f"{resource_url.rstrip('/')}/resource/"
-                    f"{self.selected_resource_id}/check_lock"
+            client = self._get_resource_client()
+
+            # Check current lock status
+            is_locked, _locked_by = await client.async_is_locked(
+                self.selected_resource_id
+            )
+
+            if is_locked:
+                # Release lock
+                await client.async_release_lock(self.selected_resource_id)
+                self.notify("Resource unlocked", timeout=2)
+            else:
+                # Acquire lock
+                await client.async_acquire_lock(
+                    self.selected_resource_id,
+                    lock_duration=300,
+                    client_id="tui",
                 )
-                if check_response.status_code != 200:
-                    self.notify("Failed to check lock status", timeout=3)
-                    return
-
-                lock_info = check_response.json()
-                is_locked = lock_info.get("is_locked", False)
-
-                if is_locked:
-                    # Release lock
-                    response = await client.delete(
-                        f"{resource_url.rstrip('/')}/resource/"
-                        f"{self.selected_resource_id}/unlock"
-                    )
-                    if response.status_code == 200:
-                        self.notify("Resource unlocked", timeout=2)
-                    else:
-                        self.notify(
-                            f"Failed to unlock: HTTP {response.status_code}",
-                            timeout=3,
-                        )
-                else:
-                    # Acquire lock
-                    response = await client.post(
-                        f"{resource_url.rstrip('/')}/resource/"
-                        f"{self.selected_resource_id}/lock",
-                        params={"lock_duration": 300, "client_id": "tui"},
-                    )
-                    if response.status_code == 200:
-                        self.notify("Resource locked", timeout=2)
-                    else:
-                        self.notify(
-                            f"Failed to lock: HTTP {response.status_code}",
-                            timeout=3,
-                        )
+                self.notify("Resource locked", timeout=2)
         except Exception as e:
             self.notify(f"Error toggling lock: {e}", timeout=3)
 
@@ -560,11 +519,11 @@ class ResourcesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen)
             self.notify("No resource selected", timeout=2)
             return
 
-        resource_url = self.get_service_url("resource_manager")
+        client = self._get_resource_client()
         self.app.push_screen(
             ResourceTreeScreen(
                 resource_id=self.selected_resource_id,
-                resource_url=resource_url,
+                resource_client=client,
             )
         )
 

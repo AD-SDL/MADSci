@@ -145,10 +145,11 @@ class TestLabClientConstruction:
     def test_context_manager_support(self) -> None:
         """LabClient should support sync context manager via the mixin."""
         client = _make_lab_client()
+        mock_sync = client._client
         with client as c:
             assert c is client
         # close should have been called on _client
-        client._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -456,18 +457,21 @@ class TestLabClientCleanup:
     def test_close_closes_httpx_client(self) -> None:
         """close() should close the underlying httpx client."""
         client = _make_lab_client()
+        mock_sync = client._client
         client.close()
-        client._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_aclose_closes_both_clients(self) -> None:
         """aclose() should close both sync and async clients."""
         client = _make_lab_client()
+        mock_sync = client._client
         mock_async = AsyncMock(spec=httpx.AsyncClient)
         client._async_client = mock_async
 
         await client.aclose()
 
-        client._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
+        assert client._client is None
         mock_async.aclose.assert_called_once()
         assert client._async_client is None

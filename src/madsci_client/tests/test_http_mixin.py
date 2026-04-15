@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
@@ -221,8 +220,9 @@ class TestClose:
     def test_close_closes_sync_client(self) -> None:
         """close() calls _client.close()."""
         stub = _StubClient()
+        mock_sync = stub._client
         stub.close()
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
 
     def test_close_skips_async_client_when_none(self) -> None:
         """close() does not fail when _async_client is None."""
@@ -243,30 +243,45 @@ class TestClose:
         assert stub._async_client is None
 
     def test_close_attempts_loop_run_when_no_loop_running(self) -> None:
-        """close() runs aclose() via get_event_loop() when no loop is running."""
+        """close() runs aclose() via asyncio.run() when no loop is running."""
         stub = _StubClient()
         aclose_called = []
 
-        async def fake_aclose() -> None:
-            aclose_called.append(True)
-
-        # Use a plain object so aclose is a real coroutine function
         class _FakeAsyncClient:
-            aclose = fake_aclose
+            async def aclose(self) -> None:
+                aclose_called.append(True)
 
         stub._async_client = _FakeAsyncClient()
 
-        # Only attempt if the current event loop is not running
-        loop = asyncio.get_event_loop()
-        with contextlib.suppress(Exception):
-            if not loop.is_running():
-                stub.close()
-                assert aclose_called, (
-                    "aclose() should have been called via run_until_complete"
-                )
-            else:
-                stub.close()
+        # No running event loop in this sync test, so close() should
+        # attempt to run aclose() via asyncio.run()
+        stub.close()
+        assert aclose_called, "aclose() should have been called via asyncio.run()"
+        assert stub._async_client is None
 
+    def test_close_sets_sync_client_to_none(self) -> None:
+        """close() sets _client to None for symmetry with aclose()."""
+        stub = _StubClient()
+        assert stub._client is not None
+        stub.close()
+        assert stub._client is None
+
+    @pytest.mark.asyncio
+    async def test_close_schedules_aclose_in_running_loop(self) -> None:
+        """close() schedules aclose() via loop.create_task() when inside a running loop."""
+        stub = _StubClient()
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
+        stub._async_client = mock_async
+
+        # We are inside a running event loop (pytest-asyncio provides one).
+        # close() should schedule aclose() via create_task instead of leaking.
+        stub.close()
+
+        # The task has been scheduled but may not have run yet.
+        # Give the event loop a chance to execute the scheduled task.
+        await asyncio.sleep(0)
+
+        mock_async.aclose.assert_called_once()
         assert stub._async_client is None
 
     def test_close_idempotent(self) -> None:
@@ -277,10 +292,12 @@ class TestClose:
 
     @pytest.mark.asyncio
     async def test_aclose_closes_sync_client(self) -> None:
-        """aclose() calls _client.close()."""
+        """aclose() calls _client.close() and sets it to None."""
         stub = _StubClient()
+        mock_sync = stub._client
         await stub.aclose()
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
+        assert stub._client is None
 
     @pytest.mark.asyncio
     async def test_aclose_awaits_async_client_aclose(self) -> None:
@@ -312,17 +329,19 @@ class TestContextManagers:
     def test_sync_context_manager(self) -> None:
         """Entering and exiting the sync context manager calls close()."""
         stub = _StubClient()
+        mock_sync = stub._client
 
         with stub as client:
             assert client is stub
 
         # After exiting, _client.close() should have been called
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_context_manager(self) -> None:
         """Entering and exiting the async context manager calls aclose()."""
         stub = _StubClient()
+        mock_sync = stub._client
         mock_async = AsyncMock(spec=httpx.AsyncClient)
         stub._async_client = mock_async
 
@@ -330,23 +349,26 @@ class TestContextManagers:
             assert client is stub
 
         # After exiting, both sync and async clients should be closed
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
+        assert stub._client is None
         mock_async.aclose.assert_called_once()
         assert stub._async_client is None
 
     def test_sync_context_manager_on_exception(self) -> None:
         """Sync context manager still closes on exception."""
         stub = _StubClient()
+        mock_sync = stub._client
 
         with pytest.raises(RuntimeError, match="boom"), stub:
             raise RuntimeError("boom")
 
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_async_context_manager_on_exception(self) -> None:
         """Async context manager still closes on exception."""
         stub = _StubClient()
+        mock_sync = stub._client
         mock_async = AsyncMock(spec=httpx.AsyncClient)
         stub._async_client = mock_async
 
@@ -354,8 +376,10 @@ class TestContextManagers:
             async with stub:
                 raise RuntimeError("boom")
 
-        stub._client.close.assert_called_once()
+        mock_sync.close.assert_called_once()
+        assert stub._client is None
         mock_async.aclose.assert_called_once()
+        assert stub._async_client is None
 
 
 # ---------------------------------------------------------------------------

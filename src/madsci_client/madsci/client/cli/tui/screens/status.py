@@ -3,7 +3,10 @@
 Provides detailed service status with health information.
 """
 
+from __future__ import annotations
+
 import asyncio
+import logging
 from typing import Any, ClassVar
 
 from madsci.client.cli.tui.mixins import (
@@ -14,11 +17,15 @@ from madsci.client.cli.tui.mixins import (
 from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
 from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
 from madsci.client.cli.utils.service_health import check_all_services_async
+from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.node_types import NodeStatus
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import DataTable, Label
+
+logger = logging.getLogger(__name__)
 
 INFRASTRUCTURE_SERVICES = {
     "ferretdb": ("localhost", 27017),
@@ -41,6 +48,16 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Initialize the screen."""
         super().__init__(**kwargs)
         self.service_status: dict[str, dict] = {}
+        self._workcell_client: WorkcellClient | None = None
+
+    def _get_workcell_client(self) -> WorkcellClient:
+        """Get or create the WorkcellClient instance."""
+        if self._workcell_client is None:
+            url = self.get_service_url("workcell_manager")
+            self._workcell_client = WorkcellClient(
+                workcell_server_url=url,
+            )
+        return self._workcell_client
 
     def compose(self) -> ComposeResult:
         """Compose the status screen layout."""
@@ -104,11 +121,17 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
                 "[dim]Auto-refresh: off | 'a' toggle | 'r' manual | 'Esc' back[/dim]"
             )
 
+    def watch_auto_refresh_enabled(self, _value: bool) -> None:
+        """Update the footer when auto-refresh is toggled."""
+        self._update_footer()
+
     async def refresh_data(self) -> None:
-        """Refresh all service statuses."""
-        await self._refresh_managers()
-        await self._refresh_infrastructure()
-        await self._refresh_nodes()
+        """Refresh all service statuses concurrently."""
+        await asyncio.gather(
+            self._refresh_managers(),
+            self._refresh_infrastructure(),
+            self._refresh_nodes(),
+        )
 
     async def _refresh_managers(self) -> None:
         """Refresh manager service statuses."""
@@ -177,36 +200,32 @@ class StatusScreen(AutoRefreshMixin, ServiceURLMixin, Screen):
         """Refresh node status from the workcell manager."""
         table = self.query_one("#nodes-table", DataTable)
         try:
-            workcell_url = self.get_service_url("workcell_manager")
-            client = self.get_async_client(workcell_url)
-            response = await client.get(f"{workcell_url.rstrip('/')}/nodes")
-            if response.status_code == 200:
-                nodes = response.json()
-                with preserve_cursor(table):
-                    table.clear()
-                    if isinstance(nodes, dict):
-                        for name, node_data in nodes.items():
-                            node_status = node_data.get("status", {})
-                            if node_status.get("disconnected", False):
-                                status_name = "disconnected"
-                            elif node_status.get("errored", False):
-                                status_name = "errored"
-                            else:
-                                status_name = "connected"
-                            icon = format_status_icon(status_name)
-                            url = str(node_data.get("node_url", "N/A"))
-                            state = format_status_colored(status_name)
-                            table.add_row(icon, name, url, state)
-                    if table.row_count == 0:
-                        table.add_row(
-                            format_status_icon("unknown"),
-                            "[dim]No nodes[/dim]",
-                            "-",
-                            "-",
-                        )
-                return
-        except Exception:  # noqa: S110
-            pass
+            client = self._get_workcell_client()
+            nodes = await client.async_get_nodes()
+            with preserve_cursor(table):
+                table.clear()
+                for name, node in nodes.items():
+                    node_status = node.status or NodeStatus()
+                    if node_status.disconnected:
+                        status_name = "disconnected"
+                    elif node_status.errored:
+                        status_name = "errored"
+                    else:
+                        status_name = "connected"
+                    icon = format_status_icon(status_name)
+                    url = str(node.node_url)
+                    state = format_status_colored(status_name)
+                    table.add_row(icon, name, url, state)
+                if table.row_count == 0:
+                    table.add_row(
+                        format_status_icon("unknown"),
+                        "[dim]No nodes[/dim]",
+                        "-",
+                        "-",
+                    )
+            return
+        except Exception as exc:
+            logger.debug("Refresh failed: %s", exc)
         with preserve_cursor(table):
             table.clear()
             table.add_row(
