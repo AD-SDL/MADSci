@@ -1,6 +1,6 @@
 [project]
 name = "madsci.common"
-version = "0.7.1"
+version = "0.8.0-rc.1"
 description = "The Modular Autonomous Discovery for Science (MADSci) Common Definitions and Utilities."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -53,7 +53,7 @@ otel-instrumentation = [
 
 [project.scripts]
 madsci-backup = "madsci.common.backup_tools.cli:main"
-madsci-mongodb-backup = "madsci.common.backup_tools.cli:main_mongodb_backup"
+madsci-document-db-backup = "madsci.common.backup_tools.document_db_cli:main_document_db_backup"
 madsci-postgres-backup = "madsci.common.backup_tools.postgres_cli:main_postgres_backup"
 
 [project.urls]

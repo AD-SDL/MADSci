@@ -198,6 +198,48 @@ def retry(times=3, delay=1.0):
     return decorator
 ```
 
+## Location Templates
+
+Nodes that interact with physical locations (deck slots, sample positions, waypoints) can declare **location representation templates** to describe the data they need for each location. The framework registers templates with the Location Manager at startup.
+
+```python
+from typing import ClassVar
+from madsci.common.types.node_types import NodeRepresentationTemplateDefinition
+
+class MyNode(RestNode):
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="my_node_access",
+            default_values={"speed": 50.0},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "description": "Coordinates for this location",
+                    },
+                    "speed": {
+                        "type": "number",
+                        "description": "Approach speed",
+                    },
+                },
+                "required": ["position"],
+            },
+            required_overrides=["position"],
+            version="1.0.0",
+        ),
+    ]
+```
+
+- `schema_def` provides a JSON Schema for validation and dashboard form rendering
+- `default_values` are merged with per-location overrides at instantiation
+- `required_overrides` lists fields that must be supplied for each location
+
+For the full guide on representation templates, location templates, seed files, and programmatic usage, see [Location Templates](integrator/10-location-templates.md).
+
 ## Next Steps
 
 1. **Complete the interactive tutorial**: Work through `examples/notebooks/node_notebook.ipynb` thoroughly

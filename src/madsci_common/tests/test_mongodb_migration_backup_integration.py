@@ -1,6 +1,6 @@
-"""Tests for MongoDB migration tools with backup tool composition.
+"""Tests for document database migration tools with backup tool composition.
 
-This test module defines the expected behavior for MongoDB migration tools that use
+This test module defines the expected behavior for document database migration tools that use
 backup tool composition instead of embedded backup functionality.
 """
 
@@ -9,14 +9,14 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from madsci.common.mongodb_migration_tool import (
-    MongoDBMigrator,
+from madsci.common.document_db_migration_tool import (
+    DocumentDBMigrator,
 )
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 
 
-class TestMongoDBMigrationBackupIntegration:
-    """Test MongoDB migration tools with backup tool composition."""
+class TestDocumentDBMigrationBackupIntegration:
+    """Test document database migration tools with backup tool composition."""
 
     @pytest.fixture
     def temp_backup_dir(self):
@@ -26,9 +26,9 @@ class TestMongoDBMigrationBackupIntegration:
 
     @pytest.fixture
     def migration_settings(self, temp_backup_dir):
-        """Create MongoDB migration settings for testing."""
-        return MongoDBMigrationSettings(
-            mongo_db_url="mongodb://localhost:27017",
+        """Create document database migration settings for testing."""
+        return DocumentDBMigrationSettings(
+            document_db_url="mongodb://localhost:27017",
             database="madsci_events",
             backup_dir=temp_backup_dir,
             target_version="1.0.0",
@@ -36,7 +36,7 @@ class TestMongoDBMigrationBackupIntegration:
 
     @pytest.fixture
     def mock_backup_tool(self):
-        """Create mock MongoDB backup tool for testing."""
+        """Create mock document database backup tool for testing."""
         backup_tool = Mock()
         backup_tool.create_backup.return_value = Path("/mock/backup/path")
         backup_tool.restore_from_backup.return_value = None
@@ -53,22 +53,24 @@ class TestMongoDBMigrationBackupIntegration:
         """Test MongoDB migration tool delegates backup operations correctly."""
         # Mock schema file path to avoid auto-detection issues
         with patch(
-            "madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings.get_effective_schema_file_path",
+            "madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings.get_effective_schema_file_path",
             return_value=Path("/mock/schema.json"),
         ):
             with patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
             ) as mock_backup_class:
                 mock_backup_tool = Mock()
                 mock_backup_class.return_value = mock_backup_tool
                 mock_backup_tool.create_backup.return_value = Path("/mock/backup/path")
 
                 with (
-                    patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                    patch("madsci.common.mongodb_migration_tool.MongoClient"),
-                    patch.object(MongoDBMigrator, "apply_schema_migrations"),
+                    patch(
+                        "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                    ),
+                    patch("madsci.common.document_db_migration_tool.MongoClient"),
+                    patch.object(DocumentDBMigrator, "apply_schema_migrations"),
                 ):
-                    migrator = MongoDBMigrator(migration_settings, mock_logger)
+                    migrator = DocumentDBMigrator(migration_settings, mock_logger)
                     migrator.version_checker.record_version = Mock()
                     migrator.version_checker.get_expected_schema_version = Mock(
                         return_value="1.0.0"
@@ -84,8 +86,8 @@ class TestMongoDBMigrationBackupIntegration:
             assert str(created_settings.backup_dir) == str(
                 migration_settings.backup_dir
             )
-            assert str(created_settings.mongo_db_url) == str(
-                migration_settings.mongo_db_url
+            assert str(created_settings.document_db_url) == str(
+                migration_settings.document_db_url
             )
             assert created_settings.database == migration_settings.database
 
@@ -95,7 +97,7 @@ class TestMongoDBMigrationBackupIntegration:
     def test_migration_backup_failure_handling(self, migration_settings, mock_logger):
         """Test MongoDB migration handles backup tool failures gracefully."""
         with patch(
-            "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+            "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
         ) as mock_backup_class:
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
@@ -103,10 +105,12 @@ class TestMongoDBMigrationBackupIntegration:
             mock_backup_tool.create_backup.side_effect = RuntimeError("Backup failed")
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
             ):
-                migrator = MongoDBMigrator(migration_settings, mock_logger)
+                migrator = DocumentDBMigrator(migration_settings, mock_logger)
 
                 # Migration should fail when backup fails
                 with pytest.raises(RuntimeError, match="Backup failed"):
@@ -123,21 +127,23 @@ class TestMongoDBMigrationBackupIntegration:
 
         with (
             patch(
-                "madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings.get_effective_schema_file_path",
+                "madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings.get_effective_schema_file_path",
                 return_value=Path("/mock/schema.json"),
             ),
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
             ) as mock_backup_class,
         ):
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
             ):
-                MongoDBMigrator(migration_settings, mock_logger)
+                DocumentDBMigrator(migration_settings, mock_logger)
 
             # Verify backup tool was created with custom settings
             mock_backup_class.assert_called_once()
@@ -152,18 +158,20 @@ class TestMongoDBMigrationBackupIntegration:
         mock_backup_path = Path("/mock/backup/events_backup_20240101_120000")
 
         with patch(
-            "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+            "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
         ) as mock_backup_class:
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.return_value = mock_backup_path
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
-                patch.object(MongoDBMigrator, "apply_schema_migrations"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
+                patch.object(DocumentDBMigrator, "apply_schema_migrations"),
             ):
-                migrator = MongoDBMigrator(migration_settings, mock_logger)
+                migrator = DocumentDBMigrator(migration_settings, mock_logger)
                 migrator.version_checker.record_version = Mock()
                 migrator.version_checker.get_expected_schema_version = Mock(
                     return_value="1.0.0"
@@ -181,21 +189,25 @@ class TestMongoDBMigrationBackupIntegration:
         mock_backup_path = Path("/mock/backup/events_backup_20240101_120000")
 
         with patch(
-            "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+            "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
         ) as mock_backup_class:
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
             mock_backup_tool.create_backup.return_value = mock_backup_path
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
-                patch.object(MongoDBMigrator, "apply_schema_migrations") as mock_apply,
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
+                patch.object(
+                    DocumentDBMigrator, "apply_schema_migrations"
+                ) as mock_apply,
             ):
                 # Simulate migration failure
                 mock_apply.side_effect = RuntimeError("Migration failed")
 
-                migrator = MongoDBMigrator(migration_settings, mock_logger)
+                migrator = DocumentDBMigrator(migration_settings, mock_logger)
                 migrator.version_checker.get_expected_schema_version = Mock(
                     return_value="1.0.0"
                 )
@@ -219,29 +231,31 @@ class TestMongoDBMigrationBackupIntegration:
         """Test MongoDB backup tool is configured consistently with migration settings."""
         with (
             patch(
-                "madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings.get_effective_schema_file_path",
+                "madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings.get_effective_schema_file_path",
                 return_value=Path("/mock/schema.json"),
             ),
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
             ) as mock_backup_class,
         ):
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
             ):
-                MongoDBMigrator(migration_settings, mock_logger)
+                DocumentDBMigrator(migration_settings, mock_logger)
 
             # Verify backup tool configuration
             mock_backup_class.assert_called_once()
             backup_settings = mock_backup_class.call_args[0][0]
 
             # Check key configuration parameters
-            assert str(backup_settings.mongo_db_url) == str(
-                migration_settings.mongo_db_url
+            assert str(backup_settings.document_db_url) == str(
+                migration_settings.document_db_url
             )
             assert backup_settings.database == migration_settings.database
             assert str(backup_settings.backup_dir) == str(migration_settings.backup_dir)
@@ -253,16 +267,18 @@ class TestMongoDBMigrationBackupIntegration:
     def test_backup_tool_logger_integration(self, migration_settings, mock_logger):
         """Test MongoDB backup tool receives logger from migration tool."""
         with patch(
-            "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+            "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
         ) as mock_backup_class:
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
             ):
-                MongoDBMigrator(migration_settings, mock_logger)
+                DocumentDBMigrator(migration_settings, mock_logger)
 
             # Verify backup tool was passed the logger
             mock_backup_class.assert_called_once()
@@ -275,21 +291,23 @@ class TestMongoDBMigrationBackupIntegration:
 
         with (
             patch(
-                "madsci.common.types.mongodb_migration_types.MongoDBMigrationSettings.get_effective_schema_file_path",
+                "madsci.common.types.document_db_migration_types.DocumentDBMigrationSettings.get_effective_schema_file_path",
                 return_value=Path("/mock/schema.json"),
             ),
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool"
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool"
             ) as mock_backup_class,
         ):
             mock_backup_tool = Mock()
             mock_backup_class.return_value = mock_backup_tool
 
             with (
-                patch("madsci.common.mongodb_migration_tool.MongoDBVersionChecker"),
-                patch("madsci.common.mongodb_migration_tool.MongoClient"),
+                patch(
+                    "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
+                ),
+                patch("madsci.common.document_db_migration_tool.MongoClient"),
             ):
-                MongoDBMigrator(migration_settings, mock_logger)
+                DocumentDBMigrator(migration_settings, mock_logger)
 
             # Verify backup tool configuration
             mock_backup_class.assert_called_once()
@@ -298,8 +316,8 @@ class TestMongoDBMigrationBackupIntegration:
             assert backup_settings.collections is None
 
 
-class TestMongoDBMigrator:
-    """Updated MongoDB migration tests using backup tool mocks."""
+class TestDocumentDBMigrator:
+    """Updated document database migration tests using backup tool mocks."""
 
     @pytest.fixture
     def temp_backup_dir(self):
@@ -309,9 +327,9 @@ class TestMongoDBMigrator:
 
     @pytest.fixture
     def migration_settings(self, temp_backup_dir):
-        """Create MongoDB migration settings for testing."""
-        return MongoDBMigrationSettings(
-            mongo_db_url="mongodb://localhost:27017",
+        """Create document database migration settings for testing."""
+        return DocumentDBMigrationSettings(
+            document_db_url="mongodb://localhost:27017",
             database="madsci_events",
             backup_dir=temp_backup_dir,
             target_version="1.0.0",
@@ -319,7 +337,7 @@ class TestMongoDBMigrator:
 
     @pytest.fixture
     def mock_backup_tool(self):
-        """Create comprehensive mock MongoDB backup tool for testing."""
+        """Create comprehensive mock document database backup tool for testing."""
         backup_tool = Mock()
         backup_tool.create_backup.return_value = Path("/mock/backup/path")
         backup_tool.restore_from_backup.return_value = None
@@ -332,14 +350,14 @@ class TestMongoDBMigrator:
         """Test MongoDB migration workflow with mocked backup tool."""
         with (
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool",
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool",
                 return_value=mock_backup_tool,
             ),
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBVersionChecker"
+                "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
             ) as mock_version_checker_class,
-            patch("madsci.common.mongodb_migration_tool.MongoClient"),
-            patch.object(MongoDBMigrator, "apply_schema_migrations"),
+            patch("madsci.common.document_db_migration_tool.MongoClient"),
+            patch.object(DocumentDBMigrator, "apply_schema_migrations"),
         ):
             mock_version_checker = Mock()
             mock_version_checker_class.return_value = mock_version_checker
@@ -347,7 +365,7 @@ class TestMongoDBMigrator:
             mock_version_checker.get_expected_schema_version.return_value = "1.0.0"
             mock_version_checker.get_database_version.return_value = "0.9.0"
 
-            migrator = MongoDBMigrator(migration_settings)
+            migrator = DocumentDBMigrator(migration_settings)
             migrator.run_migration("1.0.0")
 
         # Verify backup tool interaction
@@ -363,14 +381,14 @@ class TestMongoDBMigrator:
 
         with (
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBBackupTool",
+                "madsci.common.document_db_migration_tool.DocumentDBBackupTool",
                 return_value=mock_backup_tool,
             ),
             patch(
-                "madsci.common.mongodb_migration_tool.MongoDBVersionChecker"
+                "madsci.common.document_db_migration_tool.DocumentDBVersionChecker"
             ) as mock_version_checker_class,
-            patch("madsci.common.mongodb_migration_tool.MongoClient"),
-            patch.object(MongoDBMigrator, "apply_schema_migrations") as mock_apply,
+            patch("madsci.common.document_db_migration_tool.MongoClient"),
+            patch.object(DocumentDBMigrator, "apply_schema_migrations") as mock_apply,
         ):
             mock_version_checker = Mock()
             mock_version_checker_class.return_value = mock_version_checker
@@ -380,7 +398,7 @@ class TestMongoDBMigrator:
             # Simulate migration failure
             mock_apply.side_effect = RuntimeError("Migration failed")
 
-            migrator = MongoDBMigrator(migration_settings)
+            migrator = DocumentDBMigrator(migration_settings)
 
             # Migration should fail and trigger restore
             with pytest.raises(RuntimeError, match="Migration failed"):

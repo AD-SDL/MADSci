@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "An interactive terminal UI experiment using ExperimentTUI modality"
 category: "experiment"
 tags: ["tui", "interactive", "terminal"]
+skills: ["madsci-experiments"]
 
 author: "MADSci Team"
 license: "MIT"

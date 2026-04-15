@@ -2,7 +2,7 @@ name: Mix Colors Workflow
 
 metadata:
   author: Tobias Ginsburg
-  info: Workflow to test feedforward data handling
+  description: Workflow to test feedforward data handling
   version: 0.1
 
 parameters:

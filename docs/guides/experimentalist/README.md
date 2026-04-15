@@ -118,7 +118,7 @@ client.update_status(samples[0].resource_id, "reserved")
 | `experiment_runs` | Experiment metadata and status |
 | `workflow_results` | Workflow execution results |
 | `measurements` | Raw measurement data |
-| `files` | Large data files (MinIO) |
+| `files` | Large data files (SeaweedFS) |
 
 ### Resource Lifecycle
 

@@ -59,7 +59,7 @@ def emit_definition_deprecation_warning(
         f"{migration_hint}\n"
         f"\n"
         f"  For more information, see:\n"
-        f"  https://ad-sdl.github.io/MADSci/guides/migration/\n"
+        f"  https://ad-sdl.github.io/MADSci/migration\n"
     )
 
     warnings.warn(message, MadsciDeprecationWarning, stacklevel=3)
@@ -84,7 +84,7 @@ def emit_auto_write_deprecation_warning(
         f"  to export configuration explicitly.\n"
         f"\n"
         f"  For more information, see:\n"
-        f"  https://ad-sdl.github.io/MADSci/guides/migration_from_definitions/\n"
+        f"  https://ad-sdl.github.io/MADSci/migration-from-definitions\n"
     )
     warnings.warn(message, MadsciDeprecationWarning, stacklevel=3)
 

@@ -1,28 +1,47 @@
 """MADSci Location Manager using AbstractManagerBase."""
 
+import asyncio
+import contextlib
 import warnings
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated, Any, AsyncGenerator, Optional
 
+import yaml
 from classy_fastapi import delete, get, post
 from fastapi import FastAPI, HTTPException
 from fastapi.params import Body
 from madsci.client.resource_client import ResourceClient
 from madsci.common.context import get_current_madsci_context
-from madsci.common.db_handlers import RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
+from madsci.common.document_db_version_checker import (
+    DocumentDBVersionChecker,
+    ensure_schema_indexes,
+)
 from madsci.common.manager_base import AbstractManagerBase
 from madsci.common.ownership import ownership_class
+from madsci.common.settings_dir import walk_up_find
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.common.types.event_types import EventType
 from madsci.common.types.location_types import (
+    CreateLocationFromTemplateRequest,
+    LabLocationConfig,
     Location,
-    LocationDefinition,
+    LocationImportResult,
+    LocationManagement,
     LocationManagerHealth,
     LocationManagerSettings,
+    LocationRepresentationTemplate,
+    LocationTemplate,
+    TransferGraphDetailedResponse,
 )
+from madsci.common.types.resource_types import Slot
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
 from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.location_manager.location_state_handler import LocationStateHandler
 from madsci.location_manager.transfer_planner import TransferPlanner
+from packaging.version import InvalidVersion, Version
 
 # Module-level constants for Body() calls to avoid B008 linting errors
 REPRESENTATION_VAL_BODY = Body(...)
@@ -45,28 +64,97 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         self,
         settings: Optional[LocationManagerSettings] = None,
         redis_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the LocationManager."""
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.redis_connection = redis_connection
-        self.redis_handler = redis_handler
+        self.cache_handler = cache_handler
+        self.document_handler = document_handler
         super().__init__(settings=settings, **kwargs)
 
     def initialize(self, **_kwargs: Any) -> None:
         """Initialize manager-specific components."""
 
+        manager_name = self._resolve_name()
+        manager_id = self.settings.manager_id
+
+        # Skip version validation if external handler was provided (e.g., in tests)
+        if self.document_handler is not None:
+            self.logger.info(
+                "External document handler provided, skipping document DB version validation",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="location",
+                document_handler_external=True,
+            )
+        else:
+            # Production path: validate document DB schema version
+            self.logger.info(
+                "Validating document DB schema version",
+                event_type=EventType.MANAGER_START,
+                manager_name=manager_name,
+                manager_id=manager_id,
+                manager_type="location",
+                document_db=str(self.settings.document_db_url),
+                database_name=self.settings.database_name,
+            )
+
+            schema_file_path = Path(__file__).parent / "schema.json"
+            mig_cfg = DocumentDBMigrationSettings(database=self.settings.database_name)
+            version_checker = DocumentDBVersionChecker(
+                db_url=str(self.settings.document_db_url),
+                database_name=self.settings.database_name,
+                schema_file_path=str(schema_file_path),
+                backup_dir=str(mig_cfg.backup_dir),
+                logger=self.logger,
+            )
+
+            try:
+                version_checker.validate_or_fail()
+                self.logger.info(
+                    "Document DB version validation completed successfully",
+                    event_type=EventType.MANAGER_START,
+                    manager_name=manager_name,
+                    manager_id=manager_id,
+                    manager_type="location",
+                    database_name=self.settings.database_name,
+                )
+            except RuntimeError:
+                self.logger.error(
+                    "DATABASE VERSION MISMATCH DETECTED! SERVER STARTUP ABORTED!",
+                    event_type=EventType.MANAGER_ERROR,
+                    manager_name=manager_name,
+                    manager_id=manager_id,
+                    manager_type="location",
+                    database_name=self.settings.database_name,
+                    exc_info=True,
+                )
+                raise
+
+        # Initialize state handler with dual handlers
         self.state_handler = LocationStateHandler(
             settings=self.settings,
             manager_id=self.settings.manager_id,
             redis_connection=self.redis_connection,
-            redis_handler=self.redis_handler,
+            cache_handler=self.cache_handler,
+            document_handler=self.document_handler,
+        )
+
+        # Ensure all schema-defined indexes exist (idempotent).
+        # This covers in-memory test handlers (which skip validate_or_fail)
+        # and is idempotent with the version checker call for real document DB.
+        schema_file = Path(__file__).parent / "schema.json"
+        ensure_schema_indexes(
+            self.state_handler.document_handler, schema_file, self.logger
         )
 
         # Initialize resource client with resource server URL from context
@@ -74,71 +162,151 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         resource_server_url = context.resource_server_url
         self.resource_client = ResourceClient(resource_server_url=resource_server_url)
 
-        self._initialize_locations()
+        # Register default location container template
+        self._register_default_resource_template()
+
+        # Auto-migration: if document database is empty but cache has old-format data, migrate
+        self._auto_migrate_from_redis()
+
+        # Initialize lab config cache
+        self._lab_config_cache: Optional[LabLocationConfig] = None
+        self._lab_config_mtime: Optional[float] = None
+
+        # Reconciliation diagnostics (reset on restart)
+        self._last_reconciliation_at: Optional[str] = None
+        self._last_reconciliation_results: Optional[dict[str, Any]] = None
+
+        # Reconcile lab config file on startup
+        self._reconcile_lab_config()
+
         self.transfer_planner = TransferPlanner(
             state_handler=self.state_handler,
             transfer_capabilities=self.settings.transfer_capabilities,
             resource_client=self.resource_client,
         )
 
-    def _initialize_locations(self) -> None:
-        """Initialize locations from settings, creating or updating them in the state handler."""
-        locations = self.settings.locations or []
+    def _register_default_resource_template(self) -> None:
+        """Register a default location container template with the resource manager.
 
-        if not locations:
+        This provides a generic Slot template that locations can reference via
+        ``resource_template_name`` in seed files, ensuring container resources
+        are created even before node-specific templates are registered.
+        """
+        try:
+            location_slot = Slot(
+                resource_name="location_container",
+                resource_class="LocationContainer",
+                capacity=1,
+                attributes={
+                    "slot_type": "location_container",
+                    "description": "Default container resource for a lab location",
+                },
+            )
+            self.resource_client.init_template(
+                resource=location_slot,
+                template_name="location_container",
+                description="Default container resource for a lab location. Holds a single discrete item (e.g. a plate).",
+                required_overrides=["resource_name"],
+                tags=["location", "container", "slot"],
+                version="1.0.0",
+            )
+        except Exception as e:
             self.logger.warning(
-                "No locations configured in settings. "
-                "Ensure 'location_locations' is defined in settings.yaml "
-                "or location.settings.yaml, and that these files are "
-                "accessible from the current working directory or via "
-                "MADSCI_SETTINGS_DIR.",
-                event_type=EventType.LOCATION_UPDATE,
+                "Failed to register default location container template",
+                error=str(e),
             )
 
-        for location_def in locations:
-            # Check if location already exists
-            existing_location = self.state_handler.get_location(
-                location_def.location_id
+    def create_server(self, **kwargs: Any) -> FastAPI:
+        """Create the FastAPI server with the reconciliation lifespan.
+
+        Overrides the base class to ensure the periodic reconciliation loop
+        is always started, regardless of whether the server is launched via
+        ``run_server()`` or ``create_app()``.
+        """
+        kwargs.setdefault("lifespan", self._lifespan)
+        app = super().create_server(**kwargs)
+        app.state.manager = self
+        return app
+
+    @asynccontextmanager
+    async def _lifespan(self, _app: FastAPI) -> AsyncGenerator[None, None]:
+        """Application lifespan that runs the background reconciliation loop."""
+        task = None
+
+        if self.settings.reconciliation_enabled:
+
+            async def reconciliation_loop() -> None:
+                interval = self.settings.reconciliation_interval_seconds
+                while True:
+                    await asyncio.sleep(interval)
+                    try:
+                        self._reconcile()
+                    except Exception:
+                        self.logger.warning(
+                            "Background reconciliation failed",
+                            exc_info=True,
+                        )
+
+            task = asyncio.create_task(reconciliation_loop())
+
+        yield
+
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    def _auto_migrate_from_redis(self) -> None:
+        """Auto-migrate locations from old Redis format to document database if document database is empty."""
+        existing_locations = self.state_handler.get_locations()
+        if existing_locations:
+            return  # Document database already has data, skip migration
+
+        # Check if cache has data at the old key prefix
+        old_prefix = f"madsci:location_manager:{self.settings.manager_id}"
+        old_dict_key = f"{old_prefix}:locations"
+        try:
+            old_locations = self.state_handler._cache_handler.create_dict(old_dict_key)
+            if not old_locations:
+                return  # No old cache data either
+
+            self.logger.warning(
+                "Auto-migrating locations from cache to document database. "
+                "This is a one-time migration from the 0.7.1 format.",
+                event_type=EventType.MANAGER_START,
+                manager_id=self.settings.manager_id,
             )
 
-            # Handle resource creation/initialization if resource_template_name is provided
-            resource_id = existing_location.resource_id if existing_location else None
-            if location_def.resource_template_name:
-                if existing_location and existing_location.resource_id:
-                    # Location exists and has a resource, validate it still exists and matches template
-                    resource_id = self._validate_or_recreate_location_resource(
-                        location_def, existing_location.resource_id
+            migrated_count = 0
+            for _name, loc_data in old_locations.to_dict().items():
+                try:
+                    location = Location.model_validate(loc_data)
+                    result = self.state_handler.add_location(location)
+                    if result is not None:
+                        migrated_count += 1
+                except Exception as e:
+                    self.logger.warning(
+                        "Failed to migrate location from cache",
+                        location_data=str(loc_data),
+                        error=str(e),
                     )
-                else:
-                    # Location doesn't exist or has no resource, create new one
-                    resource_id = self._initialize_location_resource(location_def)
 
-            # Convert LocationDefinition to Location
-            location = Location(
-                location_id=location_def.location_id,
-                location_name=location_def.location_name,
-                description=location_def.description,
-                representations=location_def.representations or None,
-                resource_id=resource_id,  # Associate the resource with the location
-                allow_transfers=location_def.allow_transfers,
-            )
-
-            self.state_handler.set_location(location.location_id, location)
-
-        if locations:
             self.logger.info(
-                "Initialized locations from settings",
-                event_type=EventType.LOCATION_UPDATE,
-                num_locations=len(locations),
+                "Cache to document database migration completed",
+                event_type=EventType.MANAGER_START,
+                migrated_count=migrated_count,
+            )
+        except Exception as e:
+            self.logger.debug(
+                "No legacy cache data to migrate (expected on fresh installs)",
+                error=str(e),
             )
 
-    def _initialize_location_resource(
-        self, location_def: LocationDefinition
-    ) -> Optional[str]:
+    def _initialize_location_resource(self, location_def: Location) -> Optional[str]:
         """Initialize a resource for a location based on its resource_template_name.
 
         Args:
-            location_def: LocationDefinition containing the resource_template_name and optional overrides
+            location_def: Location containing the resource_template_name and optional overrides
 
         Returns:
             Optional[str]: The resource_id of the created resource, or None if no resource created
@@ -176,12 +344,12 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         return None
 
     def _validate_or_recreate_location_resource(
-        self, location_def: LocationDefinition, existing_resource_id: str
+        self, location_def: Location, existing_resource_id: str
     ) -> Optional[str]:
         """Check if existing resource still exists. If so, reuse it. If not, create a new one.
 
         Args:
-            location_def: LocationDefinition containing the resource_template_name and overrides
+            location_def: Location containing the resource_template_name and overrides
             existing_resource_id: The existing resource ID to validate
 
         Returns:
@@ -230,15 +398,47 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         health = LocationManagerHealth()
 
         try:
-            # Test Redis connection if configured
-            if hasattr(self.state_handler, "_redis_handler"):
-                health.redis_connected = self.state_handler._redis_handler.ping()
+            # Test document DB connection
+            if hasattr(self.state_handler, "_document_handler"):
+                health.document_db_connected = (
+                    self.state_handler._document_handler.ping()
+                )
             else:
-                health.redis_connected = None
+                health.document_db_connected = None
 
-            # Count managed locations
-            locations = self.state_handler.get_locations()
-            health.num_locations = len(locations)
+            # Test cache connection if configured
+            if hasattr(self.state_handler, "_cache_handler"):
+                health.cache_connected = self.state_handler._cache_handler.ping()
+            else:
+                health.cache_connected = None
+
+            # Count managed locations and templates using efficient count queries
+            health.num_locations = self.state_handler.count_locations()
+            health.num_representation_templates = (
+                self.state_handler.count_representation_templates()
+            )
+            health.num_location_templates = (
+                self.state_handler.count_location_templates()
+            )
+            health.num_unresolved_locations = (
+                self.state_handler.count_unresolved_locations()
+            )
+
+            # Count by management type (efficient DB-level aggregation)
+            health.num_node_managed_locations = (
+                self.state_handler.count_locations_by_managed_by(
+                    LocationManagement.NODE.value
+                )
+            )
+            health.num_lab_managed_locations = (
+                self.state_handler.count_locations_by_managed_by(
+                    LocationManagement.LAB.value
+                )
+            )
+
+            health.last_reconciliation_at = getattr(
+                self, "_last_reconciliation_at", None
+            )
 
             health.healthy = True
             health.description = "Location Manager is running normally"
@@ -246,28 +446,86 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         except Exception as e:
             health.healthy = False
             if "redis" in str(e).lower():
-                health.redis_connected = False
+                health.cache_connected = False
+            if "mongo" in str(e).lower() or "document" in str(e).lower():
+                health.document_db_connected = False
             health.description = f"Health check failed: {e!s}"
 
         return health
 
+    def close(self) -> None:
+        """Override to close state handler and release DB connections."""
+        if hasattr(self, "state_handler"):
+            self.state_handler.close()
+        super().close()
+
     @get("/locations", tags=["Locations"])
-    def get_locations(self) -> list[Location]:
-        """Get all locations."""
-        return self.state_handler.get_locations()
+    def get_locations(
+        self, managed_by: Optional[LocationManagement] = None
+    ) -> list[Location]:
+        """Get all locations, optionally filtered by management type."""
+        locations = self.state_handler.get_locations()
+        if managed_by is not None:
+            locations = [loc for loc in locations if loc.managed_by == managed_by]
+        return locations
 
     @post("/location", tags=["Locations"])
     def add_location(self, location: Location) -> Location:
         """Add a new location."""
         with self.span(
             "location.create",
-            attributes={"location.id": location.location_id},
+            attributes={"location.name": location.location_name},
         ):
-            result = self.state_handler.set_location(location.location_id, location)
+            if location.resource_id is not None:
+                resource_id = self._validate_or_recreate_location_resource(
+                    location, location.resource_id
+                )
+            else:
+                resource_id = self._initialize_location_resource(location)
+            location.resource_id = resource_id
+            result = self.state_handler.add_location(location)
+
+            if result is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Location with name '{location.location_name}' already exists",
+                )
+
             # Rebuild transfer graph since new location may affect transfer capabilities
             self.transfer_planner.rebuild_transfer_graph()
 
             return result
+
+    @post("/location/init", tags=["Locations"])
+    def init_location(self, location: Location) -> Location:
+        """Idempotent init: get-or-create a location.
+
+        If a location with the given name exists, return it unchanged.
+        If it does not exist, create it with lazy resource resolution.
+        """
+        with self.span(
+            "location.init",
+            attributes={"location.name": location.location_name},
+        ):
+            existing = self.state_handler.get_location(location.location_name)
+            if existing is not None:
+                return existing
+
+            # Initialize resource if template specified (lazy tolerance on failure)
+            try:
+                location.resource_id = self._initialize_location_resource(location)
+            except Exception:
+                location.resource_id = None
+                self.logger.info(
+                    "Resource template not available, will reconcile later",
+                    resource_template_name=location.resource_template_name,
+                    location_name=location.location_name,
+                )
+
+            self.state_handler.add_location(location)
+            # Rebuild transfer graph since new location may participate in transfers
+            self.transfer_planner.rebuild_transfer_graph()
+            return location
 
     @get("/location", tags=["Locations"])
     def get_location_by_query(
@@ -283,7 +541,7 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         if location_id is not None:
             # Search by ID
-            location = self.state_handler.get_location(location_id)
+            location = self.state_handler.get_location_by_id(location_id)
             if location is None:
                 raise HTTPException(
                     status_code=404,
@@ -291,83 +549,88 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
                 )
             return location
         # Search by name
-        locations = self.state_handler.get_locations()
-        for location in locations:
-            if location.name == name:
-                return location
+        location = self.state_handler.get_location(name)
+        if location is not None:
+            return location
         raise HTTPException(
             status_code=404, detail=f"Location with name '{name}' not found"
         )
 
-    @get("/location/{location_id}", tags=["Locations"])
-    def get_location_by_id(self, location_id: str) -> Location:
-        """Get a specific location by ID."""
-        location = self.state_handler.get_location(location_id)
-        if location is None:
-            raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
-            )
+    @get("/location/{location_name}", tags=["Locations"])
+    def get_location(self, location_name: str) -> Location:
+        """Get a specific location by name."""
+        with self.span(
+            "location.get",
+            attributes={"location.name": location_name},
+        ):
+            location = self.state_handler.get_location(location_name)
+
+            if location is None:
+                raise HTTPException(
+                    status_code=404, detail=f"Location {location_name} not found"
+                )
         return location
 
-    @delete("/location/{location_id}", tags=["Locations"])
-    def delete_location(self, location_id: str) -> dict[str, str]:
-        """Delete a specific location by ID."""
-        success = self.state_handler.delete_location(location_id)
+    @delete("/location/{location_name}", tags=["Locations"])
+    def delete_location(self, location_name: str) -> dict[str, str]:
+        """Delete a specific location by name."""
+        success = self.state_handler.delete_location(location_name)
         if not success:
             raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
+                status_code=404, detail=f"Location {location_name} not found"
             )
         # Rebuild transfer graph since deleted location affects transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
-        return {"message": f"Location {location_id} deleted successfully"}
+        return {"message": f"Location {location_name} deleted successfully"}
 
-    @post("/location/{location_id}/set_representation/{node_name}", tags=["Locations"])
-    def set_representations(
+    @post(
+        "/location/{location_name}/set_representation/{node_name}", tags=["Locations"]
+    )
+    def set_representation(
         self,
-        location_id: str,
+        location_name: str,
         node_name: str,
         representation_val: Annotated[Any, REPRESENTATION_VAL_BODY],
     ) -> Location:
         """Set representations for a location for a specific node."""
-        location = self.state_handler.get_location(location_id)
+        location = self.state_handler.get_location(location_name)
+
         if location is None:
             raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
+                status_code=404, detail=f"Location {location_name} not found"
             )
 
         # Update the location with new representations
-        if location.representations is None:
+        if not location.representations:
             location.representations = {}
         location.representations[node_name] = representation_val
 
-        result = self.state_handler.update_location(location_id, location)
+        result = self.state_handler.update_location(location)
         # Rebuild transfer graph since representations affect transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
         return result
 
     @delete(
-        "/location/{location_id}/remove_representation/{node_name}", tags=["Locations"]
+        "/location/{location_name}/remove_representation/{node_name}",
+        tags=["Locations"],
     )
     def remove_representation(
         self,
-        location_id: str,
+        location_name: str,
         node_name: str,
     ) -> Location:
         """Remove representations for a location for a specific node."""
-        location = self.state_handler.get_location(location_id)
+        location = self.state_handler.get_location(location_name)
         if location is None:
             raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
+                status_code=404, detail=f"Location {location_name} not found"
             )
 
-        # Check if representations exist and if the node_name exists
-        if (
-            location.representations is None
-            or node_name not in location.representations
-        ):
+        # Check if the node_name exists in representations
+        if node_name not in location.representations:
             raise HTTPException(
                 status_code=404,
-                detail=f"Representation for node '{node_name}' not found in location {location_id}",
+                detail=f"Representation for node '{node_name}' not found in location {location_name}",
             )
 
         # Remove the representation for the specified node
@@ -377,54 +640,54 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         if not location.representations:
             location.representations = {}
 
-        result = self.state_handler.update_location(location_id, location)
+        result = self.state_handler.update_location(location)
         # Rebuild transfer graph since representations affect transfer capabilities
         self.transfer_planner.rebuild_transfer_graph()
         return result
 
-    @post("/location/{location_id}/attach_resource", tags=["Locations"])
+    @post("/location/{location_name}/attach_resource", tags=["Locations"])
     def attach_resource(
         self,
-        location_id: str,
+        location_name: str,
         resource_id: str,
     ) -> Location:
         """Attach a resource to a location."""
         with self.span(
             "attachment.create",
             attributes={
-                "location.id": location_id,
+                "location.name": location_name,
                 "resource.id": resource_id,
             },
         ):
-            location = self.state_handler.get_location(location_id)
+            location = self.state_handler.get_location(location_name)
             if location is None:
                 raise HTTPException(
-                    status_code=404, detail=f"Location {location_id} not found"
+                    status_code=404, detail=f"Location {location_name} not found"
                 )
 
             location.resource_id = resource_id
 
             # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
             # The definition uses resource_template_name for resource initialization
-            return self.state_handler.update_location(location_id, location)
+            return self.state_handler.update_location(location)
 
-    @delete("/location/{location_id}/detach_resource", tags=["Locations"])
+    @delete("/location/{location_name}/detach_resource", tags=["Locations"])
     def detach_resource(
         self,
-        location_id: str,
+        location_name: str,
     ) -> Location:
         """Detach the resource from a location."""
-        location = self.state_handler.get_location(location_id)
+        location = self.state_handler.get_location(location_name)
         if location is None:
             raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
+                status_code=404, detail=f"Location {location_name} not found"
             )
 
         # Check if location has a resource attached
         if location.resource_id is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"No resource attached to location {location_id}",
+                detail=f"No resource attached to location {location_name}",
             )
 
         # Detach the resource
@@ -432,7 +695,691 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
 
         # Note: We don't sync resource_id changes to definition as resource_id is runtime-only
         # The definition uses resource_template_name for resource initialization
-        return self.state_handler.update_location(location_id, location)
+        return self.state_handler.update_location(location)
+
+    @post("/locations/import", tags=["Locations"])
+    def import_locations(
+        self, locations: list[Location], overwrite: bool = False
+    ) -> LocationImportResult:
+        """Import multiple locations in bulk.
+
+        Parameters
+        ----------
+        locations:
+            List of Location objects to import.
+        overwrite:
+            If True, overwrite existing locations with the same name.
+            If False (default), skip duplicates.
+
+        Returns
+        -------
+        LocationImportResult with counts and imported locations.
+        """
+        result = LocationImportResult()
+        for location in locations:
+            try:
+                existing = self.state_handler.get_location(location.location_name)
+                if existing is not None:
+                    if overwrite:
+                        # Update the existing location, preserving the existing ID
+                        location.location_id = existing.location_id
+                        self.state_handler.update_location(location)
+                        result.imported += 1
+                        result.locations.append(location)
+                    else:
+                        result.skipped += 1
+                else:
+                    added = self.state_handler.add_location(location)
+                    if added is not None:
+                        result.imported += 1
+                        result.locations.append(added)
+                    else:
+                        result.skipped += 1
+            except Exception as e:
+                result.errors.append(
+                    f"Error importing location '{location.location_name}': {e!s}"
+                )
+
+        # Rebuild transfer graph after bulk import
+        if result.imported > 0:
+            self.transfer_planner.rebuild_transfer_graph()
+
+        return result
+
+    @get("/locations/export", tags=["Locations"])
+    def export_locations(self) -> list[Location]:
+        """Export all locations as a JSON list.
+
+        Semantically distinct from GET /locations for import/export workflows.
+        """
+        return self.state_handler.get_locations()
+
+    # --- Representation Template Endpoints ---
+
+    @get("/representation_templates", tags=["Representation Templates"])
+    def get_representation_templates(self) -> list[LocationRepresentationTemplate]:
+        """Get all representation templates."""
+        return self.state_handler.get_representation_templates()
+
+    @get(
+        "/representation_template/{template_name}",
+        tags=["Representation Templates"],
+    )
+    def get_representation_template(
+        self, template_name: str
+    ) -> LocationRepresentationTemplate:
+        """Get a representation template by name."""
+        template = self.state_handler.get_representation_template(template_name)
+        if template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Representation template '{template_name}' not found",
+            )
+        return template
+
+    @post("/representation_template", tags=["Representation Templates"])
+    def create_representation_template(
+        self, template: LocationRepresentationTemplate
+    ) -> LocationRepresentationTemplate:
+        """Create a new representation template."""
+        result = self.state_handler.add_representation_template(template)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Representation template '{template.template_name}' already exists",
+            )
+        return result
+
+    @post("/representation_template/init", tags=["Representation Templates"])
+    def init_representation_template(
+        self, template: LocationRepresentationTemplate
+    ) -> LocationRepresentationTemplate:
+        """Idempotent init: get-or-create, version-update.
+
+        If template exists with same version, return it unchanged.
+        If template exists with different version, update and return.
+        If template doesn't exist, create and return.
+        """
+        existing = self.state_handler.get_representation_template(
+            template.template_name
+        )
+
+        if existing is None:
+            # Create new
+            result = self.state_handler.add_representation_template(template)
+            if result is None:
+                # Race condition: another request created it
+                result = self.state_handler.get_representation_template(
+                    template.template_name
+                )
+                if result is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to create or retrieve representation template '{template.template_name}'",
+                    )
+                return result
+            # Mark state dirty so background reconciliation picks up locations referencing this template
+            self.state_handler.mark_state_changed()
+            return result
+
+        if existing.version == template.version:
+            # Same version, return existing
+            return existing
+
+        # Version differs, update
+        template.template_id = existing.template_id
+        template.updated_at = datetime.now(timezone.utc)
+        result = self.state_handler.update_representation_template(template)
+        # Mark state dirty so background reconciliation picks up locations referencing this template
+        self.state_handler.mark_state_changed()
+        return result
+
+    @delete(
+        "/representation_template/{template_name}",
+        tags=["Representation Templates"],
+    )
+    def delete_representation_template(self, template_name: str) -> dict[str, str]:
+        """Delete a representation template by name."""
+        success = self.state_handler.delete_representation_template(template_name)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Representation template '{template_name}' not found",
+            )
+        return {
+            "message": f"Representation template '{template_name}' deleted successfully"
+        }
+
+    # --- Location Template Endpoints ---
+
+    @get("/location_templates", tags=["Location Templates"])
+    def get_location_templates(self) -> list[LocationTemplate]:
+        """Get all location templates."""
+        return self.state_handler.get_location_templates()
+
+    @get("/location_template/{template_name}", tags=["Location Templates"])
+    def get_location_template(self, template_name: str) -> LocationTemplate:
+        """Get a location template by name."""
+        template = self.state_handler.get_location_template(template_name)
+        if template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{template_name}' not found",
+            )
+        return template
+
+    @post("/location_template", tags=["Location Templates"])
+    def create_location_template(self, template: LocationTemplate) -> LocationTemplate:
+        """Create a new location template."""
+        result = self.state_handler.add_location_template(template)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Location template '{template.template_name}' already exists",
+            )
+        return result
+
+    @post("/location_template/init", tags=["Location Templates"])
+    def init_location_template(self, template: LocationTemplate) -> LocationTemplate:
+        """Idempotent init: get-or-create, version-update.
+
+        If template exists with same version, return it unchanged.
+        If template exists with different version, update and return.
+        If template doesn't exist, create and return.
+        """
+        existing = self.state_handler.get_location_template(template.template_name)
+
+        if existing is None:
+            result = self.state_handler.add_location_template(template)
+            if result is None:
+                result = self.state_handler.get_location_template(
+                    template.template_name
+                )
+                if result is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Failed to create or retrieve location template '{template.template_name}'",
+                    )
+                return result
+            return result
+
+        if existing.version == template.version:
+            return existing
+
+        template.template_id = existing.template_id
+        template.updated_at = datetime.now(timezone.utc)
+        return self.state_handler.update_location_template(template)
+
+    @delete("/location_template/{template_name}", tags=["Location Templates"])
+    def delete_location_template(self, template_name: str) -> dict[str, str]:
+        """Delete a location template by name."""
+        success = self.state_handler.delete_location_template(template_name)
+        if not success:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{template_name}' not found",
+            )
+        return {"message": f"Location template '{template_name}' deleted successfully"}
+
+    # --- Create Location from Template ---
+
+    @post("/location/from_template", tags=["Location Templates"])
+    def create_location_from_template(
+        self, request: CreateLocationFromTemplateRequest
+    ) -> Location:
+        """Create a new location by instantiating a LocationTemplate.
+
+        Requires node bindings to map abstract roles to concrete node instance names.
+        Representation data is merged from template defaults + overrides.
+        """
+        return self._create_location_from_template(request)
+
+    def _create_location_from_template(
+        self, request: CreateLocationFromTemplateRequest
+    ) -> Location:
+        """Internal implementation for creating a location from a template."""
+        # Look up the location template
+        loc_template = self.state_handler.get_location_template(request.template_name)
+        if loc_template is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Location template '{request.template_name}' not found",
+            )
+
+        # Build representations by merging template defaults with overrides
+        representations: dict[str, Any] = {}
+        for role, repr_template_name in loc_template.representation_templates.items():
+            node_name = request.node_bindings.get(role)
+            if node_name is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Missing node binding for role '{role}'",
+                )
+
+            # Look up representation template
+            repr_template = self.state_handler.get_representation_template(
+                repr_template_name
+            )
+
+            overrides = request.representation_overrides.get(role, {})
+
+            if repr_template is not None:
+                # Validate required overrides are provided
+                missing = [
+                    field
+                    for field in repr_template.required_overrides
+                    if field not in overrides
+                ]
+                if missing:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Missing required overrides for role '{role}' "
+                        f"(repr template '{repr_template_name}'): {missing}",
+                    )
+
+                # Merge defaults + overrides (overrides win)
+                merged = {**repr_template.default_values, **overrides}
+            else:
+                # Template doesn't exist yet (lazy tolerance)
+                merged = overrides
+
+            representations[node_name] = merged
+
+        # Determine resource template
+        resource_template_name = loc_template.resource_template_name
+        resource_template_overrides = loc_template.resource_template_overrides or {}
+        if request.resource_template_overrides:
+            resource_template_overrides = {
+                **resource_template_overrides,
+                **request.resource_template_overrides,
+            }
+
+        # Determine allow_transfers
+        allow_transfers = (
+            request.allow_transfers
+            if request.allow_transfers is not None
+            else loc_template.default_allow_transfers
+        )
+
+        # Create the location
+        location = Location(
+            location_name=request.location_name,
+            description=request.description,
+            representations=representations,
+            resource_template_name=resource_template_name,
+            resource_template_overrides=resource_template_overrides or None,
+            allow_transfers=allow_transfers,
+            location_template_name=request.template_name,
+            node_bindings=request.node_bindings,
+        )
+
+        # Attempt resource creation (lazy: set to None if template doesn't exist yet)
+        try:
+            location.resource_id = self._initialize_location_resource(location)
+        except Exception:
+            location.resource_id = None
+            self.logger.info(
+                "Resource template not available yet, will reconcile later",
+                resource_template_name=resource_template_name,
+                location_name=request.location_name,
+            )
+
+        # Store the location
+        result = self.state_handler.add_location(location)
+        if result is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Location '{request.location_name}' already exists",
+            )
+
+        # Rebuild transfer graph
+        self.transfer_planner.rebuild_transfer_graph()
+
+        return result
+
+    @post("/reconcile", tags=["Reconciliation"])
+    def trigger_reconcile(self) -> dict[str, Any]:
+        """Manually trigger reconciliation of unresolved template references."""
+        return self._reconcile()
+
+    @get("/reconciliation/status", tags=["Reconciliation"])
+    def get_reconciliation_status(self) -> dict[str, Any]:
+        """Get the status of the last reconciliation cycle."""
+        return {
+            "last_reconciliation_at": getattr(self, "_last_reconciliation_at", None),
+            "last_results": getattr(self, "_last_reconciliation_results", None),
+            "reconciliation_enabled": self.settings.reconciliation_enabled,
+            "reconciliation_interval_seconds": self.settings.reconciliation_interval_seconds,
+            "lab_config_file": self.settings.lab_config_file,
+        }
+
+    def _reconcile_lab_config(self) -> dict[str, Any]:
+        """Reconcile the lab config file with the live database.
+
+        Reads the lab config file, caches by mtime. Processes:
+        1. Representation templates (init, version-update)
+        2. Location templates (init, version-update)
+        3. Locations (init, get-or-create with managed_by=LAB)
+        4. Training entries (set_representation on existing locations)
+
+        Returns counts of actions taken.
+        """
+        results: dict[str, Any] = {
+            "templates_synced": 0,
+            "locations_synced": 0,
+            "training_applied": 0,
+            "training_skipped": 0,
+        }
+
+        config = self._load_lab_config()
+        if config is None:
+            return results
+
+        results["templates_synced"] += self._sync_representation_templates(config)
+        results["templates_synced"] += self._sync_location_templates(config)
+        results["locations_synced"] = self._sync_locations(config)
+        applied, skipped = self._apply_training(config)
+        results["training_applied"] = applied
+        results["training_skipped"] = skipped
+
+        # Rebuild transfer graph if anything changed
+        if results["locations_synced"] > 0 or results["training_applied"] > 0:
+            self._rebuild_transfer_graph()
+
+        return results
+
+    def _load_lab_config(self) -> Optional[LabLocationConfig]:
+        """Load and cache the lab config file, returning None if unavailable."""
+        if not self.settings.lab_config_file:
+            return None
+
+        config_path = Path(self.settings.lab_config_file)
+        if not config_path.is_absolute():
+            resolved = walk_up_find(self.settings.lab_config_file, Path.cwd())
+            if resolved is not None:
+                config_path = resolved
+
+        if not config_path.exists():
+            return None
+
+        current_mtime = config_path.stat().st_mtime
+        if (
+            self._lab_config_mtime == current_mtime
+            and self._lab_config_cache is not None
+        ):
+            return self._lab_config_cache
+
+        with config_path.open() as f:
+            raw = yaml.safe_load(f) or {}
+        config = LabLocationConfig.model_validate(raw)
+        self._lab_config_cache = config
+        self._lab_config_mtime = current_mtime
+        return config
+
+    @staticmethod
+    def _is_newer_version(new_version: str, existing_version: str) -> bool:
+        """Return True if new_version is strictly greater than existing_version.
+
+        Uses semantic version comparison when possible, falls back to string
+        inequality for non-semver version strings.
+        """
+        try:
+            return Version(new_version) > Version(existing_version)
+        except InvalidVersion:
+            return new_version != existing_version
+
+    def _sync_representation_templates(self, config: LabLocationConfig) -> int:
+        """Sync representation templates from lab config. Returns count of templates synced."""
+        count = 0
+        for tmpl in config.representation_templates:
+            try:
+                existing = self.state_handler.get_representation_template(
+                    tmpl.template_name
+                )
+                if existing is None:
+                    self.state_handler.add_representation_template(tmpl)
+                    count += 1
+                elif self._is_newer_version(tmpl.version, existing.version):
+                    tmpl.template_id = existing.template_id
+                    tmpl.updated_at = datetime.now(timezone.utc)
+                    self.state_handler.update_representation_template(tmpl)
+                    count += 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to sync representation template",
+                    template_name=tmpl.template_name,
+                    exc_info=True,
+                )
+        return count
+
+    def _sync_location_templates(self, config: LabLocationConfig) -> int:
+        """Sync location templates from lab config. Returns count of templates synced."""
+        count = 0
+        for tmpl in config.location_templates:
+            try:
+                existing = self.state_handler.get_location_template(tmpl.template_name)
+                if existing is None:
+                    self.state_handler.add_location_template(tmpl)
+                    count += 1
+                elif self._is_newer_version(tmpl.version, existing.version):
+                    tmpl.template_id = existing.template_id
+                    tmpl.updated_at = datetime.now(timezone.utc)
+                    self.state_handler.update_location_template(tmpl)
+                    count += 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to sync location template",
+                    template_name=tmpl.template_name,
+                    exc_info=True,
+                )
+        return count
+
+    def _sync_locations(self, config: LabLocationConfig) -> int:
+        """Sync locations from lab config (get-or-create with managed_by=LAB). Returns count synced."""
+        count = 0
+        for loc in config.locations:
+            try:
+                existing = self.state_handler.get_location(loc.location_name)
+                if existing is None:
+                    loc.managed_by = LocationManagement.LAB
+                    if loc.resource_template_name:
+                        try:
+                            loc.resource_id = self._initialize_location_resource(loc)
+                        except Exception:
+                            loc.resource_id = None
+                            self.logger.info(
+                                "Resource template not available during sync, will reconcile later",
+                                resource_template_name=loc.resource_template_name,
+                                location_name=loc.location_name,
+                            )
+                    self.state_handler.add_location(loc)
+                    count += 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to sync location",
+                    location_name=loc.location_name,
+                    exc_info=True,
+                )
+        return count
+
+    def _apply_training(self, config: LabLocationConfig) -> tuple[int, int]:
+        """Apply training entries from lab config. Returns (applied, skipped) counts."""
+        applied = 0
+        skipped = 0
+        for entry in config.training:
+            try:
+                location = self.state_handler.get_location(entry.location_name)
+                if location is None:
+                    skipped += 1
+                    continue
+
+                repr_data = dict(entry.overrides)
+                if entry.representation_template_name:
+                    tmpl = self.state_handler.get_representation_template(
+                        entry.representation_template_name
+                    )
+                    if tmpl is not None:
+                        repr_data = {**tmpl.default_values, **entry.overrides}
+
+                current = location.representations.get(entry.node_name)
+                if current != repr_data:
+                    if not location.representations:
+                        location.representations = {}
+                    location.representations[entry.node_name] = repr_data
+                    self.state_handler.update_location(location)
+                    applied += 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to apply training",
+                    location_name=entry.location_name,
+                    node_name=entry.node_name,
+                    exc_info=True,
+                )
+        return applied, skipped
+
+    def _rebuild_transfer_graph(self) -> None:
+        """Rebuild the transfer graph if the transfer planner is initialized."""
+        if self.transfer_planner is not None:
+            self.transfer_planner.rebuild_transfer_graph()
+
+    def _reconcile(self) -> dict[str, Any]:
+        """Reconcile unresolved locations and lab config.
+
+        - Reconciles lab config file (templates, locations, training).
+        - Resolves null resource_ids when resource templates become available.
+        - Fills in missing representation data when repr templates arrive.
+
+        Returns a summary of what was reconciled.
+        """
+        # First: reconcile lab config file
+        lab_results = self._reconcile_lab_config()
+
+        # Then: existing reconciliation (resources, representations)
+        results: dict[str, Any] = {
+            "resources_resolved": 0,
+            "representations_updated": 0,
+        }
+
+        for location in self.state_handler.get_unresolved_locations():
+            results["resources_resolved"] += self._reconcile_resource(location)
+            results["representations_updated"] += self._reconcile_representations(
+                location
+            )
+
+        if results["resources_resolved"] > 0 or results["representations_updated"] > 0:
+            self.logger.info("Reconciliation completed", **results)
+
+        # Merge lab config results
+        results.update(lab_results)
+
+        # Store reconciliation diagnostics
+        self._last_reconciliation_at = datetime.now(timezone.utc).isoformat()
+        self._last_reconciliation_results = results
+
+        return results
+
+    def _reconcile_resource(self, location: Location) -> int:
+        """Attempt to resolve a null resource_id for a location. Returns 1 if resolved, 0 otherwise."""
+        if not location.resource_template_name or location.resource_id is not None:
+            return 0
+        try:
+            resource_id = self._initialize_location_resource(location)
+            if resource_id is not None:
+                location.resource_id = resource_id
+                self.state_handler.update_location(location)
+                return 1
+        except Exception:
+            self.logger.debug(
+                "Resource template still not available",
+                resource_template_name=location.resource_template_name,
+                location_name=location.location_name,
+            )
+        return 0
+
+    def _merge_template_representations(
+        self, location: Location, loc_template: LocationTemplate
+    ) -> bool:
+        """Merge representation template defaults into a location's representations.
+
+        For each role in the location template, looks up the representation template
+        and merges its default values with the location's existing representation data.
+        Existing user data is preserved (defaults only fill in missing keys).
+
+        Returns True if any representations were updated, False otherwise.
+        """
+        if location.node_bindings is None:
+            return False
+
+        updated = False
+        for role, repr_template_name in loc_template.representation_templates.items():
+            node_name = location.node_bindings.get(role)
+            if node_name is None:
+                continue
+
+            repr_template = self.state_handler.get_representation_template(
+                repr_template_name
+            )
+            if repr_template is None:
+                continue
+
+            current_repr = location.representations.get(node_name, {})
+            merged = {**repr_template.default_values, **current_repr}
+            if merged != current_repr:
+                location.representations[node_name] = merged
+                updated = True
+
+        return updated
+
+    def _reconcile_representations(self, location: Location) -> int:
+        """Fill in missing representation defaults from templates. Returns 1 if updated, 0 otherwise."""
+        if not location.location_template_name or not location.node_bindings:
+            return 0
+
+        loc_template = self.state_handler.get_location_template(
+            location.location_template_name
+        )
+        if loc_template is None:
+            return 0
+
+        if self._merge_template_representations(location, loc_template):
+            try:
+                self.state_handler.update_location(location)
+                return 1
+            except Exception:
+                self.logger.warning(
+                    "Failed to reconcile location representations",
+                    location_name=location.location_name,
+                    exc_info=True,
+                )
+        return 0
+
+    def _reconcile_for_repr_template(self, template_name: str) -> None:
+        """Trigger reconciliation for locations that reference a specific repr template.
+
+        This is a lightweight event-driven reconciliation triggered when a repr template
+        is registered or updated.
+        """
+        # Find locations created from templates that reference this repr template
+        for loc_template in self.state_handler.get_location_templates():
+            if template_name in loc_template.representation_templates.values():
+                self._reconcile_locations_for_template(loc_template)
+
+    def _reconcile_locations_for_template(self, loc_template: LocationTemplate) -> None:
+        """Re-merge representations for locations created from a specific template."""
+        locations = self.state_handler.get_locations()
+        for location in locations:
+            if location.location_template_name != loc_template.template_name:
+                continue
+
+            if self._merge_template_representations(location, loc_template):
+                try:
+                    self.state_handler.update_location(location)
+                except Exception:
+                    self.logger.warning(
+                        "Failed to reconcile location",
+                        location_name=location.location_name,
+                        exc_info=True,
+                    )
 
     @post("/transfer/plan", tags=["Transfer"])
     def plan_transfer(
@@ -456,8 +1403,8 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         with self.span(
             "transfer.plan",
             attributes={
-                "transfer.source_location_id": source_location_id,
-                "transfer.target_location_id": target_location_id,
+                "transfer.source_location": source_location_id,
+                "transfer.target_location": target_location_id,
             },
         ):
             try:
@@ -497,13 +1444,18 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         """
         return self.transfer_planner.get_transfer_graph_adjacency_list()
 
-    @get("/location/{location_id}/resources", tags=["Resources"])
-    def get_location_resources(self, location_id: str) -> ResourceHierarchy:
+    @get("/transfer/graph/detailed", tags=["Transfer"])
+    def get_detailed_transfer_graph(self) -> TransferGraphDetailedResponse:
+        """Get the current transfer graph with detailed edge information."""
+        return self.transfer_planner.get_detailed_transfer_graph()
+
+    @get("/location/{location_name}/resources", tags=["Resources"])
+    def get_location_resources(self, location_name: str) -> Optional[ResourceHierarchy]:
         """
         Get the resource hierarchy for resources currently at a specific location.
 
         Args:
-            location_id: Location ID to query
+            location_name: Location name to query
 
         Returns:
             ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource
@@ -511,10 +1463,10 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         Raises:
             HTTPException: If location not found
         """
-        location = self.state_handler.get_location(location_id)
+        location = self.state_handler.get_location(location_name)
         if location is None:
             raise HTTPException(
-                status_code=404, detail=f"Location {location_id} not found"
+                status_code=404, detail=f"Location {location_name} not found"
             )
 
         # If no resource is attached to this location, return empty hierarchy
@@ -524,13 +1476,11 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
         try:
             # Query the resource hierarchy for the attached resource
             return self.resource_client.query_resource_hierarchy(location.resource_id)
-        except Exception as e:
+        except Exception:
             self.logger.warning(
                 "Failed to query resource hierarchy for location",
-                event_type=EventType.DATA_QUERY,
-                location_id=location_id,
+                location_name=location_name,
                 resource_id=location.resource_id,
-                error=str(e),
                 exc_info=True,
             )
             # Return empty hierarchy if query fails
@@ -541,23 +1491,13 @@ class LocationManager(AbstractManagerBase[LocationManagerSettings]):
             )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage the application lifespan."""
-    # Future: Add startup/shutdown logic here if needed
-    _ = app  # Explicitly acknowledge app parameter
-    yield
-
-
 def create_app(
     settings: Optional[LocationManagerSettings] = None,
+    document_handler: Optional[DocumentStorageHandler] = None,
 ) -> FastAPI:
     """Create and configure the FastAPI application."""
-    manager = LocationManager(settings=settings)
-    return manager.create_server(
-        version="0.1.0",
-        lifespan=lifespan,
-    )
+    manager = LocationManager(settings=settings, document_handler=document_handler)
+    return manager.create_server(version="0.1.0")
 
 
 if __name__ == "__main__":

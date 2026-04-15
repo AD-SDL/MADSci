@@ -1,273 +1,198 @@
 """Workflow visualization screen for MADSci TUI.
 
 Provides workflow monitoring with step progress visualization,
-active/queued workflow display, and workflow control actions.
+active/queued workflow display, workflow control actions, filtering,
+and step detail inspection.
 """
 
-from datetime import datetime
+from __future__ import annotations
+
 from typing import Any, ClassVar
 
-import httpx
-from madsci.client.cli.tui.constants import DEFAULT_SERVICES
+from madsci.client.cli.tui.mixins import (
+    ActionBarMixin,
+    AutoRefreshMixin,
+    ServiceURLMixin,
+    preserve_cursor,
+)
+from madsci.client.cli.tui.widgets import (
+    ActionBar,
+    ActionDef,
+    DetailSection,
+    FilterBar,
+    FilterDef,
+)
+from madsci.client.cli.utils.formatting import (
+    format_duration,
+    format_status_icon,
+    format_timestamp,
+)
+from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.workflow_types import Workflow, WorkflowStatus
 from textual.app import ComposeResult
 from textual.binding import BindingType
-from textual.containers import Container, Vertical
+from textual.containers import Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import DataTable, Label, Static
-
-# Status-to-color mapping used across the module
-_STATUS_COLORS = {
-    "completed": "green",
-    "failed": "red",
-    "cancelled": "yellow",
-    "running": "blue",
-    "paused": "yellow",
-}
-
-# Status-to-icon mapping for table rows
-_STATUS_ICONS = {
-    "completed": "[green]\u25cf[/green]",
-    "failed": "[red]\u25cf[/red]",
-    "cancelled": "[yellow]\u25cb[/yellow]",
-    "running": "[blue]\u25cf[/blue]",
-    "paused": "[yellow]\u25cf[/yellow]",
-}
+from textual.widgets import DataTable, Label
 
 
-def _get_status_color(status: dict) -> str:
-    """Get the display color for a workflow status.
+def _get_workflow_status_name(status: WorkflowStatus) -> str:
+    """Get a canonical status name from a WorkflowStatus model.
 
     Args:
-        status: Workflow status dictionary.
+        status: WorkflowStatus model instance with boolean flags.
 
     Returns:
-        Color name string.
+        Status name string.
     """
-    for key, color in _STATUS_COLORS.items():
-        if status.get(key):
-            return color
-    return "dim"
+    for key in ("completed", "failed", "cancelled", "running", "paused"):
+        if getattr(status, key, False):
+            return key
+    return "unknown"
 
 
-def _get_status_icon(status: dict) -> str:
-    """Get the display icon for a workflow status.
-
-    Args:
-        status: Workflow status dictionary.
-
-    Returns:
-        Rich markup icon string.
-    """
-    for key, icon in _STATUS_ICONS.items():
-        if status.get(key):
-            return icon
-    return "[dim]\u25cb[/dim]"
-
-
-def _format_timestamp(ts: Any) -> str:
-    """Format a timestamp for display.
-
-    Args:
-        ts: Timestamp value (string or datetime).
-
-    Returns:
-        Formatted time string.
-    """
-    if isinstance(ts, str):
-        try:
-            dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-            return dt.strftime("%H:%M:%S")
-        except ValueError:
-            return ts[:8]
-    return str(ts)[:8]
-
-
-def _format_duration(seconds: float) -> str:
-    """Format duration in seconds to a human-readable string.
-
-    Args:
-        seconds: Duration in seconds.
-
-    Returns:
-        Formatted duration string.
-    """
-    minutes, secs = divmod(int(seconds), 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours > 0:
-        return f"{hours}h {minutes:02d}m {secs:02d}s"
-    return f"{minutes:02d}m {secs:02d}s"
-
-
-def _build_step_lines(steps: list, current_step: int, is_running: bool) -> list[str]:
-    """Build display lines for workflow steps.
-
-    Args:
-        steps: List of step dictionaries.
-        current_step: Current step index.
-        is_running: Whether the workflow is currently running.
-
-    Returns:
-        List of formatted step lines.
-    """
-    lines = []
-    for i, step in enumerate(steps[:10]):
-        step_name = step.get("name", step.get("action", f"Step {i + 1}"))
-        step_node = step.get("node", "")
-
-        if i < current_step:
-            icon = "[green]\u2713[/green]"
-        elif i == current_step and is_running:
-            icon = "[blue]\u25ba[/blue]"
-        else:
-            icon = "[dim]\u25cb[/dim]"
-
-        step_line = f"    {icon} {i + 1}. {step_name}"
-        if step_node:
-            step_line += f" [dim]({step_node})[/dim]"
-        lines.append(step_line)
-
-    total_steps = len(steps)
-    if total_steps > 10:
-        lines.append(f"    ... and {total_steps - 10} more steps")
-    return lines
-
-
-def _add_workflow_row(table: DataTable, data: dict) -> None:
+def _add_workflow_row(
+    table: DataTable, workflow: Workflow, *, wf_id: str | None = None
+) -> None:
     """Add a workflow row to a table.
 
     Args:
         table: The DataTable to add to.
-        data: Workflow data dictionary.
+        workflow: Workflow model instance.
+        wf_id: Optional workflow ID used as the row key for reliable
+            selection.
     """
-    status = data.get("status", {})
-    name = data.get("name", "Unknown")
-    icon = _get_status_icon(status)
+    status_name = _get_workflow_status_name(workflow.status)
+    icon = format_status_icon(status_name)
 
     # Progress
-    steps = data.get("steps", [])
-    total_steps = len(steps)
-    completed = data.get("completed_steps", 0)
+    total_steps = len(workflow.steps)
+    completed = workflow.completed_steps
     progress = f"{completed}/{total_steps}" if total_steps > 0 else "-"
 
     # Current step
-    current_index = status.get("current_step_index", 0)
-    if steps and 0 <= current_index < total_steps:
-        current_step = steps[current_index]
-        step_name = current_step.get("name", current_step.get("action", "-"))
+    current_index = workflow.status.current_step_index
+    if workflow.steps and 0 <= current_index < total_steps:
+        current_step = workflow.steps[current_index]
+        step_name = current_step.name or current_step.action or "-"
     else:
         step_name = "-"
 
-    # Timing
-    start_time = data.get("start_time")
-    started_str = _format_timestamp(start_time) if start_time else "-"
+    # Timing - use shared formatting utilities
+    started_str = (
+        format_timestamp(workflow.start_time, short=True)
+        if workflow.start_time
+        else "-"
+    )
 
-    duration = data.get("duration_seconds")
-    duration_str = _format_duration(duration) if duration is not None else "-"
+    duration_str = format_duration(workflow.duration_seconds)
 
-    table.add_row(icon, name, progress, step_name, started_str, duration_str)
+    table.add_row(
+        icon,
+        workflow.name,
+        progress,
+        step_name,
+        started_str,
+        duration_str,
+        key=wf_id,
+    )
 
 
-class WorkflowDetailPanel(Static):
-    """Panel showing details for a selected workflow."""
+def _build_timing_section(workflow: Workflow) -> DetailSection | None:
+    """Build the timing section for a workflow detail panel.
 
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize the panel."""
-        super().__init__(**kwargs)
-        self.selected_workflow: str | None = None
-        self.workflow_data: dict = {}
+    Args:
+        workflow: Workflow model instance.
 
-    def compose(self) -> ComposeResult:
-        """Compose the panel."""
-        yield Label("[bold]Workflow Details[/bold]")
-        yield Label(
-            "[dim]Select a workflow from the table above[/dim]",
-            id="workflow-detail-content",
+    Returns:
+        DetailSection if any timing info exists, else None.
+    """
+    timing_fields: dict[str, str] = {}
+    if workflow.submitted_time:
+        timing_fields["Submitted"] = format_timestamp(
+            workflow.submitted_time, short=True
         )
-
-    def update_details(self, workflow_id: str, data: dict) -> None:
-        """Update the detail display.
-
-        Args:
-            workflow_id: Workflow ID.
-            data: Workflow data dictionary.
-        """
-        self.selected_workflow = workflow_id
-        self.workflow_data = data
-
-        content = self.query_one("#workflow-detail-content", Label)
-        status = data.get("status", {})
-        status_color = _get_status_color(status)
-
-        lines = self._build_header_lines(workflow_id, data, status, status_color)
-        lines.extend(self._build_timing_lines(data))
-        lines.extend(self._build_progress_lines(data, status, status_color))
-
-        content.update("\n".join(lines))
-
-    def _build_header_lines(
-        self, workflow_id: str, data: dict, status: dict, status_color: str
-    ) -> list[str]:
-        """Build the header section of the detail display."""
-        name = data.get("name", "Unknown")
-        status_desc = status.get("description", "Unknown")
-        return [
-            f"[bold]{name}[/bold]",
-            "",
-            f"  ID:       {workflow_id[:20]}...",
-            f"  Status:   [{status_color}]{status_desc}[/{status_color}]",
-        ]
-
-    def _build_timing_lines(self, data: dict) -> list[str]:
-        """Build the timing section of the detail display."""
-        lines: list[str] = []
-        start_time = data.get("start_time")
-        end_time = data.get("end_time")
-        if start_time:
-            lines.append(f"  Started:  {_format_timestamp(start_time)}")
-        if end_time:
-            lines.append(f"  Ended:    {_format_timestamp(end_time)}")
-        duration = data.get("duration_seconds")
-        if duration is not None:
-            lines.append(f"  Duration: {_format_duration(duration)}")
-        return lines
-
-    def _build_progress_lines(
-        self, data: dict, status: dict, status_color: str
-    ) -> list[str]:
-        """Build the step progress section of the detail display."""
-        steps = data.get("steps", [])
-        total_steps = len(steps)
-        if total_steps == 0:
-            return []
-
-        completed_steps = data.get("completed_steps", 0)
-        failed_steps = data.get("failed_steps", 0)
-        current_step = status.get("current_step_index", 0)
-
-        lines = [""]
-        summary = f"  [bold]Steps:[/bold] {completed_steps}/{total_steps} completed"
-        if failed_steps:
-            summary += f", {failed_steps} failed"
-        lines.append(summary)
-
-        # Progress bar
-        progress = completed_steps / total_steps
-        filled = int(progress * 20)
-        empty = 20 - filled
-        bar = "\u2588" * filled + "\u2591" * empty
-        percent = int(progress * 100)
-        lines.append(f"  [{status_color}]{bar}[/{status_color}] {percent}%")
-
-        # Step list
-        lines.append("")
-        lines.extend(
-            _build_step_lines(steps, current_step, bool(status.get("running")))
-        )
-
-        return lines
+    if workflow.start_time:
+        timing_fields["Started"] = format_timestamp(workflow.start_time, short=True)
+    if workflow.end_time:
+        timing_fields["Ended"] = format_timestamp(workflow.end_time, short=True)
+    if workflow.duration_seconds is not None:
+        timing_fields["Duration"] = format_duration(workflow.duration_seconds)
+    if timing_fields:
+        return DetailSection("Timing", timing_fields)
+    return None
 
 
-class WorkflowsScreen(Screen):
+def _build_progress_section(workflow: Workflow) -> DetailSection | None:
+    """Build the progress section for a workflow detail panel.
+
+    Args:
+        workflow: Workflow model instance.
+
+    Returns:
+        DetailSection if steps exist, else None.
+    """
+    total_steps = len(workflow.steps)
+    if total_steps == 0:
+        return None
+
+    completed_steps = workflow.completed_steps
+    failed_steps = workflow.failed_steps
+    skipped_steps = workflow.skipped_steps
+    current_step = workflow.status.current_step_index
+
+    progress = completed_steps / total_steps
+    filled = int(progress * 20)
+    empty = 20 - filled
+    bar = "\u2588" * filled + "\u2591" * empty
+    percent = int(progress * 100)
+
+    progress_fields: dict[str, str] = {
+        "Total": str(total_steps),
+        "Completed": f"{completed_steps}/{total_steps}",
+        "Progress": f"{bar} {percent}%",
+        "Current Step": str(current_step),
+    }
+    if failed_steps:
+        progress_fields["Failed"] = str(failed_steps)
+    if skipped_steps:
+        progress_fields["Skipped"] = str(skipped_steps)
+
+    return DetailSection("Progress", progress_fields)
+
+
+def _matches_filter(
+    workflow: Workflow,
+    search: str,
+    filters: dict[str, Any],
+) -> bool:
+    """Check whether a workflow matches the current filter criteria.
+
+    Args:
+        workflow: Workflow model instance.
+        search: Search text (matched against name, case-insensitive).
+        filters: Filter dict, currently supports ``"status"`` key.
+
+    Returns:
+        True if the workflow passes the filters.
+    """
+    # Status filter
+    status_filter = filters.get("status", "all")
+    if status_filter and status_filter != "all":
+        status_name = _get_workflow_status_name(workflow.status)
+        if status_name != status_filter:
+            return False
+
+    # Search text filter (matches against name)
+    if search:
+        name = workflow.name or ""
+        if search.lower() not in name.lower():
+            return False
+
+    return True
+
+
+class WorkflowsScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
     """Screen showing workflow visualization and management."""
 
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -276,20 +201,57 @@ class WorkflowsScreen(Screen):
         ("p", "pause_workflow", "Pause"),
         ("u", "resume_workflow", "Resume"),
         ("c", "cancel_workflow", "Cancel"),
+        ("t", "retry_workflow", "Retry"),
+        ("s", "resubmit_workflow", "Resubmit"),
         ("escape", "go_back", "Back"),
     ]
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize the screen."""
         super().__init__(**kwargs)
-        self.workflows_data: dict[str, dict] = {}
+        self.workflows_data: dict[str, Workflow] = {}
         self.selected_workflow_id: str | None = None
-        self.auto_refresh_enabled = True
+        self._active_ids: list[str] = []
+        self._archived_ids: list[str] = []
+        self._current_search: str = ""
+        self._current_filters: dict[str, Any] = {}
+        self._workcell_client: WorkcellClient | None = None
+
+    def _get_workcell_client(self) -> WorkcellClient:
+        """Get or create the WorkcellClient instance."""
+        if self._workcell_client is None:
+            url = self.get_service_url("workcell_manager")
+            self._workcell_client = WorkcellClient(
+                workcell_server_url=url,
+            )
+        return self._workcell_client
 
     def compose(self) -> ComposeResult:
         """Compose the workflows screen layout."""
-        with Container(id="main-content"):
+        with VerticalScroll(id="main-content"):
             yield Label("[bold blue]Workflow Management[/bold blue]")
+            yield Label("")
+
+            yield FilterBar(
+                search_placeholder="Filter workflows...",
+                filters=[
+                    FilterDef(
+                        "status",
+                        "Status",
+                        [
+                            ("all", "All"),
+                            ("running", "Running"),
+                            ("completed", "Completed"),
+                            ("failed", "Failed"),
+                            ("paused", "Paused"),
+                            ("cancelled", "Cancelled"),
+                        ],
+                        default="all",
+                    ),
+                ],
+                id="workflow-filter",
+            )
+
             yield Label("")
 
             with Vertical(id="active-workflows-section"):
@@ -303,13 +265,16 @@ class WorkflowsScreen(Screen):
                 yield DataTable(id="archived-table")
 
             yield Label("")
-            yield WorkflowDetailPanel(id="workflow-detail-panel")
-
-            yield Label("")
-            yield Label(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]",
-                id="workflows-footer",
+            yield ActionBar(
+                actions=[
+                    ActionDef("a", "Auto-refresh", "toggle_auto_refresh"),
+                    ActionDef("p", "Pause", "pause", variant="warning"),
+                    ActionDef("u", "Resume", "resume", variant="success"),
+                    ActionDef("c", "Cancel", "cancel", variant="error"),
+                    ActionDef("t", "Retry", "retry", variant="warning"),
+                    ActionDef("s", "Resubmit", "resubmit", variant="primary"),
+                ],
+                id="workflows-action-bar",
             )
 
     async def on_mount(self) -> None:
@@ -328,155 +293,230 @@ class WorkflowsScreen(Screen):
 
         await self.refresh_data()
 
-    def _update_footer(self) -> None:
-        """Update the footer label with current auto-refresh state."""
-        footer = self.query_one("#workflows-footer", Label)
-        if self.auto_refresh_enabled:
-            footer.update(
-                "[dim]Auto-refresh: on (5s) | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]"
-            )
-        else:
-            footer.update(
-                "[dim]Auto-refresh: off | 'a' toggle | 'p' pause | "
-                "'u' resume | 'c' cancel | 'Esc' back[/dim]"
-            )
-
     async def refresh_data(self) -> None:
         """Refresh workflow data from workcell manager."""
         self.workflows_data.clear()
+        self._active_ids.clear()
+        self._archived_ids.clear()
         await self._refresh_active_workflows()
         await self._refresh_archived_workflows()
 
     async def _refresh_active_workflows(self) -> None:
         """Refresh the active/queued workflows table."""
         table = self.query_one("#workflows-table", DataTable)
-        table.clear()
 
-        active = await self._fetch_workflows("/workflows/active")
-        queued = await self._fetch_workflows("/workflows/queue")
+        active_ids: list[str] = []
 
-        if isinstance(active, dict):
-            for wf_id, wf_data in active.items():
-                self.workflows_data[wf_id] = wf_data
-                _add_workflow_row(table, wf_data)
-        if isinstance(queued, list):
-            for wf_data in queued:
-                wf_id = wf_data.get("workflow_id", "unknown")
+        try:
+            client = self._get_workcell_client()
+            active = await client.async_get_active_workflows()
+            for wf_id, wf in active.items():
+                self.workflows_data[wf_id] = wf
+                active_ids.append(wf_id)
+
+            queued = await client.async_get_workflow_queue()
+            for wf in queued:
+                wf_id = wf.workflow_id
                 if wf_id not in self.workflows_data:
-                    self.workflows_data[wf_id] = wf_data
-                    _add_workflow_row(table, wf_data)
+                    self.workflows_data[wf_id] = wf
+                    active_ids.append(wf_id)
+        except Exception:
+            self.notify("Failed to reach Workcell Manager", timeout=3)
 
-        if not self.workflows_data:
-            table.add_row(
-                "[dim]\u25cb[/dim]",
-                "[dim]No active workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
+        self._active_ids = active_ids
+
+        # Apply filters and populate table
+        filtered = [
+            wf_id
+            for wf_id in active_ids
+            if _matches_filter(
+                self.workflows_data[wf_id],
+                self._current_search,
+                self._current_filters,
             )
+        ]
+
+        with preserve_cursor(table):
+            table.clear()
+            for wf_id in filtered:
+                _add_workflow_row(table, self.workflows_data[wf_id], wf_id=wf_id)
+
+            if not filtered:
+                table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No active workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     async def _refresh_archived_workflows(self) -> None:
         """Refresh the archived workflows table."""
         archived_table = self.query_one("#archived-table", DataTable)
-        archived_table.clear()
 
-        archived = await self._fetch_workflows("/workflows/archived?number=20")
-        rows = self._normalize_workflow_response(archived)
+        archived_ids: list[str] = []
 
-        for wf_id, wf_data in rows:
-            if wf_id not in self.workflows_data:
-                self.workflows_data[wf_id] = wf_data
-            _add_workflow_row(archived_table, wf_data)
+        try:
+            client = self._get_workcell_client()
+            archived = await client.async_get_archived_workflows(number=20)
+            for wf_id, wf in archived.items():
+                if wf_id not in self.workflows_data:
+                    self.workflows_data[wf_id] = wf
+                archived_ids.append(wf_id)
+        except Exception:
+            self.notify("Failed to reach Workcell Manager", timeout=3)
 
-        if not rows:
-            archived_table.add_row(
-                "[dim]\u25cb[/dim]",
-                "[dim]No archived workflows[/dim]",
-                "-",
-                "-",
-                "-",
-                "-",
+        self._archived_ids = archived_ids
+
+        # Apply filters and populate table
+        filtered = [
+            wf_id
+            for wf_id in archived_ids
+            if _matches_filter(
+                self.workflows_data[wf_id],
+                self._current_search,
+                self._current_filters,
             )
+        ]
 
-    @staticmethod
-    def _normalize_workflow_response(data: dict | list) -> list[tuple[str, dict]]:
-        """Normalize a workflow API response to a list of (id, data) pairs."""
-        if isinstance(data, dict):
-            return list(data.items())
-        if isinstance(data, list):
-            return [(d.get("workflow_id", "unknown"), d) for d in data]
-        return []
+        with preserve_cursor(archived_table):
+            archived_table.clear()
+            for wf_id in filtered:
+                _add_workflow_row(
+                    archived_table, self.workflows_data[wf_id], wf_id=wf_id
+                )
 
-    async def _fetch_workflows(self, path: str) -> dict | list:
-        """Fetch workflows from the workcell manager.
+            if not filtered:
+                archived_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No archived workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
+
+    def on_filter_bar_filter_changed(self, event: FilterBar.FilterChanged) -> None:
+        """Handle filter changes from the FilterBar.
 
         Args:
-            path: API path to fetch.
-
-        Returns:
-            Workflow data (dict or list depending on endpoint).
+            event: The filter changed event with search and filters.
         """
-        try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                workcell_url = self.app.service_urls.get(
-                    "workcell_manager",
-                    DEFAULT_SERVICES["workcell_manager"],
+        self._current_search = event.search
+        self._current_filters = event.filters
+        self._apply_filters()
+
+    def _apply_filters(self) -> None:
+        """Re-populate both tables using current search and filter values."""
+        # Active workflows table
+        active_table = self.query_one("#workflows-table", DataTable)
+        filtered_active = [
+            wf_id
+            for wf_id in self._active_ids
+            if wf_id in self.workflows_data
+            and _matches_filter(
+                self.workflows_data[wf_id],
+                self._current_search,
+                self._current_filters,
+            )
+        ]
+        with preserve_cursor(active_table):
+            active_table.clear()
+            for wf_id in filtered_active:
+                _add_workflow_row(active_table, self.workflows_data[wf_id], wf_id=wf_id)
+            if not filtered_active:
+                active_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No active workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
                 )
-                response = await client.get(f"{workcell_url.rstrip('/')}{path}")
-                if response.status_code == 200:
-                    return response.json()
-        except Exception:  # noqa: S110
-            pass
-        return {}
+
+        # Archived workflows table
+        archived_table = self.query_one("#archived-table", DataTable)
+        filtered_archived = [
+            wf_id
+            for wf_id in self._archived_ids
+            if wf_id in self.workflows_data
+            and _matches_filter(
+                self.workflows_data[wf_id],
+                self._current_search,
+                self._current_filters,
+            )
+        ]
+        with preserve_cursor(archived_table):
+            archived_table.clear()
+            for wf_id in filtered_archived:
+                _add_workflow_row(
+                    archived_table, self.workflows_data[wf_id], wf_id=wf_id
+                )
+            if not filtered_archived:
+                archived_table.add_row(
+                    format_status_icon("unknown"),
+                    "[dim]No archived workflows[/dim]",
+                    "-",
+                    "-",
+                    "-",
+                    "-",
+                )
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Handle row selection in the workflows table."""
+        """Handle row selection -- push workflow detail screen."""
         table = event.data_table
         row_key = event.row_key
 
-        if row_key and table.id in ("workflows-table", "archived-table"):
-            row = table.get_row(row_key)
-            workflow_name = str(row[1])
+        if not row_key:
+            return
 
-            # Find workflow by name match
-            for wf_id, wf_data in self.workflows_data.items():
-                if wf_data.get("name", "") == workflow_name:
-                    self.selected_workflow_id = wf_id
-                    detail_panel = self.query_one(
-                        "#workflow-detail-panel", WorkflowDetailPanel
-                    )
-                    detail_panel.update_details(wf_id, wf_data)
-                    break
+        if table.id not in ("workflows-table", "archived-table"):
+            return
+
+        wf_id = str(row_key.value)
+        wf = self.workflows_data.get(wf_id)
+        if wf is None:
+            return
+
+        self.selected_workflow_id = wf_id
+        from madsci.client.cli.tui.screens.workflow_detail import (
+            WorkflowDetailScreen,
+        )
+
+        self.app.push_screen(
+            WorkflowDetailScreen(
+                workflow_id=wf_id,
+                workflow_data=wf,
+            )
+        )
 
     async def _send_workflow_command(self, command: str) -> None:
         """Send a control command to the selected workflow.
 
         Args:
-            command: Command to send (pause, resume, cancel).
+            command: Command to send (pause, resume, cancel, retry, resubmit).
         """
         if not self.selected_workflow_id:
             self.notify("No workflow selected", timeout=2)
             return
 
         try:
-            workcell_url = self.app.service_urls.get(
-                "workcell_manager", DEFAULT_SERVICES["workcell_manager"]
-            )
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(
-                    f"{workcell_url.rstrip('/')}/workflow/"
-                    f"{self.selected_workflow_id}/{command}"
-                )
-                if response.status_code == 200:
-                    self.notify(f"Workflow {command}d successfully", timeout=2)
-                    await self.refresh_data()
-                else:
-                    self.notify(
-                        f"Failed to {command} workflow: HTTP {response.status_code}",
-                        timeout=3,
-                    )
+            client = self._get_workcell_client()
+            command_methods = {
+                "pause": client.async_pause_workflow,
+                "resume": client.async_resume_workflow,
+                "cancel": client.async_cancel_workflow,
+                "retry": client.async_retry_workflow,
+                "resubmit": client.async_resubmit_workflow,
+            }
+            method = command_methods.get(command)
+            if method:
+                await method(self.selected_workflow_id)
+                self.notify(f"Workflow {command} successful", timeout=2)
+                await self.refresh_data()
+            else:
+                self.notify(f"Unknown command: {command}", timeout=3)
         except Exception as e:
             self.notify(f"Error: {e}", timeout=3)
 
@@ -484,13 +524,6 @@ class WorkflowsScreen(Screen):
         """Refresh workflow data."""
         await self.refresh_data()
         self.notify("Workflows refreshed", timeout=2)
-
-    def action_toggle_auto_refresh(self) -> None:
-        """Toggle auto-refresh on/off."""
-        self.auto_refresh_enabled = not self.auto_refresh_enabled
-        state = "enabled" if self.auto_refresh_enabled else "disabled"
-        self.notify(f"Auto-refresh {state}", timeout=2)
-        self._update_footer()
 
     async def action_pause_workflow(self) -> None:
         """Pause the selected workflow."""
@@ -503,6 +536,25 @@ class WorkflowsScreen(Screen):
     async def action_cancel_workflow(self) -> None:
         """Cancel the selected workflow."""
         await self._send_workflow_command("cancel")
+
+    async def action_retry_workflow(self) -> None:
+        """Retry the selected workflow from the beginning."""
+        await self._send_workflow_command("retry")
+
+    async def action_resubmit_workflow(self) -> None:
+        """Resubmit the selected workflow as a new run."""
+        await self._send_workflow_command("resubmit")
+
+    def _get_action_map(self) -> dict:
+        """Return action map for the ActionBarMixin dispatcher."""
+        return {
+            "toggle_auto_refresh": self.action_toggle_auto_refresh,
+            "pause": self.action_pause_workflow,
+            "resume": self.action_resume_workflow,
+            "cancel": self.action_cancel_workflow,
+            "retry": self.action_retry_workflow,
+            "resubmit": self.action_resubmit_workflow,
+        }
 
     def action_go_back(self) -> None:
         """Go back to the previous screen."""

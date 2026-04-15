@@ -2,12 +2,12 @@
 
 ## Overview
 
-MADSci provides standalone backup tools for PostgreSQL and MongoDB databases. These tools can be used independently or integrated with MADSci's database migration workflows.
+MADSci provides standalone backup tools for PostgreSQL and FerretDB databases. These tools can be used independently or integrated with MADSci's database migration workflows.
 
 ## Features
 
 - **Standalone Backup Tools**: Use backup functionality without running migrations
-- **Multiple Database Support**: PostgreSQL (via pg_dump/pg_restore) and MongoDB (via mongodump/mongorestore)
+- **Multiple Database Support**: PostgreSQL (via pg_dump/pg_restore) and FerretDB (via mongodump/mongorestore)
 - **Unified CLI**: Single command-line interface for all database types
 - **Auto-Detection**: Automatically detects database type from connection URL
 - **Integrity Validation**: SHA256 checksums and backup verification
@@ -16,7 +16,7 @@ MADSci provides standalone backup tools for PostgreSQL and MongoDB databases. Th
 
 ## Installation
 
-### For All Backup Tools (PostgreSQL and MongoDB)
+### For All Backup Tools (PostgreSQL and FerretDB)
 
 ```bash
 pip install madsci-common
@@ -24,7 +24,7 @@ pip install madsci-common
 
 This provides:
 - PostgreSQL backup tool and CLI
-- MongoDB backup tool and CLI
+- FerretDB backup tool and CLI
 - Unified CLI that auto-detects database type
 
 The `madsci-common` package now includes all database backup functionality for maximum convenience and reusability.
@@ -39,7 +39,7 @@ The `madsci-backup` command automatically detects your database type:
 # PostgreSQL backup
 madsci-backup create --db-url postgresql://user:pass@localhost/mydb
 
-# MongoDB backup
+# FerretDB backup
 madsci-backup create --db-url mongodb://localhost:27017/mydb
 
 # Custom backup directory
@@ -55,7 +55,7 @@ madsci-backup create --db-url mongodb://localhost/mydb --name pre-deploy
 # Restore PostgreSQL backup
 madsci-backup restore --backup /path/to/backup.dump --db-url postgresql://localhost/mydb
 
-# Restore MongoDB backup
+# Restore FerretDB backup
 madsci-backup restore --backup /path/to/backup_dir --db-url mongodb://localhost/mydb
 ```
 
@@ -80,11 +80,11 @@ madsci-postgres-backup create --db-url postgresql://localhost/db
 madsci-postgres-backup create --db-url postgresql://localhost/db --backup-dir /backups/prod
 ```
 
-### MongoDB
+### FerretDB
 
 ```bash
-# Use the MongoDB-specific CLI
-madsci-mongodb-backup create --mongo-url mongodb://localhost/db --database mydb
+# Use the FerretDB-specific CLI
+madsci-document-db-backup create --mongo-url mongodb://localhost/db --database mydb
 ```
 
 ## Programmatic Usage
@@ -127,19 +127,19 @@ is_valid = backup_tool.validate_backup_integrity(backup_path)
 print(f"Backup valid: {is_valid}")
 ```
 
-### MongoDB Backups
+### FerretDB Backups
 
 ```python
 from pathlib import Path
 from pydantic import AnyUrl
 from madsci.common.backup_tools import (
-    MongoDBBackupTool,
+    DocumentDBBackupTool,
 )
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 
 # Configure backup settings
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017"),
     database="mydb",
     backup_dir=Path("./backups"),
     max_backups=10,
@@ -148,7 +148,7 @@ settings = MongoDBBackupSettings(
 )
 
 # Create backup tool
-backup_tool = MongoDBBackupTool(settings)
+backup_tool = DocumentDBBackupTool(settings)
 
 # Create a backup
 backup_path = backup_tool.create_backup("hourly")
@@ -198,11 +198,11 @@ class PostgreSQLBackupSettings(BaseBackupSettings):
     compression: bool = True        # Enable compression (format dependent)
 ```
 
-### MongoDB Backup Settings
+### FerretDB Backup Settings
 
 ```python
-class MongoDBBackupSettings(BaseBackupSettings):
-    mongo_db_url: AnyUrl          # MongoDB connection URL
+class DocumentDBBackupSettings(BaseBackupSettings):
+    document_db_url: AnyUrl          # FerretDB connection URL
     database: str                  # Database name to backup
     backup_dir: Path               # Where to store backups
     collections: Optional[List[str]] = None  # Specific collections (None = all)
@@ -222,7 +222,7 @@ backups/
 └── postgres_backup_20240124_150000_pre_migration.dump
 ```
 
-### MongoDB Backups
+### FerretDB Backups
 
 ```
 backups/
@@ -347,11 +347,11 @@ sudo apt-get install postgresql-client
 brew install postgresql
 ```
 
-### MongoDB Backups Fail
+### FerretDB Backups Fail
 
 **Problem**: `mongodump: command not found`
 
-**Solution**: Ensure MongoDB database tools are installed:
+**Solution**: Ensure MongoDB database tools are installed (used for FerretDB backup/restore via the MongoDB wire protocol):
 ```bash
 # Ubuntu/Debian
 sudo apt-get install mongodb-database-tools
@@ -404,12 +404,12 @@ settings = PostgreSQLBackupSettings(
 )
 ```
 
-### Selective MongoDB Collections
+### Selective FerretDB Collections
 
 ```python
 # Backup only specific collections
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017"),
     database="mydb",
     collections=["critical_data", "user_configs"]  # Skip large log collections
 )
@@ -445,11 +445,11 @@ class PostgreSQLBackupTool(AbstractBackupTool):
     def delete_backup(self, backup_path: Path) -> None
 ```
 
-### MongoDBBackupTool
+### DocumentDBBackupTool
 
 ```python
-class MongoDBBackupTool(AbstractBackupTool):
-    def __init__(self, settings: MongoDBBackupSettings, logger: Optional[EventClient] = None)
+class DocumentDBBackupTool(AbstractBackupTool):
+    def __init__(self, settings: DocumentDBBackupSettings, logger: Optional[EventClient] = None)
     def create_backup(self, name_suffix: Optional[str] = None) -> Path
     def restore_from_backup(self, backup_path: Path, target_database: Optional[str] = None) -> None
     def validate_backup_integrity(self, backup_path: Path) -> bool
@@ -501,25 +501,25 @@ backup_path = tool.create_backup()
 print(f"✓ Backup created: {backup_path}")
 ```
 
-### Example 2: MongoDB Backup with Specific Collections
+### Example 2: FerretDB Backup with Specific Collections
 
 ```python
 from pathlib import Path
 from pydantic import AnyUrl
 from madsci.common.backup_tools import (
-    MongoDBBackupTool,
-    MongoDBBackupSettings
+    DocumentDBBackupTool,
+    DocumentDBBackupSettings
 )
 
 # Backup only critical collections
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017"),
     database="events",
     backup_dir=Path("./backups"),
     collections=["system_events", "experiment_logs"]  # Skip large debug collections
 )
 
-tool = MongoDBBackupTool(settings)
+tool = DocumentDBBackupTool(settings)
 backup_path = tool.create_backup("critical_only")
 
 print(f"✓ Critical data backed up: {backup_path}")
@@ -699,7 +699,7 @@ from pathlib import Path
 from datetime import datetime
 from madsci.common.backup_tools import PostgreSQLBackupTool
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
-from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
+from madsci.common.backup_tools import DocumentDBBackupTool, DocumentDBBackupSettings
 from pydantic import AnyUrl
 
 def backup_all_databases():
@@ -726,16 +726,16 @@ def backup_all_databases():
         print(f"  ✗ Failed: {e}")
         failed_databases.append(("resources", str(e)))
 
-    # MongoDB - Event Manager
+    # FerretDB - Event Manager
     try:
-        print(f"[{timestamp}] Backing up Event Manager (MongoDB)...")
-        settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        print(f"[{timestamp}] Backing up Event Manager (FerretDB)...")
+        settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="events",
             backup_dir=backup_base / "events",
             max_backups=30
         )
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
         backup_path = tool.create_backup("auto")
         print(f"  ✓ Success: {backup_path}")
         success_count += 1
@@ -743,16 +743,16 @@ def backup_all_databases():
         print(f"  ✗ Failed: {e}")
         failed_databases.append(("events", str(e)))
 
-    # MongoDB - Data Manager
+    # FerretDB - Data Manager
     try:
-        print(f"[{timestamp}] Backing up Data Manager (MongoDB)...")
-        settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        print(f"[{timestamp}] Backing up Data Manager (FerretDB)...")
+        settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="data",
             backup_dir=backup_base / "data",
             max_backups=30
         )
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
         backup_path = tool.create_backup("auto")
         print(f"  ✓ Success: {backup_path}")
         success_count += 1
@@ -834,7 +834,7 @@ Disaster recovery script to restore all MADSci databases.
 from pathlib import Path
 from madsci.common.backup_tools import PostgreSQLBackupTool
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
-from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
+from madsci.common.backup_tools import DocumentDBBackupTool, DocumentDBBackupSettings
 from pydantic import AnyUrl
 
 def disaster_recovery(backup_date: str):
@@ -886,15 +886,15 @@ def disaster_recovery(backup_date: str):
         print(f"  ✗ Failed to restore Resource Manager: {e}")
         raise
 
-    # MongoDB - Event Manager
-    print("\n[2/3] Restoring Event Manager (MongoDB)...")
+    # FerretDB - Event Manager
+    print("\n[2/3] Restoring Event Manager (FerretDB)...")
     try:
-        settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="events",
             backup_dir=backup_base / "events"
         )
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         backups = tool.list_available_backups()
         target_backup = None
@@ -914,15 +914,15 @@ def disaster_recovery(backup_date: str):
         print(f"  ✗ Failed to restore Event Manager: {e}")
         raise
 
-    # MongoDB - Data Manager
-    print("\n[3/3] Restoring Data Manager (MongoDB)...")
+    # FerretDB - Data Manager
+    print("\n[3/3] Restoring Data Manager (FerretDB)...")
     try:
-        settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="data",
             backup_dir=backup_base / "data"
         )
-        tool = MongoDBBackupTool(settings)
+        tool = DocumentDBBackupTool(settings)
 
         backups = tool.list_available_backups()
         target_backup = None
@@ -974,7 +974,7 @@ Example: Backup before and after experiment runs.
 from pathlib import Path
 from madsci.common.backup_tools import PostgreSQLBackupTool
 from madsci.common.types.backup_types import PostgreSQLBackupSettings
-from madsci.common.backup_tools import MongoDBBackupTool, MongoDBBackupSettings
+from madsci.common.backup_tools import DocumentDBBackupTool, DocumentDBBackupSettings
 from pydantic import AnyUrl
 
 class ExperimentBackupManager:
@@ -998,12 +998,12 @@ class ExperimentBackupManager:
         resource_backup = resource_tool.create_backup("pre_experiment")
 
         # Backup data database
-        data_settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        data_settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="data",
             backup_dir=self.backup_dir / "data"
         )
-        data_tool = MongoDBBackupTool(data_settings)
+        data_tool = DocumentDBBackupTool(data_settings)
         data_backup = data_tool.create_backup("pre_experiment")
 
         print(f"✓ Pre-experiment backups created")
@@ -1024,12 +1024,12 @@ class ExperimentBackupManager:
         resource_tool = PostgreSQLBackupTool(resource_settings)
         resource_backup = resource_tool.create_backup("post_experiment")
 
-        data_settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        data_settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="data",
             backup_dir=self.backup_dir / "data"
         )
-        data_tool = MongoDBBackupTool(data_settings)
+        data_tool = DocumentDBBackupTool(data_settings)
         data_backup = data_tool.create_backup("post_experiment")
 
         print(f"✓ Post-experiment backups created")
@@ -1051,12 +1051,12 @@ class ExperimentBackupManager:
         resource_tool.restore_from_backup(pre_backups["resources"])
 
         # Restore data
-        data_settings = MongoDBBackupSettings(
-            mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+        data_settings = DocumentDBBackupSettings(
+            document_db_url=AnyUrl("mongodb://localhost:27017"),
             database="data",
             backup_dir=self.backup_dir / "data"
         )
-        data_tool = MongoDBBackupTool(data_settings)
+        data_tool = DocumentDBBackupTool(data_settings)
         data_tool.restore_from_backup(pre_backups["data"])
 
         print(f"✓ Experiment rolled back successfully")

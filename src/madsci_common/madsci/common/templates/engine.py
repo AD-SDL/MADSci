@@ -4,6 +4,7 @@ Template engine for MADSci.
 This module provides the engine for rendering templates into generated projects.
 """
 
+import importlib.resources
 import logging
 import re
 import shlex
@@ -129,6 +130,7 @@ class TemplateEngine:
         self.template_dir = template_dir
         self._sandboxed = sandboxed
         self.manifest = self._load_manifest()
+        self._shared_dir = self._resolve_shared_dir()
         self._jinja_env = self._create_jinja_env()
 
     def _load_manifest(self) -> TemplateManifest:
@@ -152,8 +154,11 @@ class TemplateEngine:
         Returns:
             Configured Jinja2 environment.
         """
+        loader_paths = [str(self.template_dir)]
+        if self._shared_dir:
+            loader_paths.append(str(self._shared_dir))
         env_kwargs = {
-            "loader": FileSystemLoader(str(self.template_dir)),
+            "loader": FileSystemLoader(loader_paths),
             "undefined": StrictUndefined,
             "keep_trailing_newline": True,
             "trim_blocks": True,
@@ -171,6 +176,157 @@ class TemplateEngine:
         # Note: "upper" and "lower" are Jinja2 built-in filters.
 
         return env
+
+    def _resolve_shared_dir(self) -> Path | None:
+        """Resolve the _shared/ directory containing common template files.
+
+        Walks up from the template directory to find _shared/ in bundled_templates,
+        falling back to importlib.resources for installed packages.
+
+        Returns:
+            Path to _shared/ directory, or None if not found.
+        """
+        current = self.template_dir
+        for _ in range(5):
+            candidate = current / "_shared"
+            if candidate.is_dir():
+                return candidate
+            current = current.parent
+
+        # Fallback: use importlib.resources
+        try:
+            resource = (
+                importlib.resources.files("madsci.common")
+                / "bundled_templates"
+                / "_shared"
+            )
+            path = Path(str(resource))
+            if path.is_dir():
+                return path
+        except (TypeError, FileNotFoundError):
+            pass
+
+        return None
+
+    def _resolve_source_path(self, original_source_path: str) -> Path:
+        """Resolve a source path with fallback to the _shared/ directory.
+
+        Checks the template directory first, then the shared directory.
+
+        Args:
+            original_source_path: The source path from the template manifest.
+
+        Returns:
+            Resolved path to the source file.
+        """
+        local = self.template_dir / original_source_path
+        if local.exists():
+            return local
+        if self._shared_dir:
+            shared = self._shared_dir / original_source_path
+            if shared.exists():
+                return shared
+        return local  # Return local path (will fail naturally if missing)
+
+    def _resolve_skills_dir(self) -> Path | None:
+        """Resolve the _skills/ directory containing bundled agent skills.
+
+        Walks up from the template directory to find _skills/ in bundled_templates,
+        falling back to importlib.resources for installed packages.
+
+        Returns:
+            Path to _skills/ directory, or None if not found.
+        """
+        # Walk up from template_dir looking for _skills/ sibling.
+        # Bundled templates are at most 2-3 levels deep (e.g.
+        # bundled_templates/module/device/), so 5 levels is sufficient.
+        current = self.template_dir
+        for _ in range(5):
+            candidate = current / "_skills"
+            if candidate.is_dir():
+                return candidate
+            current = current.parent
+
+        # Fallback: use importlib.resources
+        try:
+            resource = (
+                importlib.resources.files("madsci.common")
+                / "bundled_templates"
+                / "_skills"
+            )
+            path = Path(str(resource))
+            if path.is_dir():
+                return path
+        except (TypeError, FileNotFoundError):
+            pass
+
+        return None
+
+    def _copy_skills(
+        self,
+        project_root: Path,
+        dry_run: bool,
+        parameters: dict[str, Any] | None = None,
+    ) -> tuple[list[Path], list[str]]:
+        """Copy declared agent skills into the generated project.
+
+        Args:
+            project_root: Root directory of the generated project (may be a
+                subdirectory of output_dir when the template nests all files
+                under a common prefix such as ``{{module_name}}_module/``).
+            dry_run: If True, track paths but don't write files.
+            parameters: Rendered template parameters. When ``include_agent_config``
+                is present, skills are copied to the selected destinations
+                (``.claude/skills/`` and/or ``.agents/skills/``). Otherwise
+                defaults to ``.agents/skills/`` for backward compatibility.
+
+        Returns:
+            Tuple of (files_created, skills_included).
+        """
+        files_created: list[Path] = []
+        skills_included: list[str] = []
+
+        if not self.manifest.skills:
+            return files_created, skills_included
+
+        skills_dir = self._resolve_skills_dir()
+        if not skills_dir:
+            logger.warning("Skills directory not found, skipping skill copying")
+            return files_created, skills_included
+
+        # Determine destination prefixes based on agent config selection.
+        agent_config = (parameters or {}).get("include_agent_config")
+        if agent_config is not None:
+            destinations = []
+            if "agents" in agent_config:
+                destinations.append(".agents")
+            if "claude" in agent_config:
+                destinations.append(".claude")
+        else:
+            # Default for templates without include_agent_config
+            destinations = [".agents"]
+
+        for skill_name in self.manifest.skills:
+            skill_source = skills_dir / skill_name / "SKILL.md"
+            if not skill_source.is_file():
+                logger.warning("Skill not found, skipping: skill_name=%s", skill_name)
+                continue
+            for dest_prefix in destinations:
+                skill_dest = (
+                    project_root / dest_prefix / "skills" / skill_name / "SKILL.md"
+                )
+                if not dry_run:
+                    skill_dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(skill_source, skill_dest)
+                    logger.debug(
+                        "Copied skill: skill_name=%s dest=%s",
+                        skill_name,
+                        str(skill_dest),
+                    )
+                files_created.append(skill_dest)
+            skills_included.append(skill_name)
+
+        return files_created, skills_included
 
     def validate_parameters(self, values: dict[str, Any]) -> list[str]:  # noqa: C901, PLR0912
         """Validate parameter values against manifest.
@@ -276,7 +432,7 @@ class TemplateEngine:
 
         return defaults
 
-    def render(  # noqa: C901, PLR0912
+    def render(  # noqa: C901, PLR0912, PLR0915
         self,
         output_dir: Path,
         parameters: dict[str, Any],
@@ -332,12 +488,18 @@ class TemplateEngine:
             dest_path_template = self._jinja_env.from_string(file_spec.destination)
             dest_path = dest_path_template.render(**values)
 
-            # Full paths
-            source_full = self.template_dir / source_path
+            # Resolve the actual source file on disk, checking the template
+            # directory first then falling back to _shared/.
+            source_on_disk = self._resolve_source_path(original_source_path)
             dest_full = output_dir / dest_path
 
-            # Prevent path traversal: rendered source must stay inside template_dir
-            if not source_full.resolve().is_relative_to(self.template_dir.resolve()):
+            # Prevent path traversal: source must stay inside template_dir
+            # or the _shared directory.
+            source_resolved = source_on_disk.resolve()
+            allowed = source_resolved.is_relative_to(self.template_dir.resolve())
+            if not allowed and self._shared_dir:
+                allowed = source_resolved.is_relative_to(self._shared_dir.resolve())
+            if not allowed:
                 raise TemplateValidationError(
                     [f"Path traversal detected in source: {source_path}"]
                 )
@@ -353,19 +515,37 @@ class TemplateEngine:
                 dest_full.parent.mkdir(parents=True, exist_ok=True)
 
                 # Render and write
-                if source_full.suffix == ".j2":
+                if source_on_disk.suffix == ".j2":
                     # Jinja2 template - use original_source_path since the
-                    # file on disk has {{variable}} placeholders in its name
+                    # file on disk has {{variable}} placeholders in its name.
+                    # FileSystemLoader searches both template_dir and _shared/.
                     template = self._jinja_env.get_template(original_source_path)
                     content = template.render(**values)
                     dest_full.write_text(content)
                 else:
-                    # Static file - copy as-is
-                    shutil.copy2(source_full, dest_full)
+                    # Static file - copy as-is using the resolved on-disk path
+                    shutil.copy2(source_on_disk, dest_full)
 
                 logger.debug("Created file: dest_path=%s", str(dest_full))
 
             files_created.append(dest_full)
+
+        # Determine the project root for placing skills.  If all rendered
+        # destinations share a common directory prefix (e.g. "my_device_module/"),
+        # use that as the project root; otherwise fall back to output_dir.
+        project_root = output_dir
+        if files_created:
+            rel_parts = [f.relative_to(output_dir).parts for f in files_created]
+            if rel_parts and all(len(p) > 1 for p in rel_parts):
+                first_dir = rel_parts[0][0]
+                if all(p[0] == first_dir for p in rel_parts):
+                    project_root = output_dir / first_dir
+
+        # Copy agent skills
+        skill_files, skills_included = self._copy_skills(
+            project_root, dry_run, parameters=values
+        )
+        files_created.extend(skill_files)
 
         # Run post-generation hooks
         hooks_executed: list[str] = []
@@ -407,4 +587,5 @@ class TemplateEngine:
             files_created=files_created,
             parameters_used=values,
             hooks_executed=hooks_executed,
+            skills_included=skills_included,
         )

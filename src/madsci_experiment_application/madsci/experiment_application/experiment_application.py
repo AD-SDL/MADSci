@@ -11,7 +11,7 @@
     - For interactive terminal: Use ExperimentTUI
     - For server mode: Use ExperimentNode
 
-    See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for details.
+    See https://ad-sdl.github.io/MADSci/running-experiments for details.
 """
 
 import time
@@ -26,6 +26,7 @@ from madsci.common.context import (
     set_current_madsci_context,
 )
 from madsci.common.exceptions import ExperimentCancelledError, ExperimentFailedError
+from madsci.common.ownership import ownership_context
 from madsci.common.types.base_types import PathLike
 from madsci.common.types.condition_types import Condition
 from madsci.common.types.event_types import EventType
@@ -38,6 +39,11 @@ from madsci.common.types.location_types import Location
 from madsci.common.types.node_types import RestNodeConfig
 from madsci.common.types.resource_types import Resource
 from madsci.common.utils import threaded_daemon
+from madsci.experiment_application.experiment_base import (
+    _EXPERIMENT_OWNERSHIP_FIELDS,
+    clear_experiment_ownership,
+    set_experiment_ownership,
+)
 from madsci.node_module.rest_node_module import RestNode
 from pydantic import AnyUrl, Field
 from rich import print
@@ -136,7 +142,7 @@ class ExperimentApplication(RestNode):
             "ExperimentApplication is deprecated and will be removed in v0.8.0. "
             "Use ExperimentScript (for scripts), ExperimentNotebook (for notebooks), "
             "ExperimentTUI (for interactive TUI), or ExperimentNode (for server mode) instead. "
-            "See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for migration guide.",
+            "See https://ad-sdl.github.io/MADSci/running-experiments for migration guide.",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -214,6 +220,8 @@ class ExperimentApplication(RestNode):
             run_name=self.experiment.run_name,
             experiment_name=self.experiment.experiment_design.experiment_name,
         )
+        set_experiment_ownership(self.experiment)
+
         passed_checks = False
         while not passed_checks:
             passed_checks = True
@@ -247,6 +255,8 @@ class ExperimentApplication(RestNode):
             experiment_name=self.experiment.experiment_design.experiment_name,
             status=str(status) if status is not None else None,
         )
+
+        clear_experiment_ownership()
 
     def pause_experiment(self) -> None:
         """Pause the experiment."""
@@ -316,7 +326,7 @@ class ExperimentApplication(RestNode):
         """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
 
-        # Establish experiment context for hierarchical logging
+        # Establish experiment context for hierarchical logging and ownership tracking
         experiment_id = self.experiment.experiment_id if self.experiment else None
         experiment_name = (
             self.experiment.experiment_design.experiment_name
@@ -324,12 +334,26 @@ class ExperimentApplication(RestNode):
             else None
         )
 
-        with event_client_context(
-            name="experiment",
-            experiment_id=experiment_id,
-            experiment_name=experiment_name,
-            run_name=run_name,
-            experiment_type=self.__class__.__name__,
+        # Build ownership overrides from the experiment's ownership info,
+        # restricted to experiment-level fields only
+        ownership_overrides: dict = {}
+        if experiment_id:
+            ownership_overrides["experiment_id"] = experiment_id
+        if self.experiment and self.experiment.ownership_info:
+            for field in _EXPERIMENT_OWNERSHIP_FIELDS:
+                value = getattr(self.experiment.ownership_info, field, None)
+                if value is not None and field not in ownership_overrides:
+                    ownership_overrides[field] = value
+
+        with (
+            ownership_context(**ownership_overrides),
+            event_client_context(
+                name="experiment",
+                experiment_id=experiment_id,
+                experiment_name=experiment_name,
+                run_name=run_name,
+                experiment_type=self.__class__.__name__,
+            ),
         ):
             try:
                 yield

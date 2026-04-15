@@ -1,6 +1,7 @@
 """MADSci CLI status command.
 
-Displays status of MADSci services.
+Displays status of MADSci services, using the shared utility layer for
+health checking, formatting, and output rendering.
 """
 
 from __future__ import annotations
@@ -12,10 +13,25 @@ from enum import Enum
 from typing import Any
 
 import click
+from madsci.client.cli.utils.formatting import format_status_colored, format_status_icon
+from madsci.client.cli.utils.output import (
+    OutputFormat,
+    determine_output_format,
+    get_console,
+    output_result,
+)
+from madsci.client.cli.utils.service_health import (
+    ServiceHealthResult,
+    check_service_health_sync,
+)
+
+# ---------------------------------------------------------------------------
+# Backward-compatible types used by start.py and its tests
+# ---------------------------------------------------------------------------
 
 
 class ServiceStatus(str, Enum):
-    """Status of a service."""
+    """Status of a service (backward-compatible re-export)."""
 
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
@@ -25,7 +41,7 @@ class ServiceStatus(str, Enum):
 
 @dataclass
 class ServiceInfo:
-    """Information about a service."""
+    """Information about a service (backward-compatible re-export)."""
 
     name: str
     url: str
@@ -47,65 +63,61 @@ class ServiceInfo:
 
 
 def check_service_health(name: str, url: str, timeout: float = 5.0) -> ServiceInfo:
-    """Check the health of a service."""
-    import httpx
+    """Check the health of a service (backward-compatible wrapper).
 
-    health_url = url.rstrip("/") + "/health"
-
-    try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(health_url)
-
-            if response.status_code == 200:
-                data = response.json() if response.text else {}
-                return ServiceInfo(
-                    name=name,
-                    url=url,
-                    status=ServiceStatus.HEALTHY,
-                    version=data.get("version"),
-                    details=data,
-                )
-            return ServiceInfo(
-                name=name,
-                url=url,
-                status=ServiceStatus.UNHEALTHY,
-                error=f"HTTP {response.status_code}",
-            )
-    except httpx.ConnectError:
+    Delegates to :func:`check_service_health_sync` from the shared
+    service_health module and translates the result to :class:`ServiceInfo`.
+    """
+    result = check_service_health_sync(name, url, timeout=timeout)
+    if result.is_available:
         return ServiceInfo(
-            name=name,
-            url=url,
+            name=result.name,
+            url=result.url,
+            status=ServiceStatus.HEALTHY,
+            version=result.version,
+        )
+    if result.error and (
+        "refused" in result.error.lower() or "timeout" in result.error.lower()
+    ):
+        return ServiceInfo(
+            name=result.name,
+            url=result.url,
             status=ServiceStatus.OFFLINE,
-            error="Connection refused",
+            error=result.error,
         )
-    except httpx.TimeoutException:
-        return ServiceInfo(
-            name=name,
-            url=url,
-            status=ServiceStatus.OFFLINE,
-            error="Connection timeout",
-        )
-    except Exception as e:
-        return ServiceInfo(
-            name=name,
-            url=url,
-            status=ServiceStatus.UNKNOWN,
-            error=str(e),
-        )
+    return ServiceInfo(
+        name=result.name,
+        url=result.url,
+        status=ServiceStatus.UNHEALTHY if result.error else ServiceStatus.UNKNOWN,
+        error=result.error,
+    )
 
 
-def get_status_icon(status: ServiceStatus) -> str:
-    """Get the icon for a service status."""
-    icons = {
-        ServiceStatus.HEALTHY: "[green]\u25cf[/green]",
-        ServiceStatus.UNHEALTHY: "[yellow]\u25cf[/yellow]",
-        ServiceStatus.OFFLINE: "[red]\u25cb[/red]",
-        ServiceStatus.UNKNOWN: "[dim]\u25cb[/dim]",
+def _health_status_label(result: ServiceHealthResult) -> str:
+    """Map a ServiceHealthResult to a human-readable status label."""
+    if result.is_available:
+        return "healthy"
+    if result.error and "refused" in result.error.lower():
+        return "offline"
+    if result.error and "timeout" in result.error.lower():
+        return "offline"
+    return "unhealthy"
+
+
+def _result_to_dict(result: ServiceHealthResult) -> dict[str, Any]:
+    """Convert a ServiceHealthResult to a serialisable dict."""
+    status = _health_status_label(result)
+    return {
+        "name": result.name,
+        "url": result.url,
+        "status": status,
+        "version": result.version,
+        "error": result.error,
+        "response_time_ms": result.response_time_ms,
     }
-    return icons.get(status, "?")
 
 
-def create_status_table(services: list[ServiceInfo]) -> Any:
+def create_status_table(results: list[ServiceHealthResult]) -> Any:
     """Create a Rich table with service status."""
     from rich.table import Table
 
@@ -116,26 +128,24 @@ def create_status_table(services: list[ServiceInfo]) -> Any:
     table.add_column("State", style="bold")
     table.add_column("Version")
 
-    for svc in services:
-        icon = get_status_icon(svc.status)
-        status_text = svc.status.value
-        if svc.error and svc.status != ServiceStatus.HEALTHY:
-            status_text = f"{svc.error}"
+    for result in results:
+        status = _health_status_label(result)
+        icon = format_status_icon(status)
 
-        version = svc.version or "-"
-
-        if svc.status == ServiceStatus.HEALTHY:
-            status_style = "green"
-        elif svc.status == ServiceStatus.UNHEALTHY:
-            status_style = "yellow"
+        if result.is_available:
+            status_text = format_status_colored(status)
+        elif result.error:
+            status_text = format_status_colored(status, result.error)
         else:
-            status_style = "red"
+            status_text = format_status_colored(status)
+
+        version = result.version or "-"
 
         table.add_row(
             icon,
-            svc.name,
-            svc.url,
-            f"[{status_style}]{status_text}[/{status_style}]",
+            result.name,
+            result.url,
+            status_text,
             version,
         )
 
@@ -157,24 +167,17 @@ def create_status_table(services: list[ServiceInfo]) -> Any:
     help="Watch interval in seconds (default: 5).",
 )
 @click.option(
-    "--json",
-    "as_json",
-    is_flag=True,
-    help="Output as JSON.",
-)
-@click.option(
     "--timeout",
     type=float,
     default=5.0,
     help="Request timeout in seconds (default: 5).",
 )
 @click.pass_context
-def status(  # noqa: C901
+def status(  # noqa: C901, PLR0912, PLR0915
     ctx: click.Context,
     services: tuple[str, ...],
     watch: bool,
     interval: float,
-    as_json: bool,
     timeout: float,
 ) -> None:
     """Show status of MADSci services.
@@ -185,11 +188,13 @@ def status(  # noqa: C901
         madsci status lab_manager        Show specific service
         madsci status --watch            Continuously update
         madsci status --json             Output as JSON
+        madsci status -q                 Quiet: service names and status only
     """
     from madsci.client.cli.tui.constants import get_default_services
-    from madsci.client.cli.utils.output import get_console
 
     console = get_console(ctx)
+
+    fmt = determine_output_format(ctx)
 
     resolved_services = get_default_services(ctx.obj.get("context"))
 
@@ -203,28 +208,57 @@ def status(  # noqa: C901
     else:
         service_urls = resolved_services.copy()
 
-    def fetch_all_status() -> list[ServiceInfo]:
-        """Fetch status of all services."""
+    def fetch_all_status() -> list[ServiceHealthResult]:
+        """Fetch status of all services using shared health check."""
         return [
-            check_service_health(name, url, timeout)
+            check_service_health_sync(name, url, timeout=timeout)
             for name, url in service_urls.items()
         ]
 
-    if as_json or ctx.obj.get("json"):
+    # --- Structured output modes (JSON / YAML / quiet) ---
+    if fmt in (OutputFormat.JSON, OutputFormat.YAML, OutputFormat.QUIET):
         results = fetch_all_status()
+        service_dicts = [_result_to_dict(r) for r in results]
+        healthy = sum(1 for r in results if r.is_available)
+        unhealthy = sum(
+            1
+            for r in results
+            if not r.is_available
+            and r.error
+            and "refused" not in r.error.lower()
+            and "timeout" not in r.error.lower()
+        )
+        offline = sum(
+            1
+            for r in results
+            if not r.is_available
+            and r.error
+            and ("refused" in r.error.lower() or "timeout" in r.error.lower())
+        )
+
+        if fmt == OutputFormat.QUIET:
+            # Quiet mode: just service names and their status
+            for svc in service_dicts:
+                console.print(f"{svc['name']}: {svc['status']}")
+            return
+
         output = {
-            "services": [svc.to_dict() for svc in results],
+            "services": service_dicts,
             "summary": {
-                "healthy": sum(1 for s in results if s.status == ServiceStatus.HEALTHY),
-                "unhealthy": sum(
-                    1 for s in results if s.status == ServiceStatus.UNHEALTHY
-                ),
-                "offline": sum(1 for s in results if s.status == ServiceStatus.OFFLINE),
+                "healthy": healthy,
+                "unhealthy": unhealthy,
+                "offline": offline,
             },
         }
-        console.print_json(json.dumps(output))
+
+        if fmt == OutputFormat.JSON:
+            console.print_json(json.dumps(output))
+        else:
+            # YAML
+            output_result(console, output, format="yaml")
         return
 
+    # --- Watch mode (Rich table) ---
     if watch:
         from rich.live import Live
         from rich.panel import Panel
@@ -245,11 +279,12 @@ def status(  # noqa: C901
             console.print("\n[dim]Stopped watching.[/dim]")
             return
 
+    # --- Default table output ---
     results = fetch_all_status()
     table = create_status_table(results)
     console.print(table)
 
-    healthy = sum(1 for s in results if s.status == ServiceStatus.HEALTHY)
+    healthy = sum(1 for r in results if r.is_available)
     total = len(results)
 
     if healthy == total:

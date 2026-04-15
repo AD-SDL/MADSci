@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A vendor SDK wrapper interface pattern for instrument communication"
 category: "comm"
 tags: ["sdk", "vendor", "wrapper", "communication"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

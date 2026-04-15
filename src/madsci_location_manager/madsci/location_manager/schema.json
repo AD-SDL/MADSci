@@ -1,0 +1,79 @@
+{
+    "database": "madsci_locations",
+    "schema_version": "3.0.0",
+    "description": "Schema definition for MADSci Location Manager document database",
+    "collections": {
+      "locations": {
+        "description": "Locations managed by this Location Manager",
+        "indexes": [
+          {
+            "keys": [["location_name", 1]],
+            "name": "location_name_unique",
+            "unique": true,
+            "description": "Unique constraint on location names"
+          },
+          {
+            "keys": [["location_id", 1]],
+            "name": "location_id_unique",
+            "unique": true,
+            "description": "Unique constraint on location IDs"
+          },
+          {
+            "keys": [["managed_by", 1]],
+            "name": "managed_by_idx",
+            "description": "Index for filtering locations by management type (node vs lab)"
+          }
+        ]
+      },
+      "representation_templates": {
+        "description": "Named representation templates for node-specific location data",
+        "indexes": [
+          {
+            "keys": [["template_name", 1]],
+            "name": "repr_template_name_unique",
+            "unique": true,
+            "description": "Unique constraint on representation template names"
+          },
+          {
+            "keys": [["template_id", 1]],
+            "name": "repr_template_id_unique",
+            "unique": true,
+            "description": "Unique constraint on representation template IDs"
+          }
+        ]
+      },
+      "location_templates": {
+        "description": "Named location templates for creating locations from blueprints",
+        "indexes": [
+          {
+            "keys": [["template_name", 1]],
+            "name": "loc_template_name_unique",
+            "unique": true,
+            "description": "Unique constraint on location template names"
+          },
+          {
+            "keys": [["template_id", 1]],
+            "name": "loc_template_id_unique",
+            "unique": true,
+            "description": "Unique constraint on location template IDs"
+          }
+        ]
+      },
+      "schema_versions": {
+        "description": "Version tracking for schema migrations",
+        "indexes": [
+          {
+            "keys": [["version", 1]],
+            "name": "version_unique",
+            "unique": true,
+            "description": "Unique constraint on version strings"
+          },
+          {
+            "keys": [["applied_at", -1]],
+            "name": "applied_at_desc",
+            "description": "Index for chronological version tracking"
+          }
+        ]
+      }
+    }
+  }

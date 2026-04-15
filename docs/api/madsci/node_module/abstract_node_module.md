@@ -37,6 +37,12 @@ Classes
     `config_model: ClassVar[type[madsci.common.types.node_types.NodeConfig]]`
     :   The node config model class. This is the class that will be used to instantiate self.config.
 
+    `intrinsic_locations: ClassVar[list[madsci.common.types.node_types.NodeIntrinsicLocationDefinition]]`
+    :   Intrinsic location definitions to register on startup.
+
+    `location_representation_templates: ClassVar[list[madsci.common.types.node_types.NodeRepresentationTemplateDefinition]]`
+    :   Declarative location representation template definitions to register on startup.
+
     `logger: ClassVar[madsci.client.event_client.EventClient | None]`
     :   The event logger for this node (initialized lazily via _configure_clients)
 
@@ -48,6 +54,9 @@ Classes
 
     `node_status: ClassVar[madsci.common.types.node_types.NodeStatus]`
     :   The status of the node.
+
+    `resource_templates: ClassVar[list[madsci.common.types.node_types.NodeResourceTemplateDefinition]]`
+    :   Declarative resource template definitions to register on startup.
 
     `supported_capabilities: ClassVar[madsci.common.types.node_types.NodeClientCapabilities]`
     :   The default supported capabilities of this node module class.
@@ -103,6 +112,14 @@ Classes
     `get_status(self) ‑> madsci.common.types.node_types.NodeStatus`
     :   Get the status of the node.
 
+    `intrinsic_location_handler(self) ‑> None`
+    :   Register intrinsic locations with the Location Manager.
+        
+        Iterates over ``intrinsic_locations`` class variable. Each location is
+        registered via location_client.init_location() with automatic
+        '{node_name}.' prefix. Errors are caught per-location so a single
+        failure does not prevent the node from starting.
+
     `lock(self) ‑> bool`
     :   Admin command to lock the node.
 
@@ -132,6 +149,15 @@ Classes
 
     `status_handler(self) ‑> None`
     :   Called periodically to update the node status. Should set `self.node_status`
+
+    `template_handler(self) ‑> None`
+    :   Register declarative templates with the resource and location managers.
+        
+        Iterates over ``resource_templates`` and ``location_representation_templates``
+        class members. Each template is registered via the appropriate client API.
+        Errors are caught and logged per-template (with the template name and type
+        clearly identified) so that a single failed registration does not prevent the
+        node from starting.
 
     `unlock(self) ‑> bool`
     :   Admin command to unlock the node.

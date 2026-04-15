@@ -82,7 +82,7 @@ class ResourceManagerSettings(
     db_url: str = Field(
         title="Database URL",
         description="The URL of the database for the resource manager.",
-        default="postgresql://madsci:madsci@localhost:5432/resources",
+        default="postgresql://madsci:madsci@localhost:5434/resources",
         json_schema_extra={"secret": True},
     )
 

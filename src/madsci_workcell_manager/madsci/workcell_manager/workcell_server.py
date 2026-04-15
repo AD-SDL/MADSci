@@ -1,5 +1,6 @@
 """MADSci Workcell Manager using AbstractManagerBase."""
 
+import contextlib
 import json
 import warnings
 from contextlib import asynccontextmanager
@@ -16,14 +17,14 @@ from madsci.client.location_client import (
 from madsci.common.context import (
     get_current_madsci_context,
 )
-from madsci.common.db_handlers import MongoHandler, RedisHandler
+from madsci.common.db_handlers import CacheHandler, DocumentStorageHandler
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
 from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.auth_types import OwnershipInfo
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.common.types.event_types import Event, EventType
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.common.types.node_types import Node
 from madsci.common.types.workcell_types import (
     WorkcellInfo,
@@ -45,6 +46,7 @@ from madsci.workcell_manager.workflow_utils import (
     pause_workflow,
     save_workflow_files,
 )
+from pydantic import ValidationError
 from ulid import ULID
 
 # Module-level constants for Body() calls to avoid B008 linting errors
@@ -69,28 +71,28 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         settings: Optional[WorkcellManagerSettings] = None,
         redis_connection: Optional[Any] = None,
         mongo_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
         start_engine: bool = True,
         **kwargs: Any,
     ) -> None:
         """Initialize the WorkcellManager."""
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         if mongo_connection is not None:
             warnings.warn(
-                "The 'mongo_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                "The 'mongo_connection' parameter is deprecated. Use 'document_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.redis_connection = redis_connection
         self.mongo_connection = mongo_connection
-        self.redis_handler = redis_handler
-        self.mongo_handler = mongo_handler
+        self.cache_handler = cache_handler
+        self.document_handler = document_handler
         self.start_engine = start_engine
 
         super().__init__(settings=settings, **kwargs)
@@ -108,16 +110,16 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         manager_id = self.settings.manager_id
 
         # Skip version validation if external connections or handlers were provided (e.g., in tests)
-        # This is commonly done in tests where a mock or containerized MongoDB is used
-        if self.mongo_connection is not None or self.mongo_handler is not None:
+        # This is commonly done in tests where a mock or in-memory document database is used
+        if self.mongo_connection is not None or self.document_handler is not None:
             # External connection/handler provided, likely in test context - skip version validation
             self.logger.info(
-                "External mongo connection/handler provided, skipping MongoDB version validation",
+                "External document handler provided, skipping document database version validation",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
                 manager_type="workcell",
-                mongo_external_connection=True,
+                document_handler_external=True,
             )
             # Continue with the rest of initialization (ownership, state handler, clients)
             global_ownership_info.workcell_id = manager_id
@@ -130,8 +132,8 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 nodes=self.settings.nodes,
                 redis_connection=self.redis_connection,
                 mongo_connection=self.mongo_connection,
-                redis_handler=self.redis_handler,
-                mongo_handler=self.mongo_handler,
+                cache_handler=self.cache_handler,
+                document_handler=self.document_handler,
             )
 
             # Initialize clients
@@ -141,19 +143,19 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             return
 
         self.logger.info(
-            "Validating MongoDB schema version",
+            "Validating document database schema version",
             event_type=EventType.MANAGER_START,
             manager_name=manager_name,
             manager_id=manager_id,
             manager_type="workcell",
-            mongo_db=str(self.settings.mongo_db_url),
+            mongo_db=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
         )
 
         schema_file_path = Path(__file__).parent / "schema.json"
-        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
-        version_checker = MongoDBVersionChecker(
-            db_url=str(self.settings.mongo_db_url),
+        mig_cfg = DocumentDBMigrationSettings(database=self.settings.database_name)
+        version_checker = DocumentDBVersionChecker(
+            db_url=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
             backup_dir=str(mig_cfg.backup_dir),
@@ -163,7 +165,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         try:
             version_checker.validate_or_fail()
             self.logger.info(
-                "MongoDB version validation completed successfully",
+                "Document database version validation completed successfully",
                 event_type=EventType.MANAGER_START,
                 manager_name=manager_name,
                 manager_id=manager_id,
@@ -193,8 +195,8 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             nodes=self.settings.nodes,
             redis_connection=self.redis_connection,
             mongo_connection=self.mongo_connection,
-            redis_handler=self.redis_handler,
-            mongo_handler=self.mongo_handler,
+            cache_handler=self.cache_handler,
+            document_handler=self.document_handler,
         )
 
         # Initialize clients using MadsciClientMixin
@@ -265,18 +267,25 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         health = WorkcellManagerHealth()
 
         try:
-            # Test Redis connection via handler
-            if hasattr(self.state_handler, "_redis_handler"):
-                health.redis_connected = self.state_handler._redis_handler.ping()
+            # Test cache connection via handler
+            if hasattr(self.state_handler, "_cache_handler"):
+                health.cache_connected = self.state_handler._cache_handler.ping()
             else:
-                health.redis_connected = None
+                health.cache_connected = None
 
             # Count nodes and check their reachability
             total_nodes = len(self.settings.nodes or {})
             health.total_nodes = total_nodes
 
-            # TODO: Implement actual node reachability checks
-            health.nodes_reachable = total_nodes
+            # Check actual node reachability by querying status
+            reachable = 0
+            for node in (self.settings.nodes or {}).values():
+                with contextlib.suppress(Exception):
+                    client = find_node_client(node.node_url)
+                    if client is not None:
+                        client.get_status()
+                        reachable += 1
+            health.nodes_reachable = reachable
 
             health.healthy = True
             health.description = "Workcell Manager is running normally"
@@ -284,7 +293,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         except Exception as e:
             health.healthy = False
             if "redis" in str(e).lower():
-                health.redis_connected = False
+                health.cache_connected = False
             health.description = f"Health check failed: {e!s}"
 
         return health
@@ -463,13 +472,60 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 )
         return self.state_handler.get_workflow(workflow_id)
 
+    @post("/workflow/{workflow_id}/resubmit")
+    def resubmit_workflow(self, workflow_id: str) -> Workflow:
+        """Resubmit a workflow as a brand new workflow run with the same parameters."""
+        # Look up the existing workflow
+        original_wf = self.state_handler.get_workflow(workflow_id)
+        if not original_wf:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow {workflow_id} not found",
+            )
+
+        # Look up the workflow definition
+        workflow_definition_id = original_wf.workflow_definition_id
+        try:
+            wf_def = self.state_handler.get_workflow_definition(workflow_definition_id)
+        except ValidationError as e:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Workflow definition {workflow_definition_id} not found",
+            ) from e
+
+        # Create a new workflow from the definition, reusing the original parameters
+        workcell = self.state_handler.get_workcell_info()
+        new_wf = create_workflow(
+            workflow_def=wf_def,
+            workcell=workcell,
+            json_inputs=original_wf.parameter_values,
+            file_input_paths=original_wf.file_input_paths,
+            state_handler=self.state_handler,
+            location_client=self.location_client,
+        )
+
+        # Save and enqueue the new workflow
+        with self.state_handler.wc_state_lock():
+            self.state_handler.set_active_workflow(new_wf)
+            self.state_handler.enqueue_workflow(new_wf.workflow_id)
+
+        self.logger.info(
+            "Workflow resubmit successful",
+            event_type=EventType.WORKFLOW_START,
+            workflow_name=new_wf.name,
+            workflow_id=new_wf.workflow_id,
+            original_workflow_id=workflow_id,
+            workflow_definition_id=workflow_definition_id,
+        )
+        return new_wf
+
     @post("/workflow_definition")
     async def submit_workflow_definition(
         self,
         workflow_definition: WorkflowDefinition,
     ) -> str:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -511,7 +567,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         workflow_definition_id: str,
     ) -> WorkflowDefinition:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------
@@ -538,7 +594,7 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
         files: list[UploadFile] = [],
     ) -> Workflow:
         """
-        Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+        Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
 
         Parameters
         ----------

@@ -226,5 +226,10 @@ validate_notebooks: validate_nb_node validate_nb_experiment validate_nb_backup
 otel *args: env
   @docker compose --profile otel up {{args}}
 
+oteld: env
+  @docker compose --profile otel up -d
+
+boteld: env build oteld
+
 # Run the full pipeline including notebook validation
 all: down pipeupd validate_notebooks down docs checks

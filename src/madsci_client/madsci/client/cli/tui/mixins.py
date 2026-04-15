@@ -1,0 +1,156 @@
+"""Screen mixins for MADSci TUI.
+
+Provides reusable behaviours that can be mixed into any
+:class:`~textual.screen.Screen` subclass.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+from collections.abc import Callable, Generator
+from typing import TYPE_CHECKING
+
+from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, DEFAULT_SERVICES
+from textual.reactive import reactive
+from textual.widgets import DataTable
+
+if TYPE_CHECKING:
+    from madsci.client.cli.tui.widgets.action_bar import ActionBar
+
+
+@contextlib.contextmanager
+def preserve_cursor(table: DataTable) -> Generator[None, None, None]:
+    """Context manager that preserves cursor position across a table refresh.
+
+    Saves the current cursor row before the block executes, and
+    restores it (clamped to the new row count) afterwards.
+
+    Usage::
+
+        with preserve_cursor(table):
+            table.clear()
+            for row in new_data:
+                table.add_row(...)
+    """
+    saved_row = table.cursor_row if table.row_count > 0 else 0
+    yield
+    if table.row_count > 0 and saved_row >= 0:
+        restored = min(saved_row, table.row_count - 1)
+        table.move_cursor(row=restored)
+
+
+class AutoRefreshMixin:
+    """Adds auto-refresh toggle capability to any Screen.
+
+    The consuming screen must implement a ``refresh_data()`` async method.
+    The mixin provides the reactive ``auto_refresh_enabled`` flag and the
+    ``action_toggle_auto_refresh()`` action that can be bound to a key.
+
+    Usage::
+
+        class MyScreen(AutoRefreshMixin, Screen):
+            BINDINGS = [("a", "toggle_auto_refresh", "Auto-refresh")]
+            refresh_interval = 5.0
+
+            async def refresh_data(self) -> None:
+                # Fetch and display data
+                ...
+    """
+
+    auto_refresh_enabled: reactive[bool] = reactive(True)
+    refresh_interval: float = AUTO_REFRESH_INTERVAL
+
+    async def refresh_data(self) -> None:
+        """Override to define the refresh behaviour.
+
+        This method is called automatically by the application's
+        auto-refresh timer (see ``MadsciApp``). Subclasses should
+        fetch and update their data here.
+        """
+
+    def action_toggle_auto_refresh(self) -> None:
+        """Toggle the auto-refresh flag and notify the user."""
+        self.auto_refresh_enabled = not self.auto_refresh_enabled
+        state = "enabled" if self.auto_refresh_enabled else "disabled"
+        if hasattr(self, "notify"):
+            self.notify(f"Auto-refresh {state}", timeout=2)
+
+    async def on_unmount(self) -> None:
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "aclose"):
+                    await client.aclose()
+                elif client is not None and hasattr(client, "close"):
+                    client.close()
+
+
+class ServiceURLMixin:
+    """Provides service URL resolution from the application context.
+
+    Looks up service URLs from ``self.app.service_urls`` (set by
+    :class:`MadsciApp`) and falls back to hardcoded defaults from
+    :data:`DEFAULT_SERVICES`.
+
+    Usage::
+
+        class MyScreen(ServiceURLMixin, Screen):
+            async def fetch_data(self):
+                url = self.get_service_url("event_manager")
+                client = MyClient(server_url=url)
+                data = await client.async_get_data()
+    """
+
+    def get_service_url(self, service_name: str) -> str:
+        """Get the URL for a named service.
+
+        Resolution order:
+        1. ``self.app.service_urls`` (runtime configuration)
+        2. :data:`DEFAULT_SERVICES` (compile-time defaults)
+
+        Args:
+            service_name: Service key, e.g. ``"event_manager"``.
+
+        Returns:
+            Base URL string for the service.
+        """
+        try:
+            return self.app.service_urls.get(
+                service_name,
+                DEFAULT_SERVICES.get(service_name, "http://localhost:8000/"),
+            )
+        except Exception:
+            return DEFAULT_SERVICES.get(service_name, "http://localhost:8000/")
+
+
+class ActionBarMixin:
+    """Mixin that dispatches ActionBar.ActionTriggered events to an action map.
+
+    Subclasses should define a ``_get_action_map()`` method returning
+    ``dict[str, Callable]`` mapping action IDs to handlers.
+
+    Usage::
+
+        class MyScreen(ActionBarMixin, AutoRefreshMixin, Screen):
+            def _get_action_map(self) -> dict:
+                return {
+                    "refresh": self.action_refresh,
+                    "toggle_auto_refresh": self.action_toggle_auto_refresh,
+                }
+    """
+
+    def on_action_bar_action_triggered(self, event: ActionBar.ActionTriggered) -> None:
+        """Dispatch an action bar event to the appropriate handler."""
+        action_map = self._get_action_map()
+        handler = action_map.get(event.action)
+        if handler is not None:
+            if asyncio.iscoroutinefunction(handler):
+                self.run_worker(handler())  # type: ignore[attr-defined]
+            else:
+                handler()
+
+    def _get_action_map(self) -> dict[str, Callable]:
+        """Return a mapping of action IDs to handler callables. Override in subclass."""
+        return {}

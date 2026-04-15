@@ -111,7 +111,7 @@ def list_entries(
 
         table.add_row(
             name,
-            entry.id[:12] + "...",  # Truncate ULID
+            entry.id,
             entry.component_type,
             status,
             entry.last_seen.strftime("%Y-%m-%d %H:%M"),

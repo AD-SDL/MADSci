@@ -7,6 +7,7 @@ from madsci.common.validators import (
     create_dict_promoter,
     optional_ulid_validator,
     ulid_validator,
+    url_safe_name_validator,
 )
 
 
@@ -256,3 +257,60 @@ def test_create_dict_promoter_duplicate_keys():
     assert len(result) == 2  # Only A and B
     assert result["A"] == {"category": "A", "value": 3}  # Last value wins
     assert result["B"] == {"category": "B", "value": 2}
+
+
+def test_url_safe_name_validator_valid():
+    """Test URL-safe name validator with valid inputs."""
+    info = MockValidationInfo("name_field")
+
+    # Alphanumeric
+    assert url_safe_name_validator("test123", info) == "test123"
+
+    # With underscores
+    assert url_safe_name_validator("test_name_123", info) == "test_name_123"
+
+    # With dots
+    assert url_safe_name_validator("test.name", info) == "test.name"
+
+    # With hyphens
+    assert url_safe_name_validator("test-name", info) == "test-name"
+
+    # Mixed allowed characters
+    assert url_safe_name_validator("my-lab.slot_1", info) == "my-lab.slot_1"
+
+
+def test_url_safe_name_validator_empty():
+    """Test URL-safe name validator rejects empty string."""
+    info = MockValidationInfo("name_field")
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        url_safe_name_validator("", info)
+
+
+def test_url_safe_name_validator_invalid():
+    """Test URL-safe name validator rejects invalid characters."""
+    info = MockValidationInfo("name_field")
+
+    # Spaces
+    with pytest.raises(
+        ValueError, match="alphanumeric characters, underscores, dots, and hyphens"
+    ):
+        url_safe_name_validator("test name", info)
+
+    # Special characters
+    with pytest.raises(
+        ValueError, match="alphanumeric characters, underscores, dots, and hyphens"
+    ):
+        url_safe_name_validator("test@name", info)
+
+    # Slashes
+    with pytest.raises(
+        ValueError, match="alphanumeric characters, underscores, dots, and hyphens"
+    ):
+        url_safe_name_validator("test/name", info)
+
+    # Hash
+    with pytest.raises(
+        ValueError, match="alphanumeric characters, underscores, dots, and hyphens"
+    ):
+        url_safe_name_validator("test#name", info)

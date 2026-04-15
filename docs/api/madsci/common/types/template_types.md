@@ -43,6 +43,9 @@ Classes
     `parameters_used: dict[str, typing.Any]`
     :
 
+    `skills_included: list[str]`
+    :
+
     `template_name: str`
     :
 
@@ -122,6 +125,9 @@ Classes
 
     ### Class variables
 
+    `ADDON`
+    :
+
     `COMM`
     :
 
@@ -138,9 +144,6 @@ Classes
     :
 
     `NODE`
-    :
-
-    `WORKCELL`
     :
 
     `WORKFLOW`
@@ -301,7 +304,13 @@ Classes
     `schema_version: str`
     :
 
+    `skills: list[str]`
+    :
+
     `tags: list[str]`
+    :
+
+    `target_model: str | None`
     :
 
     `version: str`

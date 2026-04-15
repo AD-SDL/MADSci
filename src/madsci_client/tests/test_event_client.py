@@ -6,10 +6,10 @@ import tempfile
 import time
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import httpx
 import pytest
-import requests
 from madsci.client.event_client import EventClient
 from madsci.common.types.event_types import (
     Event,
@@ -77,10 +77,14 @@ class TestEventClientInit:
             mock_config.return_value.log_dir = temp_log_dir
             mock_config.return_value.log_level = EventLogLevel.INFO
             mock_config.return_value.event_server_url = None
+            mock_config.return_value.otel_enabled = False
 
-            with patch(
-                "madsci.client.event_client.get_current_madsci_context"
-            ) as mock_context:
+            with (
+                patch(
+                    "madsci.client.event_client.get_current_madsci_context"
+                ) as mock_context,
+                patch("madsci.client.event_client.create_httpx_client"),
+            ):
                 mock_context.return_value.event_server_url = None
 
                 client = EventClient()
@@ -111,7 +115,7 @@ class TestEventClientInit:
 class TestEventClientLogging:
     """Test EventClient logging methods."""
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_log_event_object(
         self, mock_create_session, config_with_server, temp_log_dir, sample_event
     ):
@@ -120,25 +124,26 @@ class TestEventClientLogging:
 
         # Mock successful POST to event server
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         # Reset mock after initialization (which logs debug messages)
-        mock_session.post.reset_mock()
+        mock_session.request.reset_mock()
 
         client.log(sample_event)
 
         # Wait for the threaded task to complete (log sends events asynchronously)
         time.sleep(0.1)
 
-        # Verify event was sent to server
-        mock_session.post.assert_called_once()
-        call_args = mock_session.post.call_args
+        # Verify event was sent to server via _request("POST", ...)
+        mock_session.request.assert_called_once()
+        call_args = mock_session.request.call_args
+        assert call_args[0][0] == "POST"
         assert call_args[1]["timeout"] == 10.0
         # Verify the JSON payload contains our event data
         json_data = call_args[1]["json"]
@@ -260,7 +265,7 @@ class TestEventClientLogging:
 
         assert client.logfile.exists()
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_event_server_error_handling(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -269,7 +274,7 @@ class TestEventClientLogging:
 
         # Mock failed POST to event server
         mock_session = Mock()
-        mock_session.post.side_effect = requests.RequestException("Server error")
+        mock_session.request.side_effect = httpx.HTTPError("Server error")
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -287,7 +292,7 @@ class TestEventClientLogging:
 class TestEventClientEventRetrieval:
     """Test EventClient event retrieval methods."""
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_event_with_server(
         self, mock_create_session, config_with_server, temp_log_dir, sample_event
     ):
@@ -296,18 +301,19 @@ class TestEventClientEventRetrieval:
 
         # Mock successful GET from event server
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = sample_event.model_dump()
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_event(sample_event.event_id)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             f"http://localhost:8001/event/{sample_event.event_id}",
             timeout=10.0,
         )
@@ -338,7 +344,7 @@ class TestEventClientEventRetrieval:
 
         assert result is None
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_event_http_error(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -346,19 +352,21 @@ class TestEventClientEventRetrieval:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        mock_response.is_success = False
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found", request=Mock(), response=mock_response
+        )
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_event("some_id")
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_events_with_server(
         self, mock_create_session, config_with_server, temp_log_dir, sample_event
     ):
@@ -367,20 +375,21 @@ class TestEventClientEventRetrieval:
 
         # Mock successful GET from event server
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = {
             sample_event.event_id: sample_event.model_dump()
         }
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_events(number=50, level=logging.INFO)
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/events",
             timeout=10.0,
             params={"number": 50, "level": logging.INFO},
@@ -389,7 +398,7 @@ class TestEventClientEventRetrieval:
         assert sample_event.event_id in result
         assert isinstance(result[sample_event.event_id], Event)
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_events_with_default_params(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -397,18 +406,19 @@ class TestEventClientEventRetrieval:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = {}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         result = client.get_events()
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/events",
             timeout=10.0,
             params={"number": 100, "level": 10},  # DEBUG level
@@ -439,7 +449,7 @@ class TestEventClientEventRetrieval:
         # Should return the most recent 3 events (reverse order)
         assert len(result) == 3
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_events_http_error(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -447,25 +457,25 @@ class TestEventClientEventRetrieval:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "500 Server Error"
+        mock_response.is_success = False
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "500 Server Error", request=Mock(), response=mock_response
         )
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.get_events()
 
 
 class TestEventClientQueryEvents:
     """Test EventClient query_events method."""
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_query_events_with_server(
         self, mock_create_session, config_with_server, temp_log_dir, sample_event
     ):
@@ -474,25 +484,25 @@ class TestEventClientQueryEvents:
 
         # Mock successful POST to event server
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.json.return_value = {
             sample_event.event_id: sample_event.model_dump()
         }
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
         # Reset mock after initialization
-        mock_session.post.reset_mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.reset_mock()
 
         selector = {"event_type": "test", "source.user": "test_user"}
         result = client.query_events(selector)
 
-        mock_session.post.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "POST",
             "http://localhost:8001/events/query",
             timeout=10.0,
             params={"selector": selector},
@@ -511,7 +521,7 @@ class TestEventClientQueryEvents:
         assert isinstance(result, dict)
         assert len(result) == 0
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_query_events_http_error(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -519,18 +529,18 @@ class TestEventClientQueryEvents:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = False
-        mock_response.raise_for_status.side_effect = requests.HTTPError(
-            "400 Bad Request"
+        mock_response.is_success = False
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "400 Bad Request", request=Mock(), response=mock_response
         )
 
         mock_session = Mock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
 
-        with pytest.raises(requests.HTTPError):
+        with pytest.raises(httpx.HTTPStatusError):
             client.query_events({"event_type": "test"})
 
 
@@ -539,7 +549,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_version_on_init(self, config_without_server, caplog):
         """Test that MADSci version is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         # Check that version info appears in log output
@@ -549,7 +559,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_config_summary_on_init(self, config_without_server, caplog):
         """Test that configuration summary is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()
@@ -565,8 +575,8 @@ class TestEventClientStartupLogging:
         config_with_server.log_dir = temp_log_dir
 
         with (
-            patch("madsci.client.event_client.create_http_session"),
-            caplog.at_level(logging.INFO),
+            patch("madsci.client.event_client.create_httpx_client"),
+            caplog.at_level(logging.DEBUG),
         ):
             client = EventClient(config=config_with_server)
 
@@ -577,7 +587,7 @@ class TestEventClientStartupLogging:
 
     def test_logs_python_version_on_init(self, config_without_server, caplog):
         """Test that Python version is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()
@@ -589,7 +599,7 @@ class TestEventClientStartupLogging:
         self, config_without_server, caplog
     ):
         """Test that platform info is logged on initialization."""
-        with caplog.at_level(logging.INFO):
+        with caplog.at_level(logging.DEBUG):
             client = EventClient(config=config_without_server)
 
         log_text = caplog.text.lower()
@@ -601,7 +611,7 @@ class TestEventClientStartupLogging:
 class TestEventClientUtilizationMethods:
     """Test EventClient utilization report methods."""
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_utilization_periods_json(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -609,12 +619,12 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"utilization_data": "test"}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -627,7 +637,8 @@ class TestEventClientUtilizationMethods:
             include_users=True,
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/periods",
             params={
                 "analysis_type": "daily",
@@ -640,7 +651,7 @@ class TestEventClientUtilizationMethods:
         )
         assert result == {"utilization_data": "test"}
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_utilization_periods_csv(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -648,12 +659,12 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.headers = {"content-type": "text/csv"}
         mock_response.text = "date,utilization\\n2025-01-01,50%"
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -672,7 +683,8 @@ class TestEventClientUtilizationMethods:
                 "save_to_file": "true",
                 "output_path": output_path,
             }
-            mock_session.get.assert_called_once_with(
+            mock_session.request.assert_called_once_with(
+                "GET",
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=100.0,
@@ -687,7 +699,7 @@ class TestEventClientUtilizationMethods:
 
         assert result is None
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_session_utilization_json(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -695,12 +707,12 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"sessions": []}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -710,7 +722,8 @@ class TestEventClientUtilizationMethods:
             end_time="2025-01-02T00:00:00Z",
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/sessions",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
@@ -720,7 +733,7 @@ class TestEventClientUtilizationMethods:
         )
         assert result == {"sessions": []}
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_session_utilization_csv(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -728,12 +741,12 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.headers = {"content-type": "text/csv"}
         mock_response.text = "session,start,end\\nsession1,2025-01-01,2025-01-02"
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -751,7 +764,8 @@ class TestEventClientUtilizationMethods:
                 "save_to_file": "true",
                 "output_path": output_path,
             }
-            mock_session.get.assert_called_once_with(
+            mock_session.request.assert_called_once_with(
+                "GET",
                 "http://localhost:8001/utilization/sessions",
                 params=expected_params,
                 timeout=100.0,
@@ -766,7 +780,7 @@ class TestEventClientUtilizationMethods:
 
         assert result is None
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_get_user_utilization_report_json(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -774,12 +788,12 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_response = Mock()
-        mock_response.ok = True
+        mock_response.is_success = True
         mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"users": {}}
 
         mock_session = Mock()
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -789,7 +803,8 @@ class TestEventClientUtilizationMethods:
             end_time="2025-01-02T00:00:00Z",
         )
 
-        mock_session.get.assert_called_once_with(
+        mock_session.request.assert_called_once_with(
+            "GET",
             "http://localhost:8001/utilization/users",
             params={
                 "start_time": "2025-01-01T00:00:00Z",
@@ -807,7 +822,7 @@ class TestEventClientUtilizationMethods:
 
         assert result is None
 
-    @patch("madsci.client.event_client.create_http_session")
+    @patch("madsci.client.event_client.create_httpx_client")
     def test_utilization_methods_request_exception(
         self, mock_create_session, config_with_server, temp_log_dir
     ):
@@ -815,7 +830,7 @@ class TestEventClientUtilizationMethods:
         config_with_server.log_dir = temp_log_dir
 
         mock_session = Mock()
-        mock_session.get.side_effect = requests.RequestException("Network error")
+        mock_session.request.side_effect = httpx.HTTPError("Network error")
         mock_create_session.return_value = mock_session
 
         client = EventClient(config=config_with_server)
@@ -1484,3 +1499,107 @@ class TestEventClientBoundChildBehavior:
         assert child.session is parent.session
 
         parent.close()
+
+
+# ---------------------------------------------------------------------------
+# EventClient aclose / close async cleanup tests
+# ---------------------------------------------------------------------------
+
+
+class TestEventClientAsyncCleanup:
+    """Tests for EventClient.aclose() and the async-cleanup path in close()."""
+
+    @pytest.mark.asyncio
+    async def test_aclose_closes_async_client(self, temp_log_dir):
+        """aclose() awaits _async_client.aclose() and nullifies the reference."""
+        config = EventClientConfig(
+            name="aclose_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
+        client._async_client = mock_async
+
+        await client.aclose()
+
+        mock_async.aclose.assert_called_once()
+        assert client._async_client is None
+
+    @pytest.mark.asyncio
+    async def test_aclose_closes_sync_client(self, temp_log_dir):
+        """aclose() also closes the sync _client."""
+        config = EventClientConfig(
+            name="aclose_sync_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_sync = MagicMock(spec=httpx.Client)
+        client._client = mock_sync
+
+        await client.aclose()
+
+        mock_sync.close.assert_called_once()
+        assert client._client is None
+
+    @pytest.mark.asyncio
+    async def test_aclose_idempotent(self, temp_log_dir):
+        """aclose() can be called multiple times without error."""
+        config = EventClientConfig(
+            name="aclose_idempotent",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        await client.aclose()
+        await client.aclose()  # Should not raise
+
+    @pytest.mark.asyncio
+    async def test_aclose_skips_if_bound_child(self, temp_log_dir):
+        """aclose() on a bound child client skips cleanup."""
+        config = EventClientConfig(
+            name="aclose_child_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        parent = EventClient(config=config)
+        child = parent.bind(step="x")
+        mock_async = AsyncMock(spec=httpx.AsyncClient)
+        child._async_client = mock_async
+
+        await child.aclose()
+
+        mock_async.aclose.assert_not_called()
+        parent.close()
+
+    def test_close_attempts_async_cleanup_when_no_loop_running(self, temp_log_dir):
+        """close() attempts async cleanup via event loop when no loop is running."""
+        config = EventClientConfig(
+            name="close_async_test",
+            log_dir=temp_log_dir,
+            event_server_url=None,
+            otel_enabled=False,
+        )
+        client = EventClient(config=config)
+        mock_async = MagicMock(spec=httpx.AsyncClient)
+        # Track whether aclose was scheduled
+        aclose_called = []
+
+        async def fake_aclose():
+            aclose_called.append(True)
+
+        mock_async.aclose = fake_aclose
+        client._async_client = mock_async
+
+        # No async loop is running in this sync test, so close() should
+        # attempt to run aclose() via get_event_loop().run_until_complete()
+        client.close()
+
+        # Either the loop ran aclose or the reference was dropped -- either way
+        # the client should be None afterward.
+        assert client._async_client is None

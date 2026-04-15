@@ -12,8 +12,8 @@ import zipfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import httpx
 import pytest
-import requests
 from fastapi.testclient import TestClient
 from madsci.client.node.rest_node_client import RestNodeClient
 from madsci.common.types.action_types import (
@@ -100,7 +100,7 @@ class TestClientOperations:
         """Fixture to create a RestNodeClient instance."""
         return RestNodeClient(url="http://localhost:2000")
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_get_status(self, mock_create_session: MagicMock) -> None:
         """Test the get_status method."""
         # Create mock session and response
@@ -111,7 +111,7 @@ class TestClientOperations:
         mock_response.ok = True
         mock_response.raise_for_status.return_value = None
         mock_response.json.return_value = {"ready": True, "locked": False}
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
 
         # Create new client to use mocked session
         test_client = RestNodeClient(url="http://localhost:2000")
@@ -120,11 +120,11 @@ class TestClientOperations:
         assert isinstance(status, NodeStatus)
         assert status.ready is True
         assert status.locked is False
-        mock_session.get.assert_called_once_with(
-            "http://localhost:2000/status", timeout=10
+        mock_session.request.assert_called_once_with(
+            "GET", "http://localhost:2000/status", timeout=10
         )
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_get_info(self, mock_create_session: MagicMock) -> None:
         """Test the get_info method."""
         # Create mock session and response
@@ -137,7 +137,7 @@ class TestClientOperations:
         mock_response.json.return_value = NodeInfo(
             node_name="Test Node", module_name="test_module"
         ).model_dump(mode="json")
-        mock_session.get.return_value = mock_response
+        mock_session.request.return_value = mock_response
 
         # Create new client to use mocked session
         test_client = RestNodeClient(url="http://localhost:2000")
@@ -146,11 +146,11 @@ class TestClientOperations:
         assert isinstance(info, NodeInfo)
         assert info.node_name == "Test Node"
         assert info.module_name == "test_module"
-        mock_session.get.assert_called_once_with(
-            "http://localhost:2000/info", timeout=10
+        mock_session.request.assert_called_once_with(
+            "GET", "http://localhost:2000/info", timeout=10
         )
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_send_action_no_await(self, mock_create_session: MagicMock) -> None:
         """Test the send_action method without awaiting."""
         action_id = new_ulid_str()
@@ -173,7 +173,7 @@ class TestClientOperations:
             action_id=action_id
         ).model_dump(mode="json")
 
-        mock_session.post.side_effect = [create_response, start_response]
+        mock_session.request.side_effect = [create_response, start_response]
 
         # Create new client to use mocked session
         test_client = RestNodeClient(url="http://localhost:2000")
@@ -185,9 +185,9 @@ class TestClientOperations:
         assert result.action_id == action_id
 
         # Verify the calls: create_action then start_action
-        assert mock_session.post.call_count == 2
+        assert mock_session.request.call_count == 2
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_send_action_with_await(
         self,
         mock_create_session: MagicMock,
@@ -233,8 +233,9 @@ class TestClientOperations:
             action_id=action_id
         ).model_dump(mode="json")
 
-        mock_session.post.side_effect = [create_response, start_response]
-        mock_session.get.side_effect = [
+        mock_session.request.side_effect = [
+            create_response,
+            start_response,
             running_response,
             success_response,
             result_response,
@@ -249,20 +250,20 @@ class TestClientOperations:
         assert result.status == ActionStatus.SUCCEEDED
         assert result.action_id == action_id
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_client_timeout_handling(self, mock_create_session: MagicMock) -> None:
         """Test client timeout handling."""
         # Create mock session
         mock_session = MagicMock()
         mock_create_session.return_value = mock_session
-        mock_session.get.side_effect = requests.Timeout("Request timed out")
+        mock_session.request.side_effect = httpx.TimeoutException("Request timed out")
 
         # Create new client to use mocked session
         test_client = RestNodeClient(url="http://localhost:2000")
-        with pytest.raises(requests.Timeout):
+        with pytest.raises(httpx.TimeoutException):
             test_client.get_status()
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_client_connection_error_handling(
         self, mock_create_session: MagicMock
     ) -> None:
@@ -270,11 +271,11 @@ class TestClientOperations:
         # Create mock session
         mock_session = MagicMock()
         mock_create_session.return_value = mock_session
-        mock_session.get.side_effect = requests.ConnectionError("Connection failed")
+        mock_session.request.side_effect = httpx.ConnectError("Connection failed")
 
         # Create new client to use mocked session
         test_client = RestNodeClient(url="http://localhost:2000")
-        with pytest.raises(requests.ConnectionError):
+        with pytest.raises(httpx.ConnectError):
             test_client.get_status()
 
 

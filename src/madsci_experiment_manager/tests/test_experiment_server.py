@@ -1,13 +1,15 @@
 """
 Test the Experiment Manager's REST server.
 
-Uses in-memory MongoDB handler for fast, Docker-free tests.
+Uses in-memory document storage handler for fast, Docker-free tests.
 """
 
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.types.experiment_types import (
     Experiment,
     ExperimentDesign,
@@ -19,15 +21,15 @@ from madsci.experiment_manager.experiment_server import ExperimentManager
 
 
 @pytest.fixture()
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_experiments")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_experiments")
     yield handler
     handler.close()
 
 
 @pytest.fixture()
-def test_client(mongo_handler) -> TestClient:
+def test_client(document_handler) -> TestClient:
     """Test client fixture for the Experiment Manager's server."""
     settings = ExperimentManagerSettings(
         manager_name="test_experiment_manager",
@@ -35,7 +37,7 @@ def test_client(mongo_handler) -> TestClient:
     )
     manager = ExperimentManager(
         settings=settings,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     app = manager.create_server()
     client = TestClient(app)

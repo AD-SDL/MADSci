@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import pytest
-from madsci.common.db_handlers.minio_handler import InMemoryMinioHandler
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.cache_handler import InMemoryCacheHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
+from madsci.common.db_handlers.object_storage_handler import (
+    InMemoryObjectStorageHandler,
+)
 from madsci.common.db_handlers.postgres_handler import SQLiteHandler
-from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 # ---------------------------------------------------------------------------
 # In-memory fixtures (always available, no Docker required)
@@ -14,17 +18,17 @@ from madsci.common.db_handlers.redis_handler import InMemoryRedisHandler
 
 
 @pytest.fixture()
-def inmemory_mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_db")
+def inmemory_document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_db")
     yield handler
     handler.close()
 
 
 @pytest.fixture()
-def inmemory_redis_handler():
-    """Create an InMemoryRedisHandler for testing."""
-    handler = InMemoryRedisHandler()
+def inmemory_cache_handler():
+    """Create an InMemoryCacheHandler for testing."""
+    handler = InMemoryCacheHandler()
     yield handler
     handler.close()
 
@@ -38,9 +42,9 @@ def sqlite_handler():
 
 
 @pytest.fixture()
-def inmemory_minio_handler():
-    """Create an InMemoryMinioHandler for testing."""
-    handler = InMemoryMinioHandler()
+def inmemory_object_storage_handler():
+    """Create an InMemoryObjectStorageHandler for testing."""
+    handler = InMemoryObjectStorageHandler()
     yield handler
     handler.close()
 
@@ -51,24 +55,23 @@ def inmemory_minio_handler():
 
 
 @pytest.fixture(scope="module")
-def real_mongo_handler():
-    """Create a PyMongoHandler backed by a real MongoDB container."""
+def real_document_handler():
+    """Create a PyDocumentStorageHandler backed by a real MongoDB-compatible container."""
     try:
         from testcontainers.mongodb import MongoDbContainer  # noqa: PLC0415
     except ImportError:
         pytest.skip("testcontainers[mongodb] not installed")
 
-    from madsci.common.db_handlers.mongo_handler import PyMongoHandler  # noqa: PLC0415
+    from madsci.common.db_handlers.document_storage_handler import (  # noqa: PLC0415
+        PyDocumentStorageHandler,
+    )
     from testcontainers.core.wait_strategies import PortWaitStrategy  # noqa: PLC0415
 
     try:
         with MongoDbContainer("mongo:7") as mongo:
-            # MongoDbContainer._connect() only checks container logs, not host
-            # port reachability. Wait for host-side port forwarding (can lag on
-            # macOS/Rancher Desktop VM networking).
             PortWaitStrategy(27017).wait_until_ready(mongo)
             url = mongo.get_connection_url()
-            handler = PyMongoHandler.from_url(url, "test_db")
+            handler = PyDocumentStorageHandler.from_url(url, "test_db")
             if not handler.ping():
                 handler.close()
                 pytest.skip("MongoDB container started but connection failed")
@@ -79,20 +82,20 @@ def real_mongo_handler():
 
 
 @pytest.fixture(scope="module")
-def real_redis_handler():
-    """Create a PyRedisHandler backed by a real Redis container."""
+def real_cache_handler():
+    """Create a PyCacheHandler backed by a real Redis/Valkey container."""
     try:
         from testcontainers.redis import RedisContainer  # noqa: PLC0415
     except ImportError:
         pytest.skip("testcontainers[redis] not installed")
 
-    from madsci.common.db_handlers.redis_handler import PyRedisHandler  # noqa: PLC0415
+    from madsci.common.db_handlers.cache_handler import PyCacheHandler  # noqa: PLC0415
 
     try:
         with RedisContainer("redis:7") as redis_container:
             host = redis_container.get_container_host_ip()
             port = int(redis_container.get_exposed_port(6379))
-            handler = PyRedisHandler.from_settings(host=host, port=port)
+            handler = PyCacheHandler.from_settings(host=host, port=port)
             if not handler.ping():
                 handler.close()
                 pytest.skip("Redis container started but connection failed")
@@ -117,10 +120,6 @@ def real_postgres_handler():
 
     try:
         with PostgresContainer("postgres:16") as pg:
-            # PostgresContainer._connect() uses ExecWaitStrategy (psql inside
-            # container) which doesn't verify host-side port forwarding. Wait
-            # for the mapped port to be reachable from the host (can lag ~1-2s
-            # on macOS/Rancher Desktop VM networking).
             PortWaitStrategy(5432).wait_until_ready(pg)
             url = pg.get_connection_url()
             handler = SQLAlchemyHandler.from_url(url)
@@ -134,15 +133,15 @@ def real_postgres_handler():
 
 
 @pytest.fixture(scope="module")
-def real_minio_handler():
-    """Create a RealMinioHandler backed by a real MinIO container."""
+def real_object_storage_handler():
+    """Create a RealObjectStorageHandler backed by a real S3-compatible container."""
     try:
         from testcontainers.minio import MinioContainer  # noqa: PLC0415
     except ImportError:
         pytest.skip("testcontainers[minio] not installed")
 
-    from madsci.common.db_handlers.minio_handler import (  # noqa: PLC0415
-        RealMinioHandler,
+    from madsci.common.db_handlers.object_storage_handler import (  # noqa: PLC0415
+        RealObjectStorageHandler,
     )
     from minio import Minio  # noqa: PLC0415
 
@@ -155,11 +154,13 @@ def real_minio_handler():
                 secret_key=config["secret_key"],
                 secure=False,
             )
-            handler = RealMinioHandler(client)
+            handler = RealObjectStorageHandler(client)
             if not handler.ping():
                 handler.close()
-                pytest.skip("MinIO container started but connection failed")
+                pytest.skip("S3 container started but connection failed")
             yield handler
             handler.close()
     except Exception as e:
-        pytest.skip(f"Could not start MinIO container (Docker unavailable?): {e}")
+        pytest.skip(
+            f"Could not start S3-compatible container (Docker unavailable?): {e}"
+        )

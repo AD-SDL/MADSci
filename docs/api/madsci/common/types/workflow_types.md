@@ -178,11 +178,25 @@ Classes
 
     ### Static methods
 
+    `coerce_simplified_parameters(v: Any) ‑> Any`
+    :   Convert simplified parameter dicts to canonical parameter format.
+        
+        Accepts a user-friendly list format where each item has ``name``,
+        ``type``, ``default``, and ``description`` keys, and converts them
+        to the canonical format with ``key`` and ``parameter_type`` fields.
+        
+        The ``type`` field is mapped to ``parameter_type``:
+        - ``"file"`` / ``"file_input"`` / ``"input_file"`` -> ``"file_input"``
+        - All other values (including omitted) -> ``"json_input"``
+
     `ensure_step_key_uniqueness(v: Any) ‑> Any`
     :   Ensure that the names of the data labels are unique
 
     `promote_parameters_list_to_data_model(v: Any) ‑> Any`
     :   Promote parameters to data model form
+
+    `promote_root_description(data: Any) ‑> Any`
+    :   Move root-level 'description' into definition_metadata/metadata.
 
     ### Methods
 

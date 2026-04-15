@@ -16,7 +16,7 @@ Sub-modules
 Classes
 -------
 
-`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, redis_handler: madsci.common.db_handlers.redis_handler.RedisHandler | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, start_engine: bool = True, **kwargs: Any)`
+`WorkcellManager(settings: madsci.common.types.workcell_types.WorkcellManagerSettings | None = None, redis_connection: Any | None = None, mongo_connection: Any | None = None, cache_handler: madsci.common.db_handlers.cache_handler.CacheHandler | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None, start_engine: bool = True, **kwargs: Any)`
 :   MADSci Workcell Manager using the new AbstractManagerBase pattern.
     
     This manager uses MadsciClientMixin (via AbstractManagerBase) for client management.
@@ -75,7 +75,7 @@ Classes
     :   Get info on a specific workflow.
 
     `get_workflow_definition(self, workflow_definition_id: str) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------
@@ -99,6 +99,9 @@ Classes
     `pause_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Pause a running workflow.
 
+    `resubmit_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
+    :   Resubmit a workflow as a brand new workflow run with the same parameters.
+
     `resume_workflow(self, workflow_id: str) ‑> madsci.common.types.workflow_types.Workflow`
     :   Resume a paused workflow.
 
@@ -112,7 +115,7 @@ Classes
     :   Send admin command to a node.
 
     `start_workflow(self, workflow_definition_id: typing.Annotated[str, Form(PydanticUndefined)], ownership_info: typing.Annotated[str | None, Form(PydanticUndefined)] = None, json_inputs: typing.Annotated[str | None, Form(PydanticUndefined)] = None, file_input_paths: typing.Annotated[str | None, Form(PydanticUndefined)] = None, files: list[fastapi.datastructures.UploadFile] = []) ‑> madsci.common.types.workflow_types.Workflow`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------
@@ -133,7 +136,7 @@ Classes
         - a workflow run object for the requested run_id
 
     `submit_workflow_definition(self, workflow_definition: madsci.common.types.workflow_types.WorkflowDefinition) ‑> str`
-    :   Parses the payload and workflow files, and then pushes a workflow job onto the redis queue
+    :   Parses the payload and workflow files, and then pushes a workflow job onto the workflow queue
         
         Parameters
         ----------

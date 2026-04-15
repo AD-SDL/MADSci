@@ -3,6 +3,7 @@ version: "2.0.0"
 description: "A simple run-once experiment script using ExperimentScript modality"
 category: "experiment"
 tags: ["script", "simple", "starter"]
+skills: ["madsci-experiments"]
 
 author: "MADSci Team"
 license: "MIT"

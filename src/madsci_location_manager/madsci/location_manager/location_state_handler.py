@@ -1,56 +1,116 @@
 """
-State management for the LocationManager
+State management for the LocationManager.
+
+Uses document database (FerretDB) for persistent location CRUD,
+and cache (Valkey) for transient state (locks, change counters).
 """
 
 import warnings
 from typing import Any, Optional, Union
 
-from madsci.common.db_handlers import PyRedisHandler, RedisHandler
-from madsci.common.types.location_types import Location, LocationManagerSettings
+from madsci.common.db_handlers import (
+    CacheHandler,
+    DocumentStorageHandler,
+    PyCacheHandler,
+    PyDocumentStorageHandler,
+)
+from madsci.common.types.location_types import (
+    Location,
+    LocationManagerSettings,
+    LocationRepresentationTemplate,
+    LocationTemplate,
+)
 from pydantic import ValidationError
+from pymongo.errors import DuplicateKeyError
 
 
 class LocationStateHandler:
     """
-    Manages state for a MADSci Location Manager, providing transactional access to reading and writing location state
-    with optimistic check-and-set and locking.
-    """
+    Manages state for a MADSci Location Manager.
 
-    state_change_marker = "0"
-    shutdown: bool = False
+    - Document storage handler: persistent location CRUD
+    - Cache handler: transient state (locks, change counters)
+    """
 
     def __init__(
         self,
         settings: LocationManagerSettings,
         manager_id: str,
         redis_connection: Optional[Any] = None,
-        redis_handler: Optional[RedisHandler] = None,
+        cache_handler: Optional[CacheHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
     ) -> None:
         """
         Initialize a LocationStateHandler.
+
+        Parameters
+        ----------
+        settings:
+            Location manager settings.
+        manager_id:
+            Unique identifier for this manager instance.
+        redis_connection:
+            Deprecated. Use cache_handler instead.
+        cache_handler:
+            Cache handler for transient state (locks, change counters).
+        document_handler:
+            Document storage handler for persistent location storage.
         """
         if redis_connection is not None:
             warnings.warn(
-                "The 'redis_connection' parameter is deprecated. Use 'redis_handler' instead.",
+                "The 'redis_connection' parameter is deprecated. Use 'cache_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         self.settings = settings
         self._manager_id = manager_id
+        self.state_change_marker = "0"
+        self.shutdown = False
 
-        # Initialize Redis handler
-        if redis_handler is not None:
-            self._redis_handler = redis_handler
+        # Initialize cache handler (transient state)
+        if cache_handler is not None:
+            self._cache_handler = cache_handler
         elif redis_connection is not None:
-            self._redis_handler = PyRedisHandler(redis_connection)
+            self._cache_handler = PyCacheHandler(redis_connection)
         else:
-            self._redis_handler = PyRedisHandler.from_settings(
-                host=str(settings.redis_host),
-                port=int(settings.redis_port),
-                password=settings.redis_password or None,
+            self._cache_handler = PyCacheHandler.from_settings(
+                host=str(settings.cache_host),
+                port=int(settings.cache_port),
+                password=settings.cache_password or None,
             )
 
-        # Suppress InefficientAccessWarning from pottery if using PyRedisHandler
+        # Initialize document storage handler (persistent locations)
+        if document_handler is not None:
+            self._document_handler = document_handler
+        else:
+            self._document_handler = PyDocumentStorageHandler.from_url(
+                str(settings.document_db_url),
+                settings.database_name,
+            )
+
+        # Set up collections
+        self._locations_collection = self._document_handler.get_collection("locations")
+        self._repr_templates_collection = self._document_handler.get_collection(
+            "representation_templates"
+        )
+        self._location_templates_collection = self._document_handler.get_collection(
+            "location_templates"
+        )
+
+        # Ensure minimum unique indexes exist for correctness.
+        # These are a subset of what schema.json defines; the full set is
+        # applied by ensure_schema_indexes() in the manager's initialize().
+        self._locations_collection.create_index(
+            "location_name", unique=True, name="location_name_unique"
+        )
+        self._repr_templates_collection.create_index(
+            "template_name", unique=True, name="repr_template_name_unique"
+        )
+        self._location_templates_collection.create_index(
+            "template_name", unique=True, name="loc_template_name_unique"
+        )
+
+        # Suppress InefficientAccessWarning from pottery if using PyCacheHandler
         try:
             from pottery import InefficientAccessWarning  # noqa: PLC0415
 
@@ -59,30 +119,31 @@ class LocationStateHandler:
             pass
 
     @property
-    def _location_prefix(self) -> str:
-        return f"madsci:location_manager:{self._manager_id}"
+    def document_handler(self) -> DocumentStorageHandler:
+        """Public accessor for the document storage handler."""
+        return self._document_handler
 
     @property
-    def _locations(self) -> Any:
-        return self._redis_handler.create_dict(f"{self._location_prefix}:locations")
+    def _location_prefix(self) -> str:
+        return f"madsci:location_manager:{self._manager_id}"
 
     def location_state_lock(self) -> Any:
         """
         Gets a lock on the location state. This should be called before any state updates are made,
         or where we don't want the state to be changing underneath us.
         """
-        return self._redis_handler.create_lock(
+        return self._cache_handler.create_lock(
             f"{self._location_prefix}:state_lock",
             auto_release_time=60,
         )
 
     def mark_state_changed(self) -> int:
-        """Marks the state as changed and returns the current state change counter"""
-        return int(self._redis_handler.incr(f"{self._location_prefix}:state_changed"))
+        """Marks the state as changed and returns the current state change counter."""
+        return int(self._cache_handler.incr(f"{self._location_prefix}:state_changed"))
 
     def has_state_changed(self) -> bool:
-        """Returns True if the state has changed since the last time this method was called"""
-        state_change_marker = self._redis_handler.get(
+        """Returns True if the state has changed since the last time this method was called."""
+        state_change_marker = self._cache_handler.get(
             f"{self._location_prefix}:state_changed"
         )
         if state_change_marker != self.state_change_marker:
@@ -91,16 +152,54 @@ class LocationStateHandler:
         return False
 
     def close(self) -> None:
-        """Release Redis connections and resources."""
-        self._redis_handler.close()
+        """Release both cache and document storage connections and resources."""
+        self._cache_handler.close()
+        self._document_handler.close()
 
-    # Location Management Methods
-    def get_location(self, location_id: str) -> Optional[Location]:
-        """
-        Returns a location by ID
-        """
+    # Count Methods (avoid deserializing all documents for health checks)
+
+    def count_locations(self) -> int:
+        """Returns the total number of locations."""
+        return self._locations_collection.count_documents({})
+
+    def count_unresolved_locations(self) -> int:
+        """Returns the number of locations with unresolved resource template references."""
+        return self._locations_collection.count_documents(
+            {"resource_template_name": {"$ne": None}, "resource_id": None}
+        )
+
+    def count_representation_templates(self) -> int:
+        """Returns the total number of representation templates."""
+        return self._repr_templates_collection.count_documents({})
+
+    def count_location_templates(self) -> int:
+        """Returns the total number of location templates."""
+        return self._location_templates_collection.count_documents({})
+
+    def count_locations_by_managed_by(self, managed_by: str) -> int:
+        """Returns the number of locations with the given managed_by value."""
+        return self._locations_collection.count_documents({"managed_by": managed_by})
+
+    # Location Management Methods (document database-backed)
+
+    def get_location(self, location_name: str) -> Optional[Location]:
+        """Returns a location by name."""
         try:
-            location_data = self._locations.get(location_id)
+            location_data = self._locations_collection.find_one(
+                {"location_name": location_name}
+            )
+            if location_data is None:
+                return None
+            return Location.model_validate(location_data)
+        except (ValidationError, KeyError):
+            return None
+
+    def get_location_by_id(self, location_id: str) -> Optional[Location]:
+        """Returns a location by ID (O(1) with MongoDB index)."""
+        try:
+            location_data = self._locations_collection.find_one(
+                {"location_id": location_id}
+            )
             if location_data is None:
                 return None
             return Location.model_validate(location_data)
@@ -108,50 +207,244 @@ class LocationStateHandler:
             return None
 
     def get_locations(self) -> list[Location]:
-        """
-        Returns all locations as a list
-        """
+        """Returns all locations as a list."""
         valid_locations = []
-        for location_id in self._locations:
+        for location_data in self._locations_collection.find().to_list():
             try:
-                location_data = self._locations[location_id]
                 valid_locations.append(Location.model_validate(location_data))
             except ValidationError:
                 continue
         return valid_locations
 
-    def set_location(
-        self, location_id: str, location: Union[Location, dict[str, Any]]
-    ) -> Location:
-        """
-        Sets a location by ID and returns the stored location
-        """
-        if isinstance(location, Location):
-            location_dump = location.model_dump(mode="json")
-        else:
-            location_obj = Location.model_validate(location)
-            location_dump = location_obj.model_dump(mode="json")
-            location = location_obj
+    def get_unresolved_locations(self) -> list[Location]:
+        """Returns locations that may need reconciliation.
 
-        self._locations[location_id] = location_dump
+        Matches locations with either:
+        - An unresolved resource template (resource_template_name set, resource_id null)
+        - A location template with node bindings (may need representation defaults)
+        """
+        valid_locations = []
+        for location_data in self._locations_collection.find(
+            {
+                "$or": [
+                    {"resource_template_name": {"$ne": None}, "resource_id": None},
+                    {
+                        "location_template_name": {"$ne": None},
+                        "node_bindings": {"$ne": None},
+                    },
+                ]
+            }
+        ).to_list():
+            try:
+                valid_locations.append(Location.model_validate(location_data))
+            except ValidationError:
+                continue
+        return valid_locations
+
+    def add_location(
+        self, location: Union[Location, dict[str, Any]]
+    ) -> Optional[Location]:
+        """
+        Adds a location by name and returns the stored location.
+        Returns None if the name already exists.
+        """
+        if not isinstance(location, Location):
+            location = Location.model_validate(location)
+
+        try:
+            self._locations_collection.insert_one(location.model_dump(mode="json"))
+        except DuplicateKeyError:
+            return None
+
         self.mark_state_changed()
         return location
 
-    def delete_location(self, location_id: str) -> bool:
+    def delete_location(self, location_name: str) -> bool:
         """
-        Deletes a location by ID. Returns True if the location was deleted, False if it didn't exist.
+        Deletes a location by name.
+        Returns True if the location was deleted, False if it didn't exist.
         """
-        try:
-            if location_id in self._locations:
-                del self._locations[location_id]
-                self.mark_state_changed()
-                return True
-            return False
-        except KeyError:
-            return False
+        result = self._locations_collection.delete_one({"location_name": location_name})
+        if result.deleted_count > 0:
+            self.mark_state_changed()
+            return True
+        return False
 
-    def update_location(self, location_id: str, location: Location) -> Location:
+    def update_location(self, location: Union[Location, dict]) -> Location:
         """
         Updates a location and returns the updated location.
+        Raises KeyError if the location doesn't exist, ValueError if ID mismatches.
         """
-        return self.set_location(location_id, location)
+        if not isinstance(location, Location):
+            location = Location.model_validate(location)
+
+        existing = self._locations_collection.find_one(
+            {"location_name": location.location_name}
+        )
+        if existing is None:
+            raise KeyError(f"Location {location.location_name} does not exist")
+
+        existing_location = Location.model_validate(existing)
+        if existing_location.location_id != location.location_id:
+            raise ValueError(
+                f"Location name {location.location_name} is already in use by a different location. Make sure to use the right ID."
+            )
+
+        self._locations_collection.replace_one(
+            {"location_name": location.location_name},
+            location.model_dump(mode="json"),
+        )
+        self.mark_state_changed()
+        return location
+
+    # Representation Template CRUD (document database-backed)
+
+    def get_representation_template(
+        self, template_name: str
+    ) -> Optional[LocationRepresentationTemplate]:
+        """Returns a representation template by name."""
+        try:
+            data = self._repr_templates_collection.find_one(
+                {"template_name": template_name}
+            )
+            if data is None:
+                return None
+            return LocationRepresentationTemplate.model_validate(data)
+        except (ValidationError, KeyError):
+            return None
+
+    def get_representation_templates(self) -> list[LocationRepresentationTemplate]:
+        """Returns all representation templates."""
+        templates = []
+        for data in self._repr_templates_collection.find().to_list():
+            try:
+                templates.append(LocationRepresentationTemplate.model_validate(data))
+            except ValidationError:
+                continue
+        return templates
+
+    def add_representation_template(
+        self,
+        template: Union[LocationRepresentationTemplate, dict[str, Any]],
+    ) -> Optional[LocationRepresentationTemplate]:
+        """Adds a representation template. Returns None if the name already exists."""
+        if not isinstance(template, LocationRepresentationTemplate):
+            template = LocationRepresentationTemplate.model_validate(template)
+
+        try:
+            self._repr_templates_collection.insert_one(template.model_dump(mode="json"))
+        except DuplicateKeyError:
+            return None
+
+        return template
+
+    def update_representation_template(
+        self,
+        template: Union[LocationRepresentationTemplate, dict[str, Any]],
+    ) -> LocationRepresentationTemplate:
+        """Updates a representation template. Raises KeyError if not found, ValueError if ID mismatch."""
+        if not isinstance(template, LocationRepresentationTemplate):
+            template = LocationRepresentationTemplate.model_validate(template)
+
+        existing = self._repr_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is None:
+            raise KeyError(
+                f"Representation template '{template.template_name}' does not exist"
+            )
+
+        existing_template = LocationRepresentationTemplate.model_validate(existing)
+        if existing_template.template_id != template.template_id:
+            raise ValueError(
+                f"Template name '{template.template_name}' is already in use by a different template"
+            )
+
+        self._repr_templates_collection.replace_one(
+            {"template_name": template.template_name},
+            template.model_dump(mode="json"),
+        )
+        return template
+
+    def delete_representation_template(self, template_name: str) -> bool:
+        """Deletes a representation template by name. Returns True if deleted, False if not found."""
+        result = self._repr_templates_collection.delete_one(
+            {"template_name": template_name}
+        )
+        return result.deleted_count > 0
+
+    # Location Template CRUD (document database-backed)
+
+    def get_location_template(self, template_name: str) -> Optional[LocationTemplate]:
+        """Returns a location template by name."""
+        try:
+            data = self._location_templates_collection.find_one(
+                {"template_name": template_name}
+            )
+            if data is None:
+                return None
+            return LocationTemplate.model_validate(data)
+        except (ValidationError, KeyError):
+            return None
+
+    def get_location_templates(self) -> list[LocationTemplate]:
+        """Returns all location templates."""
+        templates = []
+        for data in self._location_templates_collection.find().to_list():
+            try:
+                templates.append(LocationTemplate.model_validate(data))
+            except ValidationError:
+                continue
+        return templates
+
+    def add_location_template(
+        self,
+        template: Union[LocationTemplate, dict[str, Any]],
+    ) -> Optional[LocationTemplate]:
+        """Adds a location template. Returns None if the name already exists."""
+        if not isinstance(template, LocationTemplate):
+            template = LocationTemplate.model_validate(template)
+
+        try:
+            self._location_templates_collection.insert_one(
+                template.model_dump(mode="json")
+            )
+        except DuplicateKeyError:
+            return None
+
+        return template
+
+    def update_location_template(
+        self,
+        template: Union[LocationTemplate, dict[str, Any]],
+    ) -> LocationTemplate:
+        """Updates a location template. Raises KeyError if not found, ValueError if ID mismatch."""
+        if not isinstance(template, LocationTemplate):
+            template = LocationTemplate.model_validate(template)
+
+        existing = self._location_templates_collection.find_one(
+            {"template_name": template.template_name}
+        )
+        if existing is None:
+            raise KeyError(
+                f"Location template '{template.template_name}' does not exist"
+            )
+
+        existing_template = LocationTemplate.model_validate(existing)
+        if existing_template.template_id != template.template_id:
+            raise ValueError(
+                f"Template name '{template.template_name}' is already in use by a different template"
+            )
+
+        self._location_templates_collection.replace_one(
+            {"template_name": template.template_name},
+            template.model_dump(mode="json"),
+        )
+        return template
+
+    def delete_location_template(self, template_name: str) -> bool:
+        """Deletes a location template by name. Returns True if deleted, False if not found."""
+        result = self._location_templates_collection.delete_one(
+            {"template_name": template_name}
+        )
+        return result.deleted_count > 0

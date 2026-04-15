@@ -122,6 +122,7 @@ class TestTuiScreenImports:
                 LogsScreen,
                 NodesScreen,
                 StatusScreen,
+                StepDetailScreen,
                 WorkflowsScreen,
             )
 
@@ -129,6 +130,7 @@ class TestTuiScreenImports:
             assert LogsScreen is not None
             assert NodesScreen is not None
             assert StatusScreen is not None
+            assert StepDetailScreen is not None
             assert WorkflowsScreen is not None
         except ImportError:
             # Textual may not be installed in test env
@@ -159,6 +161,15 @@ class TestTuiScreenImports:
             from madsci.client.cli.tui.screens.workflows import WorkflowsScreen
 
             assert WorkflowsScreen is not None
+        except ImportError:
+            pass
+
+    def test_step_detail_screen_import(self) -> None:
+        """Test that StepDetailScreen can be imported directly."""
+        try:
+            from madsci.client.cli.tui.screens.step_detail import StepDetailScreen
+
+            assert StepDetailScreen is not None
         except ImportError:
             pass
 
@@ -198,5 +209,6 @@ class TestTuiScreenImports:
         assert ".status-offline" in content
         assert "ServicesPanel" in content
         assert "NodeDetailScreen" in content
-        assert "WorkflowDetailPanel" in content
-        assert "FilterPanel" in content
+        assert "StepDetailScreen" in content
+        assert "DetailPanel" in content
+        assert "FilterBar" in content

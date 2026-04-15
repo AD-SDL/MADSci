@@ -105,8 +105,8 @@ module_version: 1.0.0
 # Run directly
 python my_instrument_node.py
 
-# Or with a pre-defined node
-python my_instrument_node.py --node_definition my_instrument.node.yaml
+# Configuration is provided via environment variables (NODE_NAME, NODE_URL, etc.)
+# or settings files (settings.yaml, .env)
 
 # Node will be available at http://localhost:2000/docs
 ```

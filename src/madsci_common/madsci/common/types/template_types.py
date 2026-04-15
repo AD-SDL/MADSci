@@ -34,9 +34,9 @@ class TemplateCategory(str, Enum):
     NODE = "node"
     EXPERIMENT = "experiment"
     WORKFLOW = "workflow"
-    WORKCELL = "workcell"
     LAB = "lab"
     COMM = "comm"
+    ADDON = "addon"
 
 
 class ParameterChoice(MadsciBaseModel):
@@ -121,6 +121,10 @@ class TemplateManifest(MadsciBaseModel):
         description="Category (module, node, experiment, etc.)"
     )
     tags: list[str] = Field(default_factory=list, description="Search tags")
+    skills: list[str] = Field(
+        default_factory=list,
+        description="Agent skill names to include in generated project",
+    )
 
     # Optional metadata
     author: Optional[str] = Field(default=None, description="Template author")
@@ -147,6 +151,16 @@ class TemplateManifest(MadsciBaseModel):
         default=None, description="Lifecycle hooks (post_generate, etc.)"
     )
 
+    # Model validation for generated config files
+    target_model: Optional[str] = Field(
+        default=None,
+        description=(
+            "Dotted import path to the Pydantic model that template YAML/JSON output "
+            "should validate against (e.g., 'madsci.common.types.workflow_types.WorkflowDefinition'). "
+            "Used for automated validation of generated config files."
+        ),
+    )
+
 
 class GeneratedProject(MadsciBaseModel):
     """Result of template generation."""
@@ -162,6 +176,10 @@ class GeneratedProject(MadsciBaseModel):
     )
     hooks_executed: list[str] = Field(
         default_factory=list, description="Hooks that were executed"
+    )
+    skills_included: list[str] = Field(
+        default_factory=list,
+        description="Agent skills copied into the generated project",
     )
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(tz=timezone.utc),

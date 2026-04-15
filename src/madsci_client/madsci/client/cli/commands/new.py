@@ -16,6 +16,7 @@ import click
 
 if TYPE_CHECKING:
     from madsci.common.templates.engine import TemplateEngine
+    from madsci.common.types.template_types import GeneratedProject
     from rich.console import Console
 
 
@@ -137,14 +138,14 @@ def display_template_list(
     console.print(table)
 
 
-def generate_from_template(  # noqa: C901, PLR0912
+def generate_from_template(  # noqa: C901, PLR0912, PLR0915
     template_id: str,
     output_dir: Path,
     name: Optional[str],
     no_interactive: bool,
     console: Console,
     extra_params: Optional[dict] = None,
-) -> bool:
+) -> GeneratedProject | None:
     """Generate from a template with optional interactive prompts.
 
     Args:
@@ -156,7 +157,7 @@ def generate_from_template(  # noqa: C901, PLR0912
         extra_params: Additional parameters to pass.
 
     Returns:
-        True if generation succeeded, False otherwise.
+        GeneratedProject on success, None on failure.
     """
     from madsci.common.templates.engine import TemplateError, TemplateValidationError
     from madsci.common.templates.registry import TemplateNotFoundError, TemplateRegistry
@@ -169,7 +170,7 @@ def generate_from_template(  # noqa: C901, PLR0912
         engine = registry.get_template(template_id)
     except TemplateNotFoundError as e:
         console.print(f"[red]✗[/red] {e}")
-        return False
+        return None
 
     # Collect parameters
     if no_interactive:
@@ -216,10 +217,12 @@ def generate_from_template(  # noqa: C901, PLR0912
     # Validate
     errors = engine.validate_parameters(params)
     if errors:
+        from rich.markup import escape
+
         console.print("[red]✗[/red] Parameter validation failed:")
         for error in errors:
-            console.print(f"    • {error}")
-        return False
+            console.print(f"    • {escape(str(error))}")
+        return None
 
     # Preview
     if not no_interactive:
@@ -232,17 +235,21 @@ def generate_from_template(  # noqa: C901, PLR0912
 
         if not Confirm.ask("\nCreate these files?", default=True):
             console.print("Cancelled.")
-            return False
+            return None
 
     # Generate
     try:
         result = engine.render(output_dir, params)
     except TemplateValidationError as e:
-        console.print(f"[red]✗[/red] Validation error: {e.errors}")
-        return False
+        from rich.markup import escape
+
+        console.print(f"[red]✗[/red] Validation error: {escape(str(e.errors))}")
+        return None
     except TemplateError as e:
-        console.print(f"[red]✗[/red] Template error: {e}")
-        return False
+        from rich.markup import escape
+
+        console.print(f"[red]✗[/red] Template error: {escape(str(e))}")
+        return None
 
     console.print(f"\n[green]✓[/green] Created {len(result.files_created)} files\n")
 
@@ -250,7 +257,7 @@ def generate_from_template(  # noqa: C901, PLR0912
         rel_path = file_path.relative_to(output_dir)
         console.print(f"  • {rel_path}")
 
-    return True
+    return result
 
 
 @click.group(invoke_without_command=True)
@@ -265,7 +272,7 @@ def new(ctx: click.Context, use_tui: bool) -> None:
     """Create new MADSci components from templates.
 
     Generate scaffolding for modules, interfaces, nodes, experiments,
-    workflows, workcells, and labs using templates.
+    workflows, and labs using templates.
 
     \b
     Examples:
@@ -319,13 +326,15 @@ def _launch_tui_browser(ctx: click.Context) -> None:
     console = get_console(ctx)
     output_dir = Path.cwd()
 
-    generate_from_template(
+    result = generate_from_template(
         template_id=template_id,
         output_dir=output_dir,
         name=None,
         no_interactive=False,
         console=console,
     )
+    if not result:
+        ctx.exit(1)
 
 
 @new.command()
@@ -375,8 +384,11 @@ def module(
 
     registry = TemplateRegistry()
 
-    # List templates if not specified or show selection
-    if not no_interactive and not name:
+    # Only prompt for template selection if --template was not explicitly provided
+    template_explicitly_set = (
+        ctx.get_parameter_source("template") == click.core.ParameterSource.COMMANDLINE
+    )
+    if not no_interactive and not template_explicitly_set:
         templates = registry.list_templates(category=TemplateCategory.MODULE)
 
         if templates:
@@ -392,7 +404,7 @@ def module(
     # Determine output directory
     output_dir = Path(directory) if directory else Path.cwd()
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id=template,
         output_dir=output_dir,
         name=name,
@@ -400,16 +412,17 @@ def module(
         console=console,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        module_name = name or "your_module"
-        console.print(f"  1. cd {module_name}_module")
-        console.print("  2. Implement your interface in src/*_interface.py")
-        console.print("  3. Test with fake interface: python src/*_rest_node.py --fake")
-        console.print("  4. Run tests: pytest tests/")
-        console.print(
-            "\n  Documentation: https://ad-sdl.github.io/MADSci/guides/integrator/"
-        )
+    if not result:
+        ctx.exit(1)
+        return
+
+    module_name = result.parameters_used.get("module_name", name or "my_device")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. cd {module_name}_module")
+    console.print("  2. Implement your interface in src/*_interface.py")
+    console.print("  3. Test with fake interface: python src/*_rest_node.py --fake")
+    console.print("  4. Run tests: pytest tests/")
+    console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/readme/")
 
 
 @new.command()
@@ -477,7 +490,7 @@ def interface(
     interface_type = interface_type or "fake"
     template_id = f"interface/{interface_type}"
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id=template_id,
         output_dir=path,
         name=name,
@@ -485,13 +498,16 @@ def interface(
         console=console,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Implement {interface_type} behavior in the generated file")
-        console.print("  2. Run tests: pytest tests/")
-        console.print(
-            f"  3. Use {interface_type} interface: python src/*_rest_node.py --{interface_type}"
-        )
+    if not result:
+        ctx.exit(1)
+        return
+
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Implement {interface_type} behavior in the generated file")
+    console.print("  2. Run tests: pytest tests/")
+    console.print(
+        f"  3. Use {interface_type} interface: python src/*_rest_node.py --{interface_type}"
+    )
 
 
 @new.command()
@@ -533,7 +549,7 @@ def node(
     if interface_module:
         extra_params["interface_module"] = interface_module
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id="node/basic",
         output_dir=output_dir,
         name=name,
@@ -542,10 +558,14 @@ def node(
         extra_params=extra_params,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print(f"  1. Start the node: python {name or 'your_node'}.py")
-        console.print(f"  2. Test: curl http://localhost:{port}/health")
+    if not result:
+        ctx.exit(1)
+        return
+
+    node_name = result.parameters_used.get("node_name", name or "my_node")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Start the node: python {node_name}.py")
+    console.print(f"  2. Test: curl http://localhost:{port}/health")
 
 
 @new.command()
@@ -592,7 +612,7 @@ def experiment(
 
     template_id = f"experiment/{modality}"
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id=template_id,
         output_dir=output_dir,
         name=name,
@@ -600,15 +620,18 @@ def experiment(
         console=console,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        exp_name = name or "my_experiment"
-        if modality == "script":
-            console.print(f"  1. Edit {exp_name}.py to define your experiment logic")
-            console.print(f"  2. Run: python {exp_name}.py")
-        elif modality == "notebook":
-            console.print(f"  1. Open {exp_name}.ipynb in Jupyter")
-            console.print("  2. Run cells to execute experiment")
+    if not result:
+        ctx.exit(1)
+        return
+
+    exp_name = result.parameters_used.get("experiment_name", name or "my_experiment")
+    console.print("\n[bold]Next steps:[/bold]")
+    if modality == "script":
+        console.print(f"  1. Edit {exp_name}.py to define your experiment logic")
+        console.print(f"  2. Run: python {exp_name}.py")
+    elif modality == "notebook":
+        console.print(f"  1. Open {exp_name}.ipynb in Jupyter")
+        console.print("  2. Run cells to execute experiment")
 
 
 @new.command()
@@ -650,7 +673,7 @@ def workflow(
     console = get_console(ctx)
     output_dir = Path(directory) if directory else Path.cwd()
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id=template,
         output_dir=output_dir,
         name=name,
@@ -658,59 +681,14 @@ def workflow(
         console=console,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        wf_name = name or "my_workflow"
-        console.print(f"  1. Edit {wf_name}.workflow.yaml to define your steps")
-        console.print(f"  2. Run: madsci run workflow {wf_name}.workflow.yaml")
+    if not result:
+        ctx.exit(1)
+        return
 
-
-@new.command()
-@click.argument("directory", required=False, type=click.Path())
-@click.option("--name", "-n", help="Workcell name.")
-@click.option("--nodes", help="Comma-separated list of nodes to include.")
-@click.option(
-    "--no-interactive",
-    is_flag=True,
-    help="Skip interactive prompts, use defaults.",
-)
-@click.pass_context
-def workcell(
-    ctx: click.Context,
-    directory: Optional[str],
-    name: Optional[str],
-    nodes: Optional[str],
-    no_interactive: bool,
-) -> None:
-    """Create a new workcell configuration.
-
-    Creates workcell configuration for coordinating multiple nodes.
-
-    \b
-    Examples:
-        madsci new workcell --name my_lab_workcell
-        madsci new workcell --nodes liquidhandler,platereader,incubator
-    """
-    console = get_console(ctx)
-    output_dir = Path(directory) if directory else Path.cwd()
-
-    extra_params = {}
-    if nodes:
-        extra_params["nodes"] = [n.strip() for n in nodes.split(",")]
-
-    success = generate_from_template(
-        template_id="workcell/basic",
-        output_dir=output_dir,
-        name=name,
-        no_interactive=no_interactive,
-        console=console,
-        extra_params=extra_params,
-    )
-
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        console.print("  1. Edit the workcell configuration to add your nodes")
-        console.print("  2. Start: madsci start workcell")
+    wf_name = result.parameters_used.get("workflow_name", name or "my_workflow")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. Edit {wf_name}.workflow.yaml to define your steps")
+    console.print(f"  2. Run: madsci run workflow {wf_name}.workflow.yaml")
 
 
 @new.command()
@@ -756,7 +734,7 @@ def lab(
 
     template_id = f"lab/{template}"
 
-    success = generate_from_template(
+    result = generate_from_template(
         template_id=template_id,
         output_dir=output_dir,
         name=name,
@@ -764,25 +742,26 @@ def lab(
         console=console,
     )
 
-    if success:
-        console.print("\n[bold]Next steps:[/bold]")
-        lab_name = name or "my_lab"
-        console.print(f"  1. cd {lab_name}")
-        if template == "minimal":
-            console.print("  2. python -m madsci.squid")
-        else:
-            console.print("  2. madsci start lab")
-        console.print("  3. Open http://localhost:8000 in your browser")
-        console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/")
+    if not result:
+        ctx.exit(1)
+        return
+
+    lab_name = result.parameters_used.get("lab_name", name or "my_lab")
+    console.print("\n[bold]Next steps:[/bold]")
+    console.print(f"  1. cd {lab_name}")
+    if template == "minimal":
+        console.print("  2. python -m madsci.squid")
+    else:
+        console.print("  2. madsci start lab")
+    console.print("  3. Open http://localhost:8000 in your browser")
+    console.print("\n  Documentation: https://ad-sdl.github.io/MADSci/")
 
 
 @new.command("list")
 @click.option(
     "--category",
     "-c",
-    type=click.Choice(
-        ["module", "interface", "node", "experiment", "workflow", "workcell", "lab"]
-    ),
+    type=click.Choice(["module", "interface", "node", "experiment", "workflow", "lab"]),
     default=None,
     help="Filter by category.",
 )

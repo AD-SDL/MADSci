@@ -50,8 +50,8 @@ MADSci is made up of a number of different modular components, each of which can
 
 ### Guides
 
-- [CLI Reference](./docs/guides/cli_reference.md): Complete reference for all 17 CLI commands, options, and aliases.
-- [Template Catalog](./docs/guides/template_catalog.md): All 26 built-in templates with parameters and examples.
+- [CLI Reference](./docs/guides/cli_reference.md): Complete reference for all 26 CLI commands, options, and aliases.
+- [Template Catalog](./docs/guides/template_catalog.md): All 33 built-in templates (25 scaffolding + 8 addon) with parameters and examples.
 - [Logging and Event Context](./docs/guides/logging.md): Guide to MADSci's structured logging system and hierarchical context propagation.
 - [Observability](./docs/guides/observability.md): How to use the OpenTelemetry observability stack for distributed tracing, metrics, and logs.
 - [Daily Operations](./docs/guides/operator/01-daily-operations.md): Day-to-day lab operations, startup, shutdown, and health checks.
@@ -116,7 +116,7 @@ docker compose up  # Starts all services with example configuration
 MADSci uses environment variables for configuration with hierarchical precedence. Key patterns:
 
 - **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, Resource: 8003, Data: 8004, Workcell: 8005, Location: 8006, etc.)
-- **Database connections**: MongoDB/PostgreSQL on localhost by default
+- **Database connections**: FerretDB (document database)/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - **OpenTelemetry**: Configurable per-manager with `*_OTEL_ENABLED`, `*_OTEL_ENDPOINT`, etc.
@@ -139,12 +139,13 @@ We're working on bringing the following additional components to MADSci:
 
 ### CLI Overview
 
-MADSci provides a unified CLI (`madsci`) with 17 commands:
+MADSci provides a unified CLI (`madsci`) with 26 commands:
 
 | Command | Alias | Description |
 |---------|-------|-------------|
 | `init` | | Initialize a new lab interactively |
-| `new` | `n` | Create components from 26 built-in templates |
+| `new` | `n` | Create components from 33 built-in templates |
+| `add` | | Add components to an existing module project |
 | `start` | | Start lab services (Docker or local mode) |
 | `stop` | | Stop lab services |
 | `status` | `s` | Check service health |
@@ -160,6 +161,14 @@ MADSci provides a unified CLI (`madsci`) with 17 commands:
 | `completion` | | Generate shell completions |
 | `commands` | `cmd` | List all commands |
 | `version` | | Show version information |
+| `workflow` | `wf` | Manage workflows (list, submit, pause, retry) |
+| `resource` | `res` | Manage resources (CRUD, lock, tree, templates) |
+| `location` | `loc` | Manage locations (CRUD, transfers, templates) |
+| `node` | `nd` | Manage nodes (info, admin, actions, shell) |
+| `experiment` | `exp` | Manage experiments (start, run, pause, end) |
+| `campaign` | `camp` | Manage campaigns |
+| `data` | `dt` | Manage datapoints (submit, query) |
+| `events` | `ev` | Manage events (query, archive, purge) |
 
 Run `madsci <command> --help` for details on any command. See [CLI Reference](./docs/guides/cli_reference.md) for full documentation.
 
@@ -168,7 +177,7 @@ Run `madsci <command> --help` for details on any command. See [CLI Reference](./
 Generate scaffolding for any MADSci component:
 
 ```bash
-madsci new list                       # Browse all 26 templates
+madsci new list                       # Browse all 33 templates
 madsci new module                     # Interactive module creation
 madsci new experiment --modality tui  # TUI experiment
 madsci new lab --template standard    # Full lab with Docker Compose
@@ -207,9 +216,11 @@ madsci config create manager event  # Create a new manager config file
 **Creating custom nodes:**
 ```python
 # See examples/example_lab/example_modules/ for reference implementations
-from madsci.node_module import AbstractNodeModule
+from madsci.node_module import RestNode
+from madsci.node_module.helpers import action
 
-class MyInstrument(AbstractNodeModule):
+class MyInstrument(RestNode):
+    @action
     def my_action(self, param1: str) -> dict:
         # Your instrument control logic
         return {"result": "success"}
