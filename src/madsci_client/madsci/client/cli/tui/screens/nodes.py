@@ -539,8 +539,8 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             self.notify(f"No URL for node {node_name}", timeout=2)
             return
 
+        node_client = RestNodeClient(url=AnyUrl(node_url))
         try:
-            node_client = RestNodeClient(url=AnyUrl(node_url))
             await node_client.async_send_admin_command(AdminCommands(command))
             self.notify(
                 f"Admin command '{command}' sent to {node_name}",
@@ -548,7 +548,10 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             )
             await self.refresh_data()
         except Exception as e:
+            logger.debug("Admin command error", exc_info=True)
             self.notify(f"Error sending '{command}' to {node_name}: {e}", timeout=3)
+        finally:
+            await node_client.aclose()
 
     async def action_pause_node(self) -> None:
         """Pause the selected node."""
@@ -616,6 +619,16 @@ class NodesScreen(ActionBarMixin, AutoRefreshMixin, ServiceURLMixin, Screen):
             "toggle_lock": self.action_toggle_lock_node,
             "execute": self.action_execute_action,
         }
+
+    async def on_unmount(self) -> None:
+        """Clean up client connections when screen is unmounted."""
+        for attr_name in list(vars(self)):
+            if attr_name.endswith("_client"):
+                client = getattr(self, attr_name, None)
+                if client is not None and hasattr(client, "aclose"):
+                    await client.aclose()
+                elif client is not None and hasattr(client, "close"):
+                    client.close()
 
     async def action_refresh(self) -> None:
         """Refresh node data."""

@@ -286,6 +286,12 @@ class WorkflowDetailScreen(ActionBarMixin, ServiceURLMixin, Screen):
             "resubmit": self.action_resubmit_workflow,
         }
 
+    async def on_unmount(self) -> None:
+        """Clean up client connections when screen is unmounted."""
+        if self._workcell_client is not None:
+            await self._workcell_client.aclose()
+            self._workcell_client = None
+
     def action_go_back(self) -> None:
         """Go back to the workflows list."""
         self.app.pop_screen()
