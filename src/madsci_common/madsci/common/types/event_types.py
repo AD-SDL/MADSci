@@ -18,7 +18,7 @@ from madsci.common.types.base_types import (
     prefixed_alias_generator,
     prefixed_model_validator,
 )
-from madsci.common.types.client_types import MadsciClientConfig
+from madsci.common.types.client_types import MadsciHttpClientConfig
 from madsci.common.types.manager_types import (
     ManagerDefinition,
     ManagerHealth,
@@ -279,10 +279,10 @@ class Event(MadsciBaseModel):
 LogRotationType = Literal["size", "time", "none"]
 
 
-class EventClientConfig(MadsciClientConfig):
+class EventClientConfig(MadsciHttpClientConfig):
     """Configuration for an Event Client.
 
-    Inherits all HTTP client configuration from MadsciClientConfig including:
+    Inherits all HTTP client configuration from MadsciHttpClientConfig including:
     - Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
     - Timeout configuration (timeout_default, timeout_data_operations, etc.)
     - Connection pooling (pool_connections, pool_maxsize)

@@ -38,7 +38,7 @@ Classes
     This mixin assumes the consuming class sets the following instance
     attributes in its ``__init__``:
     
-    * ``self.config`` -- a :class:`~madsci.common.types.client_types.MadsciClientConfig`
+    * ``self.config`` -- a :class:`~madsci.common.types.client_types.MadsciHttpClientConfig`
     * ``self._client`` -- an ``httpx.Client`` (created via
       :func:`~madsci.common.http_client.create_httpx_client`)
     * ``self._async_client`` -- initially ``None``; lazily created on the
@@ -57,7 +57,7 @@ Classes
 
     ### Class variables
 
-    `config: MadsciClientConfig`
+    `config: MadsciHttpClientConfig`
     :
 
     ### Methods

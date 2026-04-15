@@ -15,7 +15,7 @@ from madsci.common.http_client import (
     _make_rate_limit_hook,
     create_httpx_client,
 )
-from madsci.common.types.client_types import MadsciClientConfig
+from madsci.common.types.client_types import MadsciHttpClientConfig
 from madsci.common.utils import RateLimitTracker
 
 # ---------------------------------------------------------------------------
@@ -513,7 +513,7 @@ class TestCreateHttpxClient:
             client.close()
 
     def test_custom_config(self) -> None:
-        cfg = MadsciClientConfig(
+        cfg = MadsciHttpClientConfig(
             retry_total=5,
             timeout_default=30.0,
             pool_maxsize=20,
@@ -529,7 +529,7 @@ class TestCreateHttpxClient:
             client.close()
 
     def test_retry_disabled(self) -> None:
-        cfg = MadsciClientConfig(retry_enabled=False)
+        cfg = MadsciHttpClientConfig(retry_enabled=False)
         client = create_httpx_client(config=cfg)
         try:
             # Transport should be the raw HTTPTransport, not RetryTransport
@@ -539,7 +539,7 @@ class TestCreateHttpxClient:
             client.close()
 
     def test_retry_enabled_wraps_transport(self) -> None:
-        cfg = MadsciClientConfig(retry_enabled=True)
+        cfg = MadsciHttpClientConfig(retry_enabled=True)
         client = create_httpx_client(config=cfg)
         try:
             transport = client._transport
@@ -548,7 +548,7 @@ class TestCreateHttpxClient:
             client.close()
 
     def test_async_retry_enabled_wraps_transport(self) -> None:
-        cfg = MadsciClientConfig(retry_enabled=True)
+        cfg = MadsciHttpClientConfig(retry_enabled=True)
         client = create_httpx_client(config=cfg, async_mode=True)
         try:
             transport = client._transport
@@ -557,7 +557,7 @@ class TestCreateHttpxClient:
             asyncio.run(client.aclose())
 
     def test_rate_limit_tracker_attached(self) -> None:
-        cfg = MadsciClientConfig(rate_limit_tracking_enabled=True)
+        cfg = MadsciHttpClientConfig(rate_limit_tracking_enabled=True)
         client = create_httpx_client(config=cfg)
         try:
             assert hasattr(client, "rate_limit_tracker")
@@ -566,7 +566,7 @@ class TestCreateHttpxClient:
             client.close()
 
     def test_rate_limit_tracker_not_attached_when_disabled(self) -> None:
-        cfg = MadsciClientConfig(rate_limit_tracking_enabled=False)
+        cfg = MadsciHttpClientConfig(rate_limit_tracking_enabled=False)
         client = create_httpx_client(config=cfg)
         try:
             assert not hasattr(client, "rate_limit_tracker")
@@ -591,7 +591,7 @@ class TestRateLimitHook:
 
     def test_hook_updates_tracker(self) -> None:
         """Rate-limit headers from a response should populate the tracker."""
-        cfg = MadsciClientConfig(rate_limit_tracking_enabled=True)
+        cfg = MadsciHttpClientConfig(rate_limit_tracking_enabled=True)
 
         # Create a client with a mock transport so we control the response.
         stub = _StubTransport([_rate_limit_response()])
@@ -611,7 +611,7 @@ class TestRateLimitHook:
 
     def test_hook_respects_warning_threshold(self) -> None:
         """Tracker should warn when usage exceeds threshold."""
-        cfg = MadsciClientConfig(
+        cfg = MadsciHttpClientConfig(
             rate_limit_tracking_enabled=True,
             rate_limit_warning_threshold=0.5,
         )
@@ -645,7 +645,7 @@ class TestEndToEndRetry:
 
     def test_factory_client_retries(self) -> None:
         """Client produced by the factory should retry on 503."""
-        cfg = MadsciClientConfig(
+        cfg = MadsciHttpClientConfig(
             retry_enabled=True,
             retry_total=2,
             retry_backoff_factor=0.0,
@@ -663,7 +663,7 @@ class TestEndToEndRetry:
             client.close()
 
     def test_factory_client_no_retry_on_success(self) -> None:
-        cfg = MadsciClientConfig(
+        cfg = MadsciHttpClientConfig(
             retry_enabled=True,
             retry_total=3,
             retry_backoff_factor=0.0,
