@@ -8,9 +8,6 @@ Functions
 `create_app(settings: madsci.common.types.location_types.LocationManagerSettings | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None) ‑> fastapi.applications.FastAPI`
 :   Create and configure the FastAPI application.
 
-`lifespan(app: fastapi.applications.FastAPI) ‑> AsyncGenerator[None, None]`
-:   Manage the application lifespan with background reconciliation.
-
 Classes
 -------
 
@@ -66,6 +63,13 @@ Classes
     `create_representation_template(self, template: madsci.common.types.location_types.LocationRepresentationTemplate) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
     :   Create a new representation template.
 
+    `create_server(self, **kwargs: Any) ‑> fastapi.applications.FastAPI`
+    :   Create the FastAPI server with the reconciliation lifespan.
+        
+        Overrides the base class to ensure the periodic reconciliation loop
+        is always started, regardless of whether the server is launched via
+        ``run_server()`` or ``create_app()``.
+
     `delete_location(self, location_name: str) ‑> dict[str, str]`
     :   Delete a specific location by name.
 
@@ -82,6 +86,9 @@ Classes
     :   Export all locations as a JSON list.
         
         Semantically distinct from GET /locations for import/export workflows.
+
+    `get_detailed_transfer_graph(self) ‑> madsci.common.types.location_types.TransferGraphDetailedResponse`
+    :   Get the current transfer graph with detailed edge information.
 
     `get_health(self) ‑> madsci.common.types.location_types.LocationManagerHealth`
     :   Get the health status of the Location Manager.
@@ -110,8 +117,11 @@ Classes
     `get_location_templates(self) ‑> list[madsci.common.types.location_types.LocationTemplate]`
     :   Get all location templates.
 
-    `get_locations(self) ‑> list[madsci.common.types.location_types.Location]`
-    :   Get all locations.
+    `get_locations(self, managed_by: madsci.common.types.location_types.LocationManagement | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Get all locations, optionally filtered by management type.
+
+    `get_reconciliation_status(self) ‑> dict[str, typing.Any]`
+    :   Get the status of the last reconciliation cycle.
 
     `get_representation_template(self, template_name: str) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
     :   Get a representation template by name.
@@ -139,6 +149,12 @@ Classes
         Returns
         -------
         LocationImportResult with counts and imported locations.
+
+    `init_location(self, location: madsci.common.types.location_types.Location) ‑> madsci.common.types.location_types.Location`
+    :   Idempotent init: get-or-create a location.
+        
+        If a location with the given name exists, return it unchanged.
+        If it does not exist, create it with lazy resource resolution.
 
     `init_location_template(self, template: madsci.common.types.location_types.LocationTemplate) ‑> madsci.common.types.location_types.LocationTemplate`
     :   Idempotent init: get-or-create, version-update.

@@ -284,10 +284,10 @@ Classes
     `config_schema: dict[str, typing.Any] | None`
     :
 
-    `location_representation_templates: list['NodeRepresentationTemplateDefinition']`
+    `intrinsic_locations: list['NodeIntrinsicLocationDefinition']`
     :
 
-    `location_templates: list['NodeLocationTemplateDefinition']`
+    `location_representation_templates: list['NodeRepresentationTemplateDefinition']`
     :
 
     `model_config`
@@ -328,8 +328,12 @@ Classes
             for backwards compatibility with existing code that passes a
             ``NodeDefinition`` object.
 
-`NodeLocationTemplateDefinition(**data: Any)`
-:   Declarative location template definition for node startup registration.
+`NodeIntrinsicLocationDefinition(**data: Any)`
+:   A location intrinsic to this node's hardware, auto-created on startup.
+    
+    The location_name is automatically prefixed with '{node_name}.' to ensure
+    uniqueness across node instances. For example, location_name="deck_1" on a
+    node named "liquidhandler_1" becomes "liquidhandler_1.deck_1".
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -345,16 +349,22 @@ Classes
 
     ### Class variables
 
-    `default_allow_transfers: bool`
+    `allow_transfers: bool`
     :
 
     `description: str | None`
     :
 
+    `location_name: str`
+    :
+
     `model_config`
     :
 
-    `representation_templates: dict[str, str] | None`
+    `representation_overrides: dict[str, typing.Any]`
+    :
+
+    `representation_template_name: str`
     :
 
     `resource_template_name: str | None`
@@ -364,12 +374,6 @@ Classes
     :
 
     `tags: list[str] | None`
-    :
-
-    `template_name: str`
-    :
-
-    `version: str`
     :
 
 `NodeRepresentationTemplateDefinition(**data: Any)`
