@@ -18,4 +18,4 @@
 ## 4. Verification
 
 - [x] 4.1 Run `just validate_nb_sila` to confirm the notebook executes successfully via papermill
-- [ ] 4.2 Run `just validate_notebooks` to confirm no regressions in other notebook validations
+- [x] 4.2 Run `just validate_notebooks` to confirm no regressions in other notebook validations
