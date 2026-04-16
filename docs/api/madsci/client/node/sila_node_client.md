@@ -35,7 +35,7 @@ Classes
 
     ### Static methods
 
-    `validate_url(url: Any) ‑> bool`
+    `validate_url(url: pydantic.networks.AnyUrl) ‑> bool`
     :   Check if a url uses the sila:// scheme.
 
     ### Methods

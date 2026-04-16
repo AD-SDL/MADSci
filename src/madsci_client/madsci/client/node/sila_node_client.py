@@ -82,6 +82,12 @@ def _resolve_sila_command(client: Any, action_name: str) -> tuple[Any, str, str]
         if command is None:
             msg = f"SiLA command '{command_name}' not found on feature '{feature_name}'"
             raise ValueError(msg)
+        if not callable(command):
+            msg = (
+                f"'{command_name}' on feature '{feature_name}' is not a callable command "
+                f"(it may be a SiLA property). Use '.get()' to read properties."
+            )
+            raise ValueError(msg)
         return command, feature_name, command_name
 
     # Short form: search all features
@@ -177,6 +183,18 @@ def _extract_argument_definitions(command_attr: Any) -> dict[str, ArgumentDefini
 
     Accesses ``command_attr._wrapped_command.parameters.fields`` to read
     parameter metadata (identifier, description, data type).
+
+    NOTE: Private SiLA SDK attribute usage
+    - ``_wrapped_command``: The underlying protobuf command descriptor. The sila2
+      SDK does not expose a public API for reading command parameter metadata;
+      this private attribute is the only way to get parameter names, descriptions,
+      and types from the client side.
+    - ``_identifier`` / ``_description``: Per-parameter metadata on the wrapped
+      command's field descriptors. Also private, no public alternative.
+    - Graceful degradation: the entire body is wrapped in ``contextlib.suppress``,
+      so if these attributes are renamed or removed in a future sila2 version,
+      argument extraction silently returns an empty dict and command execution
+      still works — only introspection metadata is lost.
     """
     args: dict[str, ArgumentDefinition] = {}
     with contextlib.suppress(Exception):
@@ -199,8 +217,17 @@ def _extract_argument_definitions(command_attr: Any) -> dict[str, ArgumentDefini
 def _is_command_observable(command_attr: Any) -> bool:
     """Check if a SiLA client command is observable (vs unobservable).
 
-    Detects by class name since the concrete types are in the sila2 package
-    which may not be installed.
+    NOTE: Class-name heuristic for private SDK types
+    The sila2 SDK uses ``ClientObservableCommand`` and
+    ``ClientUnobservableCommand`` classes internally. There is no public API
+    to query whether a command is observable. We detect it via the class name
+    because importing the concrete types would create a hard dependency on
+    sila2 internals that may move between releases.
+
+    Degradation: if the SDK renames these classes, this function returns False
+    (treating the command as unobservable). The command will still execute
+    correctly — only the ``asynchronous`` flag in ``ActionDefinition`` would be
+    wrong, which affects UI hints but not execution.
     """
     cls_name = type(command_attr).__name__
     return "Observable" in cls_name and "Unobservable" not in cls_name
@@ -486,7 +513,7 @@ class SilaNodeClient(AbstractNodeClient):
 
             return ActionResult(
                 action_id=action_id,
-                status=ActionStatus.SUCCEEDED,
+                status=status,
                 json_result=json_result,
             )
         except Exception as e:
@@ -634,7 +661,7 @@ class SilaNodeClient(AbstractNodeClient):
             self._running_commands.clear()
 
     @classmethod
-    def validate_url(cls, url: Any) -> bool:
+    def validate_url(cls, url: AnyUrl) -> bool:
         """Check if a url uses the sila:// scheme."""
         if hasattr(url, "scheme"):
             return url.scheme in cls.url_protocols

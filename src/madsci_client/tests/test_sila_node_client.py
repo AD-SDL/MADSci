@@ -182,6 +182,20 @@ class TestActionNameResolution:
         with pytest.raises(ValueError, match="not found"):
             _resolve_sila_command(mock_client, "GreetingProvider.NoSuchCommand")
 
+    def test_qualified_non_callable_raises(self):
+        """Qualified name resolving to a non-callable (e.g., property) should raise ValueError."""
+        mock_client = MagicMock()
+
+        # Simulate a SiLA property: has .get() but is not itself callable
+        class MockProperty:
+            def get(self):
+                return 42
+
+        mock_client.GreetingProvider.ServerName = MockProperty()
+
+        with pytest.raises(ValueError, match="not a callable command"):
+            _resolve_sila_command(mock_client, "GreetingProvider.ServerName")
+
 
 # ---------------------------------------------------------------------------
 # Response conversion
@@ -437,6 +451,48 @@ class TestGetActionResult:
 
         result = node_client.get_action_result("test-id")
         assert result.status == ActionStatus.RUNNING
+
+    def test_failed_status_propagated(self):
+        """Should return FAILED when get_action_status reports FAILED."""
+        mock_client = _make_mock_sila_client()
+        node_client = _make_sila_node_client(mock_client)
+
+        mock_instance = MagicMock()
+        mock_instance.done = True
+        mock_instance.status = "finishedWithError"
+        Resp = namedtuple("Resp", ["PartialData"])
+        mock_instance.get_responses.return_value = Resp(PartialData="partial")
+        node_client._running_commands["fail-id"] = (
+            mock_instance,
+            "Feature",
+            "Command",
+        )
+
+        result = node_client.get_action_result("fail-id")
+        assert result.status == ActionStatus.FAILED
+        assert result.json_result == {"PartialData": "partial"}
+        assert "fail-id" not in node_client._running_commands
+
+    def test_failed_status_when_get_responses_raises(self):
+        """Should return FAILED with errors when FAILED and get_responses() raises."""
+        mock_client = _make_mock_sila_client()
+        node_client = _make_sila_node_client(mock_client)
+
+        mock_instance = MagicMock()
+        mock_instance.done = True
+        mock_instance.status = "finishedWithError"
+        mock_instance.get_responses.side_effect = RuntimeError("no responses available")
+        node_client._running_commands["fail-id-2"] = (
+            mock_instance,
+            "Feature",
+            "Command",
+        )
+
+        result = node_client.get_action_result("fail-id-2")
+        assert result.status == ActionStatus.FAILED
+        assert len(result.errors) > 0
+        assert "no responses available" in result.errors[0].message
+        assert "fail-id-2" not in node_client._running_commands
 
     def test_unknown_action_id(self):
         """Should return UNKNOWN with error for untracked action IDs."""
