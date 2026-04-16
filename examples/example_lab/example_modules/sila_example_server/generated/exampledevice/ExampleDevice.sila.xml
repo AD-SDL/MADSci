@@ -56,6 +56,29 @@
       </DataType>
     </IntermediateResponse>
   </Command>
+  <!-- Unobservable Command: GenerateData -->
+  <Command>
+    <Identifier>GenerateData</Identifier>
+    <DisplayName>Generate Data</DisplayName>
+    <Description>Generates a deterministic byte sequence of the given length. Demonstrates binary data handling and ActionFiles in SilaNodeClient.</Description>
+    <Observable>No</Observable>
+    <Parameter>
+      <Identifier>NumBytes</Identifier>
+      <DisplayName>Number of Bytes</DisplayName>
+      <Description>The number of bytes to generate.</Description>
+      <DataType>
+        <Basic>Integer</Basic>
+      </DataType>
+    </Parameter>
+    <Response>
+      <Identifier>Data</Identifier>
+      <DisplayName>Data</DisplayName>
+      <Description>The generated binary data.</Description>
+      <DataType>
+        <Basic>Binary</Basic>
+      </DataType>
+    </Response>
+  </Command>
   <!-- Unobservable Property: ServerUptime -->
   <Property>
     <Identifier>ServerUptime</Identifier>

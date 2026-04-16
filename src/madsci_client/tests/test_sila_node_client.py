@@ -1,17 +1,21 @@
 """Tests for the SiLA2 node client."""
 
+import base64
 from collections import namedtuple
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.node.sila_node_client import (
     SILA2_AVAILABLE,
     SilaNodeClient,
+    _extract_bytes_files,
     _parse_sila_url,
     _resolve_sila_command,
     _response_to_dict,
+    _serialize_value,
 )
-from madsci.common.types.action_types import ActionRequest, ActionStatus
+from madsci.common.types.action_types import ActionFiles, ActionRequest, ActionStatus
 from madsci.common.types.client_types import SilaNodeClientConfig
 from pydantic import AnyUrl
 
@@ -716,7 +720,7 @@ class TestCapabilities:
         assert caps.get_state is True
         assert caps.get_action_status is True
         assert caps.get_action_result is True
-        assert caps.action_files is False
+        assert caps.action_files is True
         assert caps.get_action_history is False
         assert caps.send_admin_commands is False
         assert caps.set_config is False
@@ -800,3 +804,236 @@ class TestSilaNodeClientConfig:
         config = SilaNodeClientConfig()
         assert config.insecure is False
         assert config.command_timeout == 60.0
+
+
+# ---------------------------------------------------------------------------
+# Bytes handling
+# ---------------------------------------------------------------------------
+
+
+class TestSerializeValueBytes:
+    """Test _serialize_value with bytes input."""
+
+    def test_bytes_produces_sentinel_dict(self):
+        """Bytes should be converted to a sentinel dict with base64 encoding."""
+        data = b"\x89PNG\r\n\x1a\n"
+        result = _serialize_value(data)
+        assert isinstance(result, dict)
+        assert result["__madsci_bytes__"] is True
+        assert result["base64"] == base64.b64encode(data).decode("ascii")
+        assert result["size"] == len(data)
+
+    def test_empty_bytes(self):
+        """Empty bytes should produce a valid sentinel dict."""
+        result = _serialize_value(b"")
+        assert result["__madsci_bytes__"] is True
+        assert result["base64"] == ""
+        assert result["size"] == 0
+
+    def test_non_bytes_unchanged(self):
+        """Non-bytes primitives should still serialize normally."""
+        assert _serialize_value("hello") == "hello"
+        assert _serialize_value(42) == 42
+        assert _serialize_value(None) is None
+
+
+class TestExtractBytesFiles:
+    """Test _extract_bytes_files post-processing."""
+
+    def test_extracts_single_bytes_field(self, tmp_path, monkeypatch):
+        """Should write file and return ActionFiles for a single bytes field."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        raw = b"hello world"
+        json_result = {
+            "ImageData": {
+                "__madsci_bytes__": True,
+                "base64": base64.b64encode(raw).decode("ascii"),
+                "size": len(raw),
+            },
+            "Label": "test",
+        }
+
+        cleaned, files = _extract_bytes_files(json_result, "action-123")
+
+        assert files is not None
+        assert isinstance(files, ActionFiles)
+        file_path = files.ImageData
+        assert isinstance(file_path, Path)
+        assert file_path.read_bytes() == raw
+        assert file_path.name == "ImageData.bin"
+        assert cleaned["ImageData"] == base64.b64encode(raw).decode("ascii")
+        assert cleaned["Label"] == "test"
+
+    def test_extracts_multiple_bytes_fields(self, tmp_path, monkeypatch):
+        """Should handle multiple bytes fields."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        json_result = {
+            "Data1": {
+                "__madsci_bytes__": True,
+                "base64": base64.b64encode(b"aaa").decode("ascii"),
+                "size": 3,
+            },
+            "Data2": {
+                "__madsci_bytes__": True,
+                "base64": base64.b64encode(b"bbb").decode("ascii"),
+                "size": 3,
+            },
+        }
+
+        _cleaned, files = _extract_bytes_files(json_result, "action-456")
+
+        assert files is not None
+        assert files.Data1.read_bytes() == b"aaa"
+        assert files.Data2.read_bytes() == b"bbb"
+
+    def test_no_bytes_returns_none(self):
+        """Should return None for ActionFiles when no bytes fields present."""
+        json_result = {"Greeting": "Hello", "Count": 42}
+        cleaned, files = _extract_bytes_files(json_result, "action-789")
+
+        assert files is None
+        assert cleaned == json_result
+
+
+class TestBytesEndToEndUnobservable:
+    """Test end-to-end bytes handling for unobservable commands."""
+
+    def test_unobservable_command_with_bytes(self, tmp_path, monkeypatch):
+        """ActionResult should have files and base64 json_result for bytes responses."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        mock_client = _make_mock_sila_client()
+
+        raw = b"\x00\x01\x02\x03"
+        Resp = namedtuple("ReadSensor_Responses", ["Data", "Label"])
+        mock_client.SensorFeature.ReadSensor.return_value = Resp(
+            Data=raw, Label="sensor1"
+        )
+
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(action_name="SensorFeature.ReadSensor", args={})
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.files is not None
+        assert isinstance(result.files, ActionFiles)
+        file_path = result.files.Data
+        assert file_path.read_bytes() == raw
+        assert result.json_result["Data"] == base64.b64encode(raw).decode("ascii")
+        assert result.json_result["Label"] == "sensor1"
+
+
+class TestBytesEndToEndObservable:
+    """Test end-to-end bytes handling for observable commands."""
+
+    def test_observable_command_with_bytes(self, tmp_path, monkeypatch):
+        """Observable commands should also produce ActionFiles for bytes responses."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        mock_client = _make_mock_sila_client()
+
+        raw = b"observable-binary-data"
+        Resp = namedtuple("Scan_Responses", ["Image"])
+
+        mock_instance = MagicMock()
+        mock_instance.status = "running"
+        mock_instance.get_responses.return_value = Resp(Image=raw)
+        mock_client.Scanner.Scan.return_value = mock_instance
+
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(action_name="Scanner.Scan", args={})
+        result = node_client.send_action(request, await_result=True)
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.files is not None
+        file_path = result.files.Image
+        assert file_path.read_bytes() == raw
+        assert result.json_result["Image"] == base64.b64encode(raw).decode("ascii")
+
+    def test_get_action_result_with_bytes(self, tmp_path, monkeypatch):
+        """get_action_result should produce ActionFiles for bytes in observable results."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        mock_client = _make_mock_sila_client()
+        node_client = _make_sila_node_client(mock_client)
+
+        raw = b"polled-result-bytes"
+        Resp = namedtuple("Resp", ["BinaryOutput"])
+
+        mock_instance = MagicMock()
+        mock_instance.done = True
+        mock_instance.status = "finishedSuccessfully"
+        mock_instance.get_responses.return_value = Resp(BinaryOutput=raw)
+        node_client._running_commands["poll-id"] = (
+            mock_instance,
+            "Feature",
+            "Command",
+        )
+
+        result = node_client.get_action_result("poll-id")
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.files is not None
+        file_path = result.files.BinaryOutput
+        assert file_path.read_bytes() == raw
+
+
+class TestMixedBytesAndNonBytes:
+    """Test responses with mixed bytes and non-bytes fields."""
+
+    def test_mixed_response(self, tmp_path, monkeypatch):
+        """Only bytes fields should be in ActionFiles; non-bytes in json_result."""
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        mock_client = _make_mock_sila_client()
+
+        raw = b"\xff\xfe"
+        Resp = namedtuple("Resp", ["BinaryField", "StringField", "IntField"])
+        mock_client.Feature.Command.return_value = Resp(
+            BinaryField=raw, StringField="text", IntField=99
+        )
+
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(action_name="Feature.Command", args={})
+        result = node_client.send_action(request)
+
+        assert result.files is not None
+        assert hasattr(result.files, "BinaryField")
+        assert not hasattr(result.files, "StringField")
+        assert result.json_result["StringField"] == "text"
+        assert result.json_result["IntField"] == 99
+
+
+class TestNoBytesFieldsUnchanged:
+    """Test that responses without bytes are unaffected."""
+
+    def test_no_bytes_files_none(self):
+        """ActionResult.files should remain None when no bytes in response."""
+        mock_client = _make_mock_sila_client()
+
+        Resp = namedtuple("Resp", ["Greeting"])
+        mock_client.GreetingProvider.SayHello.return_value = Resp(Greeting="Hello")
+
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(
+            action_name="GreetingProvider.SayHello", args={"Name": "World"}
+        )
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.SUCCEEDED
+        assert result.files is None
+        assert result.json_result == {"Greeting": "Hello"}

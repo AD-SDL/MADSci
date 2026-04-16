@@ -14,6 +14,7 @@ from sila2.server import (
 from .exampledevice_types import (
     CountDown_IntermediateResponses,
     CountDown_Responses,
+    GenerateData_Responses,
     Greet_Responses,
 )
 
@@ -41,6 +42,25 @@ class ExampleDeviceBase(FeatureImplementationBase, ABC):
 
         :param metadata: The SiLA Client Metadata attached to the call
         :return: The number of seconds since the server started. Demonstrates property reading via get_state().
+        """
+
+    @abstractmethod
+    def GenerateData(
+        self, NumBytes: int, *, metadata: MetadataDict
+    ) -> GenerateData_Responses:
+        """
+        Generates a deterministic byte sequence of the given length. Demonstrates binary data handling and ActionFiles in SilaNodeClient.
+
+
+        :param NumBytes: The number of bytes to generate.
+
+        :param metadata: The SiLA Client Metadata attached to the call
+
+        :return:
+
+            - Data: The generated binary data.
+
+
         """
 
     @abstractmethod

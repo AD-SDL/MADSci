@@ -11,6 +11,13 @@ class Greet_Responses(NamedTuple):
     """
 
 
+class GenerateData_Responses(NamedTuple):
+    Data: bytes
+    """
+    The generated binary data.
+    """
+
+
 class CountDown_Responses(NamedTuple):
     Message: str
     """

@@ -15,6 +15,7 @@ from ..generated.exampledevice import (
     CountDown_IntermediateResponses,
     CountDown_Responses,
     ExampleDeviceBase,
+    GenerateData_Responses,
     Greet_Responses,
 )
 
@@ -31,6 +32,13 @@ class ExampleDeviceImpl(ExampleDeviceBase):
     def get_ServerUptime(self, *, metadata: MetadataDict) -> float:
         """Return seconds since server start."""
         return time.time() - self._start_time
+
+    def GenerateData(
+        self, NumBytes: int, *, metadata: MetadataDict
+    ) -> GenerateData_Responses:
+        """Generate a deterministic byte sequence of the given length."""
+        data = bytes(i % 256 for i in range(NumBytes))
+        return GenerateData_Responses(Data=data)
 
     def Greet(self, Name: str, *, metadata: MetadataDict) -> Greet_Responses:
         """Return a greeting for the given name."""

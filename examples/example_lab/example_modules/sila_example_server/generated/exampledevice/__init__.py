@@ -5,6 +5,7 @@ from .exampledevice_feature import ExampleDeviceFeature
 from .exampledevice_types import (
     CountDown_IntermediateResponses,
     CountDown_Responses,
+    GenerateData_Responses,
     Greet_Responses,
 )
 
@@ -12,6 +13,7 @@ __all__ = [
     "ExampleDeviceBase",
     "ExampleDeviceFeature",
     "ExampleDeviceClient",
+    "GenerateData_Responses",
     "Greet_Responses",
     "CountDown_Responses",
     "CountDown_IntermediateResponses",

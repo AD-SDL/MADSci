@@ -4,6 +4,7 @@ Connects to SiLA2 servers via gRPC using the sila2 Python SDK.
 Requires the 'sila' optional dependency: pip install "madsci.client[sila]"
 """
 
+import base64
 import contextlib
 import threading
 import time
@@ -15,8 +16,10 @@ from urllib.parse import urlparse
 from madsci.client.event_client import EventClient
 from madsci.client.node.abstract_node_client import AbstractNodeClient
 from madsci.common.context import get_event_client
+from madsci.common.sentry import get_madsci_subdir
 from madsci.common.types.action_types import (
     ActionDefinition,
+    ActionFiles,
     ActionRequest,
     ActionResult,
     ActionStatus,
@@ -165,17 +168,64 @@ def _response_to_dict(response: Any) -> dict[str, Any]:
     return {"result": str(response)}
 
 
-def _serialize_value(value: Any) -> Any:
-    """Convert a SiLA value to a JSON-serializable form."""
+def _serialize_value(value: Any, *, action_id: str | None = None) -> Any:
+    """Convert a SiLA value to a JSON-serializable form.
+
+    Bytes values are base64-encoded and returned as a sentinel dict
+    so that _extract_bytes_files can post-process them into ActionFiles.
+    """
     if isinstance(value, (str, int, float, bool, type(None))):
         return value
+    if isinstance(value, bytes):
+        return {
+            "__madsci_bytes__": True,
+            "base64": base64.b64encode(value).decode("ascii"),
+            "size": len(value),
+        }
     if isinstance(value, (list, tuple)):
-        return [_serialize_value(v) for v in value]
+        return [_serialize_value(v, action_id=action_id) for v in value]
     if isinstance(value, dict):
-        return {k: _serialize_value(v) for k, v in value.items()}
+        return {k: _serialize_value(v, action_id=action_id) for k, v in value.items()}
     if hasattr(value, "_fields"):
-        return {f: _serialize_value(getattr(value, f)) for f in value._fields}
+        return {
+            f: _serialize_value(getattr(value, f), action_id=action_id)
+            for f in value._fields
+        }
     return str(value)
+
+
+def _extract_bytes_files(
+    json_result: dict[str, Any], action_id: str
+) -> tuple[dict[str, Any], ActionFiles | None]:
+    """Extract bytes sentinel dicts from a response, write files, and return cleaned result.
+
+    Scans top-level keys of json_result for sentinel dicts produced by
+    _serialize_value when it encounters bytes values. For each sentinel:
+    - Writes the decoded bytes to a file in the sila_files/{action_id}/ directory
+    - Replaces the sentinel in json_result with the base64 string
+    - Collects file paths into an ActionFiles instance
+
+    Returns:
+        A tuple of (cleaned_json_result, action_files_or_none).
+    """
+    file_paths: dict[str, Path] = {}
+    cleaned = dict(json_result)
+
+    for key, value in json_result.items():
+        if isinstance(value, dict) and value.get("__madsci_bytes__") is True:
+            # Write bytes to disk
+            output_dir = get_madsci_subdir("sila_files") / action_id
+            output_dir.mkdir(parents=True, exist_ok=True)
+            file_path = output_dir / f"{key}.bin"
+            raw_bytes = base64.b64decode(value["base64"])
+            file_path.write_bytes(raw_bytes)
+
+            file_paths[key] = file_path
+            cleaned[key] = value["base64"]
+
+    if file_paths:
+        return cleaned, ActionFiles(**file_paths)
+    return cleaned, None
 
 
 def _extract_argument_definitions(command_attr: Any) -> dict[str, ArgumentDefinition]:
@@ -260,7 +310,7 @@ class SilaNodeClient(AbstractNodeClient):
         get_action_status=True,
         get_action_result=True,
         get_action_history=False,
-        action_files=False,
+        action_files=True,
         send_admin_commands=False,
         set_config=False,
         get_resources=False,
@@ -395,10 +445,12 @@ class SilaNodeClient(AbstractNodeClient):
 
             # Unobservable command — result available immediately
             json_result = _response_to_dict(result)
+            json_result, action_files = _extract_bytes_files(json_result, action_id)
             return ActionResult(
                 action_id=action_id,
                 status=ActionStatus.SUCCEEDED,
                 json_result=json_result,
+                files=action_files,
             )
 
         except Exception as e:
@@ -449,10 +501,12 @@ class SilaNodeClient(AbstractNodeClient):
 
             responses = instance.get_responses()
             json_result = _response_to_dict(responses)
+            json_result, action_files = _extract_bytes_files(json_result, action_id)
             return ActionResult(
                 action_id=action_id,
                 status=ActionStatus.SUCCEEDED,
                 json_result=json_result,
+                files=action_files,
             )
         except Exception as e:
             return ActionResult(
@@ -507,6 +561,7 @@ class SilaNodeClient(AbstractNodeClient):
         try:
             responses = instance.get_responses()
             json_result = _response_to_dict(responses)
+            json_result, action_files = _extract_bytes_files(json_result, action_id)
 
             with self._commands_lock:
                 self._running_commands.pop(action_id, None)
@@ -515,6 +570,7 @@ class SilaNodeClient(AbstractNodeClient):
                 action_id=action_id,
                 status=status,
                 json_result=json_result,
+                files=action_files,
             )
         except Exception as e:
             with self._commands_lock:
