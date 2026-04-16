@@ -50,10 +50,7 @@ services:
   # --- MADSci Managers ---
 
   lab_manager:
-    image: madsci-squid:latest
-    build:
-      context: .
-      dockerfile: Dockerfile.squid
+    image: ghcr.io/ad-sdl/madsci_dashboard:latest
     ports:
       - "8000:8000"
     env_file: .env
@@ -62,7 +59,7 @@ services:
         condition: service_started
 
   event_manager:
-    image: madsci-event-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8001:8001"
     env_file: .env
@@ -71,7 +68,7 @@ services:
         condition: service_started
 
   experiment_manager:
-    image: madsci-experiment-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8002:8002"
     env_file: .env
@@ -80,7 +77,7 @@ services:
         condition: service_started
 
   resource_manager:
-    image: madsci-resource-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8003:8003"
     env_file: .env
@@ -89,7 +86,7 @@ services:
         condition: service_healthy
 
   data_manager:
-    image: madsci-data-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8004:8004"
     env_file: .env
@@ -98,7 +95,7 @@ services:
         condition: service_started
 
   workcell_manager:
-    image: madsci-workcell-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8005:8005"
     env_file: .env
@@ -109,7 +106,7 @@ services:
         condition: service_healthy
 
   location_manager:
-    image: madsci-location-manager:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     ports:
       - "8006:8006"
     env_file: .env

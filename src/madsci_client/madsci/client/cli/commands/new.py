@@ -30,14 +30,19 @@ def get_console(ctx: click.Context) -> Console:
     return _get_console(ctx)
 
 
-def collect_parameters_interactive(  # noqa: C901
-    engine: TemplateEngine, console: Console
+def collect_parameters_interactive(  # noqa: C901, PLR0912, PLR0915
+    engine: TemplateEngine,
+    console: Console,
+    overrides: Optional[dict[str, object]] = None,
 ) -> dict[str, object]:
     """Collect parameter values interactively.
 
     Args:
         engine: Template engine with manifest.
         console: Rich console for output.
+        overrides: Optional dict of parameter values to use as defaults,
+            overriding the template's built-in defaults. Useful for passing
+            CLI-provided values (e.g., ``-n``) into interactive mode.
 
     Returns:
         Dictionary of parameter names to values.
@@ -45,11 +50,17 @@ def collect_parameters_interactive(  # noqa: C901
     from madsci.common.types.template_types import ParameterType
     from rich.prompt import Confirm, Prompt
 
+    overrides = overrides or {}
     params: dict[str, object] = {}
 
     for param in engine.manifest.parameters:
         if param.type == ParameterType.STRING:
-            default_str = str(param.default) if param.default else ""
+            override = overrides.get(param.name)
+            default_str = (
+                str(override)
+                if override
+                else (str(param.default) if param.default else "")
+            )
             value = Prompt.ask(
                 f"  {param.description}",
                 default=default_str or None,
@@ -57,7 +68,9 @@ def collect_parameters_interactive(  # noqa: C901
             params[param.name] = value
 
         elif param.type == ParameterType.INTEGER:
-            default_str = str(param.default) if param.default is not None else ""
+            override = overrides.get(param.name)
+            default_val = override if override is not None else param.default
+            default_str = str(default_val) if default_val is not None else ""
             value_str = Prompt.ask(
                 f"  {param.description}",
                 default=default_str or None,
@@ -65,7 +78,9 @@ def collect_parameters_interactive(  # noqa: C901
             params[param.name] = int(value_str) if value_str else 0
 
         elif param.type == ParameterType.FLOAT:
-            default_str = str(param.default) if param.default is not None else ""
+            override = overrides.get(param.name)
+            default_val = override if override is not None else param.default
+            default_str = str(default_val) if default_val is not None else ""
             value_str = Prompt.ask(
                 f"  {param.description}",
                 default=default_str or None,
@@ -73,7 +88,12 @@ def collect_parameters_interactive(  # noqa: C901
             params[param.name] = float(value_str) if value_str else 0.0
 
         elif param.type == ParameterType.BOOLEAN:
-            default_val = param.default if param.default is not None else False
+            override = overrides.get(param.name)
+            default_val = (
+                override
+                if override is not None
+                else (param.default if param.default is not None else False)
+            )
             value = Confirm.ask(
                 f"  {param.description}",
                 default=default_val,
@@ -81,31 +101,47 @@ def collect_parameters_interactive(  # noqa: C901
             params[param.name] = value
 
         elif param.type == ParameterType.CHOICE:
+            override = overrides.get(param.name)
+            effective_default = override if override is not None else param.default
             console.print(f"\n  {param.description}:")
             choices = param.choices or []
             for i, choice in enumerate(choices, 1):
-                marker = "●" if choice.value == param.default else "○"
+                marker = "●" if choice.value == effective_default else "○"
                 console.print(f"    {marker} {i}. {choice.label}")
                 if choice.description:
                     console.print(f"         {choice.description}", style="dim")
 
             default_idx = next(
-                (i for i, c in enumerate(choices, 1) if c.value == param.default),
+                (i for i, c in enumerate(choices, 1) if c.value == effective_default),
                 1,
             )
             idx = Prompt.ask("  Select", default=str(default_idx))
             params[param.name] = choices[int(idx) - 1].value
 
         elif param.type == ParameterType.MULTI_CHOICE:
+            override = overrides.get(param.name)
+            override_list = list(override) if override is not None else None
             console.print(f"\n  {param.description}:")
             selected = []
             for choice in param.choices or []:
-                if Confirm.ask(f"    Include {choice.label}?", default=choice.default):
+                # Use override list to determine default if provided
+                if override_list is not None:
+                    default_selected = choice.value in override_list
+                else:
+                    default_selected = choice.default
+                if Confirm.ask(
+                    f"    Include {choice.label}?", default=default_selected
+                ):
                     selected.append(choice.value)
             params[param.name] = selected
 
         elif param.type == ParameterType.PATH:
-            default_str = str(param.default) if param.default else ""
+            override = overrides.get(param.name)
+            default_str = (
+                str(override)
+                if override
+                else (str(param.default) if param.default else "")
+            )
             value = Prompt.ask(
                 f"  {param.description}",
                 default=default_str or None,
@@ -208,7 +244,32 @@ def generate_from_template(  # noqa: C901, PLR0912, PLR0915
             )
         )
         console.print()
-        params = collect_parameters_interactive(engine, console)
+
+        # Build overrides from CLI-provided --name so interactive prompts
+        # use it as the default instead of the template default.
+        overrides: dict[str, object] = {}
+        if name:
+            category = (
+                engine.manifest.category.value if engine.manifest.category else ""
+            )
+            category_name_key = f"{category}_name" if category else ""
+
+            if category_name_key and any(
+                p.name == category_name_key for p in engine.manifest.parameters
+            ):
+                overrides[category_name_key] = name
+            else:
+                first_param = (
+                    engine.manifest.parameters[0]
+                    if engine.manifest.parameters
+                    else None
+                )
+                if first_param and (
+                    first_param.name.endswith("_name") or first_param.name == "name"
+                ):
+                    overrides[first_param.name] = name
+
+        params = collect_parameters_interactive(engine, console, overrides=overrides)
 
     # Add extra params
     if extra_params:
