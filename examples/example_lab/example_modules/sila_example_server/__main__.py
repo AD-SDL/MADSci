@@ -10,7 +10,7 @@ from .server import Server
 logger = logging.getLogger(__name__)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="MADSci SiLA2 Example Server")
     parser.add_argument(
         "-a",

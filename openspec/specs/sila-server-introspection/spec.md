@@ -38,7 +38,7 @@ Each `ActionDefinition` built by `get_info()` SHALL include an `ArgumentDefiniti
 - **THEN** `ActionDefinition.asynchronous` SHALL be `True` for observable commands and `False` for unobservable commands
 
 ### Requirement: Read SiLA properties via get_state
-The SilaNodeClient SHALL read all SiLA property values from the server and return them as a flat dict.
+The SilaNodeClient SHALL read all SiLA property values from the server and return them as a flat dict. The property-detection heuristic (`hasattr(attr, "get") and not callable(attr)`) SHALL be documented with an inline comment explaining: (a) why this heuristic is used, (b) that it depends on SiLA SDK implementation details, and (c) that the `contextlib.suppress(Exception)` wrapper protects against misclassification.
 
 #### Scenario: Read all properties
 - **WHEN** `get_state()` is called
@@ -47,6 +47,10 @@ The SilaNodeClient SHALL read all SiLA property values from the server and retur
 #### Scenario: Property read failure
 - **WHEN** a specific property raises an error during reading
 - **THEN** the client SHALL set that property's value to `None` in the returned dict and continue reading other properties
+
+#### Scenario: Property detection heuristic documented
+- **WHEN** a developer reads the `get_state()` method
+- **THEN** an inline comment SHALL explain the property-detection heuristic, its SDK dependency, and the error-suppression safety net
 
 ### Requirement: Declare supported capabilities
 The SilaNodeClient SHALL declare its supported capabilities via the `supported_capabilities` class variable.

@@ -15,7 +15,7 @@ class Server(SilaServer):
         server_uuid: Optional[UUID] = None,
         name: Optional[str] = None,
         description: Optional[str] = None,
-    ):
+    ) -> None:
         if name is None:
             name = "MADSci SiLA Example"
         if description is None:

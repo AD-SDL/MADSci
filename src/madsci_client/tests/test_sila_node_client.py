@@ -76,13 +76,13 @@ class TestSilaImportGuard:
 class TestSilaUrlValidation:
     """Test URL scheme detection."""
 
-    def test_validates_sila_scheme_string(self):
-        """validate_url should accept sila:// URLs as strings."""
-        assert SilaNodeClient.validate_url("sila://localhost:50052") is True
+    def test_validates_sila_scheme(self):
+        """validate_url should accept sila:// URLs."""
+        assert SilaNodeClient.validate_url(AnyUrl("sila://localhost:50052")) is True
 
-    def test_rejects_http_scheme_string(self):
+    def test_rejects_http_scheme(self):
         """validate_url should reject http:// URLs."""
-        assert SilaNodeClient.validate_url("http://localhost:8080") is False
+        assert SilaNodeClient.validate_url(AnyUrl("http://localhost:8080")) is False
 
     def test_validates_anyurl_object(self):
         """validate_url should work with AnyUrl objects."""

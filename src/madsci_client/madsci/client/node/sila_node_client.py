@@ -168,7 +168,7 @@ def _response_to_dict(response: Any) -> dict[str, Any]:
     return {"result": str(response)}
 
 
-def _serialize_value(value: Any, *, action_id: str | None = None) -> Any:
+def _serialize_value(value: Any) -> Any:
     """Convert a SiLA value to a JSON-serializable form.
 
     Bytes values are base64-encoded and returned as a sentinel dict
@@ -183,14 +183,11 @@ def _serialize_value(value: Any, *, action_id: str | None = None) -> Any:
             "size": len(value),
         }
     if isinstance(value, (list, tuple)):
-        return [_serialize_value(v, action_id=action_id) for v in value]
+        return [_serialize_value(v) for v in value]
     if isinstance(value, dict):
-        return {k: _serialize_value(v, action_id=action_id) for k, v in value.items()}
+        return {k: _serialize_value(v) for k, v in value.items()}
     if hasattr(value, "_fields"):
-        return {
-            f: _serialize_value(getattr(value, f), action_id=action_id)
-            for f in value._fields
-        }
+        return {f: _serialize_value(getattr(value, f)) for f in value._fields}
     return str(value)
 
 
@@ -198,6 +195,11 @@ def _extract_bytes_files(
     json_result: dict[str, Any], action_id: str
 ) -> tuple[dict[str, Any], ActionFiles | None]:
     """Extract bytes sentinel dicts from a response, write files, and return cleaned result.
+
+    # TODO: Only top-level keys are scanned. Nested bytes sentinels (e.g.,
+    # inside sub-namedtuples or nested dicts) are left in-place in json_result
+    # and not extracted to files. To support nested bytes, this function would
+    # need recursive traversal.
 
     Scans top-level keys of json_result for sentinel dicts produced by
     _serialize_value when it encounters bytes values. For each sentinel:
@@ -646,6 +648,11 @@ class SilaNodeClient(AbstractNodeClient):
                     if attr_name.startswith("_"):
                         continue
                     attr = getattr(feature, attr_name, None)
+                    # Heuristic: SiLA properties have a .get() method but are
+                    # not themselves callable, while commands are callable.
+                    # This relies on the sila2 SDK's internal type structure;
+                    # the try/except below ensures misclassified attributes
+                    # just yield None rather than crashing.
                     if attr is not None and hasattr(attr, "get") and not callable(attr):
                         try:
                             value = attr.get()
@@ -719,6 +726,4 @@ class SilaNodeClient(AbstractNodeClient):
     @classmethod
     def validate_url(cls, url: AnyUrl) -> bool:
         """Check if a url uses the sila:// scheme."""
-        if hasattr(url, "scheme"):
-            return url.scheme in cls.url_protocols
-        return str(url).startswith("sila://")
+        return url.scheme in cls.url_protocols

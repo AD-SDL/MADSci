@@ -190,3 +190,4 @@ services:
       - liquidhandler_1
       - robotarm_1
       - platereader_1
+      - sila_example_server
