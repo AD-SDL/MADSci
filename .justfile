@@ -223,7 +223,6 @@ validate_nb_backup:
 validate_nb_sila:
   docker compose up -d sila_example_server
   docker compose --profile testing run --rm --no-deps notebook_validator papermill /home/madsci/notebooks/sila_node_notebook.ipynb /dev/null --cwd /home/madsci/notebooks --log-output --execution-timeout 120
-  docker compose stop sila_example_server
 
 # Validate all example notebooks
 validate_notebooks: validate_nb_node validate_nb_experiment validate_nb_backup validate_nb_sila
