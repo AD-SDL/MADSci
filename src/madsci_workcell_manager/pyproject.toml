@@ -13,7 +13,7 @@ readme = "README.md"
 license = {text = "MIT"}
 dependencies = [
   "madsci.common",
-  "madsci.client",
+  "madsci.client[sila]",
   "redis",
   "pottery",
 ]

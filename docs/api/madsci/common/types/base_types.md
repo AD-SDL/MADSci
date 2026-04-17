@@ -290,7 +290,8 @@ Classes
 
     * madsci.common.foss_migration.FossMigrationSettings
     * madsci.common.types.backup_types.BaseBackupSettings
-    * madsci.common.types.client_types.MadsciClientConfig
+    * madsci.common.types.client_types.MadsciHttpClientConfig
+    * madsci.common.types.client_types.SilaNodeClientConfig
     * madsci.common.types.context_types.MadsciContext
     * madsci.common.types.datapoint_types.ObjectStorageSettings
     * madsci.common.types.docker_types.DockerComposeSettings

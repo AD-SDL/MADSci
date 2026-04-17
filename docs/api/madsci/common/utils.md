@@ -5,7 +5,7 @@ Utilities for the MADSci project.
 Functions
 ---------
 
-`create_http_session(config: ForwardRef('MadsciClientConfig') | None = None, retry_enabled: bool | None = None) ‑> requests.Session`
+`create_http_session(config: ForwardRef('MadsciHttpClientConfig') | None = None, retry_enabled: bool | None = None) ‑> requests.Session`
 :   Create a requests.Session with standardized configuration.
     
     This function creates a properly configured requests session with retry
@@ -18,21 +18,21 @@ Functions
     the session.rate_limit_tracker attribute.
     
     Args:
-        config: Client configuration object. If None, uses default MadsciClientConfig.
+        config: Client configuration object. If None, uses default MadsciHttpClientConfig.
         retry_enabled: Override for retry_enabled from config. If None, uses config value.
     
     Returns:
         Configured requests.Session object with optional rate_limit_tracker attribute
     
     Example:
-        >>> from madsci.common.types.client_types import MadsciClientConfig
+        >>> from madsci.common.types.client_types import MadsciHttpClientConfig
         >>> from madsci.common.utils import create_http_session
         >>>
         >>> # Use default configuration
         >>> session = create_http_session()
         >>>
         >>> # Use custom configuration
-        >>> config = MadsciClientConfig(retry_total=5, timeout_default=30.0)
+        >>> config = MadsciHttpClientConfig(retry_total=5, timeout_default=30.0)
         >>> session = create_http_session(config=config)
         >>>
         >>> # Disable retry for a specific session

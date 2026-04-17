@@ -165,6 +165,13 @@ services:
       - location_manager
       - event_manager
 
+  sila_example_server:
+    <<: *madsci-service
+    container_name: sila_example_server
+    command: python -m example_modules.sila_example_server --insecure --disable-discovery -a 0.0.0.0 -p 50052 -vvv
+    depends_on:
+      - event_manager
+
   # *Notebook Validator
 
   notebook_validator:
@@ -183,3 +190,4 @@ services:
       - liquidhandler_1
       - robotarm_1
       - platereader_1
+      - sila_example_server

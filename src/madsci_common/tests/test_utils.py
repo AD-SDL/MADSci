@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 import pytest
 from madsci.common.types.action_types import ActionDatapoints
-from madsci.common.types.client_types import MadsciClientConfig
+from madsci.common.types.client_types import MadsciHttpClientConfig
 from madsci.common.types.datapoint_types import FileDataPoint, ValueDataPoint
 from madsci.common.utils import (
     RateLimitHTTPAdapter,
@@ -607,14 +607,14 @@ class TestCreateHTTPSession:
 
     def test_session_with_rate_limit_disabled(self):
         """Test creating session with rate limit tracking disabled."""
-        config = MadsciClientConfig(rate_limit_tracking_enabled=False)
+        config = MadsciHttpClientConfig(rate_limit_tracking_enabled=False)
         session = create_http_session(config=config)
         assert session is not None
         assert not hasattr(session, "rate_limit_tracker")
 
     def test_session_with_rate_limit_enabled(self):
         """Test creating session with rate limit tracking enabled."""
-        config = MadsciClientConfig(
+        config = MadsciHttpClientConfig(
             rate_limit_tracking_enabled=True,
             rate_limit_warning_threshold=0.9,
             rate_limit_respect_limits=True,
@@ -627,7 +627,7 @@ class TestCreateHTTPSession:
 
     def test_session_rate_limit_status_access(self):
         """Test accessing rate limit status from session."""
-        config = MadsciClientConfig(rate_limit_tracking_enabled=True)
+        config = MadsciHttpClientConfig(rate_limit_tracking_enabled=True)
         session = create_http_session(config=config)
 
         status = session.rate_limit_tracker.get_status()

@@ -30,6 +30,7 @@ Classes
     ### Descendants
 
     * madsci.client.node.rest_node_client.RestNodeClient
+    * madsci.client.node.sila_node_client.SilaNodeClient
 
     ### Class variables
 
