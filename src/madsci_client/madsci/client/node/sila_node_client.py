@@ -290,6 +290,56 @@ def _is_observable_instance(result: Any) -> bool:
     return hasattr(result, "status") and hasattr(result, "get_responses")
 
 
+_CONNECTION_ERROR_HINTS: dict[str, str] = {
+    "dns_resolution": "Check that the hostname is spelled correctly and DNS is configured.",
+    "connection_refused": "Check that the SiLA server is running on the target host and port.",
+    "connection_timeout": "Check network connectivity and firewall rules.",
+    "tls_error": "Check TLS configuration: verify the 'insecure' setting and certificate path.",
+    "grpc_error": "Check gRPC server availability and protocol compatibility.",
+    "unknown": "Check server availability and network configuration.",
+}
+
+
+def _classify_connection_error(exception: Exception) -> str:
+    """Classify a connection error into a diagnostic category.
+
+    Returns one of: dns_resolution, connection_refused, connection_timeout,
+    tls_error, grpc_error, unknown.
+    """
+    msg = str(exception).lower()
+    exc_type = type(exception).__name__.lower()
+
+    if "dns resolution failed" in msg or "name resolution failure" in msg:
+        return "dns_resolution"
+    if "connection refused" in msg or "connect failed" in msg:
+        return "connection_refused"
+    if (
+        "timeouterror" in exc_type
+        or isinstance(exception, TimeoutError)
+        or "deadline exceeded" in msg
+    ):
+        return "connection_timeout"
+    if any(term in msg for term in ("ssl", "tls", "certificate")):
+        return "tls_error"
+    if "rpcerror" in exc_type or "grpc" in msg or "statuscode" in msg:
+        return "grpc_error"
+    return "unknown"
+
+
+def _format_connection_error(
+    exception: Exception, host: str, port: int, insecure: bool
+) -> str:
+    """Build an enriched connection error message with diagnostic context."""
+    category = _classify_connection_error(exception)
+    tls_mode = "disabled" if insecure else "enabled"
+    hint = _CONNECTION_ERROR_HINTS[category]
+    return (
+        f"SiLA connection error ({category}): {exception}\n"
+        f"  Target: {host}:{port} (TLS: {tls_mode})\n"
+        f"  Hint: {hint}"
+    )
+
+
 class SilaNodeClient(AbstractNodeClient):
     """SiLA2 gRPC-based node client.
 
@@ -379,7 +429,19 @@ class SilaNodeClient(AbstractNodeClient):
                         self.config.root_certs_path
                     ).read_bytes()
 
-                self._sila_client = SilaClient(self._host, self._port, **kwargs)
+                try:
+                    self._sila_client = SilaClient(self._host, self._port, **kwargs)
+                except Exception as e:
+                    enriched = _format_connection_error(
+                        e, self._host, self._port, self.config.insecure
+                    )
+                    self.logger.log_error(
+                        enriched,
+                        event_type=EventType.LOG_ERROR,
+                        host=self._host,
+                        port=self._port,
+                    )
+                    raise type(e)(enriched) from e
                 self.logger.info(
                     "Connected to SiLA server",
                     event_type=EventType.LOG_INFO,
@@ -456,8 +518,11 @@ class SilaNodeClient(AbstractNodeClient):
             )
 
         except Exception as e:
+            enriched_msg = _format_connection_error(
+                e, self._host, self._port, self.config.insecure
+            )
             self.logger.log_error(
-                "SiLA command failed",
+                enriched_msg,
                 event_type=EventType.LOG_ERROR,
                 action_id=action_id,
                 error=str(e),
@@ -466,7 +531,7 @@ class SilaNodeClient(AbstractNodeClient):
             return ActionResult(
                 action_id=action_id,
                 status=ActionStatus.FAILED,
-                errors=[Error.from_exception(e)],
+                errors=[Error(message=enriched_msg, error_type=type(e).__name__)],
             )
 
     def _await_observable(
@@ -626,10 +691,13 @@ class SilaNodeClient(AbstractNodeClient):
                 running_actions=running_ids,
             )
         except Exception as e:
+            enriched_msg = _format_connection_error(
+                e, self._host, self._port, self.config.insecure
+            )
             return NodeStatus(
                 errored=True,
                 disconnected=True,
-                errors=[Error.from_exception(e)],
+                errors=[Error(message=enriched_msg, error_type=type(e).__name__)],
             )
 
     def get_state(self) -> dict[str, Any]:
@@ -660,8 +728,11 @@ class SilaNodeClient(AbstractNodeClient):
                         except Exception:
                             state[f"{feature_id}.{attr_name}"] = None
         except Exception as e:
+            enriched_msg = _format_connection_error(
+                e, self._host, self._port, self.config.insecure
+            )
             self.logger.warning(
-                "Failed to read SiLA node state",
+                enriched_msg,
                 event_type=EventType.LOG_WARNING,
                 error=str(e),
             )

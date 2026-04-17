@@ -9,7 +9,9 @@ import pytest
 from madsci.client.node.sila_node_client import (
     SILA2_AVAILABLE,
     SilaNodeClient,
+    _classify_connection_error,
     _extract_bytes_files,
+    _format_connection_error,
     _parse_sila_url,
     _resolve_sila_command,
     _response_to_dict,
@@ -1037,3 +1039,207 @@ class TestNoBytesFieldsUnchanged:
         assert result.status == ActionStatus.SUCCEEDED
         assert result.files is None
         assert result.json_result == {"Greeting": "Hello"}
+
+
+# ---------------------------------------------------------------------------
+# Connection error classification
+# ---------------------------------------------------------------------------
+
+
+class TestClassifyConnectionError:
+    """Test _classify_connection_error categories."""
+
+    def test_dns_resolution_failed(self):
+        assert (
+            _classify_connection_error(Exception("DNS resolution failed for host"))
+            == "dns_resolution"
+        )
+
+    def test_name_resolution_failure(self):
+        assert (
+            _classify_connection_error(Exception("Name resolution failure"))
+            == "dns_resolution"
+        )
+
+    def test_connection_refused(self):
+        assert (
+            _classify_connection_error(ConnectionRefusedError("Connection refused"))
+            == "connection_refused"
+        )
+
+    def test_connect_failed(self):
+        assert (
+            _classify_connection_error(Exception("connect failed"))
+            == "connection_refused"
+        )
+
+    def test_timeout_error_type(self):
+        assert (
+            _classify_connection_error(TimeoutError("timed out"))
+            == "connection_timeout"
+        )
+
+    def test_deadline_exceeded(self):
+        assert (
+            _classify_connection_error(Exception("Deadline exceeded"))
+            == "connection_timeout"
+        )
+
+    def test_tls_ssl_error(self):
+        assert (
+            _classify_connection_error(Exception("SSL handshake failed")) == "tls_error"
+        )
+
+    def test_tls_certificate_error(self):
+        assert (
+            _classify_connection_error(Exception("certificate verify failed"))
+            == "tls_error"
+        )
+
+    def test_grpc_error(self):
+        exc = Exception("grpc call failed")
+        assert _classify_connection_error(exc) == "grpc_error"
+
+    def test_unknown_fallback(self):
+        assert (
+            _classify_connection_error(Exception("something unexpected")) == "unknown"
+        )
+
+
+class TestFormatConnectionError:
+    """Test _format_connection_error output format."""
+
+    def test_includes_host_and_port(self):
+        msg = _format_connection_error(Exception("refused"), "myhost", 50052, True)
+        assert "myhost" in msg
+        assert "50052" in msg
+
+    def test_includes_tls_disabled(self):
+        msg = _format_connection_error(Exception("refused"), "h", 1, insecure=True)
+        assert "TLS: disabled" in msg
+
+    def test_includes_tls_enabled(self):
+        msg = _format_connection_error(Exception("refused"), "h", 1, insecure=False)
+        assert "TLS: enabled" in msg
+
+    def test_includes_category(self):
+        msg = _format_connection_error(
+            ConnectionRefusedError("Connection refused"), "h", 1, True
+        )
+        assert "connection_refused" in msg
+
+    def test_includes_hint(self):
+        msg = _format_connection_error(
+            ConnectionRefusedError("Connection refused"), "h", 1, True
+        )
+        assert "Hint:" in msg
+        assert "SiLA server is running" in msg
+
+    def test_preserves_original_message(self):
+        original = "failed to connect to all addresses; last error: UNAVAILABLE"
+        msg = _format_connection_error(Exception(original), "h", 1, True)
+        assert original in msg
+
+    def test_dns_hint(self):
+        msg = _format_connection_error(
+            Exception("DNS resolution failed"), "badhost", 50052, True
+        )
+        assert "hostname" in msg.lower() or "DNS" in msg
+
+
+# ---------------------------------------------------------------------------
+# Enriched errors in client methods
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichedConnectionErrors:
+    """Test that client methods produce enriched error messages."""
+
+    def test_get_status_enriched_error(self):
+        """get_status() should return enriched error with host/port on connection failure."""
+        mock_client = _make_mock_sila_client()
+        mock_client.SiLAService.ImplementedFeatures.get.side_effect = ConnectionError(
+            "Connection refused"
+        )
+        node_client = _make_sila_node_client(mock_client)
+
+        status = node_client.get_status()
+        assert status.errored
+        assert status.disconnected
+        assert len(status.errors) > 0
+        error_msg = status.errors[0].message
+        assert "localhost" in error_msg
+        assert "50052" in error_msg
+        assert "connection_refused" in error_msg
+        assert "Hint:" in error_msg
+
+    def test_send_action_enriched_error(self):
+        """send_action() should return enriched error on connection failure."""
+        mock_client = _make_mock_sila_client()
+        mock_client.GreetingProvider.SayHello.side_effect = ConnectionError(
+            "Connection refused"
+        )
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(
+            action_name="GreetingProvider.SayHello", args={"Name": "World"}
+        )
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        assert len(result.errors) > 0
+        error_msg = result.errors[0].message
+        assert "localhost" in error_msg
+        assert "50052" in error_msg
+        assert "Hint:" in error_msg
+
+    def test_get_state_enriched_error_logged(self):
+        """get_state() should log enriched error on connection failure."""
+        node_client = _make_sila_node_client()
+        # Force _get_sila_client to raise by clearing the mock and patching
+        node_client._sila_client = None
+        with patch(
+            "madsci.client.node.sila_node_client.SilaClient",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            state = node_client.get_state()
+        # get_state returns empty dict on failure
+        assert state == {}
+
+    def test_get_info_enriched_error_propagates(self):
+        """get_info() should propagate enriched error from _get_sila_client."""
+        node_client = _make_sila_node_client()
+        node_client._sila_client = None
+        with (
+            patch(
+                "madsci.client.node.sila_node_client.SilaClient",
+                side_effect=ConnectionError("Connection refused"),
+            ),
+            pytest.raises(ConnectionError, match="connection_refused"),
+        ):
+            node_client.get_info()
+
+    def test_get_status_dns_error(self):
+        """get_status() should classify DNS errors."""
+        mock_client = _make_mock_sila_client()
+        mock_client.SiLAService.ImplementedFeatures.get.side_effect = Exception(
+            "DNS resolution failed for my-sila-server"
+        )
+        node_client = _make_sila_node_client(mock_client)
+
+        status = node_client.get_status()
+        error_msg = status.errors[0].message
+        assert "dns_resolution" in error_msg
+        assert "hostname" in error_msg.lower() or "DNS" in error_msg
+
+    def test_get_status_tls_error(self):
+        """get_status() should classify TLS errors."""
+        mock_client = _make_mock_sila_client()
+        mock_client.SiLAService.ImplementedFeatures.get.side_effect = Exception(
+            "SSL handshake failed: certificate verify failed"
+        )
+        node_client = _make_sila_node_client(mock_client)
+
+        status = node_client.get_status()
+        error_msg = status.errors[0].message
+        assert "tls_error" in error_msg
+        assert "TLS" in error_msg or "certificate" in error_msg.lower()
