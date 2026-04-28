@@ -1,9 +1,15 @@
 """Tests for the madsci new command."""
 
 import tempfile
+from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
 from madsci.client.cli import madsci
+from madsci.common.types.template_types import (
+    ParameterChoice,
+    ParameterType,
+    TemplateParameter,
+)
 
 
 class TestNewCommand:
@@ -157,4 +163,314 @@ class TestNewWorkflowCommand:
                 assert (
                     "not found" in result.output.lower()
                     or "error" in result.output.lower()
+                )
+
+
+def _make_engine(parameters: list[TemplateParameter]) -> MagicMock:
+    """Create a mock TemplateEngine with the given parameters."""
+    engine = MagicMock()
+    engine.manifest.parameters = parameters
+    return engine
+
+
+def _prompt_return_default(*_args, **kwargs):
+    """Simulate user pressing Enter (returns the default value)."""
+    return kwargs.get("default", "")
+
+
+def _confirm_return_default(*_args, **kwargs):
+    """Simulate user pressing Enter on Confirm (returns the default value)."""
+    return kwargs.get("default", False)
+
+
+class TestCollectParametersInteractiveOverrides:
+    """Tests that collect_parameters_interactive respects the overrides dict.
+
+    Regression tests for the bug where CLI-provided args (e.g., ``-n``)
+    were ignored in interactive mode.  All tests mock Rich prompts to
+    simulate the user pressing Enter (accepting the default).
+    """
+
+    def test_string_override_used_as_default(self) -> None:
+        """STRING parameter should use override as the prompt default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="lab_name",
+                    type=ParameterType.STRING,
+                    description="Lab name",
+                    default="default_lab",
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"lab_name": "my_override"},
+            )
+        assert result["lab_name"] == "my_override"
+
+    def test_string_no_override_uses_template_default(self) -> None:
+        """Without overrides, STRING should use the template default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="lab_name",
+                    type=ParameterType.STRING,
+                    description="Lab name",
+                    default="default_lab",
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(engine, console)
+        assert result["lab_name"] == "default_lab"
+
+    def test_integer_override_used_as_default(self) -> None:
+        """INTEGER parameter should use override as the prompt default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="port",
+                    type=ParameterType.INTEGER,
+                    description="Port number",
+                    default=2000,
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"port": 3000},
+            )
+        assert result["port"] == 3000
+
+    def test_float_override_used_as_default(self) -> None:
+        """FLOAT parameter should use override as the prompt default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="rate",
+                    type=ParameterType.FLOAT,
+                    description="Rate",
+                    default=1.0,
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"rate": 2.5},
+            )
+        assert result["rate"] == 2.5
+
+    def test_boolean_override_used_as_default(self) -> None:
+        """BOOLEAN parameter should use override as the prompt default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="enable_feature",
+                    type=ParameterType.BOOLEAN,
+                    description="Enable feature?",
+                    default=False,
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Confirm.ask", side_effect=_confirm_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"enable_feature": True},
+            )
+        assert result["enable_feature"] is True
+
+    def test_choice_override_used_as_default(self) -> None:
+        """CHOICE parameter should use the override to select the default index."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="db_type",
+                    type=ParameterType.CHOICE,
+                    description="Database type",
+                    default="postgres",
+                    choices=[
+                        ParameterChoice(value="postgres", label="PostgreSQL"),
+                        ParameterChoice(value="sqlite", label="SQLite"),
+                    ],
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        # Prompt.ask returns default="2" (sqlite is index 2)
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"db_type": "sqlite"},
+            )
+        assert result["db_type"] == "sqlite"
+
+    def test_multi_choice_override_used_as_defaults(self) -> None:
+        """MULTI_CHOICE parameter should use override list for default selections."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="tools",
+                    type=ParameterType.MULTI_CHOICE,
+                    description="Select tools",
+                    choices=[
+                        ParameterChoice(value="ruff", label="Ruff", default=True),
+                        ParameterChoice(value="mypy", label="Mypy", default=False),
+                        ParameterChoice(value="pytest", label="Pytest", default=True),
+                    ],
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        # Override selects only mypy. Confirm.ask returns the default,
+        # so mypy=True (in override), ruff=False, pytest=False.
+        with patch("rich.prompt.Confirm.ask", side_effect=_confirm_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"tools": ["mypy"]},
+            )
+        assert result["tools"] == ["mypy"]
+
+    def test_path_override_used_as_default(self) -> None:
+        """PATH parameter should use override as the prompt default."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="output_dir",
+                    type=ParameterType.PATH,
+                    description="Output directory",
+                    default="/var/data/default",
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"output_dir": "/custom/path"},
+            )
+        assert result["output_dir"] == "/custom/path"
+
+    def test_override_only_affects_matching_param(self) -> None:
+        """Override for one param should not affect other params."""
+        from io import StringIO
+
+        from madsci.client.cli.commands.new import collect_parameters_interactive
+        from rich.console import Console
+
+        engine = _make_engine(
+            [
+                TemplateParameter(
+                    name="lab_name",
+                    type=ParameterType.STRING,
+                    description="Lab name",
+                    default="default_lab",
+                ),
+                TemplateParameter(
+                    name="lab_description",
+                    type=ParameterType.STRING,
+                    description="Lab description",
+                    default="A lab",
+                ),
+            ]
+        )
+        console = Console(file=StringIO())
+
+        with patch("rich.prompt.Prompt.ask", side_effect=_prompt_return_default):
+            result = collect_parameters_interactive(
+                engine,
+                console,
+                overrides={"lab_name": "my_lab"},
+            )
+        assert result["lab_name"] == "my_lab"
+        assert result["lab_description"] == "A lab"
+
+
+class TestNewLabInteractiveWithName:
+    """Integration test: madsci new lab -n should pass name into interactive mode."""
+
+    def test_lab_name_passed_to_interactive(self) -> None:
+        """When -n is provided without --no-interactive, the name should appear
+        as the default in interactive prompts, not be discarded."""
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Provide -n and accept all interactive defaults (Enter on every prompt),
+            # then answer "y" to create confirmation.
+            result = runner.invoke(
+                madsci,
+                ["new", "lab", tmpdir, "--name", "my_custom_lab"],
+                input="\n" * 20 + "y\n",
+            )
+
+            # If template was found, the output dir should contain our name
+            if result.exit_code == 0:
+                from pathlib import Path
+
+                output_path = Path(tmpdir) / "my_custom_lab"
+                assert output_path.exists(), (
+                    f"Expected 'my_custom_lab' directory but got: "
+                    f"{list(Path(tmpdir).iterdir())}"
                 )

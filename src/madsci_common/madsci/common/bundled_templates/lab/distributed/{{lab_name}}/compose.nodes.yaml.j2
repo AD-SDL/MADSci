@@ -12,7 +12,7 @@
 services:
   # Example node service - replace with your actual instrument nodes
   example_node:
-    image: madsci-example-node:latest
+    image: ghcr.io/ad-sdl/madsci:latest
     environment:
       - NODE_URL=http://0.0.0.0:2000/
       - EVENT_SERVER_URL=http://${MANAGER_HOST:-localhost}:8001/
