@@ -168,7 +168,13 @@ services:
   sila_example_server:
     <<: *madsci-service
     container_name: sila_example_server
-    command: python -m example_modules.sila_example_server --insecure --disable-discovery -a 0.0.0.0 -p 50052 -vvv
+    command: python -m example_modules.sila_example_server --insecure --disable-discovery -a 0.0.0.0 -p 50052 -v
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 50052)); s.close()"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     depends_on:
       - event_manager
 
@@ -180,14 +186,25 @@ services:
       - testing
     restart: "no"
     depends_on:
-      - lab_manager
-      - event_manager
-      - experiment_manager
-      - resource_manager
-      - data_manager
-      - location_manager
-      - workcell_manager
-      - liquidhandler_1
-      - robotarm_1
-      - platereader_1
-      - sila_example_server
+      lab_manager:
+        condition: service_started
+      event_manager:
+        condition: service_started
+      experiment_manager:
+        condition: service_started
+      resource_manager:
+        condition: service_started
+      data_manager:
+        condition: service_started
+      location_manager:
+        condition: service_started
+      workcell_manager:
+        condition: service_started
+      liquidhandler_1:
+        condition: service_started
+      robotarm_1:
+        condition: service_started
+      platereader_1:
+        condition: service_started
+      sila_example_server:
+        condition: service_healthy

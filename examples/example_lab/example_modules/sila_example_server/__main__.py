@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import logging
 import signal
+import sys
 
 from .server import Server
 
@@ -56,7 +57,7 @@ def main() -> None:
         logger.exception("Server startup failed, shutting down")
         if server.running:
             server.stop()
-        return
+        sys.exit(1)
 
     logger.info(
         "SiLA example server started on %s:%d (insecure=%s)",

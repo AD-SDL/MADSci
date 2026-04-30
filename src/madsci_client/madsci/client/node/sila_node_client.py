@@ -39,11 +39,15 @@ if TYPE_CHECKING:
 
 try:
     from sila2.client import SilaClient
+    from sila2.client.client_observable_command import ClientObservableCommand
+    from sila2.client.client_unobservable_command import ClientUnobservableCommand
 
     SILA2_AVAILABLE = True
+    _SILA_COMMAND_TYPES: tuple = (ClientObservableCommand, ClientUnobservableCommand)
 except ImportError:
     SILA2_AVAILABLE = False
     SilaClient = None  # type: ignore[assignment,misc]
+    _SILA_COMMAND_TYPES = ()
 
 _DEFAULT_SILA_PORT = 50052
 
@@ -85,10 +89,11 @@ def _resolve_sila_command(client: Any, action_name: str) -> tuple[Any, str, str]
         if command is None:
             msg = f"SiLA command '{command_name}' not found on feature '{feature_name}'"
             raise ValueError(msg)
-        if not callable(command):
+        if not isinstance(command, _SILA_COMMAND_TYPES):
             msg = (
-                f"'{command_name}' on feature '{feature_name}' is not a callable command "
-                f"(it may be a SiLA property). Use '.get()' to read properties."
+                f"'{command_name}' on feature '{feature_name}' is not a SiLA command "
+                f"(it may be a SiLA property or non-command attribute). "
+                f"Use '.get()' to read properties."
             )
             raise ValueError(msg)
         return command, feature_name, command_name
@@ -100,7 +105,7 @@ def _resolve_sila_command(client: Any, action_name: str) -> tuple[Any, str, str]
         if feature is None:
             continue
         command = getattr(feature, action_name, None)
-        if command is not None and callable(command):
+        if isinstance(command, _SILA_COMMAND_TYPES):
             matches.append((command, feature_id, action_name))
 
     if len(matches) == 0:
@@ -191,6 +196,24 @@ def _serialize_value(value: Any) -> Any:
     return str(value)
 
 
+def _safe_path_component(name: str) -> str:
+    """Reduce a string to a single safe path component.
+
+    Strips embedded separators and parent-directory references via Path(name).name,
+    then rejects empty / "." / ".." results. Used to harden _extract_bytes_files
+    against malicious action_ids or response keys that could otherwise escape the
+    intended output directory.
+    """
+    if name is None or name == "":
+        msg = "Empty filename component"
+        raise ValueError(msg)
+    safe = Path(name).name
+    if not safe or safe in (".", ".."):
+        msg = f"Invalid filename component: {name!r}"
+        raise ValueError(msg)
+    return safe
+
+
 def _extract_bytes_files(
     json_result: dict[str, Any], action_id: str
 ) -> tuple[dict[str, Any], ActionFiles | None]:
@@ -207,6 +230,9 @@ def _extract_bytes_files(
     - Replaces the sentinel in json_result with the base64 string
     - Collects file paths into an ActionFiles instance
 
+    Both action_id (subdir) and key (filename) are sanitized via
+    _safe_path_component to prevent path traversal.
+
     Returns:
         A tuple of (cleaned_json_result, action_files_or_none).
     """
@@ -215,10 +241,11 @@ def _extract_bytes_files(
 
     for key, value in json_result.items():
         if isinstance(value, dict) and value.get("__madsci_bytes__") is True:
-            # Write bytes to disk
-            output_dir = get_madsci_subdir("sila_files") / action_id
+            output_dir = get_madsci_subdir("sila_files") / _safe_path_component(
+                action_id
+            )
             output_dir.mkdir(parents=True, exist_ok=True)
-            file_path = output_dir / f"{key}.bin"
+            file_path = output_dir / f"{_safe_path_component(key)}.bin"
             raw_bytes = base64.b64decode(value["base64"])
             file_path.write_bytes(raw_bytes)
 
@@ -269,20 +296,16 @@ def _extract_argument_definitions(command_attr: Any) -> dict[str, ArgumentDefini
 def _is_command_observable(command_attr: Any) -> bool:
     """Check if a SiLA client command is observable (vs unobservable).
 
-    NOTE: Class-name heuristic for private SDK types
-    The sila2 SDK uses ``ClientObservableCommand`` and
-    ``ClientUnobservableCommand`` classes internally. There is no public API
-    to query whether a command is observable. We detect it via the class name
-    because importing the concrete types would create a hard dependency on
-    sila2 internals that may move between releases.
-
-    Degradation: if the SDK renames these classes, this function returns False
-    (treating the command as unobservable). The command will still execute
-    correctly — only the ``asynchronous`` flag in ``ActionDefinition`` would be
-    wrong, which affects UI hints but not execution.
+    Uses isinstance against the imported sila2 SDK base classes
+    (``ClientObservableCommand``). When the SDK is not installed,
+    ``SILA2_AVAILABLE`` is False and ``ClientObservableCommand`` is undefined;
+    the guard returns False (the command is treated as unobservable, which
+    is harmless because send_action would raise ImportError before reaching
+    this function).
     """
-    cls_name = type(command_attr).__name__
-    return "Observable" in cls_name and "Unobservable" not in cls_name
+    if not SILA2_AVAILABLE:
+        return False
+    return isinstance(command_attr, ClientObservableCommand)
 
 
 def _is_observable_instance(result: Any) -> bool:
@@ -472,14 +495,29 @@ class SilaNodeClient(AbstractNodeClient):
         effective_timeout = timeout or self.config.command_timeout
         action_id = action_request.action_id
 
+        # Block A: connection — already enriched by _get_sila_client; pass through.
         try:
             client = self._get_sila_client()
+        except Exception as e:
+            self.logger.log_error(
+                str(e),
+                event_type=EventType.LOG_ERROR,
+                action_id=action_id,
+                error=str(e),
+                traceback_str=traceback.format_exc(),
+            )
+            return ActionResult(
+                action_id=action_id,
+                status=ActionStatus.FAILED,
+                errors=[Error(message=str(e), error_type=type(e).__name__)],
+            )
+
+        # Block B: command resolution & arg prep — never enriched as connection error.
+        try:
             command, feature_name, command_name = _resolve_sila_command(
                 client, action_request.action_name
             )
-
             kwargs = dict(action_request.args) if action_request.args else {}
-
             self.logger.info(
                 "Sending SiLA command",
                 event_type=EventType.LOG_INFO,
@@ -487,7 +525,15 @@ class SilaNodeClient(AbstractNodeClient):
                 command=command_name,
                 action_id=action_id,
             )
+        except Exception as e:
+            return ActionResult(
+                action_id=action_id,
+                status=ActionStatus.FAILED,
+                errors=[Error(message=str(e), error_type=type(e).__name__)],
+            )
 
+        # Block C: command execution — only enrich if classifier recognizes a category.
+        try:
             result = command(**kwargs)
 
             if _is_observable_instance(result):
@@ -495,7 +541,6 @@ class SilaNodeClient(AbstractNodeClient):
                     return self._await_observable(
                         result, action_id, feature_name, command_name, effective_timeout
                     )
-                # Store for later polling
                 with self._commands_lock:
                     self._running_commands[action_id] = (
                         result,
@@ -507,7 +552,6 @@ class SilaNodeClient(AbstractNodeClient):
                     status=ActionStatus.RUNNING,
                 )
 
-            # Unobservable command — result available immediately
             json_result = _response_to_dict(result)
             json_result, action_files = _extract_bytes_files(json_result, action_id)
             return ActionResult(
@@ -516,13 +560,16 @@ class SilaNodeClient(AbstractNodeClient):
                 json_result=json_result,
                 files=action_files,
             )
-
         except Exception as e:
-            enriched_msg = _format_connection_error(
-                e, self._host, self._port, self.config.insecure
-            )
+            category = _classify_connection_error(e)
+            if category != "unknown":
+                message = _format_connection_error(
+                    e, self._host, self._port, self.config.insecure
+                )
+            else:
+                message = str(e)
             self.logger.log_error(
-                enriched_msg,
+                message,
                 event_type=EventType.LOG_ERROR,
                 action_id=action_id,
                 error=str(e),
@@ -531,7 +578,7 @@ class SilaNodeClient(AbstractNodeClient):
             return ActionResult(
                 action_id=action_id,
                 status=ActionStatus.FAILED,
-                errors=[Error(message=enriched_msg, error_type=type(e).__name__)],
+                errors=[Error(message=message, error_type=type(e).__name__)],
             )
 
     def _await_observable(
@@ -756,7 +803,7 @@ class SilaNodeClient(AbstractNodeClient):
                 if attr_name.startswith("_"):
                     continue
                 attr = getattr(feature, attr_name, None)
-                if attr is not None and callable(attr):
+                if isinstance(attr, _SILA_COMMAND_TYPES):
                     qualified_name = f"{feature_id}.{attr_name}"
                     args = _extract_argument_definitions(attr)
                     is_observable = _is_command_observable(attr)

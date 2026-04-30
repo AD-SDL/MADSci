@@ -15,25 +15,52 @@ from madsci.client.node.sila_node_client import (
     _parse_sila_url,
     _resolve_sila_command,
     _response_to_dict,
+    _safe_path_component,
     _serialize_value,
 )
 from madsci.common.types.action_types import ActionFiles, ActionRequest, ActionStatus
 from madsci.common.types.client_types import SilaNodeClientConfig
 from pydantic import AnyUrl
+from sila2.client.client_observable_command import ClientObservableCommand
+from sila2.client.client_observable_property import ClientObservableProperty
+from sila2.client.client_unobservable_command import ClientUnobservableCommand
+from sila2.client.client_unobservable_property import ClientUnobservableProperty
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
+def _make_command(observable: bool = False) -> MagicMock:
+    """Create a MagicMock that satisfies isinstance against the appropriate SDK base."""
+    spec = ClientObservableCommand if observable else ClientUnobservableCommand
+    return MagicMock(spec=spec)
+
+
+def _make_property(observable: bool = False) -> MagicMock:
+    """Create a MagicMock that satisfies isinstance against a SiLA property base."""
+    spec = ClientObservableProperty if observable else ClientUnobservableProperty
+    return MagicMock(spec=spec)
+
+
 def _make_mock_sila_client():
-    """Create a mock SiLA client with standard features."""
+    """Create a mock SiLA client with standard features and known commands.
+
+    The standard commands are pre-configured as MagicMock(spec=...) so that
+    isinstance(attr, _SILA_COMMAND_TYPES) succeeds. Tests that care about
+    return values can still set `.return_value` / `.side_effect` on them
+    (e.g., mock_client.GreetingProvider.SayHello.return_value = ...).
+    """
     mock_client = MagicMock()
     mock_client.SiLAService.ImplementedFeatures.get.return_value = [
         "GreetingProvider",
         "TimerProvider",
     ]
     mock_client.SiLAService.ServerName.get.return_value = "TestServer"
+    # Pre-configured commands used across many tests.
+    mock_client.GreetingProvider.SayHello = _make_command(observable=False)
+    mock_client.GreetingProvider.Reset = _make_command(observable=False)
+    mock_client.TimerProvider.Countdown = _make_command(observable=True)
     return mock_client
 
 
@@ -130,8 +157,9 @@ class TestActionNameResolution:
     """Test qualified vs short-form action name resolution."""
 
     def test_qualified_name(self):
-        """'Feature.Command' should resolve directly."""
+        """'Feature.Command' should resolve directly when attr is a SiLA command."""
         mock_client = MagicMock()
+        mock_client.GreetingProvider.SayHello = _make_command(observable=False)
         _command, feat, cmd = _resolve_sila_command(
             mock_client, "GreetingProvider.SayHello"
         )
@@ -144,8 +172,7 @@ class TestActionNameResolution:
         mock_client.SiLAService.ImplementedFeatures.get.return_value = [
             "GreetingProvider"
         ]
-        # Only GreetingProvider has SayHello
-        mock_client.GreetingProvider.SayHello = MagicMock()
+        mock_client.GreetingProvider.SayHello = _make_command(observable=False)
 
         _command, feat, cmd = _resolve_sila_command(mock_client, "SayHello")
         assert feat == "GreetingProvider"
@@ -158,8 +185,8 @@ class TestActionNameResolution:
             "Feat1",
             "Feat2",
         ]
-        mock_client.Feat1.DoStuff = MagicMock()
-        mock_client.Feat2.DoStuff = MagicMock()
+        mock_client.Feat1.DoStuff = _make_command(observable=False)
+        mock_client.Feat2.DoStuff = _make_command(observable=False)
 
         with pytest.raises(ValueError, match="Ambiguous"):
             _resolve_sila_command(mock_client, "DoStuff")
@@ -188,19 +215,48 @@ class TestActionNameResolution:
         with pytest.raises(ValueError, match="not found"):
             _resolve_sila_command(mock_client, "GreetingProvider.NoSuchCommand")
 
-    def test_qualified_non_callable_raises(self):
-        """Qualified name resolving to a non-callable (e.g., property) should raise ValueError."""
+    def test_qualified_non_command_raises(self):
+        """Qualified name resolving to a SiLA property should raise ValueError."""
         mock_client = MagicMock()
+        mock_client.GreetingProvider.ServerName = _make_property(observable=False)
 
-        # Simulate a SiLA property: has .get() but is not itself callable
-        class MockProperty:
-            def get(self):
-                return 42
-
-        mock_client.GreetingProvider.ServerName = MockProperty()
-
-        with pytest.raises(ValueError, match="not a callable command"):
+        with pytest.raises(ValueError, match="not a SiLA command"):
             _resolve_sila_command(mock_client, "GreetingProvider.ServerName")
+
+    def test_qualified_callable_non_command_raises(self):
+        """Qualified name resolving to a plain callable that is not a SiLA command should raise."""
+        mock_client = MagicMock()
+        mock_client.GreetingProvider.helper_method = (
+            MagicMock()
+        )  # callable but not a command
+
+        with pytest.raises(ValueError, match="not a SiLA command"):
+            _resolve_sila_command(mock_client, "GreetingProvider.helper_method")
+
+    def test_short_name_ignores_non_command_callables(self):
+        """Short-form lookup should resolve unambiguously when only one feature has a real command."""
+        mock_client = MagicMock()
+        mock_client.SiLAService.ImplementedFeatures.get.return_value = [
+            "Feat1",
+            "Feat2",
+        ]
+        mock_client.Feat1.DoStuff = _make_command(observable=False)
+        # Feat2.DoStuff is callable but NOT a SiLA command — should be ignored.
+        mock_client.Feat2.DoStuff = MagicMock()
+
+        _command, feat, _cmd = _resolve_sila_command(mock_client, "DoStuff")
+        assert feat == "Feat1"
+
+    def test_short_name_skips_non_command_callable_only(self):
+        """Short-form lookup raises 'not found' if only non-command callables match."""
+        mock_client = MagicMock()
+        mock_client.SiLAService.ImplementedFeatures.get.return_value = [
+            "Feat1",
+        ]
+        mock_client.Feat1.DoStuff = MagicMock()  # callable, not a command
+
+        with pytest.raises(ValueError, match="not found"):
+            _resolve_sila_command(mock_client, "DoStuff")
 
 
 # ---------------------------------------------------------------------------
@@ -334,18 +390,20 @@ class TestSendAction:
         assert "gRPC unavailable" in result.errors[0].message
 
     def test_unknown_action_returns_failed(self):
-        """Unknown action name should return FAILED."""
+        """Unknown action name should return FAILED with the bare resolution error."""
         mock_client = _make_mock_sila_client()
+        # Mark feature as missing BEFORE invoking send_action so resolution fails.
+        mock_client.NonExistent = None
 
         node_client = _make_sila_node_client(mock_client)
         request = ActionRequest(action_name="NonExistent.Command", args={})
-        # NonExistent feature is not None on MagicMock, but the command
-        # resolution will fail since getattr returns a new MagicMock
-        # Let's explicitly set it to None
-        mock_client.NonExistent = None
-
         result = node_client.send_action(request)
+
         assert result.status == ActionStatus.FAILED
+        assert len(result.errors) > 0
+        # Bare resolution error message — NOT the connection-error wrapper.
+        assert "not found" in result.errors[0].message
+        assert "SiLA connection error" not in result.errors[0].message
 
 
 # ---------------------------------------------------------------------------
@@ -556,15 +614,16 @@ class TestGetInfo:
     """Test SiLA node introspection."""
 
     def test_builds_action_definitions(self):
-        """Should create ActionDefinition for each callable on each feature."""
+        """Should create ActionDefinition only for SiLA command instances on each feature."""
         mock_client = _make_mock_sila_client()
-        # Configure GreetingProvider to have SayHello as callable
         greeting_feature = MagicMock()
         greeting_feature.__dir__ = lambda _self: ["SayHello", "_internal"]
+        greeting_feature.SayHello = _make_command(observable=False)
         mock_client.GreetingProvider = greeting_feature
 
         timer_feature = MagicMock()
         timer_feature.__dir__ = lambda _self: ["Countdown", "_private"]
+        timer_feature.Countdown = _make_command(observable=True)
         mock_client.TimerProvider = timer_feature
 
         node_client = _make_sila_node_client(mock_client)
@@ -579,11 +638,9 @@ class TestGetInfo:
         """Should populate ArgumentDefinition from SiLA command parameters."""
         mock_client = _make_mock_sila_client()
 
-        # Mock a feature with a command that has parameters
         greeting_feature = MagicMock()
         greeting_feature.__dir__ = lambda _self: ["SayHello"]
 
-        # Build mock wrapped command with parameters
         mock_param = MagicMock()
         mock_param._identifier = "Name"
         mock_param._description = "The name to greet."
@@ -593,7 +650,9 @@ class TestGetInfo:
         mock_wrapped = MagicMock()
         mock_wrapped.parameters.fields = [mock_param]
 
-        greeting_feature.SayHello._wrapped_command = mock_wrapped
+        say_hello = _make_command(observable=False)
+        say_hello._wrapped_command = mock_wrapped  # set first; spec blocks GET, not SET
+        greeting_feature.SayHello = say_hello
         mock_client.GreetingProvider = greeting_feature
 
         node_client = _make_sila_node_client(mock_client)
@@ -613,12 +672,7 @@ class TestGetInfo:
 
         feature = MagicMock()
         feature.__dir__ = lambda _self: ["CountDown"]
-
-        # ClientObservableCommand class name
-        mock_cmd = MagicMock()
-        mock_cmd.__class__.__name__ = "ClientObservableCommand"
-        mock_cmd._wrapped_command.parameters.fields = []
-        feature.CountDown = mock_cmd
+        feature.CountDown = _make_command(observable=True)
         mock_client.GreetingProvider = feature
 
         node_client = _make_sila_node_client(mock_client)
@@ -632,17 +686,52 @@ class TestGetInfo:
 
         feature = MagicMock()
         feature.__dir__ = lambda _self: ["Greet"]
-
-        mock_cmd = MagicMock()
-        mock_cmd.__class__.__name__ = "ClientUnobservableCommand"
-        mock_cmd._wrapped_command.parameters.fields = []
-        feature.Greet = mock_cmd
+        feature.Greet = _make_command(observable=False)
         mock_client.GreetingProvider = feature
 
         node_client = _make_sila_node_client(mock_client)
         info = node_client.get_info()
 
         assert info.actions["GreetingProvider.Greet"].asynchronous is False
+
+    def test_excludes_properties_from_actions(self):
+        """get_info() must not include SiLA properties as ActionDefinitions."""
+        mock_client = _make_mock_sila_client()
+
+        feature = MagicMock()
+        feature.__dir__ = lambda _self: ["Greet", "ServerUptime"]
+        feature.Greet = _make_command(observable=False)
+        feature.ServerUptime = _make_property(observable=False)
+        mock_client.GreetingProvider = feature
+        # Strip the pre-configured TimerProvider from this fixture so only our feature is enumerated.
+        timer = MagicMock()
+        timer.__dir__ = lambda _self: []
+        mock_client.TimerProvider = timer
+
+        node_client = _make_sila_node_client(mock_client)
+        info = node_client.get_info()
+
+        assert "GreetingProvider.Greet" in info.actions
+        assert "GreetingProvider.ServerUptime" not in info.actions
+
+    def test_excludes_non_command_callables_from_actions(self):
+        """get_info() must not include arbitrary callables as ActionDefinitions."""
+        mock_client = _make_mock_sila_client()
+
+        feature = MagicMock()
+        feature.__dir__ = lambda _self: ["Greet", "helper"]
+        feature.Greet = _make_command(observable=False)
+        feature.helper = MagicMock()  # callable but not a SiLA command
+        mock_client.GreetingProvider = feature
+        timer = MagicMock()
+        timer.__dir__ = lambda _self: []
+        mock_client.TimerProvider = timer
+
+        node_client = _make_sila_node_client(mock_client)
+        info = node_client.get_info()
+
+        assert "GreetingProvider.Greet" in info.actions
+        assert "GreetingProvider.helper" not in info.actions
 
     def test_server_name_fallback(self):
         """Should use fallback name when SiLAService.ServerName fails."""
@@ -916,6 +1005,7 @@ class TestBytesEndToEndUnobservable:
 
         raw = b"\x00\x01\x02\x03"
         Resp = namedtuple("ReadSensor_Responses", ["Data", "Label"])
+        mock_client.SensorFeature.ReadSensor = _make_command(observable=False)
         mock_client.SensorFeature.ReadSensor.return_value = Resp(
             Data=raw, Label="sensor1"
         )
@@ -950,6 +1040,7 @@ class TestBytesEndToEndObservable:
         mock_instance = MagicMock()
         mock_instance.status = "running"
         mock_instance.get_responses.return_value = Resp(Image=raw)
+        mock_client.Scanner.Scan = _make_command(observable=True)
         mock_client.Scanner.Scan.return_value = mock_instance
 
         node_client = _make_sila_node_client(mock_client)
@@ -1005,6 +1096,7 @@ class TestMixedBytesAndNonBytes:
 
         raw = b"\xff\xfe"
         Resp = namedtuple("Resp", ["BinaryField", "StringField", "IntField"])
+        mock_client.Feature.Command = _make_command(observable=False)
         mock_client.Feature.Command.return_value = Resp(
             BinaryField=raw, StringField="text", IntField=99
         )
@@ -1243,3 +1335,225 @@ class TestEnrichedConnectionErrors:
         error_msg = status.errors[0].message
         assert "tls_error" in error_msg
         assert "TLS" in error_msg or "certificate" in error_msg.lower()
+
+
+# ---------------------------------------------------------------------------
+# Path-traversal hardening for _extract_bytes_files
+# ---------------------------------------------------------------------------
+
+
+def _bytes_sentinel(raw: bytes) -> dict:
+    """Build a bytes sentinel dict (matches what _serialize_value emits)."""
+    return {
+        "__madsci_bytes__": True,
+        "base64": base64.b64encode(raw).decode("ascii"),
+        "size": len(raw),
+    }
+
+
+class TestSafePathComponent:
+    """Test the _safe_path_component helper directly."""
+
+    def test_strips_parent_traversal(self):
+        assert _safe_path_component("../etc") == "etc"
+
+    def test_strips_absolute_prefix(self):
+        assert _safe_path_component("/abs/path") == "path"
+
+    def test_strips_nested_separators(self):
+        assert _safe_path_component("a/b/c") == "c"
+
+    def test_passthrough_simple_name(self):
+        assert _safe_path_component("safe_name") == "safe_name"
+
+    def test_rejects_empty(self):
+        with pytest.raises(ValueError, match="Empty"):
+            _safe_path_component("")
+
+    def test_rejects_dot(self):
+        with pytest.raises(ValueError, match="Invalid"):
+            _safe_path_component(".")
+
+    def test_rejects_double_dot(self):
+        with pytest.raises(ValueError, match="Invalid"):
+            _safe_path_component("..")
+
+
+class TestExtractBytesFilesSafety:
+    """Path-traversal hardening tests for _extract_bytes_files."""
+
+    def test_action_id_with_parent_traversal_sanitized(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        raw = b"payload"
+        json_result = {"k": _bytes_sentinel(raw)}
+
+        _cleaned, files = _extract_bytes_files(json_result, "../etc")
+
+        # File lands inside tmp_path/etc/, not above tmp_path
+        expected = tmp_path / "etc" / "k.bin"
+        assert expected.exists()
+        assert expected.read_bytes() == raw
+        assert files.k == expected
+        # Path is inside tmp_path (no escape).
+        assert tmp_path in expected.parents
+
+    def test_action_id_with_absolute_path_sanitized(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        raw = b"payload"
+        json_result = {"k": _bytes_sentinel(raw)}
+
+        _cleaned, files = _extract_bytes_files(json_result, "/abs/path")
+
+        expected = tmp_path / "path" / "k.bin"
+        assert expected.exists()
+        assert files.k == expected
+
+    def test_response_key_with_parent_traversal_sanitized(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        raw = b"payload"
+        json_result = {"../escaped": _bytes_sentinel(raw)}
+
+        _cleaned, _files = _extract_bytes_files(json_result, "ulid-id")
+
+        expected = tmp_path / "ulid-id" / "escaped.bin"
+        assert expected.exists()
+        # File path is sanitized inside the per-action subdirectory.
+        assert tmp_path in expected.parents
+
+    def test_action_id_empty_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        json_result = {"k": _bytes_sentinel(b"x")}
+        with pytest.raises(ValueError, match="Empty"):
+            _extract_bytes_files(json_result, "")
+
+    def test_action_id_dot_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        json_result = {"k": _bytes_sentinel(b"x")}
+        with pytest.raises(ValueError, match="Invalid"):
+            _extract_bytes_files(json_result, ".")
+
+    def test_action_id_double_dot_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        json_result = {"k": _bytes_sentinel(b"x")}
+        with pytest.raises(ValueError, match="Invalid"):
+            _extract_bytes_files(json_result, "..")
+
+    def test_response_key_dot_raises(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "madsci.client.node.sila_node_client.get_madsci_subdir",
+            lambda _name: tmp_path,
+        )
+        json_result = {".": _bytes_sentinel(b"x")}
+        with pytest.raises(ValueError, match="Invalid"):
+            _extract_bytes_files(json_result, "ulid-id")
+
+
+# ---------------------------------------------------------------------------
+# Layered error classification in send_action
+# ---------------------------------------------------------------------------
+
+
+class TestSendActionErrorLayering:
+    """Verify that send_action distinguishes connection / resolution / execution errors."""
+
+    def test_arg_error_not_enriched(self):
+        """A TypeError raised inside the SiLA command should not be wrapped as a connection error."""
+        mock_client = _make_mock_sila_client()
+        mock_client.GreetingProvider.SayHello.side_effect = TypeError(
+            "missing required argument: 'Name'"
+        )
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(action_name="GreetingProvider.SayHello", args={})
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        message = result.errors[0].message
+        assert "missing required argument" in message
+        assert "SiLA connection error" not in message
+        assert result.errors[0].error_type == "TypeError"
+
+    def test_unknown_command_not_enriched(self):
+        """An unknown action_name should surface the ValueError text from _resolve_sila_command."""
+        mock_client = _make_mock_sila_client()
+        mock_client.NonExistent = None
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(action_name="NonExistent.DoStuff", args={})
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        message = result.errors[0].message
+        assert "not found" in message
+        assert "SiLA connection error" not in message
+
+    def test_connection_failure_not_double_wrapped(self):
+        """If _get_sila_client raises an already-enriched message, send_action must not re-wrap."""
+        node_client = _make_sila_node_client()
+        node_client._sila_client = None
+        with patch(
+            "madsci.client.node.sila_node_client.SilaClient",
+            side_effect=ConnectionError("Connection refused"),
+        ):
+            request = ActionRequest(
+                action_name="GreetingProvider.SayHello", args={"Name": "World"}
+            )
+            result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        message = result.errors[0].message
+        # The enriched prefix appears exactly once — not nested.
+        assert message.count("SiLA connection error") == 1
+        assert "connection_refused" in message
+        assert "Hint:" in message
+
+    def test_recognized_execution_error_is_enriched(self):
+        """A recognized connection-category exception during command call MUST be enriched."""
+        mock_client = _make_mock_sila_client()
+        mock_client.GreetingProvider.SayHello.side_effect = TimeoutError(
+            "deadline exceeded"
+        )
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(
+            action_name="GreetingProvider.SayHello", args={"Name": "World"}
+        )
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        message = result.errors[0].message
+        assert "SiLA connection error" in message
+        assert "connection_timeout" in message
+        assert "Hint:" in message
+
+    def test_unknown_category_execution_error_not_enriched(self):
+        """An execution exception with no recognized category surfaces its plain message."""
+        mock_client = _make_mock_sila_client()
+        mock_client.GreetingProvider.SayHello.side_effect = RuntimeError(
+            "device returned malformed packet"
+        )
+        node_client = _make_sila_node_client(mock_client)
+        request = ActionRequest(
+            action_name="GreetingProvider.SayHello", args={"Name": "World"}
+        )
+        result = node_client.send_action(request)
+
+        assert result.status == ActionStatus.FAILED
+        message = result.errors[0].message
+        assert "device returned malformed packet" in message
+        assert "SiLA connection error" not in message

@@ -11,12 +11,15 @@ within functions to reduce CLI startup time.
 Functions
 ---------
 
-`collect_parameters_interactive(engine: TemplateEngine, console: Console) ‑> dict[str, object]`
+`collect_parameters_interactive(engine: TemplateEngine, console: Console, overrides: Optional[dict[str, object]] = None) ‑> dict[str, object]`
 :   Collect parameter values interactively.
     
     Args:
         engine: Template engine with manifest.
         console: Rich console for output.
+        overrides: Optional dict of parameter values to use as defaults,
+            overriding the template's built-in defaults. Useful for passing
+            CLI-provided values (e.g., ``-n``) into interactive mode.
     
     Returns:
         Dictionary of parameter names to values.
