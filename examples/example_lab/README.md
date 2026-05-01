@@ -30,6 +30,7 @@ The example lab simulates a real laboratory environment with:
 - **robotarm_1** (Port 2002): Robotic arm for material transfer
 - **platereader_1** (Port 2003): Plate reader for measurements
 - **advanced_example_node** (Port 2004): Advanced node demonstrating complex workflows
+- **sila_example_server** (Port 50052): Minimal SiLA2 server demonstrating the **experimental** `SilaNodeClient` (consumed via `sila://localhost:50052`). See [SiLA Example Server](#sila-example-server-experimental) below.
 
 ![Example Lab Architecture](assets/example_lab.png)
 
@@ -44,7 +45,7 @@ Before starting the example lab, ensure you have:
    - Consult the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide) for configuration and setup recommendations
 
 2. **Network Requirements**:
-   - Ports 2000-2004, 5432, 5434, 6379, 8000-8006, 8333, 9333, and 27017 available
+   - Ports 2000-2004, 5432, 5434, 6379, 8000-8006, 8333, 9333, 27017, and 50052 available
    - Internet access for pulling Docker images
 
 3. **System Requirements**:
@@ -93,6 +94,9 @@ curl http://localhost:2001/health  # liquidhandler_2
 curl http://localhost:2002/health  # robotarm_1
 curl http://localhost:2003/health  # platereader_1
 curl http://localhost:2004/health  # advanced_example_node
+
+# SiLA example server uses gRPC, not HTTP — verify with a TCP probe instead:
+python -c "import socket; s=socket.socket(); s.settimeout(2); s.connect(('localhost', 50052)); print('sila_example_server reachable')"
 ```
 
 ### 3. Access the Dashboard
@@ -182,6 +186,7 @@ Comprehensive **Jupyter notebooks** are available in the [`examples/notebooks/`]
 - **[node_notebook.ipynb](../notebooks/node_notebook.ipynb)** - Node Development Tutorial
 - **[backup_and_migration.ipynb](../notebooks/backup_and_migration.ipynb)** - Backup & Migration Tutorial
 - **[example_utilization_plots.ipynb](../notebooks/example_utilization_plots.ipynb)** - Utilization Visualization
+- **[sila_node_notebook.ipynb](../notebooks/sila_node_notebook.ipynb)** - **(Experimental)** Consuming a SiLA2 device via `SilaNodeClient`
 
 **Start the notebooks:**
 ```bash
@@ -222,7 +227,7 @@ docker --version
 docker compose --version
 
 # Verify port availability
-netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|5434|6379|27017|8333|9333)'
+netstat -tuln | grep -E '(8000|8001|8002|8003|8004|8005|8006|2000|2001|2002|2003|2004|5432|5434|6379|27017|8333|9333|50052)'
 
 # Check Docker resources
 docker system df
@@ -326,6 +331,50 @@ Once the lab is running, navigate to the **Locations** tab in the dashboard at [
 - Edit representations on existing locations
 
 See the [Location Templates Guide](../../docs/guides/integrator/10-location-templates.md) for full documentation.
+
+## SiLA Example Server (Experimental)
+
+> **Status:** Experimental. The `SilaNodeClient` and the `sila_example_server` ship as a preview of native SiLA2 integration. The client surface, the example server's Feature shape, and the install path may change. The broader migration is scoped in [`openspec/changes/sila2-native-node-design/`](../../openspec/changes/sila2-native-node-design/) (project umbrella: issue #293).
+
+The example lab includes a minimal SiLA2 server (`example_modules/sila_example_server/`) that demonstrates how to consume a SiLA2-based device from MADSci using `SilaNodeClient`. It exposes one Feature, `ExampleDevice`, with:
+
+- `Greet` — unobservable command (synchronous).
+- `CountDown` — observable command (long-running, with intermediate progress).
+- `GenerateData` — returns binary data, surfaced as `ActionFiles` on the client side.
+- `ServerUptime` — typed Property.
+
+The compose service runs the server on `0.0.0.0:50052` (insecure / discovery disabled for the example), with a TCP-socket healthcheck. It is wired into the workcell node map in `settings.yaml` as:
+
+```yaml
+workcell_nodes:
+  sila_example: sila://localhost:50052
+```
+
+### Trying it out
+
+```bash
+# Install the experimental SiLA extra
+pip install "madsci.client[sila]"
+
+# Connect to the example server (lab must be running: `docker compose up`)
+python -c "
+from madsci.client.node.sila_node_client import SilaNodeClient
+from madsci.common.types.action_types import ActionRequest
+
+client = SilaNodeClient(url='sila://localhost:50052')
+info = client.get_info()
+print('Actions:', list(info.actions))
+
+result = client.send_action(ActionRequest(
+    action_name='ExampleDevice.Greet',
+    args={'Name': 'MADSci'},
+))
+print(result.json_result)
+client.close()
+"
+```
+
+For an end-to-end walkthrough (introspection, observable polling, binary data, error handling), open [`examples/notebooks/sila_node_notebook.ipynb`](../notebooks/sila_node_notebook.ipynb). The notebook is also the SiLA validation harness — `just validate_nb_sila` executes it via papermill against the running compose service.
 
 ## Stopping the Lab
 
