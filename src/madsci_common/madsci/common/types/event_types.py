@@ -120,6 +120,12 @@ class EventManagerSettings(
         description="The configuration for sending email alerts.",
     )
 
+    error_handler: str = Field(
+        default="madsci.event_manager.error_handlers.default_error_handler",
+        title="Error Handler",
+        description="Error handler module that contains an Error Handler class to use",
+    )
+
     # Retention settings
     retention_enabled: bool = Field(
         default=False,

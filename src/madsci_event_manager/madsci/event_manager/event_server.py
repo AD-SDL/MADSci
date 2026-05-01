@@ -1,6 +1,7 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 import asyncio
+import importlib
 import warnings
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
@@ -43,6 +44,8 @@ from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pydantic import BaseModel, model_validator
+
+from madsci.event_manager.error_hanlder import ErrorHandler
 
 if TYPE_CHECKING:
     from pymongo.synchronous.database import Database
@@ -124,6 +127,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 DeprecationWarning,
                 stacklevel=2,
             )
+
+        self.error_handler_module = importlib.import_module(settings.error_handler)
+        self.error_handler = self.error_handler_module.ErrorHandler()
         # Store additional dependencies before calling super().__init__
         self._document_handler = document_handler
         self._db_connection = db_connection
@@ -460,6 +466,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                         event_id=event.event_id,
                     )
                     # Just continue - don't fail the request
+                
             except Exception as e:
                 self.logger.error(
                     "Failed to log event",
@@ -468,7 +475,8 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                     exc_info=True,
                 )
                 raise e
-
+        if event.log_level == EventLogLevel.ERROR:
+            error_handling_response = self.error_handler.handle(event)
         if (
             event.alert or event.log_level >= self.settings.alert_level
         ) and self.settings.email_alerts:
