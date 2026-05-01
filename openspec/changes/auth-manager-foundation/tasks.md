@@ -71,6 +71,7 @@
 - [ ] 9.3 Wire the middleware into `AbstractManagerBase` so it is registered when `auth_enabled=True`
 - [ ] 9.4 Implement the `auth_required=False` migration mode (allow unauth'd requests through, log a structured warning)
 - [ ] 9.5 Add the body-vs-claims `OwnershipInfo` precedence rule with a mismatch warning
+- [ ] 9.6 Implement sampled deprecation warning for caller-asserted `OwnershipInfo` when `auth_enabled=False` (default once per process per minute per call-site, pointing at the migration guide)
 
 ## 10. `@requires` decorator and authorization helpers
 

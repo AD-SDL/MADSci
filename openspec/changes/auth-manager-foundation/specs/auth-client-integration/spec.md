@@ -70,6 +70,11 @@ When `AuthMiddleware` is active and a valid token is present, code that calls `g
 - **WHEN** a request handler attempts to act within `project_id=proj_X` (e.g., create an experiment under it) and the validated principal's claims do NOT include `proj_X` in `project_ids`
 - **THEN** the handler SHALL receive an authorization error (HTTP 403) and the operation SHALL NOT be performed
 
+#### Scenario: Caller-asserted OwnershipInfo accepted when auth is disabled
+- **GIVEN** `auth_enabled=False` on the manager
+- **WHEN** a request body includes an `OwnershipInfo` (or equivalent caller-asserted fields)
+- **THEN** the values SHALL be accepted as today and a deprecation warning SHALL be emitted on a sampled basis (default once per process per minute per call-site) pointing at the auth migration guide
+
 ### Requirement: `@requires` decorator for endpoint authorization
 
 The system SHALL provide a `@requires(permission=...)` decorator usable on `Routable` endpoint methods. The decorator MUST consult `request.state.principal.permissions` and return HTTP 403 when the required permission is absent. It MUST also support an optional `project_from=<field_name>` argument that resolves the relevant project id from the request and additionally verifies project membership.

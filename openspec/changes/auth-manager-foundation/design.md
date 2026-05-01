@@ -115,6 +115,28 @@ NodeIdentity (and ServiceAccount) records SHALL be created by an operator action
 - *Enrollment tokens from day one*: rejected — meaningful additional surface area (new endpoint, name-pattern enforcement, single-use accounting, node-side persistent credential store, key-binding semantics) that would dilute the foundation change. Value primarily shows at scale and in dynamic environments, neither of which is the typical MADSci lab today.
 - *Trust-on-first-use with no operator action*: rejected — would require some other mechanism (mTLS, network position) to establish trust, all of which are larger projects than pre-provisioning.
 
+### Decision 10: OwnershipInfo back-compat — accept caller-asserted values when auth is disabled
+
+When `auth_enabled=False`, the existing behavior SHALL be preserved: `OwnershipInfo` continues to be sourced from caller-supplied request bodies and the `ownership_context()` machinery, with no validation against tokens. When `auth_enabled=True`, caller-supplied `OwnershipInfo` is accepted only when no contradicting JWT claim exists, and the middleware-derived (claims-sourced) values always win on conflict — with a structured warning logged on mismatch.
+
+A deprecation warning SHALL be emitted on every successful caller-asserted `OwnershipInfo` write when `auth_enabled=False`, on a sampled basis (default once per process per minute per call-site, to avoid log floods). The warning text SHALL point operators at the migration guide.
+
+**Removal timeline:** Caller-asserted `OwnershipInfo` SHALL be removed in the same MADSci release that removes the `auth_required=False` migration mode. This couples the two deprecations so deployments make a single jump rather than two.
+
+**Why:** Hard-cutting this would break every existing script and notebook in the wild on day one. The deprecation/coupling lets operators migrate at their own pace while making the eventual end-state unambiguous.
+
+**Trade-off accepted:** The grace period means we ship a release in which `OwnershipInfo` semantics differ depending on `auth_enabled`. This is documented in the operator guide.
+
+### Decision 11: Registry is orthogonal to auth in v1
+
+The existing identity registry (`enable_registry_resolution`, `MADSCI_REGISTRY_PATH`, `madsci.common.registry`) SHALL remain unchanged. It continues to resolve manager and node ULIDs to URLs without any auth awareness — a registry lookup is a directory operation, not an authentication operation.
+
+Auth credentials (NodeIdentity / ServiceAccount records) live in the Auth Manager's PostgreSQL database; the registry continues to live in its JSON file or its own resolution path. The two subsystems share `manager_id` / `node_id` ULIDs as join keys but have no other coupling in v1.
+
+**Why:** Conflating directory and identity concerns is a classic anti-pattern; keeping them separate lets each evolve independently. The registry's current concerns (URL resolution, ULID lookup) are not auth concerns. A future change MAY explore whether the registry should vend bootstrap material (e.g., the Auth Manager URL itself, JWKS bootstrap) but that is a separate design question.
+
+**Trade-off accepted:** Operators have to keep registry entries and Auth Manager registrations consistent (e.g., when adding a new node, both `madsci registry add` and `madsci auth node register` are required). The CLI MAY offer a convenience that does both atomically; this is captured as an optional follow-on.
+
 ## Risks / Trade-offs
 
 - **[Risk] Adding auth to a previously-open system breaks every script in the wild.** → Mitigation: default `auth_enabled=False`; operators opt in. Two-stage rollout per manager (`auth_enabled=True, auth_required=False` first to observe, then flip `auth_required=True`). Migration guide in docs.
@@ -142,6 +164,4 @@ NodeIdentity (and ServiceAccount) records SHALL be created by an operator action
 
 ## Open Questions
 
-1. **OwnershipInfo back-compat** — When auth is disabled, do we keep accepting caller-asserted `OwnershipInfo`? Recommend yes, behind a deprecation warning, with removal scheduled for the same release that removes `auth_required=False`.
-2. **`enable_registry_resolution` interaction** — The registry resolves manager/node identities by ULID today. Does the registry need to gain auth awareness, or is auth fully orthogonal? Likely orthogonal in v1; revisit if the registry starts vending bootstrap data.
-3. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.
+1. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.
