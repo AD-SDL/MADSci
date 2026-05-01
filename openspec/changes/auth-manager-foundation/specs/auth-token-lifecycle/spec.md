@@ -2,7 +2,13 @@
 
 ### Requirement: JWT access token format
 
-The Auth Manager SHALL issue access tokens as JWTs signed with RS256 using the active signing key from its rotating keypair set. Tokens MUST include standard claims `iss` (the Auth Manager URL), `aud` (the deployment's `lab_id` as a single string value, not an array), `sub` (the principal id), `iat`, `exp`, and `jti`, plus MADSci-specific claims `principal_type` (`user` | `service_account` | `node`), `roles` (list of role ids), `permissions` (flattened list of permission strings), and ownership claims (`user_id`, `project_ids`, `node_id`, `workcell_id`, `lab_id`) populated as appropriate for the principal.
+The Auth Manager SHALL issue access tokens as JWTs signed with RS256 using the active signing key from its rotating keypair set. Tokens MUST include standard claims `iss` (the Auth Manager URL), `aud` (the deployment's `lab_id` as a single string value, not an array), `sub` (the canonical principal identifier — `user_id` for users, `client_id` for service accounts and nodes), `iat`, `exp`, and `jti`, plus MADSci-specific claims `principal_type` (`user` | `service_account` | `node`), `roles` (list of role ids), `permissions` (flattened list of permission strings), and ownership claims populated as appropriate for the principal type:
+
+- For `user` tokens: `user_id`, `project_ids`, `lab_id`
+- For `service_account` tokens: `manager_id` (the operational manager identity this service account represents — distinct from `sub`/`client_id`), `lab_id`
+- For `node` tokens: `node_id`, `workcell_id` (when scoped), `lab_id`
+
+The distinction between `sub` (the principal record's id, e.g., `client_id`) and operational identity claims (`manager_id`, `node_id`, `user_id`) preserves the canonical OAuth semantics of `sub` while still letting consuming managers populate `OwnershipInfo` with the operational identifiers they care about.
 
 #### Scenario: Issued token contains required claims
 - **WHEN** any token is issued
@@ -110,6 +116,8 @@ The Auth Manager SHALL expose a `POST /revoke` endpoint allowing a principal to 
 
 The Auth Manager SHALL expose a `GET /deny-list` endpoint returning the set of currently-revoked-but-not-yet-expired access-token `jti` values, with each entry including its `exp` (so consumers can age entries out). The endpoint SHALL support an `If-None-Match` / `ETag` conditional-fetch flow to avoid retransmitting unchanged data. Entries SHALL be removed from the deny-list once their `exp` is in the past, bounding the list size to "currently-issued + revoked + still-valid" tokens.
 
+The deny-list SHALL be **persisted** in the Auth Manager's database (a `revoked_access_tokens` table keyed by `jti` with `exp` and `revoked_at` columns). On Auth Manager startup, the in-memory deny-list cache SHALL be hydrated from this table, filtering out entries whose `exp` is already in the past. Entries SHALL only be deleted from the table once their `exp` is in the past — so a revoked token cannot silently re-validate after an Auth Manager restart.
+
 The `AuthClient` (used by `AuthMiddleware` in every consuming manager) SHALL poll `/deny-list` at a configurable interval (default 30 seconds) and reject tokens whose `jti` appears in the locally-cached deny-list, even when the token's signature and `exp` are otherwise valid.
 
 The revocation-effectiveness SLA at any consuming manager SHALL therefore be bounded by `deny_list_poll_interval + max_clock_skew` (≤ 60 seconds at default settings). Operators requiring tighter bounds MAY shorten the poll interval at the cost of additional load on the Auth Manager.
@@ -130,6 +138,11 @@ The revocation-effectiveness SLA at any consuming manager SHALL therefore be bou
 #### Scenario: Conditional-fetch reduces poll cost
 - **WHEN** an `AuthClient` polls `/deny-list` with an `If-None-Match` header matching the current `ETag`
 - **THEN** the Auth Manager SHALL return HTTP 304 with no body
+
+#### Scenario: Revoked token stays revoked across Auth Manager restart
+- **GIVEN** an access token has been revoked at the Auth Manager and the `jti` is in the persisted `revoked_access_tokens` table
+- **WHEN** the Auth Manager process restarts
+- **THEN** the in-memory deny-list cache SHALL be hydrated from the persisted table on startup and the revoked `jti` SHALL still appear in `GET /deny-list` responses (until its `exp` passes)
 
 ### Requirement: Signing-key rotation
 

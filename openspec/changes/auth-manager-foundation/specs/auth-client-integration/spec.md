@@ -78,7 +78,7 @@ When `AuthMiddleware` is active and a valid token is present, code that calls `g
 
 #### Scenario: Claim-to-OwnershipInfo field mapping
 - **WHEN** `OwnershipInfo.from_jwt_claims(claims)` is called with a verified `JWTClaims` instance
-- **THEN** the returned `OwnershipInfo` SHALL be populated as follows: `user_id ← claims.user_id` (when `principal_type=user`), `node_id ← claims.node_id` (when `principal_type=node`), `workcell_id ← claims.workcell_id` (when present), `lab_id ← claims.aud`, `manager_id ← claims.sub` (when `principal_type=service_account`); `project_id` is left unset on the returned object (project context is established per-operation via `@requires(project_from=...)`, not as ambient ownership); all other `OwnershipInfo` fields SHALL be left unset
+- **THEN** the returned `OwnershipInfo` SHALL be populated as follows: `user_id ← claims.user_id` (when `principal_type=user`), `node_id ← claims.node_id` (when `principal_type=node`), `workcell_id ← claims.workcell_id` (when present), `lab_id ← claims.aud`, `manager_id ← claims.manager_id` (when `principal_type=service_account` — sourced from the dedicated `manager_id` claim, NOT from `sub`, since `sub` is the principal record's `client_id` and not the operational manager identity); `project_id` is left unset on the returned object (project context is established per-operation via `@requires(project_from=...)`, not as ambient ownership); all other `OwnershipInfo` fields SHALL be left unset
 
 #### Scenario: Project membership enforced for project-scoped operations
 - **WHEN** a request handler attempts to act within `project_id=proj_X` (e.g., create an experiment under it) and the validated principal's claims do NOT include `proj_X` in `project_ids`

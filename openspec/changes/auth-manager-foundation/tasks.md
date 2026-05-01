@@ -15,7 +15,7 @@
 ## 3. Auth Manager settings and database schema
 
 - [ ] 3.1 Implement `AuthManagerSettings(MadsciBaseSettings)` with `AUTH_` prefix, fields for `database_url`, `signing_key_ttl`, `access_token_ttl`, `refresh_token_ttl`, `argon2_*` tuning, plus the standard `server_url`/`manager_id`
-- [ ] 3.2 Define SQLModel tables: `users`, `projects`, `project_memberships`, `roles`, `role_permissions`, `service_accounts`, `node_identities`, `refresh_tokens`, `signing_keys`, `audit_log`
+- [ ] 3.2 Define SQLModel tables: `users`, `projects`, `project_memberships`, `roles`, `role_permissions`, `service_accounts`, `node_identities`, `refresh_tokens`, `revoked_access_tokens` (jti, exp, revoked_at — for deny-list persistence), `signing_keys`, `audit_log`
 - [ ] 3.3 Set up Alembic migration directory and initial migration creating all tables with proper indexes and foreign keys
 - [ ] 3.4 Wire integration with `SQLAlchemyHandler` so the in-memory `SQLiteHandler` works for tests (handle SQLite-specific DDL via `_create_table_sqlite_compat()` where needed)
 
@@ -25,7 +25,7 @@
 - [ ] 4.2 Implement `TokenService` with `issue_access_token(principal, ttl)`, `issue_refresh_token(principal)`, `verify_token(jwt)`, `introspect(jwt)`, and `revoke(jti_or_refresh)` using Authlib's JWT module
 - [ ] 4.3 Implement `PasswordService` wrapping argon2-cffi for `hash_password()`/`verify_password()` with tunable parameters from settings
 - [ ] 4.4 Implement `AuditLogger` with append-only writes for the security-relevant events listed in the identity-model spec
-- [ ] 4.5 Implement `DenyListService` maintaining the in-memory revoked-`jti`+`exp` set, exposing it via the `/deny-list` endpoint with `ETag`/`If-None-Match` support and automatic eviction on `exp`
+- [ ] 4.5 Implement `DenyListService` with persistent backing: write revoked `jti` + `exp` to the `revoked_access_tokens` table on revoke, hydrate the in-memory cache from the table on Auth Manager startup, expose via the `/deny-list` endpoint with `ETag`/`If-None-Match` support, and automatically evict in-memory + database entries once `exp` is in the past
 
 ## 5. AuthManager FastAPI server
 
@@ -96,11 +96,12 @@
 - [ ] 11.7 Write a docker-compose end-to-end test in `examples/example_lab/` that boots Auth Manager + one other manager + one node and exercises the full token lifecycle
 - [ ] 11.8 Write integration test exercising the deny-list flow: revoke a token at the Auth Manager and verify the consuming manager rejects it within `deny_list_poll_interval + max_clock_skew`
 - [ ] 11.9 Write integration test exercising the local audit-log fallback: take down the Auth Manager mid-request, confirm the event is persisted locally, restart the Auth Manager, confirm the event drains
+- [ ] 11.10 Write integration test exercising deny-list restart durability: revoke a token, restart the Auth Manager, confirm the revoked `jti` still appears in `/deny-list` and is still rejected at consuming managers
 
 ## 12. Documentation
 
 - [ ] 12.1 Write `docs/guides/auth.md` covering the architecture, token model, RBAC concepts, and integration points
-- [ ] 12.2 Write `docs/guides/auth_operator.md` covering bootstrap, secret distribution (including required `0600` file mode on `.madsci/secrets/*` and `.gitignore` treatment in templates), key rotation, HTTPS termination, reverse-proxy `X-Forwarded-For` handling for accurate audit-log source IPs, audit-log retention/PII guidance, and the migration plan (auth_enabled → auth_required)
+- [ ] 12.2 Write `docs/guides/auth_operator.md` covering bootstrap, secret distribution (including required `0600` file mode on `.madsci/secrets/*` and `.gitignore` treatment in templates), key rotation, HTTPS termination, reverse-proxy `X-Forwarded-For` handling for accurate audit-log source IPs, audit-log retention/PII guidance, the local audit-log fallback bound (default 100 MB) with a strong recommendation to alert on the rotation warning event so operators upsize before the bound bites at high request rates, and the migration plan (auth_enabled → auth_required)
 - [ ] 12.3 Update `docs/Configuration.md` with the new `AUTH_*` settings and the per-manager `auth_enabled`/`auth_required`/`auth_server_url` fields
 - [ ] 12.4 Update `README.md` and `CHANGELOG.md` with a summary of the Auth Manager addition and migration guidance
 - [ ] 12.5 Update `CLAUDE.md` agent guidance: new manager exists, port 8007, AuthClient pattern, ambient-context propagation rule
