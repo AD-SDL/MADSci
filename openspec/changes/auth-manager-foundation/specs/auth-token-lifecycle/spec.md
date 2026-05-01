@@ -68,6 +68,18 @@ The Auth Manager SHALL accept `grant_type=client_credentials` with `client_id` a
 - **WHEN** an incorrect `client_secret` is submitted
 - **THEN** the Auth Manager SHALL return HTTP 401 and an audit log entry SHALL record the failed attempt
 
+### Requirement: Token endpoint rate limiting and grant-type validation
+
+The `/token` endpoint SHALL apply per-source-IP rate limiting using the existing `RateLimitMiddleware` infrastructure. The Auth Manager SHALL reject requests whose `grant_type` value is not one of the supported grants (`password`, `refresh_token`, `client_credentials`) with HTTP 400 and SHALL NOT log the request body in the audit log (to avoid persisting bad credentials).
+
+#### Scenario: Unsupported grant_type rejected with 400
+- **WHEN** a request to `/token` is submitted with `grant_type=authorization_code` (or any other unsupported value)
+- **THEN** the Auth Manager SHALL return HTTP 400 with an `unsupported_grant_type` error response per RFC 6749 §5.2
+
+#### Scenario: Excessive failed attempts rate limited
+- **WHEN** a single source IP exceeds the configured failed-token-request threshold within the rate-limit window
+- **THEN** subsequent requests from that IP SHALL receive HTTP 429 until the window resets, and an audit log entry SHALL be written
+
 ### Requirement: JWKS publication
 
 The Auth Manager SHALL expose a `/.well-known/jwks.json` endpoint returning the public half of every currently-active signing key in standard JWKS format.
@@ -92,13 +104,32 @@ The Auth Manager SHALL expose an OAuth 2.0 Token Introspection endpoint (`POST /
 - **WHEN** a service submits a token whose `jti` has been revoked
 - **THEN** the Auth Manager SHALL return `{ "active": false }`
 
-### Requirement: Token revocation
+### Requirement: Token revocation and deny-list distribution
 
-The Auth Manager SHALL expose a `POST /revoke` endpoint allowing a principal to revoke its own tokens, and admins to revoke any token. Revocation MUST be effective for refresh tokens immediately and for access tokens on next introspection (or by `jti` deny-list distribution to manager caches).
+The Auth Manager SHALL expose a `POST /revoke` endpoint allowing a principal to revoke its own tokens, and admins to revoke any token. Refresh-token revocation MUST be effective immediately at the Auth Manager. Access-token revocation MUST become effective at all consuming managers within a bounded SLA via a `jti` deny-list distribution mechanism specified below.
+
+The Auth Manager SHALL expose a `GET /deny-list` endpoint returning the set of currently-revoked-but-not-yet-expired access-token `jti` values, with each entry including its `exp` (so consumers can age entries out). The endpoint SHALL support an `If-None-Match` / `ETag` conditional-fetch flow to avoid retransmitting unchanged data. Entries SHALL be removed from the deny-list once their `exp` is in the past, bounding the list size to "currently-issued + revoked + still-valid" tokens.
+
+The `AuthClient` (used by `AuthMiddleware` in every consuming manager) SHALL poll `/deny-list` at a configurable interval (default 30 seconds) and reject tokens whose `jti` appears in the locally-cached deny-list, even when the token's signature and `exp` are otherwise valid.
+
+The revocation-effectiveness SLA at any consuming manager SHALL therefore be bounded by `deny_list_poll_interval + max_clock_skew` (≤ 60 seconds at default settings). Operators requiring tighter bounds MAY shorten the poll interval at the cost of additional load on the Auth Manager.
 
 #### Scenario: User logs out
 - **WHEN** a user calls `/revoke` with their refresh token
-- **THEN** the refresh token SHALL be revoked, the principal's `jti` SHALL be added to the deny-list for the access-token TTL window, and an audit log entry SHALL be written
+- **THEN** the refresh token SHALL be revoked, the principal's access-token `jti` SHALL be added to the deny-list for the access-token TTL window, and an audit log entry SHALL be written
+
+#### Scenario: Revoked access token rejected at consuming manager within SLA
+- **GIVEN** an access token has been revoked at the Auth Manager
+- **WHEN** a request bearing that token reaches a consuming manager AFTER `deny_list_poll_interval` has elapsed
+- **THEN** the consuming manager SHALL reject the request with HTTP 401, citing token revocation
+
+#### Scenario: Deny-list bounded by token TTL
+- **WHEN** an entry on the deny-list has an `exp` in the past
+- **THEN** the entry SHALL be removed from the deny-list response on the next request, bounding response size to currently-revoked-and-still-unexpired tokens
+
+#### Scenario: Conditional-fetch reduces poll cost
+- **WHEN** an `AuthClient` polls `/deny-list` with an `If-None-Match` header matching the current `ETag`
+- **THEN** the Auth Manager SHALL return HTTP 304 with no body
 
 ### Requirement: Signing-key rotation
 

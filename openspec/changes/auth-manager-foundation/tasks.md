@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Create `src/madsci_auth_manager/` package with `pyproject.toml`, `madsci/auth_manager/__init__.py`, and `tests/` directory matching the existing manager-package layout
 - [ ] 1.2 Add `Authlib`, `argon2-cffi`, and `cryptography` to `madsci_auth_manager` dependencies; add `Authlib` and `argon2-cffi` to `madsci_client` and `madsci_common` as needed
-- [ ] 1.3 Reserve port 8007 in `CLAUDE.md`, `docs/Configuration.md`, `examples/example_lab/compose.yaml`, and any other port-allocation references
+- [ ] 1.3 Reserve port 8007 in `CLAUDE.md`, `docs/Configuration.md`, `examples/example_lab/compose.yaml`, and any other port-allocation references; verify any `madsci start` port-collision logic is updated to recognize 8007
 - [ ] 1.4 Update root `.justfile` and CI workflows so the new package is included in `pdm install`, `pytest`, `ruff check`, and coverage runs
 
 ## 2. Common types and ownership extensions
@@ -25,6 +25,7 @@
 - [ ] 4.2 Implement `TokenService` with `issue_access_token(principal, ttl)`, `issue_refresh_token(principal)`, `verify_token(jwt)`, `introspect(jwt)`, and `revoke(jti_or_refresh)` using Authlib's JWT module
 - [ ] 4.3 Implement `PasswordService` wrapping argon2-cffi for `hash_password()`/`verify_password()` with tunable parameters from settings
 - [ ] 4.4 Implement `AuditLogger` with append-only writes for the security-relevant events listed in the identity-model spec
+- [ ] 4.5 Implement `DenyListService` maintaining the in-memory revoked-`jti`+`exp` set, exposing it via the `/deny-list` endpoint with `ETag`/`If-None-Match` support and automatic eviction on `exp`
 
 ## 5. AuthManager FastAPI server
 
@@ -37,6 +38,8 @@
 - [ ] 5.7 Implement service-account and node-identity endpoints: `POST /service-accounts`, `POST /node-identities`, `POST /credentials/{client_id}/rotate`
 - [ ] 5.8 Implement key-management endpoints: `POST /keys/rotate`, `GET /keys`, `DELETE /keys/{kid}`
 - [ ] 5.9 Implement `/health/keys` endpoint returning active key count and oldest-key age
+- [ ] 5.10 Implement `GET /deny-list` endpoint with `ETag` / `If-None-Match` conditional fetch
+- [ ] 5.11 Apply `RateLimitMiddleware` to `/token` and add the `unsupported_grant_type` (HTTP 400, RFC 6749 §5.2) error response
 
 ## 6. Bootstrap CLI
 
@@ -55,7 +58,8 @@
 - [ ] 7.2 Implement TTL-based JWKS cache with forced-refresh on verify failure
 - [ ] 7.3 Implement transparent auto-refresh before expiry using a configurable refresh-buffer
 - [ ] 7.4 Add an async-friendly variant where applicable, mirroring the pattern used by other clients
-- [ ] 7.5 Write unit tests covering happy path, expired-token refresh, refresh-token reuse detection, JWKS cache invalidation, and connection close
+- [ ] 7.5 Implement deny-list polling (configurable interval, default 30s) using conditional fetch; enforce locally-cached deny-list during `verify_jwt()`
+- [ ] 7.6 Write unit tests covering happy path, expired-token refresh, refresh-token reuse detection, JWKS cache invalidation, deny-list polling and enforcement, and connection close
 
 ## 8. Ambient credential propagation
 
@@ -72,6 +76,7 @@
 - [ ] 9.4 Implement the `auth_required=False` migration mode (allow unauth'd requests through, log a structured warning)
 - [ ] 9.5 Add the body-vs-claims `OwnershipInfo` precedence rule with a mismatch warning
 - [ ] 9.6 Implement sampled deprecation warning for caller-asserted `OwnershipInfo` when `auth_enabled=False` (default once per process per minute per call-site, pointing at the migration guide)
+- [ ] 9.7 Implement local audit-log fallback: persist auth events to a configurable on-disk append-only log when the Auth Manager is unreachable, drain to the Auth Manager on recovery, bounded with rotation and a warning event when the bound is exceeded
 
 ## 10. `@requires` decorator and authorization helpers
 
@@ -89,11 +94,13 @@
 - [ ] 11.5 Write integration test: JWKS rotation while a previously-issued token is still in flight (verifies in-flight token still validates)
 - [ ] 11.6 Write integration test: project-scoped `@requires` denies a principal whose token claims don't include the target project
 - [ ] 11.7 Write a docker-compose end-to-end test in `examples/example_lab/` that boots Auth Manager + one other manager + one node and exercises the full token lifecycle
+- [ ] 11.8 Write integration test exercising the deny-list flow: revoke a token at the Auth Manager and verify the consuming manager rejects it within `deny_list_poll_interval + max_clock_skew`
+- [ ] 11.9 Write integration test exercising the local audit-log fallback: take down the Auth Manager mid-request, confirm the event is persisted locally, restart the Auth Manager, confirm the event drains
 
 ## 12. Documentation
 
 - [ ] 12.1 Write `docs/guides/auth.md` covering the architecture, token model, RBAC concepts, and integration points
-- [ ] 12.2 Write `docs/guides/auth_operator.md` covering bootstrap, secret distribution, key rotation, HTTPS termination, and the migration plan (auth_enabled → auth_required)
+- [ ] 12.2 Write `docs/guides/auth_operator.md` covering bootstrap, secret distribution (including required `0600` file mode on `.madsci/secrets/*` and `.gitignore` treatment in templates), key rotation, HTTPS termination, reverse-proxy `X-Forwarded-For` handling for accurate audit-log source IPs, audit-log retention/PII guidance, and the migration plan (auth_enabled → auth_required)
 - [ ] 12.3 Update `docs/Configuration.md` with the new `AUTH_*` settings and the per-manager `auth_enabled`/`auth_required`/`auth_server_url` fields
 - [ ] 12.4 Update `README.md` and `CHANGELOG.md` with a summary of the Auth Manager addition and migration guidance
 - [ ] 12.5 Update `CLAUDE.md` agent guidance: new manager exists, port 8007, AuthClient pattern, ambient-context propagation rule
@@ -115,5 +122,5 @@
 
 - [ ] 15.1 Run the `security-review` skill against the change branch
 - [ ] 15.2 Run the `madsci-release-audit` skill before merge
-- [ ] 15.3 Confirm test coverage thresholds for `madsci_auth_manager`, the `AuthClient`, and the `AuthMiddleware` paths
+- [ ] 15.3 Confirm test coverage thresholds for `madsci_auth_manager`, the `AuthClient`, and the `AuthMiddleware` paths (default to project-wide threshold; raise the bar in a follow-on if the security-review surfaces specific risk areas)
 - [ ] 15.4 Open a follow-up tracking issue listing the deferred items: Globus/ORCID upstream-IdP federation (which addresses cross-lab user identity), mTLS for nodes, per-manager `@requires` rollout, per-principal `aud` narrowing, node enrollment-token flow, optional `madsci registry add` + `madsci auth node register` atomic-add CLI convenience, and the deprecation timeline for `auth_required=False` and caller-asserted `OwnershipInfo`

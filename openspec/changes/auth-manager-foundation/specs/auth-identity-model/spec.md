@@ -87,3 +87,21 @@ The system SHALL persist an append-only audit log row for each security-relevant
 #### Scenario: Audit log is append-only
 - **WHEN** any actor (including admin) attempts to modify or delete an audit log row
 - **THEN** the operation SHALL fail and SHALL itself produce a new audit log entry recording the attempt
+
+### Requirement: Local audit-log fallback at consuming managers
+
+When a consuming manager cannot deliver an authentication-related audit event to the Auth Manager (e.g., the Auth Manager is unreachable, the network is partitioned, or the request hit a 5xx), the manager SHALL persist the event to a local append-only audit log on disk before returning the request response. The local audit log SHALL be retried for delivery to the Auth Manager on a configurable interval (default 60 seconds) and SHALL only be removed locally after successful delivery is confirmed. Loss of an authentication-related audit event SHALL never be silent.
+
+#### Scenario: Auth Manager unreachable does not silently drop audit events
+- **GIVEN** a consuming manager has rejected a request with HTTP 401 and the Auth Manager is unreachable
+- **WHEN** the manager attempts to write the audit event
+- **THEN** the event SHALL be persisted to the local fallback audit log file before the manager finishes handling the request
+
+#### Scenario: Local audit log drains on Auth Manager recovery
+- **GIVEN** locally-persisted audit events exist
+- **WHEN** the Auth Manager becomes reachable again
+- **THEN** the manager SHALL deliver the queued events in original order and SHALL only remove each event from the local log after the Auth Manager confirms persistence
+
+#### Scenario: Local audit log is bounded
+- **WHEN** the local fallback audit log exceeds a configurable maximum size (default 100 MB)
+- **THEN** the manager SHALL emit a structured warning event AND SHALL continue persisting new events (rotating the oldest segment), so that loss is loud and auditable rather than silent

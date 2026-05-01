@@ -1,6 +1,6 @@
 ## Why
 
-MADSci has no authentication or authorization on any of its services — every manager endpoint is open to anyone with network access, and the existing `OwnershipInfo` metadata is propagated only as in-process Python contextvars, never validated against requests. As MADSci moves toward shared/multi-tenant lab deployments, federated experiments, and external integrations (Globus, ORCID), this gap blocks downstream features and presents a real security risk. Issue #86 has been open since the early days; the work is now a dependency for layered location ownership, federated experiments, and the SiLA2 migration's node trust model.
+MADSci has no authentication or authorization on any of its services — every manager endpoint is open to anyone with network access, and the existing `OwnershipInfo` metadata is propagated only as in-process Python contextvars, never validated against requests. As MADSci moves toward shared/multi-tenant lab deployments, federated experiments, and external integrations (Globus, ORCID), this gap blocks downstream features and presents a real security risk. [Issue #86](https://github.com/AD-SDL/MADSci/issues/86) has been open since the early days; the work is now a dependency for layered location ownership, federated experiments, and the SiLA2 migration's node trust model.
 
 ## What Changes
 
@@ -15,7 +15,7 @@ MADSci has no authentication or authorization on any of its services — every m
 - **NEW** Operator documentation covering bootstrap (initial admin user, signing key generation), HTTPS termination patterns, and a backwards-compat migration path.
 - **NOT IN SCOPE for this change** (called out so reviewers don't expect them): mTLS for nodes, full Globus/ORCID federation, UI login flows, distributed/multi-lab Auth Manager federation. These will be follow-on changes built on this foundation.
 
-This is a **non-breaking** change at the deployment level (auth defaults to disabled), but **forward-incompatible** for code paths that assume `OwnershipInfo` is freely caller-asserted: once a deployment enables auth, callers must hold valid tokens and ownership claims become authoritative.
+This is a **non-breaking** change at the deployment level (auth defaults to disabled), but **forward-incompatible** for code paths that assume `OwnershipInfo` is freely caller-asserted: once a deployment enables auth, callers must hold valid tokens and ownership claims become authoritative. One small behavior change does ship even with `auth_enabled=False`: a sampled deprecation warning is emitted whenever caller-asserted `OwnershipInfo` is accepted (per Decision 10), pointing operators at the migration guide.
 
 ## Capabilities
 

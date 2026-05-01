@@ -59,12 +59,26 @@ An ambient `AuthClient` SHALL be installable into a contextvars-based scope (`au
 
 ### Requirement: OwnershipInfo binding from token claims
 
-When `AuthMiddleware` is active and a valid token is present, code that calls `get_current_ownership_info()` SHALL receive an `OwnershipInfo` whose `user_id`, `project_id`, `node_id`, `workcell_id`, and `lab_id` fields are sourced from the validated JWT claims (not from caller-supplied request bodies). When `OwnershipInfo` fields are also present in the request body, the middleware-derived values SHALL take precedence and a warning SHALL be logged if the body-supplied value differs.
+When `AuthMiddleware` is active and a valid token is present, code that calls `get_current_ownership_info()` SHALL receive an `OwnershipInfo` whose `user_id`, `project_id` (drawn from `project_ids` claim — see project-scoped scenario), `node_id`, `workcell_id`, and `lab_id` fields are sourced exclusively from the validated JWT claims. The body-supplied value of any ownership field that has a corresponding claim SHALL be ignored entirely (no fallback when the claim is absent). The body-supplied value of any field that has NO corresponding claim slot (e.g., `experiment_id`, `workflow_id`, `step_id`, `campaign_id`) is accepted as today, since these are operational identifiers, not principal-bound identifiers. Mismatches between body and claim SHALL emit a warning event.
 
 #### Scenario: Token claims override body-supplied ownership
 - **GIVEN** a request whose body declares `user_id=mallory` but whose validated token claims `user_id=alice`
 - **WHEN** the request handler reads `get_current_ownership_info()`
 - **THEN** the returned `OwnershipInfo.user_id` SHALL be `alice` and a warning event SHALL be logged noting the mismatch
+
+#### Scenario: Absent claim does not fall back to body
+- **GIVEN** a service-account token whose claims do NOT include `user_id` and a request body declaring `user_id=mallory`
+- **WHEN** the request handler reads `get_current_ownership_info()`
+- **THEN** `OwnershipInfo.user_id` SHALL be `None` (not `mallory`) and a warning event SHALL be logged noting the body-supplied principal-bound field was discarded
+
+#### Scenario: Operational identifiers from body are preserved
+- **GIVEN** a request whose body declares `experiment_id=exp_123` and `workflow_id=wf_456`
+- **WHEN** the request handler reads `get_current_ownership_info()`
+- **THEN** `OwnershipInfo.experiment_id` SHALL be `exp_123` and `OwnershipInfo.workflow_id` SHALL be `wf_456`, since these are operational identifiers without corresponding token claims
+
+#### Scenario: Claim-to-OwnershipInfo field mapping
+- **WHEN** `OwnershipInfo.from_jwt_claims(claims)` is called with a verified `JWTClaims` instance
+- **THEN** the returned `OwnershipInfo` SHALL be populated as follows: `user_id ← claims.user_id` (when `principal_type=user`), `node_id ← claims.node_id` (when `principal_type=node`), `workcell_id ← claims.workcell_id` (when present), `lab_id ← claims.aud`, `manager_id ← claims.sub` (when `principal_type=service_account`); `project_id` is left unset on the returned object (project context is established per-operation via `@requires(project_from=...)`, not as ambient ownership); all other `OwnershipInfo` fields SHALL be left unset
 
 #### Scenario: Project membership enforced for project-scoped operations
 - **WHEN** a request handler attempts to act within `project_id=proj_X` (e.g., create an experiment under it) and the validated principal's claims do NOT include `proj_X` in `project_ids`
