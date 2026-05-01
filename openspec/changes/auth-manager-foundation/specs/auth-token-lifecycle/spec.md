@@ -16,6 +16,10 @@ The Auth Manager SHALL issue access tokens as JWTs signed with RS256 using the a
 - **WHEN** a manager verifies a token whose `aud` claim does not match its configured `lab_id`
 - **THEN** verification SHALL fail and the request SHALL be treated as unauthenticated
 
+#### Scenario: iss is the lab's Auth Manager URL
+- **WHEN** any token is issued
+- **THEN** the `iss` claim SHALL be the URL of this lab's Auth Manager (sourced from its `server_url` setting), and verifiers SHALL fetch JWKS from that URL's `/.well-known/jwks.json`
+
 #### Scenario: User token includes project memberships
 - **WHEN** a token is issued for a user with project memberships
 - **THEN** the JWT SHALL include `project_ids` listing every project the user is a member of at issuance time

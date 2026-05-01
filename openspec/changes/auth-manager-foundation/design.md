@@ -137,6 +137,29 @@ Auth credentials (NodeIdentity / ServiceAccount records) live in the Auth Manage
 
 **Trade-off accepted:** Operators have to keep registry entries and Auth Manager registrations consistent (e.g., when adding a new node, both `madsci registry add` and `madsci auth node register` are required). The CLI MAY offer a convenience that does both atomically; this is captured as an optional follow-on.
 
+### Decision 12: Lab-scoped Auth Manager (`lab_id` is the tenant boundary)
+
+The Auth Manager and the Lab Manager have a **1:1 relationship**. Each MADSci lab runs exactly one Auth Manager. `lab_id` is the security and tenancy boundary: `aud = lab_id` (per Decision 8) and `iss` is the URL of that lab's Auth Manager. Users, projects, service accounts, node identities, role grants, signing keys, and audit logs all live in that single Auth Manager's PostgreSQL database and are implicitly scoped to its `lab_id`. The schema is single-tenant — there is no `tenant_id` foreign key and no cross-lab queries.
+
+**Why lab-scoped for v1:**
+- Smallest delta from how MADSci is deployed today (one lab ≈ one deployment).
+- Schema and operations stay single-tenant, eliminating an entire class of cross-tenant data-isolation bugs in a security-critical subsystem.
+- Trust boundary is unambiguous: a token from lab A's Auth Manager has no semantic meaning in lab B until/unless an explicit federation mechanism is added.
+- Bootstrap is clean — `madsci auth bootstrap` operates against a single lab.
+
+**Cross-lab user identity is intentionally deferred to the upstream-IdP layer.** Researchers who work across labs will, in v1, hold multiple lab-scoped tokens — one per lab. The follow-on Globus/ORCID OIDC federation work resolves this at the right layer: each lab's Auth Manager OIDC-trusts a shared upstream IdP, so a researcher's external identity is one record but lab-local role grants and project membership remain lab-autonomous. This is the same pattern used by every modern federated scientific computing system (JupyterHub, Globus-aware HPC schedulers, etc.) and avoids forcing multi-tenant complexity into the foundation.
+
+**Trade-offs accepted:**
+- Orgs running N labs operate N Auth Managers (N PostgreSQL DBs to back up, N sets of signing keys to rotate). Acceptable given typical AD-SDL/RPL deployment scale.
+- Cross-lab researchers manage multiple tokens until the upstream-IdP follow-on lands. Annoying but workable — and the upstream-IdP work is already on the roadmap.
+- Cross-lab token validation (lab B trusting lab A's tokens directly) is not supported in v1. If two labs want to share resources, the path is via the shared upstream IdP, not via direct cross-issuer trust.
+
+**Forward-compatibility:** Nothing in this decision precludes a later multi-tenant Auth Manager mode or direct cross-issuer trust. Both can be added in follow-on changes without breaking what v1 ships, because the schema is already keyed on globally-unique ULIDs and `iss`/`aud` are already explicit.
+
+**Alternatives considered:**
+- *Multi-tenant Auth Manager (one per organization, `tenant_id` on every row)*: rejected — adds isolation bugs to a security-critical foundation, and the cross-lab-user UX problem is better solved at the IdP layer anyway.
+- *Workcell-scoped Auth Manager (sub-lab tenants)*: rejected — within a lab, isolation belongs at the Project layer (project membership), not at the auth tenancy layer.
+
 ## Risks / Trade-offs
 
 - **[Risk] Adding auth to a previously-open system breaks every script in the wild.** → Mitigation: default `auth_enabled=False`; operators opt in. Two-stage rollout per manager (`auth_enabled=True, auth_required=False` first to observe, then flip `auth_required=True`). Migration guide in docs.
@@ -164,4 +187,4 @@ Auth credentials (NodeIdentity / ServiceAccount records) live in the Auth Manage
 
 ## Open Questions
 
-1. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.
+_All open questions have been resolved into Decisions 8–12 above. Future questions surfaced during implementation will be tracked here or as separate follow-on changes._

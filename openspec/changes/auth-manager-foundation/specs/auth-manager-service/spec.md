@@ -1,5 +1,18 @@
 ## ADDED Requirements
 
+### Requirement: Auth Manager is lab-scoped (1:1 with Lab Manager)
+
+Each MADSci lab SHALL run exactly one Auth Manager. The Auth Manager's persistence (users, projects, service accounts, node identities, role grants, signing keys, audit log) SHALL be scoped to a single `lab_id`. The schema SHALL be single-tenant — there is no `tenant_id` column and no cross-lab queries. The Auth Manager's `iss` URL and the deployment's `lab_id` together identify the trust domain.
+
+#### Scenario: Auth Manager binds to a single lab_id at bootstrap
+- **WHEN** `madsci auth bootstrap` runs against an empty database
+- **THEN** the Auth Manager SHALL record the deployment's `lab_id` (read from settings) and SHALL refuse to start later against a different `lab_id` without an explicit operator-acknowledged migration
+
+#### Scenario: Tokens issued for one lab are not accepted by another lab
+- **GIVEN** lab A and lab B each run their own Auth Manager
+- **WHEN** a manager in lab B receives a JWT whose `aud` is lab A's `lab_id`
+- **THEN** verification SHALL fail and the request SHALL be treated as unauthenticated; cross-lab token validation is out of scope for this change
+
 ### Requirement: Auth Manager package layout and base class
 
 A new package `madsci_auth_manager` SHALL exist at `src/madsci_auth_manager/`. The server class SHALL inherit from `AbstractManagerBase[AuthManagerSettings]` and SHALL be importable as `madsci.auth_manager.AuthManager`. The settings class SHALL inherit from `MadsciBaseSettings` and use the `AUTH_` environment-variable prefix.
