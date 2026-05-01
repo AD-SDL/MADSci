@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 from madsci.client.http import DualModeClientMixin
-from madsci.common.types.client_types import MadsciClientConfig
+from madsci.common.types.client_types import MadsciHttpClientConfig
 
 # ---------------------------------------------------------------------------
 # Helper: concrete class that uses the mixin
@@ -18,8 +18,8 @@ from madsci.common.types.client_types import MadsciClientConfig
 class _StubClient(DualModeClientMixin):
     """Minimal concrete class for testing the mixin."""
 
-    def __init__(self, *, config: MadsciClientConfig | None = None) -> None:
-        self.config = config or MadsciClientConfig()
+    def __init__(self, *, config: MadsciHttpClientConfig | None = None) -> None:
+        self.config = config or MadsciHttpClientConfig()
         # Use a mock for the sync client so we don't open real connections
         self._client = MagicMock(spec=httpx.Client)
         self._async_client = None
@@ -404,7 +404,7 @@ class TestMixinIsNotABaseClass:
         class Combined(DualModeClientMixin, OtherBase):
             def __init__(self) -> None:
                 super().__init__()
-                self.config = MadsciClientConfig()
+                self.config = MadsciHttpClientConfig()
                 self._client = MagicMock(spec=httpx.Client)
                 self._async_client = None
 

@@ -41,7 +41,7 @@ import httpx
 if TYPE_CHECKING:
     from types import TracebackType
 
-    from madsci.common.types.client_types import MadsciClientConfig
+    from madsci.common.types.client_types import MadsciHttpClientConfig
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +55,7 @@ class DualModeClientMixin:
     This mixin assumes the consuming class sets the following instance
     attributes in its ``__init__``:
 
-    * ``self.config`` -- a :class:`~madsci.common.types.client_types.MadsciClientConfig`
+    * ``self.config`` -- a :class:`~madsci.common.types.client_types.MadsciHttpClientConfig`
     * ``self._client`` -- an ``httpx.Client`` (created via
       :func:`~madsci.common.http_client.create_httpx_client`)
     * ``self._async_client`` -- initially ``None``; lazily created on the
@@ -64,7 +64,7 @@ class DualModeClientMixin:
 
     # Declared here for type-checkers; actual values are set by the
     # consuming class's __init__.
-    config: MadsciClientConfig
+    config: MadsciHttpClientConfig
     _client: httpx.Client
     _async_client: httpx.AsyncClient | None
 

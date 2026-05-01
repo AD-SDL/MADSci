@@ -32,6 +32,9 @@ otel-exporters = [
 tui = [
   "textual>=0.50.0",
 ]
+sila = [
+  "sila2>=0.10.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/AD-SDL/MADSci"

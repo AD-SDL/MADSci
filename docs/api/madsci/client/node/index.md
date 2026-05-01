@@ -6,6 +6,7 @@ Sub-modules
 -----------
 * madsci.client.node.abstract_node_client
 * madsci.client.node.rest_node_client
+* madsci.client.node.sila_node_client
 
 Classes
 -------
@@ -18,6 +19,7 @@ Classes
     ### Descendants
 
     * madsci.client.node.rest_node_client.RestNodeClient
+    * madsci.client.node.sila_node_client.SilaNodeClient
 
     ### Class variables
 

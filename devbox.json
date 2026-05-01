@@ -6,7 +6,8 @@
     "pdm@latest",
     "just@latest",
     "yarn@latest",
-    "pre-commit@latest"
+    "pre-commit@latest",
+    "openspec@latest"
   ],
   "env": {
     "PDM_USE_UV": "True"

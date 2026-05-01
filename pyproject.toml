@@ -28,6 +28,7 @@ dev = [
     "opentelemetry-instrumentation-logging>=0.60b1",
     "pytest-asyncio>=1.3.0",
     "papermill>=2.7.0",
+    "sila2>=0.10.0",
 ]
 
 [tool.pytest.ini_options]
@@ -55,7 +56,7 @@ default_settings = [
     "madsci.common.types.client_types:ResourceClientConfig",
     "madsci.common.types.client_types:ExperimentClientConfig",
     "madsci.common.types.client_types:DataClientConfig",
-    "madsci.common.types.client_types:MadsciClientConfig",
+    "madsci.common.types.client_types:MadsciHttpClientConfig",
     "madsci.common.types.client_types:LocationClientConfig",
     "madsci.common.types.client_types:WorkcellClientConfig",
     "madsci.common.types.client_types:LabClientConfig",

@@ -11,7 +11,7 @@ client factory across all MADSci components.
 Functions
 ---------
 
-`create_httpx_client(config: MadsciClientConfig | None = None, *, async_mode: bool = False) ‑> Union[httpx.Client, httpx.AsyncClient]`
+`create_httpx_client(config: MadsciHttpClientConfig | None = None, *, async_mode: bool = False) ‑> Union[httpx.Client, httpx.AsyncClient]`
 :   Create an ``httpx.Client`` or ``httpx.AsyncClient`` with standardised configuration.
     
     This mirrors the behaviour of :func:`madsci.common.utils.create_http_session`
@@ -31,8 +31,8 @@ Functions
     
     Parameters
     ----------
-    config : MadsciClientConfig | None
-        Client configuration.  Falls back to ``MadsciClientConfig()`` defaults.
+    config : MadsciHttpClientConfig | None
+        Client configuration.  Falls back to ``MadsciHttpClientConfig()`` defaults.
     async_mode : bool
         If ``True`` return an ``httpx.AsyncClient``; otherwise a sync
         ``httpx.Client``.
@@ -50,9 +50,9 @@ Functions
     >>> client = create_httpx_client()
     >>>
     >>> # Async client with custom retry count
-    >>> from madsci.common.types.client_types import MadsciClientConfig
+    >>> from madsci.common.types.client_types import MadsciHttpClientConfig
     >>> aclient = create_httpx_client(
-    ...     config=MadsciClientConfig(retry_total=5),
+    ...     config=MadsciHttpClientConfig(retry_total=5),
     ...     async_mode=True,
     ... )
 

@@ -13,13 +13,13 @@ from pydantic import Field
 from pydantic_settings import SettingsConfigDict
 
 
-class MadsciClientConfig(MadsciBaseSettings):
+class MadsciHttpClientConfig(MadsciBaseSettings):
     """
     Base configuration for MADSci HTTP clients.
 
-    This class provides standardized configuration for requests library usage,
+    This class provides standardized configuration for HTTP-based clients,
     including retry strategies, timeout values, and backoff algorithms.
-    All MADSci clients should use this configuration to ensure consistency.
+    All MADSci HTTP clients should use this configuration to ensure consistency.
 
     Attributes
     ----------
@@ -134,7 +134,11 @@ class MadsciClientConfig(MadsciBaseSettings):
     )
 
 
-class ExperimentClientConfig(MadsciClientConfig):
+MadsciClientConfig = MadsciHttpClientConfig
+"""Backward-compatible alias for MadsciHttpClientConfig."""
+
+
+class ExperimentClientConfig(MadsciHttpClientConfig):
     """Configuration for the Experiment Manager client."""
 
     model_config = SettingsConfigDict(
@@ -144,7 +148,7 @@ class ExperimentClientConfig(MadsciClientConfig):
     )
 
 
-class DataClientConfig(MadsciClientConfig):
+class DataClientConfig(MadsciHttpClientConfig):
     """
     Configuration for the Data Manager client.
 
@@ -158,7 +162,7 @@ class DataClientConfig(MadsciClientConfig):
     )
 
 
-class LocationClientConfig(MadsciClientConfig):
+class LocationClientConfig(MadsciHttpClientConfig):
     """Configuration for the Location Manager client."""
 
     model_config = SettingsConfigDict(
@@ -189,7 +193,7 @@ class LocationClientConfig(MadsciClientConfig):
     )
 
 
-class WorkcellClientConfig(MadsciClientConfig):
+class WorkcellClientConfig(MadsciHttpClientConfig):
     """
     Configuration for the Workcell Manager client.
 
@@ -203,7 +207,7 @@ class WorkcellClientConfig(MadsciClientConfig):
     )
 
 
-class ResourceClientConfig(MadsciClientConfig):
+class ResourceClientConfig(MadsciHttpClientConfig):
     """Configuration for the Resource Manager client."""
 
     model_config = SettingsConfigDict(
@@ -218,7 +222,7 @@ class ResourceClientConfig(MadsciClientConfig):
     )
 
 
-class LabClientConfig(MadsciClientConfig):
+class LabClientConfig(MadsciHttpClientConfig):
     """Configuration for the Lab (Squid) client."""
 
     model_config = SettingsConfigDict(
@@ -228,7 +232,7 @@ class LabClientConfig(MadsciClientConfig):
     )
 
 
-class RestNodeClientConfig(MadsciClientConfig):
+class RestNodeClientConfig(MadsciHttpClientConfig):
     """
     Configuration for Node REST clients.
 
@@ -247,4 +251,52 @@ class RestNodeClientConfig(MadsciClientConfig):
         default=60.0,
         gt=0.0,
         description="Timeout for node action operations",
+    )
+
+
+class SilaNodeClientConfig(MadsciBaseSettings):
+    """Configuration for SiLA2 Node clients.
+
+    SiLA clients communicate over gRPC, not HTTP. This config provides
+    SiLA-specific connection settings like TLS certificates and timeouts.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="SILA_NODE_CLIENT_",
+        env_file=None,
+        env_file_encoding="utf-8",
+        validate_assignment=True,
+        validate_default=True,
+        env_nested_delimiter="__",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    insecure: bool = Field(
+        default=True,
+        description="Whether to connect without TLS. If False, root_certs_path must be provided.",
+    )
+    root_certs_path: Optional[str] = Field(
+        default=None,
+        description="Path to PEM-encoded root certificates for TLS verification.",
+    )
+    command_timeout: float = Field(
+        default=300.0,
+        gt=0.0,
+        description="Default timeout in seconds for SiLA command execution.",
+    )
+    poll_interval: float = Field(
+        default=0.5,
+        ge=0.1,
+        description="Interval in seconds for polling observable command status.",
+    )
+    poll_backoff_factor: float = Field(
+        default=1.5,
+        ge=1.0,
+        description="Backoff multiplier applied to poll_interval on each iteration.",
+    )
+    max_poll_interval: float = Field(
+        default=5.0,
+        gt=0.0,
+        description="Maximum polling interval in seconds after backoff is applied.",
     )

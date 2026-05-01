@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Union
 import httpx
 
 if TYPE_CHECKING:
-    from madsci.common.types.client_types import MadsciClientConfig
+    from madsci.common.types.client_types import MadsciHttpClientConfig
     from madsci.common.utils import RateLimitTracker
 
 logger = logging.getLogger(__name__)
@@ -304,7 +304,7 @@ def _make_rate_limit_hook(
 
 
 def create_httpx_client(
-    config: MadsciClientConfig | None = None,
+    config: MadsciHttpClientConfig | None = None,
     *,
     async_mode: bool = False,
 ) -> Union[httpx.Client, httpx.AsyncClient]:
@@ -328,8 +328,8 @@ def create_httpx_client(
 
     Parameters
     ----------
-    config : MadsciClientConfig | None
-        Client configuration.  Falls back to ``MadsciClientConfig()`` defaults.
+    config : MadsciHttpClientConfig | None
+        Client configuration.  Falls back to ``MadsciHttpClientConfig()`` defaults.
     async_mode : bool
         If ``True`` return an ``httpx.AsyncClient``; otherwise a sync
         ``httpx.Client``.
@@ -347,18 +347,18 @@ def create_httpx_client(
     >>> client = create_httpx_client()
     >>>
     >>> # Async client with custom retry count
-    >>> from madsci.common.types.client_types import MadsciClientConfig
+    >>> from madsci.common.types.client_types import MadsciHttpClientConfig
     >>> aclient = create_httpx_client(
-    ...     config=MadsciClientConfig(retry_total=5),
+    ...     config=MadsciHttpClientConfig(retry_total=5),
     ...     async_mode=True,
     ... )
     """
     # Lazy import to avoid circular dependencies (same pattern as create_http_session)
-    from madsci.common.types.client_types import MadsciClientConfig  # noqa: PLC0415
+    from madsci.common.types.client_types import MadsciHttpClientConfig  # noqa: PLC0415
     from madsci.common.utils import RateLimitTracker  # noqa: PLC0415
 
     if config is None:
-        config = MadsciClientConfig()
+        config = MadsciHttpClientConfig()
 
     # -- Limits (connection pooling) ----------------------------------------
     limits = httpx.Limits(

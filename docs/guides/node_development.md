@@ -240,6 +240,63 @@ class MyNode(RestNode):
 
 For the full guide on representation templates, location templates, seed files, and programmatic usage, see [Location Templates](integrator/10-location-templates.md).
 
+## Consuming SiLA2 Devices (Experimental)
+
+> **Status: Experimental.** `SilaNodeClient` is an early preview of native SiLA2 support. The client surface (URL scheme, install extra, binary handling) may change. The broader migration — including a `Sila2Node` *server* base class, async parity, admin commands, lock/cancel/pause integration, and a `RestNode` → `Sila2Node` migration guide — is scoped in the [`sila2-native-node-design`](../../openspec/changes/sila2-native-node-design/) proposal (umbrella issue #293). What ships today is **client-side consumption only**: you can talk to an existing SiLA2 server, you cannot yet author a new MADSci node *as* a SiLA2 server through the framework.
+
+### What's available today
+
+- `madsci.client.node.sila_node_client.SilaNodeClient` — connects to a SiLA2 server over gRPC using the [`sila2`](https://gitlab.com/SiLA2/sila_python) SDK.
+- `sila://host:port` URL scheme — auto-dispatched by the workcell manager's `find_node_client()` alongside `http://` (REST) URLs.
+- Synchronous (unobservable) and long-running (observable) command execution, server introspection (`get_info` / `get_status` / `get_state`), and binary responses surfaced as `ActionFiles`.
+- Connection errors classified with diagnostic context (DNS / refused / TLS / gRPC) and actionable hints.
+
+### Install
+
+```bash
+pip install "madsci.client[sila]"
+```
+
+The `[sila]` extra pulls in a compatible `sila2` SDK version. Without the extra, importing `SilaNodeClient` raises `ImportError` with install instructions.
+
+### Quick start
+
+```python
+from madsci.client.node.sila_node_client import SilaNodeClient
+from madsci.common.types.action_types import ActionRequest
+
+client = SilaNodeClient(url="sila://localhost:50052")
+
+# Discover features and commands
+info = client.get_info()
+print(list(info.actions))
+
+# Run an unobservable command (action_name uses Feature.Command dot notation)
+result = client.send_action(ActionRequest(
+    action_name="ExampleDevice.Greet",
+    args={"Name": "MADSci"},
+))
+print(result.json_result)
+
+client.close()
+```
+
+### Try it end-to-end
+
+The example lab includes a minimal SiLA2 server (`examples/example_lab/example_modules/sila_example_server/`) bound to `sila://localhost:50052`. The [`sila_node_notebook.ipynb`](../../examples/notebooks/sila_node_notebook.ipynb) walks through every supported capability end-to-end (introspection, observable polling, binary data round-trip, error handling) and is the canonical SiLA validation harness — `just validate_nb_sila` runs it via papermill.
+
+### What's *not* yet available
+
+The current preview is **client-only**. The following are intentionally not in scope for this iteration and are tracked as downstream issues against the design proposal:
+
+- A `Sila2Node` server base class for authoring MADSci nodes natively as SiLA2 servers.
+- Async (`async_*`) method parity on `SilaNodeClient`.
+- `send_admin_command` dispatch over SiLA (Lock/Cancel/Pause/Reset/Shutdown/SafetyStop).
+- File *input* (parameter) support via SiLA Binary Transfer (currently bytes responses only).
+- `get_log` / `get_action_history` / `get_resources` (REST-only for now; the design proposal removes `get_resources` wholesale and re-homes the others as MADSci Features).
+
+If you need any of these now, stay on `RestNodeClient`; the migration is "side-by-side with full parity until REST removal" by design.
+
 ## Next Steps
 
 1. **Complete the interactive tutorial**: Work through `examples/notebooks/node_notebook.ipynb` thoroughly
@@ -252,5 +309,6 @@ For the full guide on representation templates, location templates, seed files, 
 
 - **Interactive Tutorial**: [node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb)
 - **Example Implementations**: [example_modules/](../../examples/example_lab/example_modules/)
+- **SiLA2 Client (Experimental)**: [sila_node_notebook.ipynb](../../examples/notebooks/sila_node_notebook.ipynb), [sila2-native-node-design proposal](../../openspec/changes/sila2-native-node-design/)
 - **Troubleshooting**: [Troubleshooting](troubleshooting.md)
 - **Workflow Development**: [Workflow Development](workflow_development.md)
