@@ -101,6 +101,20 @@ All access tokens — for users, service accounts, and node identities alike —
 - *Multi-audience array from day one*: rejected — requires every caller to declare intent upfront, complicates the AuthClient cache, and forces users (who hit everything) into either broad scoping anyway or per-target refresh. Better to layer this in once the foundation has settled.
 - *Per-resource-server tokens (classic OAuth)*: rejected — too much token churn for a workflow execution that fans out across many managers.
 
+### Decision 9: Pre-provisioned node identities for v1
+
+NodeIdentity (and ServiceAccount) records SHALL be created by an operator action ahead of node startup. The operator runs `madsci auth node register --node-id <id> --workcell-id <wc>`; the Auth Manager returns the `client_id` + plaintext `client_secret` exactly once; the operator distributes the secret to the node host (typically via `.madsci/secrets/` mounted into the container or as an env var). At startup the node exchanges the secret for a JWT via the standard OAuth 2.0 client-credentials grant.
+
+**Why pre-provisioned for v1:** Smallest delta from the existing static compose / config-file deployment model that real MADSci labs use today. No new endpoint, no node-side keypair generation, no enrollment-token bookkeeping. The NodeIdentity row exists before the node ever runs, which makes the trust model unambiguous and easy to audit.
+
+**Trade-off accepted:** Operators have to manually shuffle a secret from the CLI output to the node host. At small node counts this is fine; it does not scale to dozens of ephemeral nodes or to autoscaled / CI environments. The on-disk secret is also long-lived until rotated.
+
+**Follow-on path (not in this change):** A future change SHALL add an enrollment-token flow modeled on Kubernetes kubelet bootstrap / Tailscale auth keys / Nomad ACL bootstrap. Operators would create short-lived, optionally multi-use enrollment tokens scoped to a workcell with name-pattern constraints; nodes would self-generate a keypair, present the enrollment token to a `/enroll` endpoint, and persist their issued long-lived credentials locally. The NodeIdentity schema designed here is forward-compatible — a follow-on adds an `enrolled_via_token` field and the `/enroll` endpoint without restructuring existing tables. Captured in Task 15.4.
+
+**Alternatives considered:**
+- *Enrollment tokens from day one*: rejected — meaningful additional surface area (new endpoint, name-pattern enforcement, single-use accounting, node-side persistent credential store, key-binding semantics) that would dilute the foundation change. Value primarily shows at scale and in dynamic environments, neither of which is the typical MADSci lab today.
+- *Trust-on-first-use with no operator action*: rejected — would require some other mechanism (mTLS, network position) to establish trust, all of which are larger projects than pre-provisioning.
+
 ## Risks / Trade-offs
 
 - **[Risk] Adding auth to a previously-open system breaks every script in the wild.** → Mitigation: default `auth_enabled=False`; operators opt in. Two-stage rollout per manager (`auth_enabled=True, auth_required=False` first to observe, then flip `auth_required=True`). Migration guide in docs.
@@ -128,7 +142,6 @@ All access tokens — for users, service accounts, and node identities alike —
 
 ## Open Questions
 
-1. **Node-identity issuance UX** — Do nodes self-register at startup against an enrollment token (Kubernetes-style), or are they pre-provisioned by the operator? Recommend pre-provisioned for v1; enrollment-token flow is a Phase 4 follow-on.
-2. **OwnershipInfo back-compat** — When auth is disabled, do we keep accepting caller-asserted `OwnershipInfo`? Recommend yes, behind a deprecation warning, with removal scheduled for the same release that removes `auth_required=False`.
-3. **`enable_registry_resolution` interaction** — The registry resolves manager/node identities by ULID today. Does the registry need to gain auth awareness, or is auth fully orthogonal? Likely orthogonal in v1; revisit if the registry starts vending bootstrap data.
-4. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.
+1. **OwnershipInfo back-compat** — When auth is disabled, do we keep accepting caller-asserted `OwnershipInfo`? Recommend yes, behind a deprecation warning, with removal scheduled for the same release that removes `auth_required=False`.
+2. **`enable_registry_resolution` interaction** — The registry resolves manager/node identities by ULID today. Does the registry need to gain auth awareness, or is auth fully orthogonal? Likely orthogonal in v1; revisit if the registry starts vending bootstrap data.
+3. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.

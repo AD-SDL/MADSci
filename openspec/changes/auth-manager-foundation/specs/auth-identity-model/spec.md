@@ -52,6 +52,18 @@ The system SHALL define a `NodeIdentity` entity representing a node principal. E
 - **WHEN** a NodeIdentity exchanges its credentials for a JWT
 - **THEN** the issued token's claims SHALL include `node_id` and `workcell_id` so downstream managers can bind these into `OwnershipInfo`
 
+### Requirement: Node and service-account identities are pre-provisioned
+
+In this foundation change, NodeIdentity and ServiceAccount records SHALL be created exclusively by an authenticated operator action (CLI or API call by an admin principal) BEFORE the corresponding node or manager process starts. The Auth Manager SHALL NOT expose any unauthenticated registration or self-enrollment endpoint.
+
+#### Scenario: Self-registration is not supported in v1
+- **WHEN** a node process attempts to create its own NodeIdentity record without admin credentials
+- **THEN** the request SHALL be rejected with HTTP 401 or 403 and no NodeIdentity SHALL be created
+
+#### Scenario: NodeIdentity schema is forward-compatible with enrollment tokens
+- **WHEN** the NodeIdentity table is created
+- **THEN** its schema SHALL be designed so a future migration can add an `enrolled_via_token` field and an associated `enrollment_tokens` table without restructuring existing columns or breaking foreign keys
+
 ### Requirement: Role and Permission entities
 
 The system SHALL define a `Role` entity (`role_id`, `name`, `description`) and a many-to-many `RolePermission` mapping linking roles to permission strings drawn from a documented namespace (e.g., `experiment.write`, `node.execute_action`, `resource.read`).

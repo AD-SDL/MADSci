@@ -115,4 +115,4 @@
 - [ ] 15.1 Run the `security-review` skill against the change branch
 - [ ] 15.2 Run the `madsci-release-audit` skill before merge
 - [ ] 15.3 Confirm test coverage thresholds for `madsci_auth_manager`, the `AuthClient`, and the `AuthMiddleware` paths
-- [ ] 15.4 Open a follow-up tracking issue listing the deferred items (Globus/ORCID, mTLS, per-manager rollout, per-principal `aud` narrowing, deprecation timeline for `auth_required=False`)
+- [ ] 15.4 Open a follow-up tracking issue listing the deferred items (Globus/ORCID, mTLS, per-manager rollout, per-principal `aud` narrowing, node enrollment-token flow, deprecation timeline for `auth_required=False`)
