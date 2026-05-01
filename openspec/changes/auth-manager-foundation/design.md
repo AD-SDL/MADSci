@@ -87,6 +87,20 @@ Bootstrap secrets are issued by `madsci auth manager register <manager_id>` / `m
 
 Auth Manager runs on **port 8007**, slotted in after Location Manager (8006). Reserved in port-allocation docs.
 
+### Decision 8: Single audience (`aud = lab_id`) for v1
+
+All access tokens — for users, service accounts, and node identities alike — SHALL be issued with a single `aud` claim equal to the deployment's `lab_id`. Every manager verifies `aud == lab_id` during JWT validation.
+
+**Why single aud for v1:** Simplest possible client and verification logic for the foundation. One token per principal, one refresh path, one cache entry. Aligns with the typical single-tenant lab deployment where every manager and node trusts every other manager and node within the same `lab_id` boundary. Avoids upfront-declaration ergonomic problems (especially for users, who interact with everything).
+
+**Trade-off accepted:** A token leaked from any service can be replayed against every other service in the same lab. The mitigations are short access-token TTL (15 min) and the `jti` deny-list for incident response — same controls that bound any single-token compromise.
+
+**Follow-on path (not in this change):** A future change SHALL add per-principal `aud` scoping — primarily for service accounts and node identities, where audiences are declared at registration time (`madsci auth node register --audiences workcell_manager,event_manager`). User tokens would likely remain broad. RFC 8693 token exchange is a possible further evolution if dynamic narrowing becomes desirable. This is captured in the follow-up issue list created in Task 15.4.
+
+**Alternatives considered:**
+- *Multi-audience array from day one*: rejected — requires every caller to declare intent upfront, complicates the AuthClient cache, and forces users (who hit everything) into either broad scoping anyway or per-target refresh. Better to layer this in once the foundation has settled.
+- *Per-resource-server tokens (classic OAuth)*: rejected — too much token churn for a workflow execution that fans out across many managers.
+
 ## Risks / Trade-offs
 
 - **[Risk] Adding auth to a previously-open system breaks every script in the wild.** → Mitigation: default `auth_enabled=False`; operators opt in. Two-stage rollout per manager (`auth_enabled=True, auth_required=False` first to observe, then flip `auth_required=True`). Migration guide in docs.
@@ -114,8 +128,7 @@ Auth Manager runs on **port 8007**, slotted in after Location Manager (8006). Re
 
 ## Open Questions
 
-1. **Token audience scoping** — Should access tokens carry a single `aud` (the deployment) or an array (`event-manager`, `workcell-manager`, …) for tighter blast-radius? Recommend single `aud=lab_id` for v1, revisit if needed.
-2. **Node-identity issuance UX** — Do nodes self-register at startup against an enrollment token (Kubernetes-style), or are they pre-provisioned by the operator? Recommend pre-provisioned for v1; enrollment-token flow is a Phase 4 follow-on.
-3. **OwnershipInfo back-compat** — When auth is disabled, do we keep accepting caller-asserted `OwnershipInfo`? Recommend yes, behind a deprecation warning, with removal scheduled for the same release that removes `auth_required=False`.
-4. **`enable_registry_resolution` interaction** — The registry resolves manager/node identities by ULID today. Does the registry need to gain auth awareness, or is auth fully orthogonal? Likely orthogonal in v1; revisit if the registry starts vending bootstrap data.
-5. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.
+1. **Node-identity issuance UX** — Do nodes self-register at startup against an enrollment token (Kubernetes-style), or are they pre-provisioned by the operator? Recommend pre-provisioned for v1; enrollment-token flow is a Phase 4 follow-on.
+2. **OwnershipInfo back-compat** — When auth is disabled, do we keep accepting caller-asserted `OwnershipInfo`? Recommend yes, behind a deprecation warning, with removal scheduled for the same release that removes `auth_required=False`.
+3. **`enable_registry_resolution` interaction** — The registry resolves manager/node identities by ULID today. Does the registry need to gain auth awareness, or is auth fully orthogonal? Likely orthogonal in v1; revisit if the registry starts vending bootstrap data.
+4. **Lab vs. deployment as the security boundary** — The current `lab_id` looks like the right tenant boundary for token `iss`/`aud`. Confirm with stakeholders before locking in the claim schema.

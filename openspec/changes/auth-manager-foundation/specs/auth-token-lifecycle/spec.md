@@ -2,11 +2,19 @@
 
 ### Requirement: JWT access token format
 
-The Auth Manager SHALL issue access tokens as JWTs signed with RS256 using the active signing key from its rotating keypair set. Tokens MUST include standard claims `iss` (the Auth Manager URL), `aud` (the lab_id), `sub` (the principal id), `iat`, `exp`, and `jti`, plus MADSci-specific claims `principal_type` (`user` | `service_account` | `node`), `roles` (list of role ids), `permissions` (flattened list of permission strings), and ownership claims (`user_id`, `project_ids`, `node_id`, `workcell_id`, `lab_id`) populated as appropriate for the principal.
+The Auth Manager SHALL issue access tokens as JWTs signed with RS256 using the active signing key from its rotating keypair set. Tokens MUST include standard claims `iss` (the Auth Manager URL), `aud` (the deployment's `lab_id` as a single string value, not an array), `sub` (the principal id), `iat`, `exp`, and `jti`, plus MADSci-specific claims `principal_type` (`user` | `service_account` | `node`), `roles` (list of role ids), `permissions` (flattened list of permission strings), and ownership claims (`user_id`, `project_ids`, `node_id`, `workcell_id`, `lab_id`) populated as appropriate for the principal.
 
 #### Scenario: Issued token contains required claims
 - **WHEN** any token is issued
 - **THEN** the JWT SHALL contain at minimum `iss`, `aud`, `sub`, `iat`, `exp`, `jti`, `principal_type`, `roles`, and `permissions` claims
+
+#### Scenario: aud is the deployment's lab_id
+- **WHEN** any token is issued, regardless of principal type
+- **THEN** the `aud` claim SHALL be a single string equal to the deployment's `lab_id` (per-principal audience narrowing is deferred to a follow-on change)
+
+#### Scenario: Verifier rejects tokens with wrong aud
+- **WHEN** a manager verifies a token whose `aud` claim does not match its configured `lab_id`
+- **THEN** verification SHALL fail and the request SHALL be treated as unauthenticated
 
 #### Scenario: User token includes project memberships
 - **WHEN** a token is issued for a user with project memberships
