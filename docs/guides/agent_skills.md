@@ -120,5 +120,5 @@ The `description` field is what the agent uses to decide whether to auto-load th
 
 In addition to the MADSci-specific skills, the project includes two general coding quality skills:
 
-- **`galahad`** — Testing, types, lints, and coverage best practices
+- **`quality-checks`** — Testing, types, lints, and coverage best practices (treat checker output as authoritative; never silence with `# type: ignore`, `# noqa`, `as any`, etc.)
 - **`code-ratchets`** — Preventing proliferation of deprecated code patterns via pre-commit ratchets

@@ -11,6 +11,15 @@ A ratchet is a pre-commit check that counts deprecated patterns in your codebase
 
 This automates the manual code review process of saying "don't do this, we've stopped doing this."
 
+## Bundled Reference Implementation
+
+This skill ships two reference files **next to this SKILL.md** — copy them rather than regenerating from the snippets below:
+
+- `ratchet.py` — Drop into `scripts/ratchet.py` and edit the `RATCHETS` dict for your patterns. Supports `--init` for printing current counts.
+- `.pre-commit-config.yaml` — Example pre-commit config wiring the ratchet hook.
+
+The snippets in the rest of this document explain how the bundled scripts work and how to customize them; they are not meant to be hand-typed when the bundled files are available.
+
 ## Core Workflow
 
 ### 1. Identify the Pattern

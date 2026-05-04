@@ -1,6 +1,6 @@
 ---
-name: galahad
-description: How to approach tests, types, lints, and coverage
+name: quality-checks
+description: Treat type errors, test failures, lint warnings, and coverage gaps as authoritative feedback rather than obstacles. Use when running tests, type checkers, linters, or coverage tools; when tempted to add `# type: ignore`, `# noqa`, `as any`, `@ts-ignore`, `# pragma: no cover`, or to skip/quarantine a test; when deciding how strict to be in an existing codebase; or when designing code that is hard to type or test.
 ---
 
 # Coding Agent Quality Rules (Galahad Principle)

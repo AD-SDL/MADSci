@@ -307,26 +307,50 @@ class TemplateEngine:
             destinations = [".agents"]
 
         for skill_name in self.manifest.skills:
-            skill_source = skills_dir / skill_name / "SKILL.md"
-            if not skill_source.is_file():
+            skill_source_dir = skills_dir / skill_name
+            if not (skill_source_dir / "SKILL.md").is_file():
                 logger.warning("Skill not found, skipping: skill_name=%s", skill_name)
                 continue
-            for dest_prefix in destinations:
-                skill_dest = (
-                    project_root / dest_prefix / "skills" / skill_name / "SKILL.md"
+            files_created.extend(
+                self._copy_skill_directory(
+                    skill_name, skill_source_dir, project_root, destinations, dry_run
                 )
-                if not dry_run:
-                    skill_dest.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(skill_source, skill_dest)
-                    logger.debug(
-                        "Copied skill: skill_name=%s dest=%s",
-                        skill_name,
-                        str(skill_dest),
-                    )
-                files_created.append(skill_dest)
+            )
             skills_included.append(skill_name)
 
         return files_created, skills_included
+
+    def _copy_skill_directory(
+        self,
+        skill_name: str,
+        skill_source_dir: Path,
+        project_root: Path,
+        destinations: list[str],
+        dry_run: bool,
+    ) -> list[Path]:
+        """Copy every file in a skill directory to each destination prefix.
+
+        Returns the list of destination paths (always populated, even on dry runs).
+        """
+        # Sorted for deterministic file_created ordering across platforms.
+        source_files = sorted(f for f in skill_source_dir.rglob("*") if f.is_file())
+        copied: list[Path] = []
+        for dest_prefix in destinations:
+            skill_dest_dir = project_root / dest_prefix / "skills" / skill_name
+            for source_file in source_files:
+                rel_path = source_file.relative_to(skill_source_dir)
+                dest_file = skill_dest_dir / rel_path
+                if not dry_run:
+                    dest_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source_file, dest_file)
+                    logger.debug(
+                        "Copied skill file: skill_name=%s file=%s dest=%s",
+                        skill_name,
+                        str(rel_path),
+                        str(dest_file),
+                    )
+                copied.append(dest_file)
+        return copied
 
     def validate_parameters(self, values: dict[str, Any]) -> list[str]:  # noqa: C901, PLR0912
         """Validate parameter values against manifest.

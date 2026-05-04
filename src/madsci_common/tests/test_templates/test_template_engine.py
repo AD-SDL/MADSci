@@ -1082,7 +1082,8 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 4  # 1 workflow + 3 skills
+        non_skill_files = [f for f in result.files_created if "/skills/" not in str(f)]
+        assert len(non_skill_files) == 1  # the workflow YAML
         yaml_file = next(
             f for f in result.files_created if f.name == "my_wf.workflow.yaml"
         )
@@ -1111,7 +1112,8 @@ class TestTemplateRendering:
             },
         )
 
-        assert len(result.files_created) == 4  # 1 workflow + 3 skills
+        non_skill_files = [f for f in result.files_created if "/skills/" not in str(f)]
+        assert len(non_skill_files) == 1  # the workflow YAML
         yaml_file = next(
             f for f in result.files_created if f.name == "transfer_wf.workflow.yaml"
         )
@@ -1198,7 +1200,8 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 11  # 7 files + 4 skills
+        non_skill_files = [f for f in result.files_created if "/skills/" not in str(f)]
+        assert len(non_skill_files) == 7
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1221,7 +1224,8 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 12  # 8 files + 4 skills
+        non_skill_files = [f for f in result.files_created if "/skills/" not in str(f)]
+        assert len(non_skill_files) == 8
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1245,7 +1249,8 @@ class TestTemplateRendering:
             parameters={"lab_name": "test_lab"},
         )
 
-        assert len(result.files_created) == 13  # 9 files + 4 skills
+        non_skill_files = [f for f in result.files_created if "/skills/" not in str(f)]
+        assert len(non_skill_files) == 9
         file_names = [f.name for f in result.files_created]
         assert "start_lab.py" in file_names
         assert "settings.yaml" in file_names
@@ -1481,12 +1486,12 @@ class TestSkillsCopying:
             dry_run=True,
         )
 
-        skill_paths = [f for f in result.files_created if "SKILL.md" in f.name]
+        skill_md_paths = [f for f in result.files_created if f.name == "SKILL.md"]
         # Default include_agent_config selects both "claude" and "agents",
-        # so the skill is copied to both .claude/skills/ and .agents/skills/.
-        assert len(skill_paths) == 2
+        # so each skill is copied to both .claude/skills/ and .agents/skills/.
+        assert len(skill_md_paths) == 2
         # Files should NOT exist on disk
-        for path in skill_paths:
+        for path in skill_md_paths:
             assert not path.exists()
 
     def test_skills_included_in_result(
@@ -1510,6 +1515,57 @@ class TestSkillsCopying:
                 "madsci-cli",
             ]
         )
+
+    def test_skill_reference_files_copied(
+        self, registry: TemplateRegistry, tmp_path: Path
+    ) -> None:
+        """Sibling files in a skill directory must propagate alongside SKILL.md.
+
+        Builds a minimal template that includes a synthetic skill with a
+        reference subdirectory, renders it, and verifies the reference file
+        lands in every destination.
+        """
+        # Build an isolated template with its own _skills/ directory.
+        root = tmp_path / "isolated"
+        skill_dir = root / "_skills" / "demo-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nname: demo-skill\ndescription: demo\n---\nbody"
+        )
+        (skill_dir / "reference").mkdir()
+        (skill_dir / "reference" / "guide.md").write_text("# Guide\nreference content")
+        (skill_dir / "scripts").mkdir()
+        (skill_dir / "scripts" / "helper.py").write_text("print('hi')\n")
+
+        template_dir = root / "templates" / "demo"
+        template_dir.mkdir(parents=True)
+        (template_dir / "template.yaml").write_text(
+            'name: "Demo"\n'
+            'version: "1.0.0"\n'
+            'description: "Demo"\n'
+            'category: "module"\n'
+            "tags: []\n"
+            'skills: ["demo-skill"]\n'
+            "parameters: []\n"
+            "files: []\n"
+        )
+
+        engine = TemplateEngine(template_dir)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        engine.render(
+            output_dir=output_dir,
+            parameters={"include_agent_config": ["agents", "claude"]},
+        )
+
+        for dest_prefix in (".agents", ".claude"):
+            base = output_dir / dest_prefix / "skills" / "demo-skill"
+            assert (base / "SKILL.md").is_file()
+            assert (base / "reference" / "guide.md").is_file()
+            assert (base / "scripts" / "helper.py").is_file()
+            assert (base / "reference" / "guide.md").read_text() == (
+                "# Guide\nreference content"
+            )
 
     def test_no_skills_when_empty(self, tmp_path: Path) -> None:
         """Template with no skills field should copy nothing."""
@@ -1627,13 +1683,28 @@ class TestSkillsCopying:
             "madsci-managers",
             "madsci-cli",
         ]:
-            bundled_file = bundled_skills / skill_name / "SKILL.md"
-            repo_file = repo_skills / skill_name / "SKILL.md"
-            assert bundled_file.exists(), f"Missing bundled skill: {skill_name}"
-            assert repo_file.exists(), f"Missing repo skill: {skill_name}"
-            assert bundled_file.read_text() == repo_file.read_text(), (
-                f"Content mismatch for {skill_name}/SKILL.md"
+            bundled_dir = bundled_skills / skill_name
+            repo_dir = repo_skills / skill_name
+            assert bundled_dir.is_dir(), f"Missing bundled skill: {skill_name}"
+            assert repo_dir.is_dir(), f"Missing repo skill: {skill_name}"
+
+            # Compare every file (SKILL.md plus any reference files / scripts).
+            bundled_files = {
+                f.relative_to(bundled_dir): f
+                for f in bundled_dir.rglob("*")
+                if f.is_file()
+            }
+            repo_files = {
+                f.relative_to(repo_dir): f for f in repo_dir.rglob("*") if f.is_file()
+            }
+            assert bundled_files.keys() == repo_files.keys(), (
+                f"File set mismatch for {skill_name}: "
+                f"bundled={sorted(bundled_files)} repo={sorted(repo_files)}"
             )
+            for rel_path, bundled_path in bundled_files.items():
+                assert bundled_path.read_bytes() == repo_files[rel_path].read_bytes(), (
+                    f"Content mismatch for {skill_name}/{rel_path}"
+                )
 
 
 # --- Generated code quality tests ---

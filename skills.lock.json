@@ -25,7 +25,7 @@
   },
   "skills": [
     {
-      "installName": "galahad",
+      "installName": "quality-checks",
       "source": {
         "repoKey": "github.com/luckierdodge/skills",
         "skillPath": "skills/galahad"
