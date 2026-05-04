@@ -112,6 +112,26 @@ Classes
 
     ### Descendants
 
+    * madsci.auth_manager.server_types.AddMemberRequest
+    * madsci.auth_manager.server_types.BootstrapResponse
+    * madsci.auth_manager.server_types.CreateProjectRequest
+    * madsci.auth_manager.server_types.CreateRoleRequest
+    * madsci.auth_manager.server_types.CreateUserRequest
+    * madsci.auth_manager.server_types.CredentialResponse
+    * madsci.auth_manager.server_types.DenyListEntry
+    * madsci.auth_manager.server_types.DenyListResponse
+    * madsci.auth_manager.server_types.GrantRoleRequest
+    * madsci.auth_manager.server_types.IntrospectRequest
+    * madsci.auth_manager.server_types.KeyInfo
+    * madsci.auth_manager.server_types.KeysHealthResponse
+    * madsci.auth_manager.server_types.ProjectResponse
+    * madsci.auth_manager.server_types.RegisterNodeRequest
+    * madsci.auth_manager.server_types.RegisterServiceAccountRequest
+    * madsci.auth_manager.server_types.RevokeRequest
+    * madsci.auth_manager.server_types.RoleResponse
+    * madsci.auth_manager.server_types.TokenErrorResponse
+    * madsci.auth_manager.server_types.UpdateUserRequest
+    * madsci.auth_manager.server_types.UserResponse
     * madsci.common.backup_tools.base_backup.BackupInfo
     * madsci.common.foss_migration.FossMigrationReport
     * madsci.common.foss_migration.FossMigrationStepResult
@@ -134,8 +154,16 @@ Classes
     * madsci.common.types.action_types.ArgumentDefinition
     * madsci.common.types.action_types.RestActionRequest
     * madsci.common.types.admin_command_types.AdminCommandResponse
+    * madsci.common.types.auth_types.JWTClaims
+    * madsci.common.types.auth_types.NodeIdentity
     * madsci.common.types.auth_types.OwnershipInfo
+    * madsci.common.types.auth_types.Permission
+    * madsci.common.types.auth_types.Principal
     * madsci.common.types.auth_types.ProjectInfo
+    * madsci.common.types.auth_types.ProjectMembership
+    * madsci.common.types.auth_types.Role
+    * madsci.common.types.auth_types.ServiceAccount
+    * madsci.common.types.auth_types.TokenResponse
     * madsci.common.types.auth_types.UserInfo
     * madsci.common.types.base_types.Error
     * madsci.common.types.condition_types.Condition

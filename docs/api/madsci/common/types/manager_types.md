@@ -141,6 +141,7 @@ Classes
 
     ### Descendants
 
+    * madsci.common.types.auth_types.AuthManagerSettings
     * madsci.common.types.datapoint_types.DataManagerSettings
     * madsci.common.types.event_types.EventManagerSettings
     * madsci.common.types.experiment_types.ExperimentManagerSettings
@@ -150,6 +151,15 @@ Classes
     * madsci.common.types.workcell_types.WorkcellManagerSettings
 
     ### Class variables
+
+    `auth_enabled: bool`
+    :
+
+    `auth_required: bool`
+    :
+
+    `auth_server_url: pydantic.networks.AnyUrl | None`
+    :
 
     `enable_registry_resolution: bool`
     :

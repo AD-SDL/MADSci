@@ -55,6 +55,7 @@ Classes
 
     ### Descendants
 
+    * madsci.auth_manager.auth_server.AuthManager
     * madsci.data_manager.data_server.DataManager
     * madsci.event_manager.event_server.EventManager
     * madsci.experiment_manager.experiment_server.ExperimentManager
