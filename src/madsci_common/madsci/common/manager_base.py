@@ -365,6 +365,41 @@ class AbstractManagerBase(
         if isinstance(self._settings, ManagerSettings):
             global_ownership_info.manager_id = self._settings.manager_id
 
+    def _setup_auth_middleware(self, app: FastAPI) -> None:
+        """Construct an AuthClient and install AuthMiddleware on the app."""
+        from madsci.common.auth_middleware import AuthMiddleware  # noqa: PLC0415
+
+        auth_url = getattr(self._settings, "auth_server_url", None)
+        if auth_url is None:
+            self.logger.warning(
+                "auth_enabled=True but auth_server_url is unset;"
+                " AuthMiddleware not installed",
+                event_type=EventType.MANAGER_ERROR,
+            )
+            return
+
+        try:
+            from madsci.client.auth_client import AuthClient  # noqa: PLC0415
+        except ImportError:
+            self.logger.warning(
+                "auth_enabled=True but madsci.client.auth_client is unavailable",
+                event_type=EventType.MANAGER_ERROR,
+            )
+            return
+
+        self._auth_client = AuthClient(auth_server_url=str(auth_url))
+        app.add_middleware(
+            AuthMiddleware,
+            auth_client=self._auth_client,
+            auth_required=getattr(self._settings, "auth_required", False),
+        )
+        self.logger.info(
+            "AuthMiddleware installed",
+            event_type=EventType.MANAGER_START,
+            auth_server_url=str(auth_url),
+            auth_required=getattr(self._settings, "auth_required", False),
+        )
+
     def get_health(self) -> ManagerHealth:
         """
         Get the health status of this manager.
@@ -592,6 +627,12 @@ class AbstractManagerBase(
             EventClientContextMiddleware,
             manager_name=manager_name,
         )
+
+        # Install AuthMiddleware when auth_enabled
+        if isinstance(self._settings, ManagerSettings) and getattr(
+            self._settings, "auth_enabled", False
+        ):
+            self._setup_auth_middleware(app)
 
     # Server creation and lifecycle methods
 

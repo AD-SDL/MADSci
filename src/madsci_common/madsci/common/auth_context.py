@@ -1,0 +1,52 @@
+"""Ambient ``AuthClient`` context for outbound credential propagation.
+
+When an ``AuthClient`` is installed via ``auth_client_context()``, the MADSci
+``create_httpx_client()`` factory and other in-process helpers can
+transparently pick it up to inject ``Authorization: Bearer <token>`` headers
+on outbound requests and to handle on-401 force-refresh-and-retry.
+
+This module deliberately uses ``Any`` for the client type to avoid importing
+the ``madsci.client`` package — ``madsci.common`` must stay
+dependency-light. The protocol the client must satisfy is:
+
+- ``get_access_token() -> str`` — return a (possibly auto-refreshed) token
+- ``refresh() -> Any`` — force a refresh-grant exchange
+
+In practice the only conforming implementation is
+``madsci.client.auth_client.AuthClient``.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import contextvars
+from typing import Any, Iterator, Optional
+
+_current_auth_client: contextvars.ContextVar[Optional[Any]] = contextvars.ContextVar(
+    "auth_client", default=None
+)
+
+
+def get_current_auth_client() -> Optional[Any]:
+    """Return the currently-installed ambient AuthClient, if any."""
+    return _current_auth_client.get()
+
+
+@contextlib.contextmanager
+def auth_client_context(client: Any) -> Iterator[Any]:
+    """Install ``client`` as the ambient AuthClient for the current scope.
+
+    Mirrors ``event_client_context()`` semantics. Nested contexts replace the
+    binding for their lifetime; on exit the previous binding is restored.
+    """
+    token = _current_auth_client.set(client)
+    try:
+        yield client
+    finally:
+        _current_auth_client.reset(token)
+
+
+__all__ = [
+    "auth_client_context",
+    "get_current_auth_client",
+]

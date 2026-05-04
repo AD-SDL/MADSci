@@ -31,6 +31,7 @@ MANAGER_MODULES: dict[str, str] = {
     "data": "madsci.data_manager.data_server",
     "workcell": "madsci.workcell_manager.workcell_server",
     "location": "madsci.location_manager.location_server",
+    "auth": "madsci.auth_manager.auth_server",
 }
 
 
@@ -540,7 +541,7 @@ def _start_local(console: Console) -> None:
         "[yellow]Warning: Data is ephemeral and will not persist across restarts.[/yellow]"
     )
     console.print()
-    console.print("Managers starting on ports 8000-8006...")
+    console.print("Managers starting on ports 8000-8007...")
     console.print("[dim]Press Ctrl+C to stop.[/dim]")
     console.print()
 

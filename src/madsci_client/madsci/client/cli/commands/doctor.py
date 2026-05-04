@@ -307,6 +307,7 @@ def run_all_checks(categories: list[str] | None = None) -> DiagnosticResults:
             lambda: check_port(8004, "data_manager"),
             lambda: check_port(8005, "workcell_manager"),
             lambda: check_port(8006, "location_manager"),
+            lambda: check_port(8007, "auth_manager"),
         ],
     }
 

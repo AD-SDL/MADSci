@@ -1,0 +1,37 @@
+[project]
+name = "madsci.auth_manager"
+version = "0.8.0-rc.1"
+description = "The Modular Autonomous Discovery for Science (MADSci) Auth Manager."
+authors = [
+    {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
+    {name = "Ryan D. Lewis", email = "ryan.lewis@anl.gov"},
+    {name = "Casey Stone", email = "cstone@anl.gov"},
+    {name = "Doga Ozgulbas", email = "dozgulbas@anl.gov"},
+]
+requires-python = ">=3.10.0"
+readme = "README.md"
+license = {text = "MIT"}
+dependencies = [
+  "madsci.common",
+  "madsci.client",
+  "psycopg2-binary",
+  "alembic>=1.13.0",
+  "Authlib>=1.3.0",
+  "argon2-cffi>=23.1.0",
+  "cryptography>=42.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/AD-SDL/MADSci"
+
+
+######################
+# Build Info + Tools #
+######################
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm.build]
+includes = ["madsci/"]

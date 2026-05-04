@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`LabManagerDefinition`**: Now emits `MadsciDeprecationWarning` on instantiation (v0.7.0 removal). Use `LabManagerSettings` for configuration.
 
 ### Added
+
+#### Auth Manager (Foundation)
+- **`madsci_auth_manager` package (port 8007)**: New OAuth 2.0 + OIDC-style identity service. Issues RS256 JWT access tokens (15-min default) signed by a rotating keypair; opaque refresh tokens stored server-side with reuse-detection. Exposes `/token` (password, refresh_token, client_credentials), `/introspect`, `/revoke`, `/.well-known/jwks.json`, `/deny-list` (with `ETag` conditional fetch), users, projects, roles, service-accounts, node-identities, and key-rotation endpoints. Single-tenant (per Decision 12 — `aud = lab_id`). PostgreSQL-backed via `SQLAlchemyHandler`; in-memory `SQLiteHandler` for tests. Default-disabled at all consuming managers; opt-in via `auth_enabled=True`.
+- **`AuthClient`** (`madsci.client.auth_client`): `login()`, `refresh()`, `client_credentials_login()`, `verify_jwt()` (JWKS-cached + force-refresh on signature failure), `introspect()`, `revoke()`, deny-list polling, plus admin surface (users, projects, roles, service-accounts, nodes, credentials, keys).
+- **`AuthMiddleware`** on `AbstractManagerBase`: When `auth_enabled=True`, validates `Authorization: Bearer <jwt>` against cached JWKS, populates `request.state.principal`, and enters an `ownership_context()` for the request lifetime. `auth_required=False` migration mode passes unauth'd requests through with a structured warning.
+- **`auth_client_context()`**: Ambient `AuthClient` propagation. When set, `create_httpx_client()` automatically injects `Authorization: Bearer <token>` and force-refreshes-and-retries on 401.
+- **`@requires(permission=..., project_from=...)`**: Decorator for `Routable` endpoints. 401 unauthenticated, 403 missing permission, 403 if `project_from` resolves a project the principal is not a member of.
+- **`madsci auth` CLI**: `bootstrap`, `user create|deactivate|password|grant|list`, `project create|list|members`, `manager register|list`, `node register|list`, `credentials rotate`, `keys rotate|list|retire`.
+- **Migration guides**: [`docs/guides/auth.md`](guides/auth.md) (architecture, token model, RBAC) and [`docs/guides/auth_operator.md`](guides/auth_operator.md) (bootstrap, secret distribution with required `0600` mode and `.gitignore` treatment, key rotation, HTTPS termination + `X-Forwarded-For`, audit-log retention, local audit-log fallback bound + rotation alerting, the `auth_enabled → auth_required` rollout).
+- **`MadsciBaseSettings`/`ManagerSettings` new fields**: `auth_enabled`, `auth_required`, `auth_server_url`. Defaults preserve current behavior (auth disabled).
+- **`OwnershipInfo.from_jwt_claims(claims)`**: Canonical mapping from validated `JWTClaims` to `OwnershipInfo` (claims-sourced fields override body-supplied values when auth is enabled, per Decision 10).
+- **Port 8007 reserved** for the Auth Manager across CLAUDE.md, doctor checks, and `madsci start --mode=local`.
+
 - **`target_model` field on `TemplateManifest`**: Templates that generate YAML/JSON config can now declare which Pydantic model the output should validate against. Automated tests verify template output matches the declared model.
 - **Settings file validation in `madsci validate`**: The validate command now supports `settings.yaml` and `*.settings.yaml` files, validating against per-manager settings classes (Lab, Event, Experiment, Resource, Data, Workcell, Location).
 - **Pydantic-first data modeling guidance**: Added to CLAUDE.md, AGENTS.md, and agent skills to codify the rule that every YAML/JSON config format must have a corresponding Pydantic model.

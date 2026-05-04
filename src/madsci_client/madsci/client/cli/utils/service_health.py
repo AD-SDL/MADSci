@@ -24,6 +24,7 @@ DEFAULT_SERVICE_URLS: dict[str, str] = {
     "data_manager": "http://localhost:8004/",
     "workcell_manager": "http://localhost:8005/",
     "location_manager": "http://localhost:8006/",
+    "auth_manager": "http://localhost:8007/",
 }
 
 

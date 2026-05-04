@@ -115,7 +115,7 @@ docker compose up  # Starts all services with example configuration
 
 MADSci uses environment variables for configuration with hierarchical precedence. Key patterns:
 
-- **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, Resource: 8003, Data: 8004, Workcell: 8005, Location: 8006, etc.)
+- **Service URLs**: Each manager defaults to `localhost` with specific ports (Event: 8001, Experiment: 8002, Resource: 8003, Data: 8004, Workcell: 8005, Location: 8006, Auth: 8007)
 - **Database connections**: FerretDB (document database)/PostgreSQL on localhost by default
 - **File storage**: Defaults to `~/.madsci/` subdirectories
 - **Environment prefixes**: Each service has a unique prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
@@ -123,11 +123,23 @@ MADSci uses environment variables for configuration with hierarchical precedence
 
 See [Configuration.md](docs/Configuration.md) for comprehensive options, [example_lab/](./examples/example_lab/) for working configurations, and [OBSERVABILITY.md](./docs/guides/observability.md) for OpenTelemetry setup.
 
+## Auth Manager (v0.8 — opt-in)
+
+MADSci ships an OAuth 2.0 + OIDC-style **Auth Manager** (port 8007) for users, projects, service-accounts, node identities, and JWT-based service-to-service trust. It is **default-disabled** so existing deployments keep working unchanged; deployments opt in by:
+
+1. Bootstrapping the Auth Manager (`madsci auth bootstrap`).
+2. Registering each consuming manager and node, distributing client secrets.
+3. Setting `auth_enabled=True, auth_required=False` on each manager (migration mode).
+4. Flipping `auth_required=True` once traffic is clean.
+
+See [`docs/guides/auth.md`](docs/guides/auth.md) for the architecture and token model and [`docs/guides/auth_operator.md`](docs/guides/auth_operator.md) for the bootstrap and rollout runbook.
+
 ## Roadmap
 
 We're working on bringing the following additional components to MADSci:
 
-- **Auth Manager**: For handling authentication and user and group management for an autonomous lab.
+- **Globus / ORCID OIDC federation** — cross-lab user identity (follow-on to the Auth Manager).
+- **mTLS for nodes** — TLS-based node trust, layered onto the existing `NodeIdentity` model (slots into the reserved `mtls_cert_fingerprint` field).
 
 ## Getting Started
 

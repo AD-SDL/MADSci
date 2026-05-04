@@ -23,6 +23,7 @@ The example lab simulates a real laboratory environment with:
 - **Data Manager** (Port 8004): Data capture, storage, and querying
 - **Workcell Manager** (Port 8005): Workflow coordination and scheduling
 - **Location Manager** (Port 8006): Laboratory location management and resource attachments
+- **Auth Manager** (Port 8007): JWT-based identity service. Default-disabled at all consumers; opt in per [`docs/guides/auth_operator.md`](../../docs/guides/auth_operator.md).
 
 ### Laboratory Nodes
 - **liquidhandler_1** (Port 2000): First liquid handling robot
@@ -109,6 +110,39 @@ The dashboard provides:
 - Workflow execution interface
 - Data visualization tools
 - System health monitoring
+
+## Auth Manager bootstrap (optional)
+
+The example lab boots `auth_manager` (port 8007) but every consumer leaves
+`auth_enabled=False`, so existing scripts and notebooks keep working without
+any token. To explore the auth flow:
+
+```bash
+# 1. Bootstrap the Auth Manager (pick any ULID for lab_id)
+docker compose exec auth_manager madsci auth bootstrap \
+  --username admin --password hunter2 \
+  --lab-id 01HZZ0000000000000000000A0
+
+# 2. Verify
+curl -s -X POST http://localhost:8007/token \
+  -d 'grant_type=password&username=admin&password=hunter2' | jq
+
+# 3. Inspect the JWKS
+curl -s http://localhost:8007/.well-known/jwks.json | jq
+```
+
+To enable auth on a single consumer in **migration mode** (observe-only),
+add to that manager's settings:
+
+```yaml
+auth_enabled: true
+auth_required: false        # accept unauth'd requests, log warnings
+auth_server_url: "http://auth_manager:8007/"
+```
+
+See [`docs/guides/auth_operator.md`](../../docs/guides/auth_operator.md)
+for the full rollout (registering managers/nodes, key rotation, secret
+distribution).
 
 ## Configuration
 

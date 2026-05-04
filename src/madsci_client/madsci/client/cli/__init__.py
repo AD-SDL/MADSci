@@ -45,6 +45,7 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "campaign": ("madsci.client.cli.commands.campaign", "campaign"),
     "data": ("madsci.client.cli.commands.data", "data"),
     "events": ("madsci.client.cli.commands.events", "events"),
+    "auth": ("madsci.client.cli.commands.auth", "auth"),
 }
 
 

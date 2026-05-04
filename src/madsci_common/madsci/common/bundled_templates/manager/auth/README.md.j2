@@ -1,0 +1,36 @@
+# Auth Manager Deployment
+
+Generated from the `auth` template. See `docs/guides/auth.md` and
+`docs/guides/auth_operator.md` for the full architecture and operator runbook.
+
+## Quick start
+
+```bash
+# 1. Bootstrap (creates admin user, signing keypair, built-in roles)
+madsci auth bootstrap --username admin --lab-id {{ lab_id }}
+
+# 2. Start the server
+python -m madsci.auth_manager.auth_server
+
+# 3. Register every other manager + node (returns plaintext secrets exactly once)
+madsci auth manager register --manager-id <manager_ulid>
+madsci auth node register --node-id <node_ulid> --workcell-id <wc_ulid>
+```
+
+## Migration mode (recommended initial rollout)
+
+Set on each consuming manager:
+
+```yaml
+auth_enabled: true
+auth_required: false       # accept unauth'd requests, log structured warnings
+auth_server_url: "http://{{ server_host }}:{{ server_port }}/"
+```
+
+Watch logs for `AuthMiddleware: unauth'd request` warnings. Once they dry up,
+flip `auth_required: true`.
+
+## Secret hygiene
+
+`.madsci/secrets/` MUST be `0700` and individual secret files `0600`.
+The bundled `.gitignore` already excludes the directory.
