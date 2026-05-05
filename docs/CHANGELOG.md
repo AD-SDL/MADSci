@@ -67,19 +67,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ResourceClient async methods**: 16 new async methods for TUI integration
 - **LocationClient async methods**: Missing async methods added for TUI integration
 
-#### Transfer Graph Detailed View
-- **`GET /transfer/graph/detailed` endpoint** on Location Manager: returns `TransferGraphDetailedResponse` with per-edge node names so callers can render which node performs each transfer.
-- **`get_detailed_transfer_graph()` / `async_get_detailed_transfer_graph()`** on `LocationClient`.
-- **`TransferGraphDetailedEdge` and `TransferGraphDetailedResponse` models**.
-- **Dashboard transfer graph redesign**: location grouping, resource-fill colors, edge tooltips, location index numbers, and `transferEdges` polling on the location store.
-
-#### Templates: Shared File Deduplication
-- **`_shared/` directory** in bundled templates with 13 canonical files (`.gitignore`, `CLAUDE.md.j2`, `AGENTS.md.j2`, `justfile.j2`, `ruff.toml.j2`, `.pre-commit-config.yaml.j2`, `docker-compose.yaml.j2`, notebooks, docs, drivers).
-- **`TemplateEngine`** extended with `_resolve_shared_dir()` (walk-up + importlib fallback), `_resolve_source_path()` (local-first fallback), multi-path `FileSystemLoader`, and expanded path-traversal check.
-- Removed ~105 duplicated files across 14 template directories (6 module + 8 addon), net -4,678 lines. Module template manifests reference shared files with flat source paths while preserving destination paths.
-
-#### Pre-commit Tooling
-- **Node `try`/`except` checker** (`scripts/precommit_check_try_catch_blocks.py`): pre-commit hook that fails when a node module catches an exception without re-raising or returning an `ActionResult`, enforcing the node error-handling contract.
+- **Transfer graph detailed view**: `GET /transfer/graph/detailed` endpoint on Location Manager returning `TransferGraphDetailedResponse` with per-edge node names; `get_detailed_transfer_graph()` / `async_get_detailed_transfer_graph()` on `LocationClient`; `TransferGraphDetailedEdge` and `TransferGraphDetailedResponse` models; dashboard redesign with location grouping, resource-fill colors, edge tooltips, location index numbers, and `transferEdges` polling on the location store.
+- **Bundled templates `_shared/` directory**: 13 canonical files (`.gitignore`, `CLAUDE.md.j2`, `AGENTS.md.j2`, `justfile.j2`, `ruff.toml.j2`, `.pre-commit-config.yaml.j2`, `docker-compose.yaml.j2`, notebooks, docs, drivers) deduplicated across all bundled templates. `TemplateEngine` extended with `_resolve_shared_dir()` (walk-up + importlib fallback), `_resolve_source_path()` (local-first fallback), multi-path `FileSystemLoader`, and expanded path-traversal check. Removes ~105 duplicated files across 14 template directories (6 module + 8 addon), net -4,678 lines.
+- **Node `try`/`except` pre-commit checker** (`scripts/precommit_check_try_catch_blocks.py`): pre-commit hook that fails when a node module catches an exception without re-raising or returning an `ActionResult`, enforcing the node error-handling contract.
 
 ### Changed
 - **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.

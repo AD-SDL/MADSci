@@ -359,6 +359,7 @@ steps:
 
   # Step 4: Take temperature reading
   - name: measure_temperature
+    key: measure          # stable handle so callers can pull the datapoint by step key
     node: temp_sensor
     action: read_temperature
 
@@ -411,8 +412,7 @@ print(f"Temperature: {temperature}°C")
 
 ```bash
 madsci workflow submit sample_collection.workflow.yaml \
-  --json-input sample_location=rack_b2 \
-  --json-input measurement_count=5
+  --parameters '{"sample_location": "rack_b2", "measurement_count": 5}'
 ```
 
 ## Step 8: Monitor Workflow Execution

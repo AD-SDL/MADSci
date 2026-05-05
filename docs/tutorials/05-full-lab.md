@@ -439,11 +439,8 @@ Now run an experiment that uses all the services. `ExperimentScript` provides ev
 ```python
 """Complete lab experiment with resource tracking and data capture."""
 
-import contextlib
-
 from madsci.common.types.experiment_types import ExperimentDesign
 from madsci.common.types.resource_types import Asset
-from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.experiment_application import ExperimentScript
 
 
@@ -470,7 +467,9 @@ class FullLabExperiment(ExperimentScript):
             deck = self.location_client.get_location_by_name(
                 "liquidhandler_1.deck_1"
             )
-            with contextlib.suppress(Exception):
+            # Clear any plate already on the deck before staging the new one.
+            deck_resource = self.resource_client.get_resource(deck.resource_id)
+            if deck_resource.quantity > 0:
                 self.resource_client.pop(deck.resource_id)
             self.resource_client.push(deck.resource_id, plate.resource_id)
 
@@ -486,8 +485,13 @@ class FullLabExperiment(ExperimentScript):
                 status=workflow.status.value,
             )
 
-            # 3. Pull the platereader datapoint for this run
-            datapoint = workflow.get_datapoint(step_key="measurement")
+            # 3. Pull the temperature datapoint produced by the `measure` step.
+            #    The `measure` key is set on the measure_temperature step in the
+            #    workflow YAML from tutorial 04.
+            try:
+                datapoint = workflow.get_datapoint(step_key="measure")
+            except KeyError:
+                datapoint = None
             if datapoint is not None:
                 readings.append(
                     {"sample": plate.resource_name, "value": datapoint.value}
