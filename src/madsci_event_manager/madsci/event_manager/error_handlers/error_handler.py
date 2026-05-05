@@ -1,4 +1,4 @@
-
+"""Abstract Error Handler for MADSci Event Manager."""
 
 from madsci.common.types.event_types import Event
 
@@ -6,7 +6,7 @@ from madsci.common.types.event_types import Event
 class AbstractErrorHandler:
     """Abstract base class for error handlers in the MADSci Event Manager."""
 
-    def handle_error(self, error_event: Event):
+    def handle_error(self, error_event: Event) -> None:
         """
         Handle an error that occurs during event processing.
 

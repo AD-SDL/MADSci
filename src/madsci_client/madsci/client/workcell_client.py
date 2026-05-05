@@ -917,6 +917,62 @@ class WorkcellClient(DualModeClientMixin):
         response.raise_for_status()
         return Workflow.model_validate(response.json())
 
+    def send_admin_command(
+        self, command: str, timeout: Optional[float] = None
+    ) -> dict[str, Any]:
+        """
+        Send an admin command to a specific node.
+
+        Parameters
+        ----------
+        node_name : str
+            The name of the node to send the command to.
+        command : str
+            The admin command to send.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+
+        Returns
+        -------
+        dict[str, Any]
+            The response from the node.
+        """
+        response = self._request(
+            "POST",
+            f"{self.workcell_server_url}admin/{command}",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def send_admin_command_to_node(
+        self, node_name: str, command: str, timeout: Optional[float] = None
+    ) -> dict[str, Any]:
+        """
+        Send an admin command to a specific node.
+
+        Parameters
+        ----------
+        node_name : str
+            The name of the node to send the command to.
+        command : str
+            The admin command to send.
+        timeout : Optional[float]
+            Timeout in seconds for this request. If not provided, uses the default timeout from config.
+
+        Returns
+        -------
+        dict[str, Any]
+            The response from the node.
+        """
+        response = self._request(
+            "POST",
+            f"{self.workcell_server_url}admin/{command}/{node_name}",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
     # ------------------------------------------------------------------
     # Async methods
     # ------------------------------------------------------------------
