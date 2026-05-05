@@ -72,6 +72,12 @@ Classes
     `signing_key_ttl: int`
     :
 
+    `token_clock_skew_seconds: int`
+    :
+
+    `trust_forwarded_for: bool`
+    :
+
 `GrantType(value, names=None, *, module=None, qualname=None, type=None, start=1)`
 :   OAuth 2.0 grant types supported by the Auth Manager.
 

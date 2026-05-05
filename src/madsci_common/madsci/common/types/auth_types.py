@@ -589,6 +589,25 @@ class AuthManagerSettings(
         ),
         ge=0,
     )
+    token_clock_skew_seconds: int = Field(
+        default=30,
+        title="Token Clock-Skew Leeway",
+        description=(
+            "Leeway (seconds) applied to ``iat``/``exp``/``nbf`` validation"
+            " when verifying JWTs. Tolerates small clock drift between issuer"
+            " and verifier."
+        ),
+        ge=0,
+    )
+    trust_forwarded_for: bool = Field(
+        default=False,
+        title="Trust X-Forwarded-For",
+        description=(
+            "When True, ``_client_ip`` reads the leftmost ``X-Forwarded-For``"
+            " value. Operators behind a trusted reverse proxy must opt in;"
+            " otherwise the socket peer is used to prevent audit-log spoofing."
+        ),
+    )
     local_audit_log_path: Optional[str] = Field(
         default=None,
         title="Local Audit Log Path",

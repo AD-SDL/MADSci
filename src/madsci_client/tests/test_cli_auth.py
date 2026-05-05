@@ -138,6 +138,52 @@ def test_node_register_returns_credentials(patched_auth_client: AuthManager) -> 
     assert body["client_id"].startswith("node-")
 
 
+def test_bootstrap_rejects_password_flag() -> None:
+    """The bootstrap CLI must NOT accept ``--password`` on argv (leaks via ps)."""
+    runner = CliRunner()
+    result = runner.invoke(cli, ["auth", "bootstrap", "--password", "x"])
+    # Click rejects unknown options with exit code 2 + 'No such option' message
+    assert result.exit_code != 0
+    assert "no such option" in result.output.lower() or "--password" in result.output
+
+
+def test_bootstrap_uses_env_var_for_password(monkeypatch) -> None:
+    """``MADSCI_AUTH_BOOTSTRAP_PASSWORD`` env var is honored without prompting.
+
+    We test the password-resolution helper directly rather than driving the
+    full ``madsci auth bootstrap`` command, because the latter would call
+    ``create_all_tables`` against the global ``SQLModel.metadata`` — which,
+    when other test modules have been collected, includes tables from other
+    managers (e.g., ``resource_history``) that real SQLite cannot create
+    (composite PK + autoincrement). The injected ``SQLiteHandler`` used in
+    the rest of the suite has a workaround for this; the bootstrap CLI's
+    file-backed ``SQLAlchemyHandler`` does not.
+    """
+    from madsci.client.cli.commands.auth import (
+        BOOTSTRAP_PASSWORD_ENV_VAR,
+        _resolve_bootstrap_password,
+    )
+
+    monkeypatch.setenv(BOOTSTRAP_PASSWORD_ENV_VAR, "envvar-secret-x" * 2)
+    pw = _resolve_bootstrap_password("envadmin")
+    assert pw == "envvar-secret-x" * 2
+
+
+def test_bootstrap_password_helper_fails_without_env_or_tty(monkeypatch) -> None:
+    """No env var + no TTY => clear ClickException, NOT a silent fallback."""
+    import click
+    from madsci.client.cli.commands.auth import (
+        BOOTSTRAP_PASSWORD_ENV_VAR,
+        _resolve_bootstrap_password,
+    )
+
+    monkeypatch.delenv(BOOTSTRAP_PASSWORD_ENV_VAR, raising=False)
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    with pytest.raises(click.ClickException) as exc:
+        _resolve_bootstrap_password("admin")
+    assert BOOTSTRAP_PASSWORD_ENV_VAR in str(exc.value.message)
+
+
 def test_credentials_rotate(patched_auth_client: AuthManager) -> None:
     reg = json.loads(
         _run(

@@ -21,7 +21,9 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 import httpx
-from authlib.jose import jwt as jose_jwt
+from joserfc import jwt as jose_jwt
+from joserfc.jwk import KeySet
+from joserfc.jwt import JWTClaimsRegistry
 from madsci.common.types.auth_types import JWTClaims, TokenResponse
 from pydantic import AnyUrl
 
@@ -38,6 +40,9 @@ class AuthClient:
     own thread pool / asyncio.to_thread.
     """
 
+    # JWT verification is hard-pinned to RS256 (mirrors TokenService).
+    ALLOWED_ALGORITHMS: tuple[str, ...] = ("RS256",)
+
     def __init__(
         self,
         auth_server_url: AnyUrl | str,
@@ -50,6 +55,7 @@ class AuthClient:
         deny_list_poll_interval: int = 30,
         refresh_buffer_seconds: int = 60,
         timeout: float = 10.0,
+        clock_skew_seconds: int = 30,
     ) -> None:
         """Initialize the client with optional pre-existing tokens / credentials."""
         self.auth_server_url = str(auth_server_url).rstrip("/")
@@ -62,6 +68,7 @@ class AuthClient:
         self._http: Optional[httpx.Client] = None
         self._async_http: Optional[httpx.AsyncClient] = None
         self._lock = threading.RLock()
+        self._clock_skew = clock_skew_seconds
 
         # JWKS cache
         self._jwks_ttl = jwks_ttl_seconds
@@ -224,12 +231,17 @@ class AuthClient:
         On signature failure, the JWKS cache is force-refreshed and verification
         is retried once.
         """
+        # Reject anything that isn't on our allowlist before joserfc touches it.
+        self._enforce_algorithm(token)
         for attempt in range(2):
-            keys = self.jwks(force_refresh=attempt > 0)
+            jwks_dict = self.jwks(force_refresh=attempt > 0)
             try:
-                decoded = jose_jwt.decode(token, keys)
-                decoded.validate()
-                claims = JWTClaims(**dict(decoded))
+                key_set = KeySet.import_key_set(jwks_dict)
+                decoded = jose_jwt.decode(
+                    token, key_set, algorithms=list(self.ALLOWED_ALGORITHMS)
+                )
+                JWTClaimsRegistry(leeway=self._clock_skew).validate(decoded.claims)
+                claims = JWTClaims(**decoded.claims)
                 # Deny-list enforcement
                 self._poll_deny_list_if_due()
                 if claims.jti in self._deny_set:
@@ -241,6 +253,20 @@ class AuthClient:
                 if attempt == 1:
                     raise
         raise AuthClientError("verify_jwt: unreachable")
+
+    def _enforce_algorithm(self, token: str) -> None:
+        """Reject tokens whose JWS header alg is not in ALLOWED_ALGORITHMS."""
+        try:
+            header_b64 = token.split(".", maxsplit=1)[0]
+            padding = 4 - (len(header_b64) % 4)
+            if padding != 4:
+                header_b64 += "=" * padding
+            header = json.loads(base64.urlsafe_b64decode(header_b64))
+            alg = header.get("alg")
+        except Exception as e:
+            raise AuthClientError("invalid_token: malformed header") from e
+        if alg not in self.ALLOWED_ALGORITHMS:
+            raise AuthClientError(f"invalid_token: disallowed alg {alg!r}")
 
     def _parse_unverified(self, token: str) -> Optional[JWTClaims]:
         """Parse JWT claims without signature verification. Used for refresh-buffer logic."""

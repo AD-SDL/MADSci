@@ -83,6 +83,9 @@ Classes
 
     `log(self, event_type: str, *, principal_id: Optional[str] = None, principal_type: Optional[str] = None, grant_type: Optional[str] = None, token_jti: Optional[str] = None, source_ip: Optional[str] = None, success: bool = True, details: Optional[dict] = None) ‑> madsci.auth_manager.tables.AuditLogTable`
     :   Append a new audit row and return it.
+        
+        Raises whatever the underlying DB raises — callers MUST NOT swallow
+        these exceptions for state-changing operations (failure-closed).
 
     `query(self, *, principal_id: Optional[str] = None, event_type: Optional[str] = None, limit: int = 100) ‑> list[madsci.auth_manager.tables.AuditLogTable]`
     :   Query audit rows with optional filters; newest first.

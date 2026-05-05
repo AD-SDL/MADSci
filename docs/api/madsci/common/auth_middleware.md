@@ -40,7 +40,7 @@ Functions
 Classes
 -------
 
-`AuthMiddleware(app: Any, *, auth_client: Any, auth_required: bool = False, lab_id: Optional[str] = None)`
+`AuthMiddleware(app: Any, *, auth_client: Any, auth_required: bool = False, lab_id: Optional[str] = None, unauthenticated_paths: Optional[set[str]] = None)`
 :   Validate JWTs and bind validated claims into request state and ownership.
     
     Configure the middleware with an injected ``AuthClient``.
@@ -48,6 +48,11 @@ Classes
     ``auth_required=False`` enables migration mode: unauth'd requests pass
     through with ``request.state.principal = None`` and a structured
     warning is logged.
+    
+    ``unauthenticated_paths`` is an exact-match set of URL paths that
+    SHALL bypass the bearer-token check entirely — used for endpoints
+    that must remain reachable without a token (e.g., the Auth Manager's
+    own ``/token`` and ``/.well-known/jwks.json``).
 
     ### Ancestors (in MRO)
 

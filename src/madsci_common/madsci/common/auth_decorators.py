@@ -113,6 +113,13 @@ def _check(
     permission: str,
     project_from: Optional[str],
 ) -> None:
+    # If AuthMiddleware isn't installed (auth_enabled=False), it never set
+    # ``request.state.principal`` — not even to None. Treat that as "auth is
+    # off" and no-op, preserving backwards compatibility for managers that
+    # haven't enabled auth yet. The middleware ALWAYS sets ``principal``
+    # (possibly to None) when it runs, so this signal is reliable.
+    if not hasattr(request.state, "principal"):
+        return
     principal = current_principal(request)
     if principal is None:
         raise HTTPException(status_code=401, detail="authentication required")
@@ -157,9 +164,20 @@ PERMISSION_NAMESPACE = {
     # Event / observability
     "event.read": "Query the event log",
     # Auth admin
+    "auth.user.read": "List / read users",
     "auth.user.write": "Create / modify users",
-    "auth.role.write": "Create / grant / revoke roles",
+    "auth.project.read": "List / read projects",
+    "auth.project.write": "Create / modify projects and memberships",
+    "auth.role.read": "List / read roles",
+    "auth.role.write": "Create / modify roles",
+    "auth.role.grant": "Grant / revoke roles to principals",
+    "auth.principal.write": "Register service accounts and node identities",
+    "auth.credentials.rotate": "Rotate service-account / node-identity secrets",
+    "auth.key.read": "List signing keys",
     "auth.key.rotate": "Rotate signing keys",
+    "auth.key.retire": "Retire signing keys",
+    "auth.token.introspect": "Introspect tokens (RFC 7662)",
+    "auth.token.revoke": "Revoke other principals' tokens",
 }
 
 

@@ -14,7 +14,7 @@ automatically (see ``madsci.common.auth_context``).
 Classes
 -------
 
-`AuthClient(auth_server_url: AnyUrl | str, *, access_token: Optional[str] = None, refresh_token: Optional[str] = None, client_id: Optional[str] = None, client_secret: Optional[str] = None, jwks_ttl_seconds: int = 300, deny_list_poll_interval: int = 30, refresh_buffer_seconds: int = 60, timeout: float = 10.0)`
+`AuthClient(auth_server_url: AnyUrl | str, *, access_token: Optional[str] = None, refresh_token: Optional[str] = None, client_id: Optional[str] = None, client_secret: Optional[str] = None, jwks_ttl_seconds: int = 300, deny_list_poll_interval: int = 30, refresh_buffer_seconds: int = 60, timeout: float = 10.0, clock_skew_seconds: int = 30)`
 :   Synchronous client for the Auth Manager.
     
     The client is intentionally synchronous to mirror the rest of MADSci's
@@ -22,6 +22,11 @@ Classes
     own thread pool / asyncio.to_thread.
     
     Initialize the client with optional pre-existing tokens / credentials.
+
+    ### Class variables
+
+    `ALLOWED_ALGORITHMS: tuple[str, ...]`
+    :
 
     ### Instance variables
 

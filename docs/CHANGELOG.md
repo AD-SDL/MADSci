@@ -7,7 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
+### Security
+
+#### Auth Manager hardening (review-driven follow-ups)
+- **Auth Manager admin endpoints now require authentication.** Every admin route on the Auth Manager itself (`POST /users`, `/projects`, `/roles`, `/roles/grant`, `/service-accounts`, `/node-identities`, `POST /credentials/{id}/rotate`, `POST /keys/rotate`, `DELETE /keys/{kid}`, every `GET` listing endpoint) carries an explicit `@requires(permission=...)` check, and the Auth Manager mounts `AuthMiddleware` on itself with an explicit unauthenticated allowlist (`/token`, `/.well-known/jwks.json`, `/health`, `/health/keys`, `/settings`, `/deny-list`, `/introspect`). New permission strings: `auth.user.{read,write}`, `auth.project.{read,write}`, `auth.role.{read,write,grant}`, `auth.principal.write`, `auth.credentials.rotate`, `auth.key.{read,rotate,retire}`, `auth.token.{introspect,revoke}`.
+- **`POST /introspect` follows RFC 7662** — unauthenticated callers (or callers without `auth.token.introspect`) receive `{"active": false}` rather than the full claims dump.
+- **`POST /revoke` requires authentication** — self-revocation (matching `sub`) is allowed; revoking another principal's token requires `auth.token.revoke`.
+- **JWT verification pins `RS256`.** Both `TokenService.verify_token` and `AuthClient.verify_jwt` reject any other JWS algorithm before the JOSE library touches the token (and pass the same allowlist to the library's own `algorithms=` argument), closing the alg-confusion attack class (e.g., HS256-with-public-key forgery).
+- **JWT verification applies a configurable clock-skew leeway** (`AuthManagerSettings.token_clock_skew_seconds`, default 30s). Applies to both server and client verification.
+- **Refresh-token consumption is atomic.** `consume_refresh_token` now uses an atomic claim/marker pattern so two parallel consumers of the same refresh token cannot both succeed; the loser fires the family-revoke reuse-detection path. The `rotated_to` column links parent → child for forensic walks. New Alembic migration `0002_refresh_token_partial_unique_index` adds a partial unique index on `refresh_tokens(token_hash) WHERE revoked_at IS NULL`.
+- **Auth Manager refuses to start without a bound `lab_id`.** The `"lab-unbound"` placeholder audience is gone; two unbound deployments can no longer mutually trust each other's tokens.
+- **`madsci auth bootstrap` no longer accepts `--password` on argv** (leaks via `ps`). Source the password from `MADSCI_AUTH_BOOTSTRAP_PASSWORD` env var or the interactive prompt.
+- **`X-Forwarded-For` is no longer trusted by default.** New `AuthManagerSettings.trust_forwarded_for` (default `False`) gates whether `_client_ip` reads the header. Operators behind a real proxy must opt in.
+
+### Changed
+
+- **JOSE library swapped from `Authlib` to `joserfc`.** Authlib 1.7+ deprecates `authlib.jose` in favor of `joserfc` (the same author's successor library). `madsci.auth_manager` and `madsci.client.auth_client` both call `joserfc.jwt.encode`/`decode`, build keys via `joserfc.jwk.RSAKey`/`KeySet`, and validate claims via `JWTClaimsRegistry`. The `Authlib>=1.3.0` dependency is replaced with `joserfc>=1.0.0` in `madsci.auth_manager` and `madsci.client`. No behavioral change for callers of `AuthClient`; the JWT format and verification semantics are identical. Eliminates the runtime `AuthlibDeprecationWarning`.
 - **`madsci new workcell` subcommand**: The workcell template generated an orphaned YAML format that didn't correspond to any Pydantic model. Workcell configuration is handled by `WorkcellManagerSettings` via `settings.yaml`.
 - **`LabClient.get_definition()`**: The Lab Manager no longer serves a `/definition` endpoint. Use `get_lab_context()` or `get_lab_health()` instead.
 - **`WORKCELL` template category**: Removed from `TemplateCategory` enum.

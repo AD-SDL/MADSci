@@ -70,24 +70,53 @@ class AuthMiddleware(BaseHTTPMiddleware):
         auth_client: Any,
         auth_required: bool = False,
         lab_id: Optional[str] = None,
+        unauthenticated_paths: Optional[set[str]] = None,
     ) -> None:
         """Configure the middleware with an injected ``AuthClient``.
 
         ``auth_required=False`` enables migration mode: unauth'd requests pass
         through with ``request.state.principal = None`` and a structured
         warning is logged.
+
+        ``unauthenticated_paths`` is an exact-match set of URL paths that
+        SHALL bypass the bearer-token check entirely — used for endpoints
+        that must remain reachable without a token (e.g., the Auth Manager's
+        own ``/token`` and ``/.well-known/jwks.json``).
         """
         super().__init__(app)
         self._auth_client = auth_client
         self._auth_required = auth_required
         self._lab_id = lab_id
+        self._unauth_paths = unauthenticated_paths or set()
 
-    async def dispatch(
+    async def dispatch(  # noqa: C901
         self,
         request: Request,
         call_next: Any,
     ) -> Response:
         """Verify the bearer token and bind ownership context for the request."""
+        # Allowlist: don't enforce auth, but still try to populate the
+        # principal if a valid token was presented. Some endpoints behave
+        # differently for authenticated callers (e.g., ``/introspect`` per
+        # RFC 7662 returns full claims to authorized holders, ``{active:
+        # false}`` to everyone else).
+        if request.url.path in self._unauth_paths:
+            principal: Optional[Principal] = None
+            auth_header = request.headers.get("authorization")
+            if auth_header and auth_header.lower().startswith("bearer "):
+                token = auth_header.split(" ", 1)[1].strip()
+                try:
+                    claims = self._auth_client.verify_jwt(token)
+                    principal = Principal.from_claims(claims)
+                except Exception:
+                    principal = None
+            request.state.principal = principal
+            if principal is not None:
+                ownership = OwnershipInfo.from_jwt_claims(principal.claims)
+                with ownership_context(**ownership.model_dump(exclude_none=True)):
+                    return await call_next(request)
+            return await call_next(request)
+
         auth_header = request.headers.get("authorization")
         principal: Optional[Principal] = None
 

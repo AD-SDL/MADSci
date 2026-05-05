@@ -5,15 +5,25 @@ Practical operational guide for deploying and running the MADSci Auth Manager.
 ## Bootstrap
 
 ```bash
-# 1. Start the Auth Manager service (port 8007)
+# 1. Start the Auth Manager service (port 8007). The Auth Manager refuses
+#    to start without a bound lab_id — set AUTH_LAB_ID first.
+export AUTH_LAB_ID=<your_lab_ulid>
 python -m madsci.auth_manager.auth_server
 
-# 2. Bootstrap (creates admin user, signing keypair, built-in roles)
-madsci auth bootstrap --username admin --lab-id <lab_id>
-# You will be prompted for the admin password.
+# 2. Bootstrap (creates admin user, signing keypair, built-in roles).
+#    Two ways to supply the password — never via argv (would leak via `ps`):
+#      a) Interactive prompt (TTY required):
+madsci auth bootstrap --username admin --lab-id "$AUTH_LAB_ID"
+
+#      b) Env var (for automation / CI):
+export MADSCI_AUTH_BOOTSTRAP_PASSWORD='<your-strong-password>'
+madsci auth bootstrap --username admin --lab-id "$AUTH_LAB_ID"
+unset MADSCI_AUTH_BOOTSTRAP_PASSWORD
 ```
 
 `bootstrap` is idempotent — re-running against a populated database is a no-op.
+
+> **Why no `--password` flag?** Anything on the command line is visible to every other user on the host via `ps`. The CLI was hardened to only accept the password from `MADSCI_AUTH_BOOTSTRAP_PASSWORD` or an interactive prompt.
 
 ## Secret distribution
 
@@ -59,14 +69,23 @@ madsci auth keys retire <old_kid>
 
 ## HTTPS termination & reverse proxy
 
-Run the Auth Manager behind a TLS-terminating reverse proxy (Caddy, nginx, Envoy). The Auth Manager uses `X-Forwarded-For` to record the source IP in audit-log entries, so the proxy MUST be configured to forward real client IPs:
+Run the Auth Manager behind a TLS-terminating reverse proxy (Caddy, nginx, Envoy).
+
+**`X-Forwarded-For` is NOT trusted by default.** If you don't opt in, every audit row records the socket peer (your proxy's loopback IP). To use the real client IP from `X-Forwarded-For`, set:
+
+```yaml
+# auth.settings.yaml
+auth_trust_forwarded_for: true
+```
+
+…or `AUTH_TRUST_FORWARDED_FOR=true` in the environment. **Only enable this when the Auth Manager is reachable solely through a trusted proxy** — without that constraint any caller can spoof their IP in the audit log by setting the header themselves.
+
+When trusted, the proxy MUST forward real client IPs:
 
 ```nginx
 proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 proxy_set_header X-Real-IP $remote_addr;
 ```
-
-Without this, every audit row will show the proxy's loopback IP and the audit log will be useless for incident response.
 
 ## Audit-log retention & PII
 

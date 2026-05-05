@@ -31,6 +31,9 @@ Classes
 
     `log(self, event_type: str, *, principal_id: Optional[str] = None, principal_type: Optional[str] = None, grant_type: Optional[str] = None, token_jti: Optional[str] = None, source_ip: Optional[str] = None, success: bool = True, details: Optional[dict] = None) ‑> madsci.auth_manager.tables.AuditLogTable`
     :   Append a new audit row and return it.
+        
+        Raises whatever the underlying DB raises — callers MUST NOT swallow
+        these exceptions for state-changing operations (failure-closed).
 
     `query(self, *, principal_id: Optional[str] = None, event_type: Optional[str] = None, limit: int = 100) ‑> list[madsci.auth_manager.tables.AuditLogTable]`
     :   Query audit rows with optional filters; newest first.
@@ -119,20 +122,32 @@ Classes
     `rotate(self) ‑> madsci.auth_manager.tables.SigningKeyTable`
     :   Generate a new signing key, demoting the current one to verify-only.
 
-`TokenService(*, engine: Any, signing_key_service: SigningKeyService, deny_list_service: DenyListService, issuer: str, audience: str, access_token_ttl: int = 900, refresh_token_ttl: int = 2592000)`
+`TokenService(*, engine: Any, signing_key_service: SigningKeyService, deny_list_service: DenyListService, issuer: str, audience: str, access_token_ttl: int = 900, refresh_token_ttl: int = 2592000, clock_skew_seconds: int = 30)`
 :   Issue, verify, and revoke MADSci access + refresh tokens.
     
     Wire the token service to its signing-key, deny-list, and lab identity.
 
+    ### Class variables
+
+    `ALLOWED_ALGORITHMS: tuple[str, ...]`
+    :
+
     ### Methods
 
-    `consume_refresh_token(self, refresh_token: str) ‑> madsci.auth_manager.tables.RefreshTokenTable`
-    :   Validate, revoke, and return the matching refresh-token row.
+    `consume_refresh_token(self, refresh_token: str, *, rotated_to_token_id: Optional[str] = None) ‑> madsci.auth_manager.tables.RefreshTokenTable`
+    :   Atomically validate-and-revoke the matching refresh-token row.
         
         Raises ``TokenError`` for invalid / expired / already-revoked tokens.
         
-        On detected reuse of an already-revoked token, all refresh tokens for
-        the same principal are revoked (per the reuse-detection requirement).
+        Concurrency: the revoke is implemented as a single
+        ``UPDATE ... WHERE revoked_at IS NULL RETURNING ...`` so two parallel
+        consumers of the same refresh token cannot both succeed. If the
+        update affects zero rows, we re-fetch by ``token_hash`` to
+        distinguish "doesn't exist" (invalid_grant) from "already revoked"
+        (reuse — fire family-revocation).
+        
+        ``rotated_to_token_id`` is recorded on the parent row so future
+        forensic queries can walk the rotation chain.
 
     `introspect(self, token: str) ‑> dict[str, typing.Any]`
     :   RFC 7662 introspection. Returns ``{'active': False}`` for any failure.
@@ -140,8 +155,12 @@ Classes
     `issue_access_token(self, *, sub: str, principal_type: PrincipalType, roles: Optional[list[str]] = None, permissions: Optional[list[str]] = None, user_id: Optional[str] = None, project_ids: Optional[list[str]] = None, manager_id: Optional[str] = None, node_id: Optional[str] = None, workcell_id: Optional[str] = None, ttl: Optional[int] = None) ‑> tuple[str, madsci.common.types.auth_types.JWTClaims]`
     :   Sign a new access token. Returns ``(jwt_str, claims_model)``.
 
-    `issue_refresh_token(self, *, sub: str, principal_type: PrincipalType, ttl: Optional[int] = None) ‑> str`
+    `issue_refresh_token(self, *, sub: str, principal_type: PrincipalType, ttl: Optional[int] = None) ‑> tuple[str, str]`
     :   Generate an opaque refresh token and persist its hash.
+        
+        Returns ``(opaque_token, row_token_id)`` so the caller can record the
+        new row's id on the parent row's ``rotated_to`` column when this is
+        issued as part of a rotation.
 
     `make_token_response(self, *, access_token: str, ttl: int, refresh_token: Optional[str] = None) ‑> madsci.common.types.auth_types.TokenResponse`
     :   Build the OAuth 2.0 token-endpoint response body.

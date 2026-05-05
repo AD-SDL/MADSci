@@ -7,9 +7,14 @@ service-accounts, node identities, signing keys, and the deny-list.
 Per Decision 12, this manager is single-tenant: all data is implicitly
 scoped to the deployment's ``lab_id``.
 """
+# ARG002: every admin route accepts ``request: Request`` because the
+# ``@requires(...)`` decorator reads ``request.state.principal`` — the
+# function bodies don't reference ``request`` directly.
+# ruff: noqa: ARG002
 
 from __future__ import annotations
 
+import ipaddress
 import secrets
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -17,6 +22,7 @@ from typing import Any, Optional
 import fastapi
 from classy_fastapi import delete, get, patch, post
 from fastapi import Form, HTTPException, Request, Response
+from madsci.auth_manager.permissions import AuthPermissions
 from madsci.auth_manager.server_types import (
     AddMemberRequest,
     BootstrapResponse,
@@ -45,19 +51,22 @@ from madsci.auth_manager.services import (
     TokenService,
 )
 from madsci.auth_manager.services.audit_logger import AuditEvent
-from madsci.auth_manager.services.token_service import TokenError
+from madsci.auth_manager.services.token_service import TokenError, hash_refresh_token
 from madsci.auth_manager.tables import (
     GlobalRoleGrantTable,
     LabBindingTable,
     NodeIdentityTable,
     ProjectMembershipTable,
     ProjectTable,
+    RefreshTokenTable,
     RolePermissionTable,
     RoleTable,
     ServiceAccountTable,
     UserTable,
     metadata,
 )
+from madsci.common.auth_decorators import requires
+from madsci.common.auth_middleware import current_principal
 from madsci.common.db_handlers.postgres_handler import (
     PostgresHandler,
     SQLAlchemyHandler,
@@ -117,15 +126,24 @@ BUILTIN_ROLES: list[dict[str, Any]] = [
 ]
 
 
-def _client_ip(request: Request) -> Optional[str]:
-    """Get the client IP, preferring X-Forwarded-For when present.
+def _client_ip(request: Request, *, trust_forwarded_for: bool = False) -> Optional[str]:
+    """Return the client IP for audit-log attribution.
 
-    Operators terminating TLS at a reverse proxy MUST configure the proxy to
-    forward real client IPs (see ``docs/guides/auth_operator.md``).
+    By default returns the socket peer; trusts ``X-Forwarded-For`` only when
+    the operator opts in via ``AuthManagerSettings.trust_forwarded_for``.
+    Untrusted forwarded headers would otherwise let any caller spoof the
+    audit log's ``source_ip`` column.
     """
-    xff = request.headers.get("x-forwarded-for")
-    if xff:
-        return xff.split(",")[0].strip()
+    if trust_forwarded_for:
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            candidate = xff.split(",", maxsplit=1)[0].strip()
+            # Validate it parses as an IP; fall through to socket peer on garbage.
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
     return request.client.host if request.client else None
 
 
@@ -144,11 +162,28 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         self._postgres_handler = postgres_handler
         super().__init__(settings=settings, **kwargs)
 
+    def unauthenticated_paths(self) -> set[str]:
+        """Public endpoints required for token bootstrap and verification.
+
+        Per the auth-manager-security-hardening change: every other admin
+        route on this manager carries a ``@requires(...)`` permission check.
+        """
+        return super().unauthenticated_paths() | {
+            "/token",
+            "/.well-known/jwks.json",
+            "/health/keys",
+            "/deny-list",
+            # /introspect bypasses the middleware enforcement so the handler
+            # can implement RFC 7662's privacy-preserving "{active: false}"
+            # response for unauthorized callers.
+            "/introspect",
+        }
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def initialize(self, **kwargs: Any) -> None:  # noqa: ARG002
+    def initialize(self, **kwargs: Any) -> None:
         """Initialize handlers, schema, and service objects."""
         if self._postgres_handler is None:
             try:
@@ -183,14 +218,24 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         # Resolve / persist lab_id binding (Decision 12)
         self._lab_id = self._resolve_lab_binding()
 
+        # Decision: refuse to start without a bound lab_id. The earlier
+        # "lab-unbound" placeholder allowed two unrelated unbound deployments
+        # to mutually trust each other's tokens.
+        if not self._lab_id:
+            raise RuntimeError(
+                "AuthManager refuses to start: settings.lab_id is unset."
+                " Set AUTH_LAB_ID or pass --lab-id to bootstrap."
+            )
+
         self._token_service = TokenService(
             engine=engine,
             signing_key_service=self._signing_key_service,
             deny_list_service=self._deny_list_service,
             issuer=str(self.settings.server_url).rstrip("/"),
-            audience=self._lab_id or "lab-unbound",
+            audience=self._lab_id,
             access_token_ttl=self.settings.access_token_ttl,
             refresh_token_ttl=self.settings.refresh_token_ttl,
+            clock_skew_seconds=self.settings.token_clock_skew_seconds,
         )
 
         self.logger.info(
@@ -391,7 +436,7 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         client_secret: Optional[str] = Form(None),
     ) -> TokenResponse:
         """OAuth 2.0 token endpoint (password, refresh_token, client_credentials)."""
-        ip = _client_ip(request)
+        ip = _client_ip(request, trust_forwarded_for=self.settings.trust_forwarded_for)
         try:
             gt = GrantType(grant_type)
         except ValueError:
@@ -462,7 +507,7 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             user_id=user.user_id,
             project_ids=project_ids,
         )
-        refresh = self._token_service.issue_refresh_token(
+        refresh, _refresh_id = self._token_service.issue_refresh_token(
             sub=user.user_id, principal_type=PrincipalType.USER
         )
         self._audit.log(
@@ -484,8 +529,39 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     ) -> TokenResponse:
         if not refresh_token:
             raise HTTPException(status_code=400, detail="missing refresh_token")
+
+        # Pre-issue the new refresh token so we can record its id on the
+        # parent's ``rotated_to`` in the same atomic UPDATE that revokes the
+        # parent. We need to know the principal first — peek at the row
+        # without consuming it via a SELECT.
+        token_hash = hash_refresh_token(refresh_token)
+        engine = self._postgres_handler.get_engine()
+        with Session(engine) as session:
+            preview = session.exec(
+                select(RefreshTokenTable).where(
+                    RefreshTokenTable.token_hash == token_hash
+                )
+            ).first()
+        if preview is None:
+            self._audit.log(
+                AuditEvent.TOKEN_REJECT,
+                source_ip=ip,
+                success=False,
+                details={"reason": "invalid_grant"},
+            )
+            raise HTTPException(status_code=401, detail="invalid_grant")
+
+        principal_type = PrincipalType(preview.principal_type)
+        new_refresh, new_refresh_id = self._token_service.issue_refresh_token(
+            sub=preview.principal_sub, principal_type=principal_type
+        )
+
+        # Atomically claim the parent. If reuse is detected, the new refresh
+        # we just issued is also revoked as part of the family revocation.
         try:
-            row = self._token_service.consume_refresh_token(refresh_token)
+            row = self._token_service.consume_refresh_token(
+                refresh_token, rotated_to_token_id=new_refresh_id
+            )
         except TokenError as e:
             self._audit.log(
                 AuditEvent.TOKEN_REJECT,
@@ -495,7 +571,6 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             )
             raise HTTPException(status_code=401, detail="invalid_grant") from e
 
-        engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
             if row.principal_type == PrincipalType.USER.value:
                 user = session.get(UserTable, row.principal_sub)
@@ -532,9 +607,6 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
                     permissions=permissions,
                 )
 
-        new_refresh = self._token_service.issue_refresh_token(
-            sub=row.principal_sub, principal_type=PrincipalType(row.principal_type)
-        )
         self._audit.log(
             AuditEvent.TOKEN_REFRESH,
             principal_id=row.principal_sub,
@@ -637,28 +709,77 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/introspect")
-    async def introspect_endpoint(self, body: IntrospectRequest) -> dict[str, Any]:
-        """OAuth 2.0 Token Introspection (RFC 7662)."""
+    async def introspect_endpoint(
+        self, request: Request, body: IntrospectRequest
+    ) -> dict[str, Any]:
+        """OAuth 2.0 Token Introspection (RFC 7662).
+
+        Per RFC 7662 §2.2 the introspection endpoint MUST NOT leak claims to
+        unauthenticated callers. When AuthMiddleware is installed
+        (``auth_enabled=True``) we require ``auth.token.introspect``;
+        unauthorized callers get ``{"active": false}`` (NOT 401/403, to match
+        the spec's privacy-preserving response shape).
+        """
+        if hasattr(request.state, "principal"):
+            principal = current_principal(request)
+            perms = set(principal.permissions) if principal else set()
+            if principal is None or (
+                AuthPermissions.TOKEN_INTROSPECT not in perms and "*" not in perms
+            ):
+                return {"active": False}
         return self._token_service.introspect(body.token)
 
     @post("/revoke")
-    async def revoke_endpoint(self, body: RevokeRequest) -> dict[str, bool]:
-        """Revoke an access token and/or refresh token."""
-        if body.refresh_token:
-            self._token_service.revoke_refresh_token(body.refresh_token)
+    async def revoke_endpoint(
+        self, request: Request, body: RevokeRequest
+    ) -> dict[str, bool]:
+        """Revoke an access token and/or refresh token.
+
+        Requires authentication when AuthMiddleware is installed. Self-
+        revocation (caller's own ``sub``) is always allowed; revoking
+        another principal's token requires ``auth.token.revoke``.
+        """
+        principal = (
+            current_principal(request) if hasattr(request.state, "principal") else None
+        )
+        auth_active = hasattr(request.state, "principal")
+
+        if auth_active and principal is None:
+            raise HTTPException(status_code=401, detail="authentication required")
+
+        # Probe the token's sub (without revoking) to enforce self-vs-other rules.
+        target_claims = None
         if body.token:
             try:
-                claims = self._token_service.verify_token(body.token)
-                self._token_service.revoke_access_token(claims.jti, claims.exp)
-                self._audit.log(
-                    AuditEvent.TOKEN_REVOKE,
-                    principal_id=claims.sub,
-                    principal_type=claims.principal_type.value,
-                    token_jti=claims.jti,
-                )
+                target_claims = self._token_service.verify_token(body.token)
             except TokenError:
-                # Already invalid; nothing to do
-                pass
+                target_claims = None
+
+        if auth_active and target_claims is not None and principal is not None:
+            is_self = target_claims.sub == principal.sub
+            perms = set(principal.permissions)
+            if (
+                not is_self
+                and AuthPermissions.TOKEN_REVOKE not in perms
+                and "*" not in perms
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"missing required permission: {AuthPermissions.TOKEN_REVOKE}",
+                )
+
+        if body.refresh_token:
+            self._token_service.revoke_refresh_token(body.refresh_token)
+        if body.token and target_claims is not None:
+            self._token_service.revoke_access_token(
+                target_claims.jti, target_claims.exp
+            )
+            self._audit.log(
+                AuditEvent.TOKEN_REVOKE,
+                principal_id=target_claims.sub,
+                principal_type=target_claims.principal_type.value,
+                token_jti=target_claims.jti,
+            )
         return {"revoked": True}
 
     @get("/.well-known/jwks.json")
@@ -671,7 +792,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/users")
-    async def create_user(self, body: CreateUserRequest) -> UserResponse:
+    @requires(permission=AuthPermissions.USER_WRITE)
+    async def create_user(
+        self, request: Request, body: CreateUserRequest
+    ) -> UserResponse:
         """Create a new user account."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -702,7 +826,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             )
 
     @get("/users")
-    async def list_users(self) -> list[UserResponse]:
+    @requires(permission=AuthPermissions.USER_READ)
+    async def list_users(self, request: Request) -> list[UserResponse]:
         """List all user accounts."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -718,7 +843,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             ]
 
     @get("/users/{user_id}")
-    async def get_user(self, user_id: str) -> UserResponse:
+    @requires(permission=AuthPermissions.USER_READ)
+    async def get_user(self, request: Request, user_id: str) -> UserResponse:
         """Fetch a single user by id."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -733,7 +859,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             )
 
     @patch("/users/{user_id}")
-    async def update_user(self, user_id: str, body: UpdateUserRequest) -> UserResponse:
+    @requires(permission=AuthPermissions.USER_WRITE)
+    async def update_user(
+        self, request: Request, user_id: str, body: UpdateUserRequest
+    ) -> UserResponse:
         """Patch user fields (deactivate, change password, update email)."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -781,7 +910,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/projects")
-    async def create_project(self, body: CreateProjectRequest) -> ProjectResponse:
+    @requires(permission=AuthPermissions.PROJECT_WRITE)
+    async def create_project(
+        self, request: Request, body: CreateProjectRequest
+    ) -> ProjectResponse:
         """Create a new project."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -803,7 +935,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             )
 
     @get("/projects")
-    async def list_projects(self) -> list[ProjectResponse]:
+    @requires(permission=AuthPermissions.PROJECT_READ)
+    async def list_projects(self, request: Request) -> list[ProjectResponse]:
         """List all projects."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -816,8 +949,9 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             ]
 
     @post("/projects/{project_id}/members")
+    @requires(permission=AuthPermissions.PROJECT_WRITE)
     async def add_project_member(
-        self, project_id: str, body: AddMemberRequest
+        self, request: Request, project_id: str, body: AddMemberRequest
     ) -> dict[str, str]:
         """Add a user to a project with a role."""
         engine = self._postgres_handler.get_engine()
@@ -840,8 +974,9 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             return {"status": "ok"}
 
     @delete("/projects/{project_id}/members/{user_id}")
+    @requires(permission=AuthPermissions.PROJECT_WRITE)
     async def remove_project_member(
-        self, project_id: str, user_id: str
+        self, request: Request, project_id: str, user_id: str
     ) -> dict[str, str]:
         """Remove all memberships for a user from a project."""
         engine = self._postgres_handler.get_engine()
@@ -861,7 +996,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/roles")
-    async def create_role(self, body: CreateRoleRequest) -> RoleResponse:
+    @requires(permission=AuthPermissions.ROLE_WRITE)
+    async def create_role(
+        self, request: Request, body: CreateRoleRequest
+    ) -> RoleResponse:
         """Create a new role with permissions."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -885,7 +1023,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             )
 
     @get("/roles")
-    async def list_roles(self) -> list[RoleResponse]:
+    @requires(permission=AuthPermissions.ROLE_READ)
+    async def list_roles(self, request: Request) -> list[RoleResponse]:
         """List all roles, including their permission strings."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -908,7 +1047,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             return results
 
     @post("/roles/grant")
-    async def grant_role(self, body: GrantRoleRequest) -> dict[str, str]:
+    @requires(permission=AuthPermissions.ROLE_GRANT)
+    async def grant_role(
+        self, request: Request, body: GrantRoleRequest
+    ) -> dict[str, str]:
         """Grant a role to a user (optionally project-scoped), service account, or node."""
         engine = self._postgres_handler.get_engine()
         with Session(engine) as session:
@@ -947,8 +1089,9 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/service-accounts")
+    @requires(permission=AuthPermissions.PRINCIPAL_WRITE)
     async def register_service_account(
-        self, body: RegisterServiceAccountRequest
+        self, request: Request, body: RegisterServiceAccountRequest
     ) -> CredentialResponse:
         """Create a service-account principal and return its plaintext secret once."""
         engine = self._postgres_handler.get_engine()
@@ -980,8 +1123,9 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         return CredentialResponse(client_id=client_id, client_secret=client_secret)
 
     @post("/node-identities")
+    @requires(permission=AuthPermissions.PRINCIPAL_WRITE)
     async def register_node_identity(
-        self, body: RegisterNodeRequest
+        self, request: Request, body: RegisterNodeRequest
     ) -> CredentialResponse:
         """Create a node-identity principal and return its plaintext secret once."""
         engine = self._postgres_handler.get_engine()
@@ -1017,7 +1161,10 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         return CredentialResponse(client_id=client_id, client_secret=client_secret)
 
     @post("/credentials/{client_id}/rotate")
-    async def rotate_credentials(self, client_id: str) -> CredentialResponse:
+    @requires(permission=AuthPermissions.CREDENTIALS_ROTATE)
+    async def rotate_credentials(
+        self, request: Request, client_id: str
+    ) -> CredentialResponse:
         """Rotate the client_secret for a service-account or node-identity."""
         engine = self._postgres_handler.get_engine()
         new_secret = secrets.token_urlsafe(32)
@@ -1044,7 +1191,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
     # ------------------------------------------------------------------
 
     @post("/keys/rotate")
-    async def rotate_keys(self) -> KeyInfo:
+    @requires(permission=AuthPermissions.KEY_ROTATE)
+    async def rotate_keys(self, request: Request) -> KeyInfo:
         """Generate a new signing keypair, demoting the previous one to verify-only."""
         new_row = self._signing_key_service.rotate()
         self._audit.log(AuditEvent.KEY_ROTATE, details={"kid": new_row.kid})
@@ -1057,7 +1205,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         )
 
     @get("/keys")
-    async def list_keys(self) -> list[KeyInfo]:
+    @requires(permission=AuthPermissions.KEY_READ)
+    async def list_keys(self, request: Request) -> list[KeyInfo]:
         """List all signing keys (active, retired, signing flag)."""
         return [
             KeyInfo(
@@ -1072,7 +1221,8 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         ]
 
     @delete("/keys/{kid}")
-    async def retire_key(self, kid: str) -> dict[str, bool]:
+    @requires(permission=AuthPermissions.KEY_RETIRE)
+    async def retire_key(self, request: Request, kid: str) -> dict[str, bool]:
         """Retire a signing key (remove from JWKS, delete private material)."""
         ok = self._signing_key_service.retire(kid)
         if ok:

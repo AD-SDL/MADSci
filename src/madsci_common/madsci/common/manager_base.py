@@ -365,6 +365,23 @@ class AbstractManagerBase(
         if isinstance(self._settings, ManagerSettings):
             global_ownership_info.manager_id = self._settings.manager_id
 
+    def unauthenticated_paths(self) -> set[str]:
+        """Return URL paths that bypass AuthMiddleware on this manager.
+
+        The default set covers operator/monitor endpoints (``/health``,
+        ``/settings``, OpenAPI). Subclasses MAY extend this — e.g., the Auth
+        Manager itself adds ``/token``, ``/.well-known/jwks.json``,
+        ``/deny-list`` since those are needed to bootstrap and validate
+        tokens.
+        """
+        return {
+            "/health",
+            "/settings",
+            "/openapi.json",
+            "/docs",
+            "/redoc",
+        }
+
     def _setup_auth_middleware(self, app: FastAPI) -> None:
         """Construct an AuthClient and install AuthMiddleware on the app."""
         from madsci.common.auth_middleware import AuthMiddleware  # noqa: PLC0415
@@ -392,6 +409,7 @@ class AbstractManagerBase(
             AuthMiddleware,
             auth_client=self._auth_client,
             auth_required=getattr(self._settings, "auth_required", False),
+            unauthenticated_paths=set(self.unauthenticated_paths()),
         )
         self.logger.info(
             "AuthMiddleware installed",

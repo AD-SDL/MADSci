@@ -34,7 +34,11 @@ class AuditLogger:
         success: bool = True,
         details: Optional[dict] = None,
     ) -> AuditLogTable:
-        """Append a new audit row and return it."""
+        """Append a new audit row and return it.
+
+        Raises whatever the underlying DB raises — callers MUST NOT swallow
+        these exceptions for state-changing operations (failure-closed).
+        """
         with Session(self._engine) as session:
             row = AuditLogTable(
                 event_type=event_type,

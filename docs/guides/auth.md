@@ -55,11 +55,26 @@ Defined in `madsci.common.auth_decorators.PERMISSION_NAMESPACE`:
 | `workcell.read/execute`   | Workcell config and admin commands           |
 | `node.read/execute_action`| Node status / action submission              |
 | `event.read`              | Event log queries                            |
-| `auth.user.write`         | User CRUD on the Auth Manager                |
-| `auth.role.write`         | Role grant / revoke                          |
-| `auth.key.rotate`         | Signing-key rotation                         |
+| `auth.user.read` / `.write`           | List / create / modify users on the Auth Manager |
+| `auth.project.read` / `.write`        | List / create / modify projects + memberships    |
+| `auth.role.read` / `.write` / `.grant`| Read / create roles; grant / revoke role grants  |
+| `auth.principal.write`                | Register service accounts and node identities    |
+| `auth.credentials.rotate`             | Rotate service-account / node-identity secrets   |
+| `auth.key.read` / `.rotate` / `.retire`| List / rotate / retire signing keys             |
+| `auth.token.introspect`               | Introspect any token (RFC 7662)                  |
+| `auth.token.revoke`                   | Revoke other principals' tokens                  |
 
-The built-in roles seeded by `madsci auth bootstrap` are `admin` (`*`), `experimenter`, `operator`, and `read_only`.
+Every administrative endpoint on the Auth Manager itself carries an explicit `@requires(permission=...)` check, and the Auth Manager mounts `AuthMiddleware` on its own app. The unauthenticated allowlist is intentionally narrow:
+
+- `POST /token` — bootstrap path for credentials.
+- `GET /.well-known/jwks.json` — public key publication.
+- `GET /health`, `/health/keys`, `/settings` — operator/monitor endpoints.
+- `GET /deny-list` — polled by every consuming manager (authenticating it would be circular).
+- `POST /introspect` — bypasses middleware enforcement; the handler returns `{"active": false}` to unauthenticated callers per RFC 7662 and full claims to authorized holders of `auth.token.introspect`.
+
+`POST /revoke` requires authentication. Self-revocation (the caller's own `sub`) is always allowed; revoking another principal's token requires `auth.token.revoke`.
+
+The built-in roles seeded by `madsci auth bootstrap` are `admin` (`*`, covers all `auth.*`), `experimenter`, `operator`, and `read_only`.
 
 ## Integration points
 

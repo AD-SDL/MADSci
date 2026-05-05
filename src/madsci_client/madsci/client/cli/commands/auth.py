@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import getpass
 import json
+import os
+import sys
 from typing import TYPE_CHECKING, Optional
 
 import click
+
+BOOTSTRAP_PASSWORD_ENV_VAR = "MADSCI_AUTH_BOOTSTRAP_PASSWORD"  # noqa: S105
 
 
 def _auth_url(ctx: click.Context, auth_url: Optional[str]) -> str:
@@ -62,13 +66,32 @@ def auth(ctx: click.Context, auth_url: Optional[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_bootstrap_password(username: str) -> str:
+    """Source the admin password from env var, then interactive prompt.
+
+    Refuses to fall back to argv-passed passwords: those leak via ``ps``.
+    Refuses to silently accept an empty password.
+    """
+    env_value = os.environ.get(BOOTSTRAP_PASSWORD_ENV_VAR)
+    if env_value:
+        return env_value
+    if not sys.stdin.isatty():
+        raise click.ClickException(
+            f"No password available. Set ${BOOTSTRAP_PASSWORD_ENV_VAR} or run"
+            " interactively (TTY required for the password prompt)."
+        )
+    pw = click.prompt(
+        f"Password for {username}",
+        hide_input=True,
+        confirmation_prompt=True,
+    )
+    if not pw:
+        raise click.ClickException("Password may not be empty.")
+    return pw
+
+
 @auth.command()
 @click.option("--username", default="admin", show_default=True)
-@click.option(
-    "--password",
-    default=None,
-    help="Admin password. If omitted, you will be prompted.",
-)
 @click.option("--email", default=None)
 @click.option(
     "--lab-id",
@@ -84,7 +107,6 @@ def auth(ctx: click.Context, auth_url: Optional[str]) -> None:
 )
 def bootstrap(
     username: str,
-    password: Optional[str],
     email: Optional[str],
     lab_id: Optional[str],
     database_url: Optional[str],
@@ -93,12 +115,16 @@ def bootstrap(
 
     Creates the admin user, generates the first signing keypair, and seeds
     the built-in roles. Safe to re-run against a populated database.
+
+    The admin password MUST be supplied via the
+    ``MADSCI_AUTH_BOOTSTRAP_PASSWORD`` environment variable or via the
+    interactive prompt. Passing the password on the command line is no longer
+    supported (it would leak via ``ps``/process listings).
     """
     from madsci.auth_manager.auth_server import AuthManager
     from madsci.common.types.auth_types import AuthManagerSettings
 
-    if password is None:
-        password = getpass.getpass(f"Password for {username}: ")
+    password = _resolve_bootstrap_password(username)
 
     overrides: dict = {"enable_registry_resolution": False}
     if lab_id:
