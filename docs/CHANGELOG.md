@@ -67,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **ResourceClient async methods**: 16 new async methods for TUI integration
 - **LocationClient async methods**: Missing async methods added for TUI integration
 
+- **Transfer graph detailed view**: `GET /transfer/graph/detailed` endpoint on Location Manager returning `TransferGraphDetailedResponse` with per-edge node names; `get_detailed_transfer_graph()` / `async_get_detailed_transfer_graph()` on `LocationClient`; `TransferGraphDetailedEdge` and `TransferGraphDetailedResponse` models; dashboard redesign with location grouping, resource-fill colors, edge tooltips, location index numbers, and `transferEdges` polling on the location store.
+- **Bundled templates `_shared/` directory**: 13 canonical files (`.gitignore`, `CLAUDE.md.j2`, `AGENTS.md.j2`, `justfile.j2`, `ruff.toml.j2`, `.pre-commit-config.yaml.j2`, `docker-compose.yaml.j2`, notebooks, docs, drivers) deduplicated across all bundled templates. `TemplateEngine` extended with `_resolve_shared_dir()` (walk-up + importlib fallback), `_resolve_source_path()` (local-first fallback), multi-path `FileSystemLoader`, and expanded path-traversal check. Removes ~105 duplicated files across 14 template directories (6 module + 8 addon), net -4,678 lines.
+- **Node `try`/`except` pre-commit checker** (`scripts/precommit_check_try_catch_blocks.py`): pre-commit hook that fails when a node module catches an exception without re-raising or returning an `ActionResult`, enforcing the node error-handling contract.
+
 ### Changed
 - **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
 - **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
@@ -80,6 +84,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Transfer graph names, delete confirmation dialog, inventory button label
 - Double-slash URL bug in node client health checks
 - httpx migration fixes: stale `requests` imports, config attribute access, response closing in retry transports, async health checks, broken sync `.close()` call
+- **Object storage overwrites on repeated uploads** (closes #274): added `ULID_PREFIXED` value to `ObjectNamingStrategy` and incorporated `datapoint_id` into S3 object keys (`{ulid}_{label}`) in both server-side and client-side upload paths, matching the local filesystem backend.
+- **`madsci new <subcommand>` ignored `--name` in interactive mode**: `collect_parameters_interactive()` now accepts an `overrides` dict, and `generate_from_template()` passes CLI-provided names through it, so `madsci new lab -n my_lab` produces a lab named `my_lab` instead of prompting.
+- **Generated lab compose templates referenced nonexistent local images** (`madsci-squid:latest`, `madsci-event-manager:latest`): updated `standard` and `distributed` lab templates to use the published GHCR images (`ghcr.io/ad-sdl/madsci_dashboard:latest` for the lab manager, `ghcr.io/ad-sdl/madsci:latest` for all other services). Removed the stale `build:` section from the lab manager service.
+- **SiLA connection diagnostics**: `SilaNodeClient` now raises connection errors enriched with classification (`dns_resolution`, `connection_refused`, `connection_timeout`, `tls_error`, `grpc_error`) and remediation hints.
 
 ## [0.8.0] - 2026-03-31
 
