@@ -118,4 +118,16 @@ two filtered defense-in-depth findings. Mitigations:
 - [x] 13.3 `ruff check .` clean
 - [x] 13.4 First `security-review` skill pass complete; HIGH finding + two filtered findings mitigated in Section 15. _(Re-review still recommended pre-merge.)_
 - [x] 13.5 First `madsci-release-audit` skill pass complete: stale `--password` in example lab README fixed, stale `Authlib` dep removed from `madsci_common`, stale "authlib's decoder" comment fixed in `token_service.py`. Audit findings recorded in `.scratch/auth_manager_security_hardening_audit.md`.
-- [ ] 13.6 Manual smoke against example lab: `just up`, then `madsci auth bootstrap` (env-var path), exercise `/token`, `/.well-known/jwks.json`, and assert admin endpoints reject unauthenticated calls _(operator to perform pre-merge — Docker required)_
+- [x] 13.6 Manual smoke against example lab — **PASSED**. `just build` + `just upd`. Exercised end-to-end against the running stack:
+  - **Pre-existing bug fixed during smoke:** `examples/example_lab/compose.yaml` set `AUTH_DATABASE_URL` to use the container DNS name (`madsci_postgres_auth:5432`), but the service uses `network_mode: host`, so DNS doesn't resolve. Auth Manager crashed with `OperationalError: could not translate host name`. Changed to `localhost:${AUTH_POSTGRES_PORT:-5435}` (the host-mapped port — same pattern other managers use for postgres).
+  - **Bootstrap via env var** (`docker exec -e MADSCI_AUTH_BOOTSTRAP_PASSWORD='...' auth_manager madsci auth bootstrap ...`) succeeded; returned admin user + signing kid.
+  - **Bootstrap with `--password`** rejected with `Error: No such option: --password`.
+  - **Bootstrap without env var or TTY** rejected with the documented error citing `MADSCI_AUTH_BOOTSTRAP_PASSWORD`.
+  - **Bootstrap re-run on populated DB** idempotent (returned same admin user).
+  - **`POST /token`** with admin credentials returned access + refresh token.
+  - **`GET /.well-known/jwks.json`** unauthenticated returned the active RS256 key.
+  - **Admin endpoints unauthenticated** (GET `/users`, `/projects`, `/roles`, `/keys`; POST `/users`, `/projects`, `/roles`, `/service-accounts`, `/node-identities`, `/keys/rotate`) all returned **HTTP 401**.
+  - **Admin endpoints with admin token** (GET `/users`, `/projects`, `/roles`, `/keys`) returned **HTTP 200**.
+  - **`/introspect` unauthenticated** returned `{"active": false}` (RFC 7662 compliant — no claim leak).
+  - **`/introspect` authorized** returned full claims dict including `sub`, `aud`, `principal_type`, `permissions`.
+  - **AuthMiddleware self-verifying log** (`"AuthMiddleware installed on Auth Manager (self-verifying)"`) confirmed at startup.
