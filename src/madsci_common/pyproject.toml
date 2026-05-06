@@ -36,7 +36,6 @@ dependencies = [
     "rich>=13.0.0",
     "opentelemetry-api>=1.20.0",
     "simpleeval>=1.0.0",
-    "Authlib>=1.3.0",
 ]
 
 [project.optional-dependencies]

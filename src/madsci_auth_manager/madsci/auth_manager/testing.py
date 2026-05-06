@@ -24,8 +24,16 @@ def make_auth_manager(
     lab_id: str | None = None,
     admin_username: str = "admin",
     admin_password: str = "hunter2",  # noqa: S107
+    auth_enforced: bool = False,
 ) -> AuthManager:
-    """Build a fully-bootstrapped in-memory AuthManager."""
+    """Build a fully-bootstrapped in-memory AuthManager.
+
+    ``auth_enforced=False`` (the default for tests) disables the auth
+    middleware so admin endpoints can be exercised without going through
+    the password-grant + bearer-token dance. Production deployments default
+    to ``True`` (security review HIGH finding); pass ``True`` here when the
+    test specifically wants to verify auth enforcement.
+    """
     settings = AuthManagerSettings(
         enable_registry_resolution=False,
         lab_id=lab_id or new_ulid_str(),
@@ -34,6 +42,9 @@ def make_auth_manager(
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    if not auth_enforced:
+        settings.auth_enabled = False
+        settings.auth_required = False
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username=admin_username, admin_password=admin_password)
     return mgr

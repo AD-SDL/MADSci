@@ -56,8 +56,20 @@ class AuthClient:
         refresh_buffer_seconds: int = 60,
         timeout: float = 10.0,
         clock_skew_seconds: int = 30,
+        expected_issuer: Optional[str] = None,
+        expected_audience: Optional[str] = None,
     ) -> None:
-        """Initialize the client with optional pre-existing tokens / credentials."""
+        """Initialize the client with optional pre-existing tokens / credentials.
+
+        ``expected_issuer`` and ``expected_audience`` are validated on every
+        ``verify_jwt`` call when set — defense-in-depth against any future
+        topology where a consumer might be reachable by tokens from a
+        different lab. Today's single-Auth-Manager-per-lab architecture
+        already prevents cross-lab confusion via the JWKS scope, but the
+        explicit check costs nothing and is required by the
+        ``auth-token-lifecycle`` spec's "verifier rejects tokens with wrong
+        aud" requirement.
+        """
         self.auth_server_url = str(auth_server_url).rstrip("/")
         self._access_token = access_token
         self._refresh_token = refresh_token
@@ -69,6 +81,8 @@ class AuthClient:
         self._async_http: Optional[httpx.AsyncClient] = None
         self._lock = threading.RLock()
         self._clock_skew = clock_skew_seconds
+        self._expected_issuer = expected_issuer
+        self._expected_audience = expected_audience
 
         # JWKS cache
         self._jwks_ttl = jwks_ttl_seconds
@@ -240,7 +254,20 @@ class AuthClient:
                 decoded = jose_jwt.decode(
                     token, key_set, algorithms=list(self.ALLOWED_ALGORITHMS)
                 )
-                JWTClaimsRegistry(leeway=self._clock_skew).validate(decoded.claims)
+                claim_options: dict[str, Any] = {}
+                if self._expected_issuer is not None:
+                    claim_options["iss"] = {
+                        "essential": True,
+                        "value": self._expected_issuer,
+                    }
+                if self._expected_audience is not None:
+                    claim_options["aud"] = {
+                        "essential": True,
+                        "value": self._expected_audience,
+                    }
+                JWTClaimsRegistry(leeway=self._clock_skew, **claim_options).validate(
+                    decoded.claims
+                )
                 claims = JWTClaims(**decoded.claims)
                 # Deny-list enforcement
                 self._poll_deny_list_if_due()

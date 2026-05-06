@@ -22,6 +22,12 @@ def server() -> tuple[AuthManager, TestClient]:
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    # Explicit opt-out of auth enforcement for these unit tests. The Auth
+    # Manager defaults to ``auth_enabled=True`` in production (security
+    # review HIGH finding) — these tests exercise the raw HTTP surface
+    # without going through the password grant + bearer-token flow.
+    settings.auth_enabled = False
+    settings.auth_required = False
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username="admin", admin_password="hunter2")
     app = mgr.create_server()

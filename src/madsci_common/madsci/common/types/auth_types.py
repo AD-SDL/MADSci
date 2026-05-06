@@ -525,6 +525,30 @@ class AuthManagerSettings(
         description="The type of manager.",
         default=ManagerType.AUTH_MANAGER,
     )
+    # The Auth Manager is the only manager that MUST default to enforcing
+    # auth on its own admin surface — see the security review of
+    # ``auth_manager_foundation``. Operators may opt out for local dev /
+    # testing only; ``run_server()`` refuses to bind in production-style use.
+    auth_enabled: bool = Field(
+        default=True,
+        title="Auth Enabled",
+        description=(
+            "Whether AuthMiddleware is installed on the Auth Manager itself."
+            " Defaults to True (the Auth Manager is the one service where"
+            " unauth'd admin endpoints would be a privilege-escalation vector)."
+            " Set to False only for in-process unit tests."
+        ),
+    )
+    auth_required: bool = Field(
+        default=True,
+        title="Auth Required",
+        description=(
+            "Whether the Auth Manager rejects unauthenticated requests on"
+            " non-allowlisted routes (vs. admitting them with"
+            " ``request.state.principal=None``). Defaults to True; should"
+            " never be False in production."
+        ),
+    )
     database_url: str = Field(
         default="postgresql://madsci:madsci@localhost/madsci_auth",
         title="Database URL",

@@ -404,18 +404,28 @@ class AbstractManagerBase(
             )
             return
 
-        self._auth_client = AuthClient(auth_server_url=str(auth_url))
+        # Defense-in-depth: expected issuer is the auth_server_url itself,
+        # expected audience is the lab_id. Both are validated on every JWT
+        # verification when set.
+        expected_audience = getattr(self._settings, "lab_id", None)
+        self._auth_client = AuthClient(
+            auth_server_url=str(auth_url),
+            expected_issuer=str(auth_url).rstrip("/"),
+            expected_audience=expected_audience,
+        )
         app.add_middleware(
             AuthMiddleware,
             auth_client=self._auth_client,
             auth_required=getattr(self._settings, "auth_required", False),
             unauthenticated_paths=set(self.unauthenticated_paths()),
+            lab_id=expected_audience,
         )
         self.logger.info(
             "AuthMiddleware installed",
             event_type=EventType.MANAGER_START,
             auth_server_url=str(auth_url),
             auth_required=getattr(self._settings, "auth_required", False),
+            expected_audience=expected_audience,
         )
 
     def get_health(self) -> ManagerHealth:

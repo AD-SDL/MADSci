@@ -97,11 +97,25 @@
 - [x] 14.6 Replace `Authlib>=1.3.0` with `joserfc>=1.0.0` in `src/madsci_auth_manager/pyproject.toml` and `src/madsci_client/pyproject.toml`
 - [x] 14.7 Run the auth test suite; confirm 92/92 pass and the `AuthlibDeprecationWarning` is gone
 
+## 15. Security-review HIGH mitigation (post-implementation review)
+
+The first `/security-review` pass after implementation found one HIGH issue plus
+two filtered defense-in-depth findings. Mitigations:
+
+- [x] 15.1 **HIGH (Vuln 1):** Override `auth_enabled` and `auth_required` defaults to `True` on `AuthManagerSettings`. Mitigates the foundational issue that `@requires` no-ops when middleware isn't installed and `AuthManagerSettings` inherited `auth_enabled=False` from `ManagerSettings` — leaving every admin route unauthenticated on a fresh deployment.
+- [x] 15.2 **HIGH (defense in depth):** `AuthManager._setup_auth_middleware` override installs a self-verifying `AuthMiddleware` (uses local `TokenService` rather than a remote `AuthClient`), avoiding the prefixed-alias collision that prevented the base-class path from picking up `auth_server_url`.
+- [x] 15.3 **HIGH (defense in depth):** `AuthManager.run_server()` override refuses to bind unless both `auth_enabled` and `auth_required` are `True`. Catches misconfiguration at the startup boundary.
+- [x] 15.4 **Filtered (`AuthClient` skips `iss`/`aud` validation):** Added `expected_issuer` and `expected_audience` constructor args to `AuthClient`; `verify_jwt` includes them in `JWTClaimsRegistry` when set. `manager_base._setup_auth_middleware` plumbs the manager's `auth_server_url` and `lab_id` through automatically.
+- [x] 15.5 **Filtered (`/revoke` refresh-token branch lacks self-vs-other check):** `revoke_endpoint` now probes the refresh-token row's `principal_sub` and applies the same self-vs-other rule before revoking.
+- [x] 15.6 Updated test fixtures in `test_auth_server.py`, `test_integration.py` (via `testing.make_auth_manager`'s new `auth_enforced=False` default), `test_auth_client.py`, `test_cli_auth.py`, and `test_security_hardening.py::server` to explicitly opt out of enforcement (preserves their unit-test semantics with the new safe defaults).
+- [x] 15.7 New tests pin the invariants: `test_auth_manager_settings_default_to_auth_enabled`, `test_auth_manager_run_server_refuses_unsafe_config`, `test_cross_principal_refresh_token_revoke_requires_permission`, `test_auth_client_rejects_token_with_wrong_audience`.
+- [x] 15.8 Re-ran auth suite (96/96) + full pytest (4202/4202) + project-wide `ruff check .` (clean).
+
 ## 13. Verification & release gates
 
-- [x] 13.1 `pytest src/madsci_auth_manager src/madsci_common/tests/test_auth_*.py src/madsci_client/tests/test_auth_*.py src/madsci_client/tests/test_cli_auth.py` — all green
-- [x] 13.2 Full `pytest` — no regressions
+- [x] 13.1 `pytest src/madsci_auth_manager src/madsci_common/tests/test_auth_*.py src/madsci_client/tests/test_auth_*.py src/madsci_client/tests/test_cli_auth.py` — all green (96/96)
+- [x] 13.2 Full `pytest` — no regressions (4202/4202)
 - [x] 13.3 `ruff check .` clean
-- [ ] 13.4 Re-run `security-review` skill against the branch — must address every finding from the prior review _(reviewer to invoke before merge — implementation complete, not yet re-reviewed)_
-- [ ] 13.5 Run `madsci-release-audit` skill — confirm CHANGELOG, docs, examples are coherent _(reviewer to invoke before merge)_
+- [x] 13.4 First `security-review` skill pass complete; HIGH finding + two filtered findings mitigated in Section 15. _(Re-review still recommended pre-merge.)_
+- [x] 13.5 First `madsci-release-audit` skill pass complete: stale `--password` in example lab README fixed, stale `Authlib` dep removed from `madsci_common`, stale "authlib's decoder" comment fixed in `token_service.py`. Audit findings recorded in `.scratch/auth_manager_security_hardening_audit.md`.
 - [ ] 13.6 Manual smoke against example lab: `just up`, then `madsci auth bootstrap` (env-var path), exercise `/token`, `/.well-known/jwks.json`, and assert admin endpoints reject unauthenticated calls _(operator to perform pre-merge — Docker required)_

@@ -179,6 +179,62 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             "/introspect",
         }
 
+    def _setup_auth_middleware(self, app: fastapi.FastAPI) -> None:
+        """Install AuthMiddleware on the Auth Manager itself.
+
+        Overrides the base-class implementation, which would try to read
+        ``auth_server_url`` from settings and construct a remote ``AuthClient``
+        — both unnecessary here because the Auth Manager has its own
+        ``TokenService`` and JWKS in-process. This avoids the prefixed-alias
+        collision between the inherited ``auth_server_url`` field and our
+        own ``server_url`` (alias-generated to ``auth_server_url``).
+        """
+        from madsci.common.auth_middleware import AuthMiddleware  # noqa: PLC0415
+
+        # Local in-process verification: short-circuit the HTTP round-trip.
+        token_service = self._token_service
+
+        class _InProcAuthClient:
+            """Stand-in for ``AuthClient`` that calls our own ``TokenService``."""
+
+            def verify_jwt(self, token: str) -> Any:
+                return token_service.verify_token(token)
+
+        app.add_middleware(
+            AuthMiddleware,
+            auth_client=_InProcAuthClient(),
+            auth_required=self.settings.auth_required,
+            unauthenticated_paths=self.unauthenticated_paths(),
+        )
+        self.logger.info(
+            "AuthMiddleware installed on Auth Manager (self-verifying)",
+            event_type=EventType.MANAGER_START,
+            auth_required=self.settings.auth_required,
+        )
+
+    def run_server(
+        self,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
+        **uvicorn_kwargs: Any,
+    ) -> None:
+        """Bind and serve. Refuses to bind unless auth is enforced.
+
+        Defense-in-depth against the security review's HIGH finding: an
+        Auth Manager started with ``auth_enabled=False`` would expose every
+        admin endpoint unauthenticated (``@requires`` no-ops when the
+        middleware isn't installed). We catch the misconfiguration at the
+        startup boundary rather than at first request.
+        """
+        if not (self.settings.auth_enabled and self.settings.auth_required):
+            raise RuntimeError(
+                "AuthManager refuses to bind: settings.auth_enabled and"
+                " settings.auth_required must both be True. The Auth Manager"
+                " is the one service where unauthenticated admin endpoints"
+                " would compromise the entire lab's identity system."
+            )
+        super().run_server(host=host, port=port, **uvicorn_kwargs)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -730,7 +786,7 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
         return self._token_service.introspect(body.token)
 
     @post("/revoke")
-    async def revoke_endpoint(
+    async def revoke_endpoint(  # noqa: C901
         self, request: Request, body: RevokeRequest
     ) -> dict[str, bool]:
         """Revoke an access token and/or refresh token.
@@ -755,18 +811,45 @@ class AuthManager(AbstractManagerBase[AuthManagerSettings]):
             except TokenError:
                 target_claims = None
 
-        if auth_active and target_claims is not None and principal is not None:
-            is_self = target_claims.sub == principal.sub
+        # Probe the refresh-token row (without revoking) to enforce the
+        # same self-vs-other rule on the refresh-token branch. Without this,
+        # any authenticated principal who knows another user's refresh-token
+        # bearer string could revoke it (a sign-out DoS).
+        target_refresh_sub: Optional[str] = None
+        if body.refresh_token:
+            with Session(self._postgres_handler.get_engine()) as session:
+                row = session.exec(
+                    select(RefreshTokenTable).where(
+                        RefreshTokenTable.token_hash
+                        == hash_refresh_token(body.refresh_token)
+                    )
+                ).first()
+                if row is not None:
+                    target_refresh_sub = row.principal_sub
+
+        if auth_active and principal is not None:
             perms = set(principal.permissions)
-            if (
-                not is_self
-                and AuthPermissions.TOKEN_REVOKE not in perms
-                and "*" not in perms
-            ):
-                raise HTTPException(
-                    status_code=403,
-                    detail=f"missing required permission: {AuthPermissions.TOKEN_REVOKE}",
-                )
+            has_revoke_perm = AuthPermissions.TOKEN_REVOKE in perms or "*" in perms
+            if target_claims is not None:
+                is_self_access = target_claims.sub == principal.sub
+                if not is_self_access and not has_revoke_perm:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            "missing required permission: "
+                            f"{AuthPermissions.TOKEN_REVOKE}"
+                        ),
+                    )
+            if target_refresh_sub is not None:
+                is_self_refresh = target_refresh_sub == principal.sub
+                if not is_self_refresh and not has_revoke_perm:
+                    raise HTTPException(
+                        status_code=403,
+                        detail=(
+                            "missing required permission: "
+                            f"{AuthPermissions.TOKEN_REVOKE}"
+                        ),
+                    )
 
         if body.refresh_token:
             self._token_service.revoke_refresh_token(body.refresh_token)

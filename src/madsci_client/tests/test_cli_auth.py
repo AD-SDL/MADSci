@@ -32,6 +32,10 @@ def patched_auth_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[AuthManager
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    # Smoke tests bypass auth — they exercise the CLI command surface,
+    # not the auth-middleware path. Production defaults enforce auth.
+    settings.auth_enabled = False
+    settings.auth_required = False
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username="admin", admin_password="hunter2")
     test_client = TestClient(mgr.create_server())

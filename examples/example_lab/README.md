@@ -118,9 +118,11 @@ The example lab boots `auth_manager` (port 8007) but every consumer leaves
 any token. To explore the auth flow:
 
 ```bash
-# 1. Bootstrap the Auth Manager (pick any ULID for lab_id)
-docker compose exec auth_manager madsci auth bootstrap \
-  --username admin --password hunter2 \
+# 1. Bootstrap the Auth Manager (pick any ULID for lab_id).
+#    The admin password is sourced from MADSCI_AUTH_BOOTSTRAP_PASSWORD or an
+#    interactive prompt — `--password` on argv is rejected (would leak via `ps`).
+docker compose exec -e MADSCI_AUTH_BOOTSTRAP_PASSWORD='hunter2' auth_manager \
+  madsci auth bootstrap --username admin \
   --lab-id 01HZZ0000000000000000000A0
 
 # 2. Verify

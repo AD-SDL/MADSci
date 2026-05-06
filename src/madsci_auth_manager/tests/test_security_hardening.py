@@ -48,6 +48,10 @@ def server() -> tuple[AuthManager, TestClient]:
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    # These tests exercise the raw HTTP surface; the dedicated
+    # ``server_with_auth`` fixture below covers the middleware path.
+    settings.auth_enabled = False
+    settings.auth_required = False
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username="admin", admin_password="hunter2")
     return mgr, TestClient(mgr.create_server())
@@ -152,6 +156,43 @@ def test_auth_client_rejects_alg_none() -> None:
 # ---------------------------------------------------------------------------
 # Task 2.5: Auth Manager refuses to start without lab_id
 # ---------------------------------------------------------------------------
+
+
+def test_auth_manager_settings_default_to_auth_enabled() -> None:
+    """Production safety: AuthManagerSettings defaults must enforce auth.
+
+    Pins the fix for the security review's HIGH finding — a fresh
+    deployment with no overrides must NOT expose admin endpoints
+    unauthenticated.
+    """
+    settings = AuthManagerSettings(
+        enable_registry_resolution=False, lab_id=new_ulid_str()
+    )
+    assert settings.auth_enabled is True
+    assert settings.auth_required is True
+
+
+def test_auth_manager_run_server_refuses_unsafe_config(tmp_path) -> None:
+    """run_server() refuses to bind unless auth is enforced.
+
+    Defense-in-depth: even if an operator deliberately overrode the safe
+    defaults, the production startup path catches the misconfiguration
+    rather than silently exposing the admin surface.
+    """
+    settings = AuthManagerSettings(
+        enable_registry_resolution=False,
+        lab_id=new_ulid_str(),
+        otel_enabled=False,
+        argon2_time_cost=1,
+        argon2_memory_cost=8 * 1024,
+        argon2_parallelism=1,
+    )
+    settings.auth_enabled = False
+    settings.auth_required = False
+    mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
+    with pytest.raises(RuntimeError) as exc:
+        mgr.run_server()
+    assert "auth_enabled" in str(exc.value)
 
 
 def test_auth_manager_refuses_to_start_without_lab_id() -> None:
@@ -277,15 +318,12 @@ def test_rotated_to_links_parent_to_child(server) -> None:
 def server_with_auth() -> tuple[AuthManager, TestClient, str]:
     """An Auth Manager with AuthMiddleware installed, plus an admin token.
 
-    NOTE on the manual middleware install: the AuthManagerSettings class
-    uses a prefixed alias generator that collides with the ``auth_*`` fields
-    inherited from ManagerSettings, so the standard
-    ``manager_base._setup_auth_middleware`` path can't pick up
-    ``auth_enabled``/``auth_server_url``. We bypass it and install the
-    middleware ourselves with the correct unauthenticated allowlist.
+    Uses the production defaults (``auth_enabled=True``,
+    ``auth_required=True``) and lets ``AuthManager._setup_auth_middleware``
+    install the middleware automatically. The Auth Manager's middleware is
+    self-verifying (uses its own ``TokenService`` rather than a remote
+    ``AuthClient``), so no HTTP transport plumbing is needed.
     """
-    from madsci.common.auth_middleware import AuthMiddleware
-
     # OwnershipInfo.from_jwt_claims validates lab_id as a ULID, so the
     # auth-enabled middleware path requires a real ULID (the simpler tests
     # above don't pass through the middleware so they can use "lab-test").
@@ -298,23 +336,13 @@ def server_with_auth() -> tuple[AuthManager, TestClient, str]:
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    # Defaults are now True, but be explicit so the test reads as a
+    # behavioral assertion, not a default-coupling.
+    settings.auth_enabled = True
+    settings.auth_required = True
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username="admin", admin_password="hunter2")
-
-    # Local AuthClient stand-in: verifies tokens against our in-process
-    # TokenService (no HTTP needed).
-    class _InProcAuthClient:
-        def verify_jwt(self, token: str):
-            return mgr._token_service.verify_token(token)
-
-    app = mgr.create_server()
-    app.add_middleware(
-        AuthMiddleware,
-        auth_client=_InProcAuthClient(),
-        auth_required=True,
-        unauthenticated_paths=mgr.unauthenticated_paths(),
-    )
-    test_client = TestClient(app)
+    test_client = TestClient(mgr.create_server())
 
     # Acquire admin token
     r = test_client.post(
@@ -451,6 +479,109 @@ def test_cross_principal_revoke_requires_permission(server_with_auth) -> None:
         headers={"Authorization": f"Bearer {bob_token}"},
     )
     assert r.status_code == 403
+
+
+def test_cross_principal_refresh_token_revoke_requires_permission(
+    server_with_auth,
+) -> None:
+    """Refresh-token revocation honors the same self-vs-other rule.
+
+    Pins the security review's filtered ``/revoke refresh-token path lacks
+    self-vs-other check`` finding — without this, bob with knowledge of
+    admin's refresh token could force-sign-out admin without holding
+    ``auth.token.revoke``.
+    """
+    _mgr, client, admin_token = server_with_auth
+    # Get admin's refresh token
+    admin_refresh = client.post(
+        "/token",
+        data={
+            "grant_type": "password",
+            "username": "admin",
+            "password": "hunter2",
+        },
+    ).json()["refresh_token"]
+
+    # bob (no permissions) logs in
+    client.post(
+        "/users",
+        json={"username": "bob3", "password": "x" * 12},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    bob_token = client.post(
+        "/token",
+        data={"grant_type": "password", "username": "bob3", "password": "x" * 12},
+    ).json()["access_token"]
+
+    # bob tries to revoke admin's refresh token -> 403
+    r = client.post(
+        "/revoke",
+        json={"refresh_token": admin_refresh},
+        headers={"Authorization": f"Bearer {bob_token}"},
+    )
+    assert r.status_code == 403
+
+    # Admin's refresh token still works
+    r = client.post(
+        "/token",
+        data={"grant_type": "refresh_token", "refresh_token": admin_refresh},
+    )
+    assert r.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# AuthClient iss/aud validation (security review filtered defense-in-depth)
+# ---------------------------------------------------------------------------
+
+
+def test_auth_client_rejects_token_with_wrong_audience(server) -> None:
+    """AuthClient.verify_jwt enforces ``expected_audience`` when configured."""
+    from madsci.client.auth_client import AuthClient, AuthClientError
+
+    mgr, _ = server
+    # Issue a token via the manager (aud = "lab-test")
+    signing = mgr._signing_key_service.get_signing_key()
+    signing_key = RSAKey.import_key(
+        signing.private_key_pem, parameters={"kid": signing.kid}
+    )
+    now = int(datetime.now(timezone.utc).timestamp())
+    claims = {
+        "iss": str(mgr.settings.server_url).rstrip("/"),
+        "aud": "lab-test",
+        "sub": "u",
+        "iat": now,
+        "exp": now + 600,
+        "jti": new_ulid_str(),
+        "principal_type": "user",
+        "permissions": ["*"],
+    }
+    header = {"alg": "RS256", "kid": signing.kid, "typ": "JWT"}
+    token = jwt.encode(header, claims, signing_key, algorithms=["RS256"])
+
+    jwks_dict = mgr._signing_key_service.jwks()
+
+    # AuthClient configured for a DIFFERENT audience must reject. The
+    # underlying joserfc raises InvalidClaimError; AuthClient propagates
+    # whatever the JOSE library raises for non-signature failures.
+    client = AuthClient(
+        auth_server_url="http://example.invalid/",
+        expected_audience="some-other-lab",
+    )
+    # Stub jwks() entirely so retry-on-failure doesn't try to HTTP-fetch
+    client.jwks = lambda **_: jwks_dict  # type: ignore[method-assign]
+    with pytest.raises((AuthClientError, Exception)) as exc:
+        client.verify_jwt(token)
+    assert "aud" in str(exc.value).lower() or "audience" in str(exc.value).lower()
+
+    # Same client with the correct audience accepts it
+    client.close()
+    client = AuthClient(
+        auth_server_url="http://example.invalid/",
+        expected_audience="lab-test",
+    )
+    client.jwks = lambda **_: jwks_dict  # type: ignore[method-assign]
+    decoded = client.verify_jwt(token)
+    assert decoded.aud == "lab-test"
 
 
 # ---------------------------------------------------------------------------

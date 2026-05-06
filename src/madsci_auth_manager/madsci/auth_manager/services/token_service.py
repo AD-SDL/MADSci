@@ -269,7 +269,7 @@ class TokenService:
         """Reject tokens whose JWS header alg is not in ALLOWED_ALGORITHMS.
 
         Closes the classic alg-confusion attack (e.g., HS256-with-public-key
-        forgery) before the token reaches authlib's decoder.
+        forgery) before the token reaches joserfc's decoder.
         """
         try:
             header_b64 = token.split(".", maxsplit=1)[0]

@@ -28,6 +28,12 @@ def auth_pair() -> Iterator[tuple[AuthManager, AuthClient]]:
         argon2_memory_cost=8 * 1024,
         argon2_parallelism=1,
     )
+    # These tests exercise AuthClient against the raw token endpoints
+    # (login, refresh, introspect, revoke); they don't go through the
+    # admin-permission surface, so disable enforcement on the manager
+    # itself. Production defaults to True (security review HIGH finding).
+    settings.auth_enabled = False
+    settings.auth_required = False
     mgr = AuthManager(settings=settings, postgres_handler=SQLiteHandler())
     mgr.bootstrap(admin_username="admin", admin_password="hunter2")
     test_client = TestClient(mgr.create_server())
