@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from madsci.client.event_client import EventClient
-from madsci.common.types.action_types import ActionCancelled, ActionPaused
+from madsci.common.types.action_types import ActionCancelled, ActionPaused, ActionSucceeded
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import RestNodeConfig
@@ -66,7 +66,13 @@ def interruptable(action_fn: Any) -> Any:
                 self.logger.debug("PausedError raised in interruptable wrapper")
                 result_container["value"] = self._pause_result()
             except Exception as e:
-                result_container["error"] = e
+                if isinstance(e, (CancelledError, PausedError)):
+                    result_container["value"] = (
+                        self._cancel_result() if isinstance(e, CancelledError)
+                        else self._pause_result()
+                    )
+                else:
+                    result_container["error"] = e
 
         t = threading.Thread(target=run, daemon=True)
         t.start()
@@ -321,6 +327,8 @@ class LiquidHandlerNode(RestNode):
             f"Initialized pipette resource from template: {self.pipette.resource_id}"
         )
 
+        self.node_status.homed = False # On start up assume liquidhandler is not homed yet. By default True for other nodes (no homing ability).
+
         self.logger.log("Liquid handler initialized!")
 
     def shutdown_handler(self) -> None:
@@ -453,6 +461,15 @@ class LiquidHandlerNode(RestNode):
             target_location.resource_id, transferred_resource.resource_id
         )
 
+    @action
+    def Home(self) -> ActionSucceeded:
+        self.node_status.homed = False
+        self._wait(10 * self.config.wait_time) # ***
+
+        # simulated homing assumed successful
+        self.node_status.homed = True
+        return ActionSucceeded()
+
     def get_location(self) -> AdminCommandResponse:
         """
         Get the physical location coordinates of the liquid handler.
@@ -483,6 +500,12 @@ class LiquidHandlerNode(RestNode):
         """Resume a paused action."""
         self.logger.debug("Resuming, setting paused status to False")
         self.node_status.paused = False
+        return AdminCommandResponse()
+    
+    def home(self) -> AdminCommandResponse:
+        """Send a homing action."""
+        self.logger.debug("Homing, setting homed status to True.")
+        # *** TO DO: What goes in the home admin command that isn't accomplished by Home?
         return AdminCommandResponse()
 
 

@@ -35,6 +35,7 @@ Emergency and operational control components:
 - **PauseResumeButton.vue**: Pause/resume operations (workcells, nodes)
 - **LockUnlockButton.vue**: Lock/unlock nodes for maintenance
 - **CancelButton.vue**: Cancel running workflows and operations
+- **HomeButton.vue**: Send nodes to home location
 - **ResetButton.vue**: Reset node states and clear errors
 - **ShutdownButton.vue**: Graceful system shutdown
 

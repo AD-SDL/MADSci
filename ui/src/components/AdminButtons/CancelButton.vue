@@ -4,7 +4,7 @@
             <template v-slot:activator="{ props }">
                 <div v-bind="props">
                     <v-btn
-                        @click="sendCancelCommand"
+                        @click="sendCancelCommand()"
                         color="deep-orange darken-1"
                         dark
                         elevation="5"

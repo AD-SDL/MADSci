@@ -6,6 +6,7 @@
         <PauseResumeButton class="ml-2"/>
         <CancelButton class="ml-2" />
         <ResetButton class="ml-2" />
+        <HomeButton class="ml-2" />
         <LockUnlockButton class="ml-2"/>
         <ShutdownButton class="ml-2" />
         <SafetyStopButton class="ml-2"/>
@@ -68,6 +69,7 @@ import PauseResumeButton from './AdminButtons/PauseResumeButton.vue';
 import ResetButton from './AdminButtons/ResetButton.vue';
 import SafetyStopButton from './AdminButtons/SafetyStopButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
+import HomeButton from './AdminButtons/HomeButton.vue';
 import LocationsPanel from './LocationsPanel.vue';
 import WorkflowsPanel from './WorkflowsPanel.vue';
 

@@ -23,6 +23,14 @@
             :node_status="wc_state.nodes[modal_title].state.status"
             class="ml-2" />
 
+          <template v-if="wc_state.nodes[modal_title].info.capabilities.admin_commands.includes('home')">
+            <HomeButton
+              :node="modal_title"
+              :node_status="wc_state.nodes[modal_title].state.status"
+              @Home="send_wf(Object.values(modal_text.actions).find((a: any) => a.name === 'Home'))"
+              class="ml-2"/>
+          </template>
+
           <LockUnlockButton
             :node="modal_title"
             :node_status="wc_state.nodes[modal_title].state.status"
@@ -67,7 +75,7 @@
           </v-container>
           <h3>Actions</h3>
           <v-expansion-panels>
-            <v-expansion-panel v-for="action in modal_text.actions" :key="action.name">
+            <v-expansion-panel v-for="action in (Object.values(modal_text.actions) as any[]).filter((a: any) => a.name !== 'Home')" :key="action.name">
               <v-expansion-panel-title @click="set_text(action)">
                 <h4>{{ action.name }}</h4>
               </v-expansion-panel-title>
@@ -177,6 +185,7 @@ import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
+import HomeButton from './AdminButtons/HomeButton.vue';
 import { json } from 'stream/consumers';
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
 const arg_headers = [

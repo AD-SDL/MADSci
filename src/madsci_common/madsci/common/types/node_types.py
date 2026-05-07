@@ -497,6 +497,11 @@ class NodeStatus(MadsciBaseModel):
         title="Node Disconnected",
         description="Whether the node is disconnected from the workcell manager",
     )
+    homed: bool = Field(
+        default=True,
+        title="Node Homed",
+        description="Whether the node is homed.",
+    )
     errors: list[Error] = Field(
         default_factory=list,
         title="Node Errors",

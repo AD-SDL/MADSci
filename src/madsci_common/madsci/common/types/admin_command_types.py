@@ -18,6 +18,7 @@ class AdminCommands(str, Enum):
     SHUTDOWN = "shutdown"
     LOCK = "lock"
     UNLOCK = "unlock"
+    HOME = "home"
     GET_LOCATION = "get_location"
 
 
