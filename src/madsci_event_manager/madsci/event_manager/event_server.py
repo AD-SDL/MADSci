@@ -125,8 +125,6 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 stacklevel=2,
             )
 
-        
-        
         # Store additional dependencies before calling super().__init__
         self._document_handler = document_handler
         self._db_connection = db_connection
@@ -477,8 +475,8 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 )
                 raise e
         for handler in self.event_handlers:
-             handler.handle_event(event)
-        
+            handler.handle_event(event)
+
         return event
 
     @get("/event/{event_id}")

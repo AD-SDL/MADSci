@@ -121,7 +121,10 @@ class EventManagerSettings(
     )
 
     event_handlers: list[str] = Field(
-        default=["madsci.event_manager.event_handlers.default_error_handler", "madsci.event_manager.event_handlers.default_notification_handler"],
+        default=[
+            "madsci.event_manager.event_handlers.default_error_handler",
+            "madsci.event_manager.event_handlers.default_notification_handler",
+        ],
         title="Event Handlers",
         description="Comma-separated list of event handler modules to use",
     )
