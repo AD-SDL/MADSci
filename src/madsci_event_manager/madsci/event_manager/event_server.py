@@ -40,7 +40,6 @@ from madsci.common.types.event_types import (
     EventType,
 )
 from madsci.event_manager.events_csv_exporter import CSVExporter
-from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
 from madsci.event_manager.utilization_analyzer import UtilizationAnalyzer
 from pydantic import BaseModel, model_validator
@@ -126,13 +125,17 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 stacklevel=2,
             )
 
-        self.error_handler_module = importlib.import_module(settings.error_handler)
-        self.error_handler = self.error_handler_module.ErrorHandler()
+        
+        
         # Store additional dependencies before calling super().__init__
         self._document_handler = document_handler
         self._db_connection = db_connection
         super().__init__(settings=settings, **kwargs)
-
+        self.event_handlers = []
+        for handler_name in settings.event_handlers:
+            handler_module = importlib.import_module(handler_name)
+            handler = handler_module.EventHandler(self.settings)
+            self.event_handlers.append(handler)
         # Initialize database connection and collections
         self._setup_database()
 
@@ -473,16 +476,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                     exc_info=True,
                 )
                 raise e
-        if event.log_level == EventLogLevel.ERROR:
-            self.error_handler.handle_error(event)
-        if (
-            event.alert or event.log_level >= self.settings.alert_level
-        ) and self.settings.email_alerts:
-            email_alerter = EmailAlerts(
-                config=self.settings.email_alerts,
-                logger=self.logger,
-            )
-            email_alerter.send_email_alerts(event)
+        for handler in self.event_handlers:
+             handler.handle_event(event)
+        
         return event
 
     @get("/event/{event_id}")
