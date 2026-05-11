@@ -555,20 +555,27 @@ class RateLimitTracker:
         Args:
             headers: HTTP response headers dictionary
         """
-        with self._lock:
-            # Parse long window rate limit headers
-            if "X-RateLimit-Limit" in headers:
-                self.limit = int(headers["X-RateLimit-Limit"])
-            if "X-RateLimit-Remaining" in headers:
-                self.remaining = int(headers["X-RateLimit-Remaining"])
-            if "X-RateLimit-Reset" in headers:
-                self.reset = int(headers["X-RateLimit-Reset"])
+        header_attr_map = (
+            ("X-RateLimit-Limit", "limit"),
+            ("X-RateLimit-Remaining", "remaining"),
+            ("X-RateLimit-Reset", "reset"),
+            ("X-RateLimit-Burst-Limit", "burst_limit"),
+            ("X-RateLimit-Burst-Remaining", "burst_remaining"),
+        )
 
-            # Parse burst window rate limit headers if present
-            if "X-RateLimit-Burst-Limit" in headers:
-                self.burst_limit = int(headers["X-RateLimit-Burst-Limit"])
-            if "X-RateLimit-Burst-Remaining" in headers:
-                self.burst_remaining = int(headers["X-RateLimit-Burst-Remaining"])
+        with self._lock:
+            for header_name, attr in header_attr_map:
+                if header_name not in headers:
+                    continue
+                raw = headers[header_name]
+                try:
+                    setattr(self, attr, int(raw))
+                except (ValueError, TypeError):
+                    logger.debug(
+                        "Ignoring unparseable rate limit header %s=%r",
+                        header_name,
+                        raw,
+                    )
 
             # Log warnings if approaching limits
             self._check_and_warn()
