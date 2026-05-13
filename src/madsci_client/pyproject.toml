@@ -20,6 +20,7 @@ dependencies = [
   "structlog>=24.1.0",
   "httpx>=0.25.0",
   "rich>=13.0.0",
+  "joserfc>=1.0.0",
 ]
 
 [project.scripts]

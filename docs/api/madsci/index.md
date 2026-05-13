@@ -3,6 +3,7 @@ Namespace madsci
 
 Sub-modules
 -----------
+* madsci.auth_manager
 * madsci.client
 * madsci.common
 * madsci.data_manager

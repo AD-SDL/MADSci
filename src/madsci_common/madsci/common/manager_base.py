@@ -365,6 +365,69 @@ class AbstractManagerBase(
         if isinstance(self._settings, ManagerSettings):
             global_ownership_info.manager_id = self._settings.manager_id
 
+    def unauthenticated_paths(self) -> set[str]:
+        """Return URL paths that bypass AuthMiddleware on this manager.
+
+        The default set covers operator/monitor endpoints (``/health``,
+        ``/settings``, OpenAPI). Subclasses MAY extend this — e.g., the Auth
+        Manager itself adds ``/token``, ``/.well-known/jwks.json``,
+        ``/deny-list`` since those are needed to bootstrap and validate
+        tokens.
+        """
+        return {
+            "/health",
+            "/settings",
+            "/openapi.json",
+            "/docs",
+            "/redoc",
+        }
+
+    def _setup_auth_middleware(self, app: FastAPI) -> None:
+        """Construct an AuthClient and install AuthMiddleware on the app."""
+        from madsci.common.auth_middleware import AuthMiddleware  # noqa: PLC0415
+
+        auth_url = getattr(self._settings, "auth_server_url", None)
+        if auth_url is None:
+            self.logger.warning(
+                "auth_enabled=True but auth_server_url is unset;"
+                " AuthMiddleware not installed",
+                event_type=EventType.MANAGER_ERROR,
+            )
+            return
+
+        try:
+            from madsci.client.auth_client import AuthClient  # noqa: PLC0415
+        except ImportError:
+            self.logger.warning(
+                "auth_enabled=True but madsci.client.auth_client is unavailable",
+                event_type=EventType.MANAGER_ERROR,
+            )
+            return
+
+        # Defense-in-depth: expected issuer is the auth_server_url itself,
+        # expected audience is the lab_id. Both are validated on every JWT
+        # verification when set.
+        expected_audience = getattr(self._settings, "lab_id", None)
+        self._auth_client = AuthClient(
+            auth_server_url=str(auth_url),
+            expected_issuer=str(auth_url).rstrip("/"),
+            expected_audience=expected_audience,
+        )
+        app.add_middleware(
+            AuthMiddleware,
+            auth_client=self._auth_client,
+            auth_required=getattr(self._settings, "auth_required", False),
+            unauthenticated_paths=set(self.unauthenticated_paths()),
+            lab_id=expected_audience,
+        )
+        self.logger.info(
+            "AuthMiddleware installed",
+            event_type=EventType.MANAGER_START,
+            auth_server_url=str(auth_url),
+            auth_required=getattr(self._settings, "auth_required", False),
+            expected_audience=expected_audience,
+        )
+
     def get_health(self) -> ManagerHealth:
         """
         Get the health status of this manager.
@@ -592,6 +655,12 @@ class AbstractManagerBase(
             EventClientContextMiddleware,
             manager_name=manager_name,
         )
+
+        # Install AuthMiddleware when auth_enabled
+        if isinstance(self._settings, ManagerSettings) and getattr(
+            self._settings, "auth_enabled", False
+        ):
+            self._setup_auth_middleware(app)
 
     # Server creation and lifecycle methods
 

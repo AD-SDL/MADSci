@@ -178,6 +178,32 @@ class ManagerSettings(MadsciBaseSettings):
         description="OTLP transport protocol ('grpc' or 'http')",
     )
 
+    # Authentication / authorization integration
+    auth_enabled: bool = Field(
+        default=False,
+        title="Auth Enabled",
+        description=(
+            "Enable AuthMiddleware on this manager. When True, an AuthClient"
+            " is constructed against ``auth_server_url`` and incoming requests"
+            " carrying ``Authorization: Bearer <jwt>`` are validated."
+        ),
+    )
+    auth_required: bool = Field(
+        default=False,
+        title="Auth Required",
+        description=(
+            "When True, requests without a valid token are rejected with HTTP"
+            " 401. When False (the migration mode), unauth'd requests are"
+            " allowed but a structured warning is emitted. Has no effect"
+            " unless ``auth_enabled`` is True."
+        ),
+    )
+    auth_server_url: Optional[AnyUrl] = Field(
+        default=None,
+        title="Auth Server URL",
+        description=("URL of the lab's Auth Manager. Required when ``auth_enabled``."),
+    )
+
 
 class ManagerHealth(MadsciBaseModel):
     """Base health status for MADSci Manager services.

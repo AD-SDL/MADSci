@@ -51,6 +51,21 @@ services:
     volumes:
       - ${REPO_PATH:-../..}/.madsci/postgresql_resources/data:/var/lib/postgresql/data
 
+  # PostgreSQL for the Auth Manager (separate from Resource Manager so an
+  # auth incident doesn't compromise inventory state).
+  madsci_postgres_auth:
+    container_name: madsci_postgres_auth
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=madsci
+      - POSTGRES_PASSWORD=madsci
+      - POSTGRES_DB=auth
+    ports:
+      - ${AUTH_POSTGRES_PORT:-5435}:5432
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/postgresql_auth/data:/var/lib/postgresql/data
+
   madsci_seaweedfs:
     container_name: madsci_seaweedfs
     image: chrislusf/seaweedfs:4.17

@@ -23,6 +23,7 @@ MADSCI_PACKAGES = [
     "madsci.data_manager",
     "madsci.workcell_manager",
     "madsci.location_manager",
+    "madsci.auth_manager",
 ]
 
 

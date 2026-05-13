@@ -55,6 +55,7 @@ Classes
 
     ### Descendants
 
+    * madsci.auth_manager.auth_server.AuthManager
     * madsci.data_manager.data_server.DataManager
     * madsci.event_manager.event_server.EventManager
     * madsci.experiment_manager.experiment_server.ExperimentManager
@@ -195,6 +196,15 @@ Classes
     :   Create a best-effort span context manager.
         
         This is intended for higher-level manager operations (not every log line).
+
+    `unauthenticated_paths(self) ‑> set[str]`
+    :   Return URL paths that bypass AuthMiddleware on this manager.
+        
+        The default set covers operator/monitor endpoints (``/health``,
+        ``/settings``, OpenAPI). Subclasses MAY extend this — e.g., the Auth
+        Manager itself adds ``/token``, ``/.well-known/jwks.json``,
+        ``/deny-list`` since those are needed to bootstrap and validate
+        tokens.
 
 `ManagerBaseMeta(*args, **kwargs)`
 :   Metaclass that combines ABCMeta and Routable's metaclass.

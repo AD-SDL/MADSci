@@ -35,6 +35,7 @@ The system follows a microservices architecture with the following main componen
 - **madsci_data_manager**: Data capture, storage, and querying (Port 8004)
 - **madsci_workcell_manager**: Workflow coordination and scheduling (Port 8005)
 - **madsci_location_manager**: Laboratory location management, resource attachments, and node-specific references (Port 8006)
+- **madsci_auth_manager**: Authentication and authorization service — users, projects, service accounts, node identities, JWT issuance, JWKS, RBAC (Port 8007). Default-disabled across all managers (`auth_enabled=False`); opt in per the rollout in `docs/guides/auth_operator.md`. Use `AuthClient` (`from madsci.client.auth_client import AuthClient`) for programmatic access; install ambient propagation via `auth_client_context()` so other service clients pick up bearer tokens automatically. Apply `@requires(permission=...)` from `madsci.common.auth_decorators` to enforce per-endpoint authorization.
 
 ### Frontend
 - **ui/**: Vue 3 + Vuetify dashboard for lab management and monitoring
@@ -429,6 +430,7 @@ When TUI screens, CLI commands, or application code needs to communicate with MA
 | `DataClient` | Data Manager | 8004 |
 | `WorkcellClient` | Workcell Manager | 8005 |
 | `LocationClient` | Location Manager | 8006 |
+| `AuthClient` | Auth Manager | 8007 |
 | `RestNodeClient` | Direct node communication | varies |
 
 Client classes handle Pydantic model deserialization (avoiding field alias bugs like `_id` vs `experiment_id`), retry strategies, connection pooling, consistent error handling, and rate limiting.

@@ -4,6 +4,7 @@ The Modular Autonomous Discovery for Science (MADSci) Python Client and CLI.
 
 Sub-modules
 -----------
+* madsci.client.auth_client
 * madsci.client.cli
 * madsci.client.client_mixin
 * madsci.client.data_client

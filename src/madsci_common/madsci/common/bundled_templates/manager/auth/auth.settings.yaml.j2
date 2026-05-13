@@ -1,0 +1,30 @@
+# MADSci Auth Manager settings (port 8007)
+# Generated from the bundled `auth` template.
+
+server_url: "http://{{ server_host }}:{{ server_port }}/"
+manager_name: "auth_manager"
+manager_description: "MADSci Auth Manager — JWT issuance, JWKS, RBAC, deny-list"
+
+lab_id: "{{ lab_id }}"
+database_url: "{{ database_url }}"
+
+# Default lifetimes (override only if you understand the trade-offs).
+access_token_ttl: 900           # 15 min
+refresh_token_ttl: 2592000      # 30 days
+signing_key_ttl: 7776000        # 90 days
+
+# Argon2id tuning (defaults are OWASP-recommended for current hardware).
+argon2_time_cost: 3
+argon2_memory_cost: 65536       # KiB (64 MiB)
+argon2_parallelism: 4
+
+# Deny-list grace period (seconds past exp to retain the row).
+deny_list_persist_grace: 300
+
+# Local audit-log fallback used by consuming managers when this Auth Manager
+# is unreachable. See docs/guides/auth_operator.md for sizing guidance.
+local_audit_log_path: ".madsci/audit/auth-fallback.log"
+local_audit_log_max_bytes: 104857600   # 100 MB
+
+# Rate limiting on /token (RFC 6749 §5.2 errors are still surfaced).
+rate_limit_enabled: true

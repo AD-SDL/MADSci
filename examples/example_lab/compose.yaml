@@ -98,6 +98,22 @@ services:
       - event_manager
       - location_manager
 
+  # Auth Manager — default-disabled at all consumers (auth_enabled=False); the
+  # service still runs so operators can opt in by flipping per-manager
+  # auth_enabled=True. See docs/guides/auth_operator.md for the rollout plan.
+  auth_manager:
+    <<: *madsci-service
+    container_name: auth_manager
+    command: python -m madsci.auth_manager.auth_server
+    environment:
+      # network_mode: host means we reach postgres via the host-mapped port,
+      # not the container DNS name (which doesn't resolve under host networking).
+      - AUTH_DATABASE_URL=postgresql://madsci:madsci@localhost:${AUTH_POSTGRES_PORT:-5435}/auth
+      - AUTH_LAB_ID=${AUTH_LAB_ID:-01HZZ0000000000000000000A0}
+    depends_on:
+      - madsci_postgres_auth
+      - event_manager
+
   # *Nodes
 
   liquidhandler_1:

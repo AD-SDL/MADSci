@@ -4,6 +4,10 @@ Common code for the MADSci project.
 
 Sub-modules
 -----------
+* madsci.common.auth_audit_fallback
+* madsci.common.auth_context
+* madsci.common.auth_decorators
+* madsci.common.auth_middleware
 * madsci.common.backup_tools
 * madsci.common.context
 * madsci.common.data_manipulation

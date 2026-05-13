@@ -17,6 +17,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Union
 
 import httpx
+from madsci.common.auth_context import get_current_auth_client
 
 if TYPE_CHECKING:
     from madsci.common.types.client_types import MadsciHttpClientConfig
@@ -261,6 +262,70 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
 # ---------------------------------------------------------------------------
 
 
+def _install_auth_hooks(
+    event_hooks: dict[str, list],
+    *,
+    async_mode: bool,
+) -> None:
+    """Install ambient-AuthClient request/response hooks on ``event_hooks``.
+
+    On request, injects ``Authorization: Bearer <token>`` from the ambient
+    ``AuthClient`` (set via ``auth_client_context()``) when the caller has
+    not already supplied an Authorization header. On a 401 response, asks
+    the ambient client to force a deny-list refresh and retry the refresh
+    grant; the actual retry is handled by the higher-level call site.
+
+    No-op when no ambient client is set, preserving existing unauthenticated
+    behavior.
+    """
+    if async_mode:
+
+        async def _async_request_hook(request: httpx.Request) -> None:
+            _maybe_inject_bearer(request)
+
+        async def _async_response_hook(response: httpx.Response) -> None:
+            _maybe_refresh_on_401(response)
+
+        event_hooks["request"].append(_async_request_hook)
+        event_hooks["response"].append(_async_response_hook)
+    else:
+
+        def _request_hook(request: httpx.Request) -> None:
+            _maybe_inject_bearer(request)
+
+        def _response_hook(response: httpx.Response) -> None:
+            _maybe_refresh_on_401(response)
+
+        event_hooks["request"].append(_request_hook)
+        event_hooks["response"].append(_response_hook)
+
+
+def _maybe_inject_bearer(request: httpx.Request) -> None:
+    """Inject Authorization from the ambient AuthClient if one is present."""
+    client_obj = get_current_auth_client()
+    if client_obj is None or "authorization" in (k.lower() for k in request.headers):
+        return
+    try:
+        token = client_obj.get_access_token()
+    except Exception:
+        return
+    request.headers["Authorization"] = f"Bearer {token}"
+
+
+def _maybe_refresh_on_401(response: httpx.Response) -> None:
+    """Force-refresh the ambient AuthClient's tokens after a 401."""
+    if response.status_code != 401:
+        return
+    client_obj = get_current_auth_client()
+    if client_obj is None:
+        return
+    try:
+        client_obj.force_deny_list_refresh()
+        client_obj.refresh()
+    except Exception:
+        return
+
+
 def _make_rate_limit_hook(
     tracker: RateLimitTracker,
     *,
@@ -374,9 +439,11 @@ def create_httpx_client(
         pool=5.0,
     )
 
-    # -- Event hooks (rate limit tracking) ----------------------------------
+    # -- Event hooks (rate limit tracking + ambient auth) -------------------
     event_hooks: dict[str, list] = {"request": [], "response": []}
     rate_limit_tracker: RateLimitTracker | None = None
+
+    _install_auth_hooks(event_hooks, async_mode=async_mode)
 
     if config.rate_limit_tracking_enabled:
         rate_limit_tracker = RateLimitTracker(
