@@ -7,15 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-- **`madsci new workcell` subcommand**: The workcell template generated an orphaned YAML format that didn't correspond to any Pydantic model. Workcell configuration is handled by `WorkcellManagerSettings` via `settings.yaml`.
-- **`LabClient.get_definition()`**: The Lab Manager no longer serves a `/definition` endpoint. Use `get_lab_context()` or `get_lab_health()` instead.
-- **`WORKCELL` template category**: Removed from `TemplateCategory` enum.
-- **`NodeLocationTemplateDefinition`**: Replaced by `NodeIntrinsicLocationDefinition` for declaring node-intrinsic locations. Location templates are now defined as `LocationTemplate` objects (via lab config file or API) rather than on node classes.
-- **`seed_locations_file` setting**: Replaced by `lab_config_file` on `LocationManagerSettings`. The new `LabLocationConfig` format supports representation templates, location templates, training entries, and locations in a single reconcilable file.
-
-### Deprecated
-- **`LabManagerDefinition`**: Now emits `MadsciDeprecationWarning` on instantiation (v0.7.0 removal). Use `LabManagerSettings` for configuration.
+## [0.8.0] - 2026-05-13
 
 ### Added
 - **`target_model` field on `TemplateManifest`**: Templates that generate YAML/JSON config can now declare which Pydantic model the output should validate against. Automated tests verify template output matches the declared model.
@@ -71,28 +63,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bundled templates `_shared/` directory**: 13 canonical files (`.gitignore`, `CLAUDE.md.j2`, `AGENTS.md.j2`, `justfile.j2`, `ruff.toml.j2`, `.pre-commit-config.yaml.j2`, `docker-compose.yaml.j2`, notebooks, docs, drivers) deduplicated across all bundled templates. `TemplateEngine` extended with `_resolve_shared_dir()` (walk-up + importlib fallback), `_resolve_source_path()` (local-first fallback), multi-path `FileSystemLoader`, and expanded path-traversal check. Removes ~105 duplicated files across 14 template directories (6 module + 8 addon), net -4,678 lines.
 - **Node `try`/`except` pre-commit checker** (`scripts/precommit_check_try_catch_blocks.py`): pre-commit hook that fails when a node module catches an exception without re-raising or returning an `ActionResult`, enforcing the node error-handling contract.
 
-### Changed
-- **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
-- **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
-- **TUI screens migrated** to shared widget library for consistent styling and behavior
-- **Example lab location management**: Inline `location_locations` definitions in `settings.yaml` replaced by a standalone `locations.yaml` lab config file using `LabLocationConfig` format. Node-intrinsic locations (liquid handler deck slots) are now auto-created by nodes on startup. Lab-managed locations (storage rack, plate carriage) and training entries (robot arm coordinates for LH deck slots) are defined in `locations.yaml`.
-- **Location Manager reconciliation**: Now processes the lab config file (`LabLocationConfig`) on each cycle, syncing representation templates, location templates, locations, and training entries with the live database.
-
-### Fixed
-- TUI UX improvements: scrollable layouts, clickable ActionBar, screen discoverability
-- Dashboard scroll behavior and full ULID ID display
-- Transfer graph names, delete confirmation dialog, inventory button label
-- Double-slash URL bug in node client health checks
-- httpx migration fixes: stale `requests` imports, config attribute access, response closing in retry transports, async health checks, broken sync `.close()` call
-- **Object storage overwrites on repeated uploads** (closes #274): added `ULID_PREFIXED` value to `ObjectNamingStrategy` and incorporated `datapoint_id` into S3 object keys (`{ulid}_{label}`) in both server-side and client-side upload paths, matching the local filesystem backend.
-- **`madsci new <subcommand>` ignored `--name` in interactive mode**: `collect_parameters_interactive()` now accepts an `overrides` dict, and `generate_from_template()` passes CLI-provided names through it, so `madsci new lab -n my_lab` produces a lab named `my_lab` instead of prompting.
-- **Generated lab compose templates referenced nonexistent local images** (`madsci-squid:latest`, `madsci-event-manager:latest`): updated `standard` and `distributed` lab templates to use the published GHCR images (`ghcr.io/ad-sdl/madsci_dashboard:latest` for the lab manager, `ghcr.io/ad-sdl/madsci:latest` for all other services). Removed the stale `build:` section from the lab manager service.
-- **SiLA connection diagnostics**: `SilaNodeClient` now raises connection errors enriched with classification (`dns_resolution`, `connection_refused`, `connection_timeout`, `tls_error`, `grpc_error`) and remediation hints.
-
-## [0.8.0] - 2026-03-31
-
-### Added
-
 #### Node Location Template System (PR #228, #258)
 - `template_handler()` lifecycle method on `AbstractNode` for declarative registration of resource templates, location representation templates, and location templates at node startup
 - `location_representation_templates` and `location_templates` class variables on `AbstractNode` for declarative template definitions
@@ -126,6 +96,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FOSS migration test suites: CLI tests (129 lines) and tool unit tests (536 lines)
 
 ### Changed
+- **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
+- **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
+- **TUI screens migrated** to shared widget library for consistent styling and behavior
+- **Example lab location management**: Inline `location_locations` definitions in `settings.yaml` replaced by a standalone `locations.yaml` lab config file using `LabLocationConfig` format. Node-intrinsic locations (liquid handler deck slots) are now auto-created by nodes on startup. Lab-managed locations (storage rack, plate carriage) and training entries (robot arm coordinates for LH deck slots) are defined in `locations.yaml`.
+- **Location Manager reconciliation**: Now processes the lab config file (`LabLocationConfig`) on each cycle, syncing representation templates, location templates, locations, and training entries with the live database.
 
 #### Location Manager Dual-Handler Architecture (PR #228)
 - Location Manager migrated from Redis-only to dual-handler architecture (document database + cache)
@@ -183,7 +158,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tutorials updated with new service names, ports, and compose configuration
 - `madsci_common` README updated with new backup tool class names
 
+### Deprecated
+- **`LabManagerDefinition`**: Now emits `MadsciDeprecationWarning` on instantiation (v0.7.0 removal). Use `LabManagerSettings` for configuration.
+
+### Removed
+- **`madsci new workcell` subcommand**: The workcell template generated an orphaned YAML format that didn't correspond to any Pydantic model. Workcell configuration is handled by `WorkcellManagerSettings` via `settings.yaml`.
+- **`LabClient.get_definition()`**: The Lab Manager no longer serves a `/definition` endpoint. Use `get_lab_context()` or `get_lab_health()` instead.
+- **`WORKCELL` template category**: Removed from `TemplateCategory` enum.
+- **`NodeLocationTemplateDefinition`**: Replaced by `NodeIntrinsicLocationDefinition` for declaring node-intrinsic locations. Location templates are now defined as `LocationTemplate` objects (via lab config file or API) rather than on node classes.
+- **`seed_locations_file` setting**: Replaced by `lab_config_file` on `LocationManagerSettings`. The new `LabLocationConfig` format supports representation templates, location templates, training entries, and locations in a single reconcilable file.
+- `workcell_manager.compose.yaml` (redundant compose file)
+- MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)
+- Hardcoded MinIO console port rewriting logic in `object_storage_helpers.py` (replaced by configurable `public_endpoint`)
+
 ### Fixed
+- TUI UX improvements: scrollable layouts, clickable ActionBar, screen discoverability
+- Dashboard scroll behavior and full ULID ID display
+- Transfer graph names, delete confirmation dialog, inventory button label
+- Double-slash URL bug in node client health checks
+- httpx migration fixes: stale `requests` imports, config attribute access, response closing in retry transports, async health checks, broken sync `.close()` call
+- **Object storage overwrites on repeated uploads** (closes #274): added `ULID_PREFIXED` value to `ObjectNamingStrategy` and incorporated `datapoint_id` into S3 object keys (`{ulid}_{label}`) in both server-side and client-side upload paths, matching the local filesystem backend.
+- **`madsci new <subcommand>` ignored `--name` in interactive mode**: `collect_parameters_interactive()` now accepts an `overrides` dict, and `generate_from_template()` passes CLI-provided names through it, so `madsci new lab -n my_lab` produces a lab named `my_lab` instead of prompting.
+- **Generated lab compose templates referenced nonexistent local images** (`madsci-squid:latest`, `madsci-event-manager:latest`): updated `standard` and `distributed` lab templates to use the published GHCR images (`ghcr.io/ad-sdl/madsci_dashboard:latest` for the lab manager, `ghcr.io/ad-sdl/madsci:latest` for all other services). Removed the stale `build:` section from the lab manager service.
+- **SiLA connection diagnostics**: `SilaNodeClient` now raises connection errors enriched with classification (`dns_resolution`, `connection_refused`, `connection_timeout`, `tls_error`, `grpc_error`) and remediation hints.
 
 #### Dashboard and UI Fixes (PRs #255, #256, #257, #259)
 - Fixed dashboard freeze caused by `@vue:updated` event handler creating infinite update loops; replaced with `@update:modelValue`
@@ -210,11 +207,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed agent skills being placed in the current working directory instead of inside the generated project directory (e.g., `my_device_module/.agents/` instead of `./.agents/`)
 - Fixed next-steps output using hardcoded fallback names (e.g., `your_module_module`) instead of the actual names entered during interactive prompts; `generate_from_template` now returns the `GeneratedProject` result
 - Fixed documentation link in `madsci new module` pointing to non-existent URL
-
-### Removed
-- `workcell_manager.compose.yaml` (redundant compose file)
-- MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)
-- Hardcoded MinIO console port rewriting logic in `object_storage_helpers.py` (replaced by configurable `public_endpoint`)
 
 ## [0.7.1] - 2026-03-10
 
