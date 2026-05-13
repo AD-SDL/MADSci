@@ -118,14 +118,15 @@ This lab uses the modern **dual-layer configuration** pattern:
 - **`.env`** contains secrets and environment-specific overrides (database credentials, OTEL settings). This file is gitignored.
 - **Environment variables** override both files with the highest precedence.
 
-All structural data that managers need is configured directly in `settings.yaml`:
+Structural data is split between `settings.yaml` and standalone config files:
 
-| Setting | Purpose |
+| Source | Purpose |
 |---|---|
-| `location_locations` | Lab location definitions (deck positions, storage, etc.) |
-| `location_transfer_capabilities` | Transfer templates and routing configuration |
-| `resource_default_templates` | Default resource templates (plate_nest, storage_stack) |
-| `workcell_nodes` | Node name → URL map for the workcell |
+| `settings.yaml` → `location_transfer_capabilities` | Transfer templates and routing configuration |
+| `settings.yaml` → `resource_default_templates` | Default resource templates (plate_nest, storage_stack) |
+| `settings.yaml` → `workcell_nodes` | Node name → URL map for the workcell |
+| `locations.yaml` (`LabLocationConfig`) | Lab-managed locations, location templates, training entries |
+| Node `intrinsic_locations` | Locations declared by nodes (e.g., liquid handler deck slots, plate carriage) |
 
 See [Configuration.md](../../docs/Configuration.md) for the full configuration reference.
 
@@ -312,15 +313,15 @@ Both `RobotArmNode` and `LiquidHandlerNode` define `location_representation_temp
 
 These templates are registered with the Location Manager automatically at node startup via `template_handler()`.
 
-### Seed File (`locations.yaml`)
+### Lab Config File (`locations.yaml`)
 
-The `locations.yaml` file pre-populates the Location Manager on first startup. It defines:
+The `locations.yaml` file is a reconcilable `LabLocationConfig` document the Location Manager processes on each reconciliation cycle. It defines:
 
-1. **Representation templates** -- `robotarm_deck_access`, `robotarm_wide_access`, `lh_deck_repr`
-2. **Location templates** -- `lh_accessible_deck_slot` (liquid handler + robot arm access) and `lh_only_deck_slot` (liquid handler only)
-3. **Concrete locations** -- deck slots for `liquidhandler_1` and `liquidhandler_2`, each with node bindings mapping abstract roles (`deck_controller`, `transfer_arm`) to concrete node instances and per-location overrides (deck position, joint angles)
+1. **Location templates** -- e.g., `storage_rack_nest` (reusable blueprints for lab-managed locations).
+2. **Training** -- adds node representations to existing node-managed locations (e.g., teaching `robotarm_1` how to access specific liquid handler deck slots).
+3. **Lab-managed locations** -- e.g., `storage_rack`, locations not owned by any single node.
 
-Inline (non-template) locations like `storage_rack` and `platereader_1.plate_carriage` are also supported for locations that do not fit a reusable template pattern.
+Node-intrinsic locations (liquid handler deck slots, plate reader carriage) are declared via each node's `intrinsic_locations` ClassVar and auto-created at node startup; they do not need to appear in `locations.yaml`.
 
 ### Dashboard Integration
 
