@@ -2,8 +2,8 @@
   "lockfile_version": "1",
   "packages": {
     "github:NixOS/nixpkgs/nixpkgs-unstable": {
-      "last_modified": "2026-02-04T01:49:30Z",
-      "resolved": "github:NixOS/nixpkgs/aa290c9891fa4ebe88f8889e59633d20cc06a5f2?lastModified=1770169770&narHash=sha256-awR8qIwJxJJiOmcEGgP2KUqYmHG4v%2Fz8XpL9z8FnT1A%3D"
+      "last_modified": "2026-05-03T16:35:46Z",
+      "resolved": "github:NixOS/nixpkgs/73c703c22422b8951895a960959dbbaca7296492?lastModified=1777826146&narHash=sha256-wQ%2FiN5Zp5VIa3ebBibijPnLyKhor%2BxEbDy4d0goa9Zs%3D"
     },
     "just@latest": {
       "last_modified": "2026-01-23T17:20:52Z",
@@ -89,51 +89,51 @@
         }
       }
     },
-    "openspec@latest": {
-      "last_modified": "2026-03-27T11:17:38Z",
-      "resolved": "github:NixOS/nixpkgs/832efc09b4caf6b4569fbf9dc01bec3082a00611#openspec",
+    "openspec@1.3.1": {
+      "last_modified": "2026-04-28T17:03:49Z",
+      "resolved": "github:NixOS/nixpkgs/e75f25705c2934955ee5075e62530d74aca973c6#openspec",
       "source": "devbox-search",
-      "version": "1.2.0",
+      "version": "1.3.1",
       "systems": {
         "aarch64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/2w1n8b825bh8nln9zjjiyc2ims5jw3ix-openspec-1.2.0",
+              "path": "/nix/store/3sy5g5isz1pd5yx3dzsqyns5735jq8gd-openspec-1.3.1",
               "default": true
             }
           ],
-          "store_path": "/nix/store/2w1n8b825bh8nln9zjjiyc2ims5jw3ix-openspec-1.2.0"
+          "store_path": "/nix/store/3sy5g5isz1pd5yx3dzsqyns5735jq8gd-openspec-1.3.1"
         },
         "aarch64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/pc98k48238dvi4cvwvyz21w14x402qs3-openspec-1.2.0",
+              "path": "/nix/store/dsqlfhx391xwsy6b4211kbvcbdhs6j7s-openspec-1.3.1",
               "default": true
             }
           ],
-          "store_path": "/nix/store/pc98k48238dvi4cvwvyz21w14x402qs3-openspec-1.2.0"
+          "store_path": "/nix/store/dsqlfhx391xwsy6b4211kbvcbdhs6j7s-openspec-1.3.1"
         },
         "x86_64-darwin": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/y7zfprg5kl0fvafiw6salysmxmfbraxx-openspec-1.2.0",
+              "path": "/nix/store/zv41dcn13x3gmkdkkkwahk20c36mrvfj-openspec-1.3.1",
               "default": true
             }
           ],
-          "store_path": "/nix/store/y7zfprg5kl0fvafiw6salysmxmfbraxx-openspec-1.2.0"
+          "store_path": "/nix/store/zv41dcn13x3gmkdkkkwahk20c36mrvfj-openspec-1.3.1"
         },
         "x86_64-linux": {
           "outputs": [
             {
               "name": "out",
-              "path": "/nix/store/7y3qnxp47rsm26ah8ad6gm2vi0jh3c7l-openspec-1.2.0",
+              "path": "/nix/store/njxrmfs0sj2jgr4x8r6crwj0x3rcwy48-openspec-1.3.1",
               "default": true
             }
           ],
-          "store_path": "/nix/store/7y3qnxp47rsm26ah8ad6gm2vi0jh3c7l-openspec-1.2.0"
+          "store_path": "/nix/store/njxrmfs0sj2jgr4x8r6crwj0x3rcwy48-openspec-1.3.1"
         }
       }
     },

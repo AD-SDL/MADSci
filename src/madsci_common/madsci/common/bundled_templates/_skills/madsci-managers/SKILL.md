@@ -7,6 +7,13 @@ description: Working with MADSci manager services (Event, Experiment, Resource, 
 
 MADSci has 7 manager services, all built on `AbstractManagerBase[SettingsT]` with FastAPI via `classy_fastapi.Routable`. Each follows the pattern: **Settings class** -> **Server class** -> **Client class**.
 
+## Reference Files
+
+Detailed material is in `reference/`. Read the relevant file when the task touches that area:
+
+- **Per-Manager Notes** — domain-specific notes for each of the 7 managers (Event/Experiment/Resource/Data/Workcell/Location/Lab). See [reference/managers.md](reference/managers.md).
+- **Database Handler Reference** — the 4 handler ABCs and their real + in-memory implementations. See [reference/db-handlers.md](reference/db-handlers.md).
+
 ## Key Files
 
 | File | Purpose |
@@ -174,87 +181,6 @@ get_settings_export(include_secrets=False)  # Default
 ### Environment Variable Precedence
 CLI args > init kwargs > env vars > .env > file secrets > JSON > TOML > YAML > field defaults
 
-## Database Handler Abstraction
-
-4 handler ABCs with real and in-memory implementations:
-
-### DocumentStorageHandler (FerretDB/MongoDB)
-
-```python
-from madsci.common.db_handlers.document_storage_handler import (
-    DocumentStorageHandler,       # ABC
-    PyDocumentStorageHandler,     # Real (pymongo)
-    InMemoryDocumentStorageHandler,  # Testing
-)
-
-# Production:
-handler = PyDocumentStorageHandler(url="mongodb://localhost:27017", database_name="madsci_events")
-collection = handler.get_collection("events")
-collection.insert_one({"event": "data"})
-
-# Testing:
-handler = InMemoryDocumentStorageHandler()
-```
-
-**Used by:** Event, Experiment, Data, Workcell, Location managers
-
-### CacheHandler (Valkey/Redis)
-
-```python
-from madsci.common.db_handlers.cache_handler import (
-    CacheHandler,          # ABC
-    PyCacheHandler,        # Real (redis + pottery)
-    InMemoryCacheHandler,  # Testing
-)
-
-# Production:
-handler = PyCacheHandler(url="redis://localhost:6379")
-state_dict = handler.create_dict("workcell_state")  # pottery RedisDict-like
-lock = handler.create_lock("operation_lock", auto_release_time=30)
-
-# Testing:
-handler = InMemoryCacheHandler()
-```
-
-**Used by:** Workcell, Location managers
-
-### PostgresHandler (PostgreSQL)
-
-```python
-from madsci.common.db_handlers.postgres_handler import (
-    PostgresHandler,     # ABC
-    SQLAlchemyHandler,   # Real (SQLAlchemy + PostgreSQL)
-    SQLiteHandler,       # Testing (in-memory SQLite)
-)
-
-# Production:
-handler = SQLAlchemyHandler(url="postgresql://localhost/resources")
-engine = handler.get_engine()
-
-# Testing:
-handler = SQLiteHandler()  # StaticPool, check_same_thread=False
-```
-
-**Used by:** Resource manager
-
-### ObjectStorageHandler (S3-compatible)
-
-```python
-from madsci.common.db_handlers.object_storage_handler import (
-    ObjectStorageHandler,          # ABC
-    RealObjectStorageHandler,      # Real (MinIO/SeaweedFS/S3)
-    InMemoryObjectStorageHandler,  # Testing
-)
-
-# Production:
-handler = RealObjectStorageHandler(settings=ObjectStorageSettings(...))
-
-# Testing:
-handler = InMemoryObjectStorageHandler()
-```
-
-**Used by:** Data manager (optional, for file storage)
-
 ## Deprecated: Manager Definition Types
 
 All `*ManagerDefinition` classes (e.g., `ManagerDefinition`, `LabManagerDefinition`, `WorkcellManagerDefinition`) are **deprecated as of v0.7.0** and will be removed. They emit `MadsciDeprecationWarning` on instantiation.
@@ -263,55 +189,6 @@ All `*ManagerDefinition` classes (e.g., `ManagerDefinition`, `LabManagerDefiniti
 - **Use `WorkcellInfo`** for workcell runtime state (not `WorkcellManagerDefinition`)
 - Definition files (`*.manager.yaml`) are replaced by `settings.yaml` + environment variables
 - Run `madsci migrate` to convert legacy definition files
-
-## Manager-Specific Notes
-
-### Event Manager (8001)
-- **Retention system**: Background loop archives old events (soft-delete), TTL indexes for hard-delete
-- **Utilization analytics**: Session-based, time-series, and per-user utilization reports
-- **Email alerts**: Configurable alert level triggers email notifications
-- **Recursive logging prevention**: EventClient initialized with `event_server_url=None`
-- **Key types**: `Event`, `EventLogLevel`, `EventType`
-
-### Experiment Manager (8002)
-- **Simple state machine**: IN_PROGRESS -> PAUSED/COMPLETED/FAILED/CANCELLED
-- **Timestamp tracking**: `started_at`, `ended_at` on Experiment model
-- **Key types**: `Experiment`, `ExperimentDesign`, `ExperimentStatus`, `ExperimentalCampaign`
-
-### Resource Manager (8003)
-- **Only PostgreSQL manager**: Uses SQLModel ORM, not document database
-- **Container types**: Queue (FIFO), Stack (LIFO), Slot (single item)
-- **Resource hierarchies**: Parent-child relationships with recursive queries
-- **Template system**: Create resources from templates, extract templates from existing resources
-- **Audit trail**: `ResourceHistoryTable` tracks all changes
-- **Key types**: `Resource`, `ResourceTemplate`, `Queue`, `Stack`, `Slot`
-
-### Data Manager (8004)
-- **Dual storage**: Metadata in FerretDB, files in local filesystem or S3-compatible storage
-- **DataPoint discriminated union**: `FileDataPoint`, `ValueDataPoint`, `ObjectStorageDataPoint`
-- **File organization**: Local files stored as `{year}/{month}/{day}/{ulid_filename}`
-- **Key types**: `DataPoint`, `FileDataPoint`, `ValueDataPoint`
-
-### Workcell Manager (8005)
-- **Workflow engine**: Executes workflow DAGs with branching and error recovery
-- **Dual-handler**: FerretDB for workflow definitions, Valkey for runtime state/locks
-- **Required clients**: event, data, location (for workflow execution)
-- **Node coordination**: Discovers and communicates with registered nodes
-- **Key types**: `WorkflowDefinition`, `WorkflowRun`, `WorkflowStep`
-
-### Location Manager (8006)
-- **Dual-handler**: FerretDB for persistent data, Valkey for transient state (locks, counters)
-- **Transfer planning**: Dijkstra's algorithm via `TransferPlanner`
-- **Node-specific representations**: Arbitrary JSON data per node per location
-- **Seed file loading**: Bootstrap from `locations.yaml` on empty database
-- **Key types**: `Location`, `TransferPlan`, `ReservationInfo`
-
-### Lab Manager / Squid (8000)
-- **No database**: Coordination-only, no persistent storage
-- **Service discovery**: `/context` endpoint returns all manager URLs
-- **Health aggregation**: `/lab_health` checks all 6 managers with 5s timeout
-- **Dashboard**: Serves Vue 3 + Vuetify SPA as static files
-- **Key types**: `LabHealth`, `LabContext`
 
 ## EventClient Dual Nature
 

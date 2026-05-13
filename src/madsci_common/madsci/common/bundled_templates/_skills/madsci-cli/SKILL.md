@@ -7,6 +7,13 @@ description: Working with the MADSci CLI (the `madsci` command). Use when adding
 
 The `madsci` CLI is built on Click with lazy command loading, Rich output formatting, and a Textual TUI. It provides 26 commands for managing MADSci labs.
 
+## Reference Files
+
+Detailed material is in `reference/`. Read the relevant file when the task touches that area:
+
+- **Command Reference** — every command's flags, subcommands, and behavior. See [reference/commands.md](reference/commands.md).
+- **Template System** — manifest format, categories, Jinja2 filters, Pydantic alignment. See [reference/templates.md](reference/templates.md).
+
 ## Key Files
 
 | File | Purpose |
@@ -139,101 +146,6 @@ _aliases = {
 - Use `@click.pass_context` to access the CLI context (console, verbosity, etc.)
 - All informational output should support `--json` via `ctx.obj["json"]`
 
-## Command Reference
-
-### `version`
-Display installed MADSci package versions, Python info, platform.
-- `--json`, `--check-updates`
-
-### `doctor` (alias: `doc`)
-System diagnostics: Python version, virtualenv, Docker, port availability.
-- `--fix`, `--check [python|docker|ports|network]`, `--json`
-
-### `status` (alias: `s`)
-Show health of MADSci services (hits `/health` endpoints).
-- `[services]` args, `-w/--watch`, `--interval`, `--timeout`, `--json`
-
-### `logs` (alias: `l`)
-View/stream logs from Event Manager.
-- `-f/--follow`, `--tail N`, `--since 5m/1h/1d`, `--level`, `--grep`, `--json`
-
-### `tui` (alias: `ui`)
-Launch Textual terminal UI with 9 main screens + 5 detail/modal screens.
-- `--screen [dashboard|status|logs|nodes|workflows|experiments|resources|locations|data]`
-- Keybindings: `d/s/l/n/w/e/i/o/b` (screens), `r` (refresh), `q` (quit), `?` (help), `Ctrl+P` (command palette)
-
-### `registry`
-Manage ID Registry (ULID mappings for component names).
-- Subcommands: `list [--type] [--include-stale]`, `resolve <name>`, `clean`
-
-### `migrate`
-Upgrade from deprecated definition files to Settings + ID Registry.
-- Subcommands: `scan [dir]`, `convert [--all]`, `status`, `finalize`
-
-### `new` (alias: `n`)
-Create new components from templates. Interactive parameter prompts.
-- Subcommands: `lab`, `module`, `node`, `interface`, `experiment`, `workflow`
-- `--tui` launches Textual template browser
-
-### `start`
-Start MADSci services.
-- `-d/--detach`, `--build`, `--services`, `--mode [docker|local]`, `--wait/--no-wait`, `--settings-dir`
-- Subcommands: `manager <name> [-d]`, `node <path> [-d]`
-- Docker mode: finds compose file, runs `docker compose up`
-- Local mode: all 7 managers in-process with in-memory backends (no Docker)
-
-### `stop`
-Stop MADSci services.
-- `--remove`, `--volumes` (requires confirmation), `--config`
-- Subcommands: `manager <name>`, `node <name>`
-
-### `init`
-Initialize new MADSci lab (scaffolds `.madsci/`, settings, templates).
-- `[directory]`, `--template [minimal]`, `--name`, `--description`, `--no-interactive`
-
-### `validate` (alias: `val`)
-Validate YAML configuration files (workflow, node, manager definitions).
-- `[paths]`, `--json`
-
-### `run`
-Execute workflows or experiments.
-- Subcommands: `workflow <path> [--parameters JSON] [--no-wait]`, `experiment <path>`
-
-### `completion`
-Generate shell completion scripts.
-- `<shell>` arg: `bash`, `zsh`, `fish`
-
-### `backup`
-Database backup management (re-exports from `madsci.common.backup_tools.cli`).
-- Subcommands: `create --db-url`, `restore --backup --db-url`, `validate --backup --db-url`
-- Auto-detects PostgreSQL vs MongoDB/FerretDB
-
-### `commands` (alias: `cmd`)
-Launch Trogon interactive command palette (TUI forms for all commands).
-
-### `config` (alias: `cfg`)
-Configuration management with secret redaction.
-- Subcommands: `export [manager_type] [--all] [-o path] [--format yaml|json] [--include-secrets]`, `create manager <type>`
-
-### Manager Interaction Commands
-
-Eight command groups provide direct access to manager APIs. Each resolves the manager URL from the lab context automatically.
-
-| Command | Alias | Subcommands |
-|---------|-------|-------------|
-| `workflow` | `wf` | list, show, submit, pause, resume, cancel, retry, resubmit |
-| `resource` | `res` | list, get, create, delete, restore, tree, lock, unlock, quantity, template, history |
-| `location` | `loc` | list, get, create, create-from-template, delete, resources, attach, detach, set-repr, remove-repr, transfer-graph, plan-transfer, export, import, template, rep-template |
-| `node` | `nd` | list, info, status, state, log, admin, action, action-result, action-history, config, set-config, add, shell |
-| `experiment` | `exp` | list, get, start, run, pause, continue, cancel, end |
-| `campaign` | `camp` | create, get |
-| `data` | `dt` | list, get, metadata, submit, query |
-| `events` | `ev` | query, get, archive, purge, backup |
-
-All commands support `--json` for machine-readable output. URL resolution follows: explicit `--<manager>-url` flag > lab context > localhost default.
-
-Command modules are in `src/madsci_client/madsci/client/cli/commands/` (one file per group).
-
 ## Output Helpers
 
 ```python
@@ -259,80 +171,6 @@ if ctx.obj.get("json"):
 else:
     output_result(console, data, format="text", title="Results")
 ```
-
-## Template System
-
-Templates live in `src/madsci_common/madsci/common/bundled_templates/`. Each has a `template.yaml` manifest:
-
-```yaml
-name: "Module Name"
-version: "1.0.0"
-description: "What this template creates"
-category: "lab|module|node|interface|experiment|workflow"
-tags: ["device", "robot"]
-
-parameters:
-  - name: module_name
-    type: string
-    description: "Name of the module"
-    required: true
-    pattern: "^[a-z][a-z0-9_]*$"
-  - name: port
-    type: integer
-    description: "Server port"
-    default: 2000
-    min: 1024
-    max: 65535
-  - name: include_tests
-    type: boolean
-    description: "Include test files"
-    default: true
-
-files:
-  - source: "template/{{module_name}}_node.py.j2"
-    destination: "{{module_name}}/{{module_name}}_node.py"
-  - source: "template/test_node.py.j2"
-    destination: "{{module_name}}/tests/test_node.py"
-    condition: "{{ include_tests }}"
-
-hooks:
-  post_generate:
-    - command: "ruff format {{module_name}}/"
-      continue_on_error: true
-```
-
-**Template categories (33 total):**
-- `lab/`: minimal lab scaffold
-- `module/`: device, compute modules (full packages with tests, Dockerfile)
-- `node/`: basic node, rest node
-- `interface/`: node interface
-- `experiment/`: script, notebook, tui, node modalities
-- `workflow/`: basic workflow
-- `addon/`: docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all
-
-**Jinja2 filters:** `pascal_case` (converts `my_module` -> `MyModule`)
-
-### Template-Model Alignment
-
-Every template that generates YAML/JSON configuration must produce output that validates against a specific Pydantic model. Templates declare their target model via the `target_model` field in `template.yaml`:
-
-```yaml
-# In template.yaml
-target_model: "madsci.common.types.workflow_types.WorkflowDefinition"
-```
-
-| Template Category | Output Type | Target Pydantic Model |
-|---|---|---|
-| lab/* | settings.yaml | MadsciContext / ManagerSettings subclasses (no single target_model — shared file) |
-| workflow/* | *.workflow.yaml | `WorkflowDefinition` |
-| node/* | Python code | Uses `RestNodeConfig` in generated code |
-| module/* | Python package | Uses `RestNodeConfig`, domain-specific models |
-| experiment/* | Python code | Uses `ExperimentDesign` in generated code |
-
-When creating new templates for config files:
-1. Identify the Pydantic model first
-2. Build the template to match its schema
-3. Set `target_model` in `template.yaml` so tests validate output automatically
 
 ## Start/Stop Lifecycle
 

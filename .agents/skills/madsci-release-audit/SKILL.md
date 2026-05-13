@@ -21,18 +21,16 @@ Work through each section. For each item, either confirm it's correct or fix it.
 
 ### 1. CHANGELOG (`docs/CHANGELOG.md`)
 
-**Goal**: Every user-facing change has a corresponding CHANGELOG entry.
+**Goal**: Every user-facing change has a corresponding CHANGELOG entry in the Keep a Changelog 1.1.0 format.
 
-1. Identify the version being prepared (check `pyproject.toml` at repo root for the current version)
-2. Get the git log since the last release tag: `git log --oneline <last-tag>..HEAD`
-3. For each merged PR, verify it has coverage in the CHANGELOG under the correct category:
-   - **Added**: New features, new endpoints, new CLI commands, new templates
-   - **Changed**: Behavior changes, renames, breaking changes (mark with `**BREAKING**`)
-   - **Fixed**: Bug fixes
-   - **Removed**: Deleted features or files
-   - **Deprecated**: Newly deprecated APIs
-4. Ensure the header uses the correct version and date format: `## [X.Y.Z] - YYYY-MM-DD`
-5. Do NOT include interstitial development details (merge commits, pre-commit fixes, "merging with unstable", etc.)
+**Use the `keepachangelog` skill** for the format rules, category definitions (Added/Changed/Deprecated/Removed/Fixed/Security), MADSci conventions (`**BREAKING**:` prefix, `**`backticked-symbol`**:` lead-ins, sub-headings), and the release-cut workflow. This audit covers only the cross-checking part:
+
+1. Identify the version being prepared (check `pyproject.toml` at repo root for the current version).
+2. Get the git log since the last release tag: `git log --oneline <last-tag>..HEAD`.
+3. For each merged PR, verify it has at least one entry under `[Unreleased]` (or the version section being cut) in the correct category. Apply the `keepachangelog` rules when adding or fixing entries.
+4. Ensure the header uses the correct version and ISO 8601 date format: `## [X.Y.Z] - YYYY-MM-DD`.
+5. Confirm a fresh empty `## [Unreleased]` section exists above the latest release.
+6. Strip any interstitial development noise (merge commits, pre-commit fixes, "merging with unstable", lint-only churn).
 
 ### 2. Documentation and Guides (`docs/`)
 
