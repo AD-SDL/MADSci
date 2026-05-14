@@ -595,11 +595,16 @@ df -h >> system_info.txt
 ### Configuration Validation
 
 ```bash
-# Validate all YAML files
-for file in node_definitions/*.yaml managers/*.yaml workflows/*.yaml; do
+# Validate settings, locations, and workflow YAML files
+for file in settings.yaml locations.yaml workflows/*.yaml; do
   echo "Checking $file:"
   python -c "import yaml; yaml.safe_load(open('$file'))" && echo "  ✅ Valid" || echo "  ❌ Invalid"
 done
+
+# Use the MADSci validator for schema-aware checks
+madsci validate settings.yaml
+madsci validate locations.yaml
+madsci validate workflows/*.yaml
 
 # Check environment configuration
 docker compose config --quiet && echo "Compose config valid" || echo "Compose config invalid"
@@ -618,8 +623,8 @@ docker compose config --quiet && echo "Compose config valid" || echo "Compose co
 # Backup lab configuration and data
 tar -czf backup_$(date +%Y%m%d).tar.gz \
   .env \
-  ../../examples/example_lab/node_definitions/ \
-  ../../examples/example_lab/managers/ \
+  ../../examples/example_lab/settings.yaml \
+  ../../examples/example_lab/locations.yaml \
   ../../examples/example_lab/workflows/ \
   .madsci/
 ```

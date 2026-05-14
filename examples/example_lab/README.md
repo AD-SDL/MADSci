@@ -134,11 +134,7 @@ See [Configuration.md](../../docs/Configuration.md) for the full configuration r
 
 Nodes are configured via environment variables in `compose.yaml` (`NODE_NAME`, `NODE_MODULE_NAME`, `NODE_URL`). These can also be set in per-node `settings.yaml` files for local development. Node modules are implemented in `example_modules/`.
 
-### Legacy Definition Files
-
-The `managers/*.manager.yaml` and `node_definitions/*.node.yaml` files represent the **legacy definition-file pattern**. They are kept as historical examples of the older format but are **not loaded** by the lab — all configuration is now sourced from `settings.yaml`, `.env`, and environment variables.
-
-See [Migration from Definitions](../../docs/guides/migration_from_definitions.md) for details on migrating from definition files to settings.
+If you are migrating from the legacy `*.manager.yaml` / `*.node.yaml` definition-file pattern, see [Migration from Definitions](../../docs/guides/migration_from_definitions.md).
 
 ## Usage Examples
 
