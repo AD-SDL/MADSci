@@ -10,8 +10,9 @@ Template version: {{ template_version }}
 
 import argparse
 import time
-from typing import Any
+from typing import Any, ClassVar
 
+from madsci.common.types.node_types import NodeRepresentationTemplateDefinition
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -38,6 +39,35 @@ class {{ module_name | pascal_case }}Node(RestNode):
     - Initializes device slot resource instances
     - Tracks resource state changes
     """
+
+    # Location representation templates — registered automatically by template_handler()
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="{{ module_name }}_deck_position",
+            default_values={"deck_position": 1, "deck_type": "standard"},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "deck_position": {
+                        "type": "integer",
+                        "description": "Deck slot position number for this location",
+                    },
+                    "deck_type": {
+                        "type": "string",
+                        "enum": ["standard", "temperature", "magnetic", "shaker"],
+                        "description": "Type of deck module at this position",
+                    },
+                },
+                "required": ["deck_position"],
+            },
+            required_overrides=["deck_position"],
+            tags=["{{ module_name }}", "liquid-handler"],
+            version="1.0.0",
+            description="Deck position representation for {{ module_name }} liquid handler",
+        ),
+    ]
 
     # Hardware interface instance (initialized in startup_handler)
     _interface: Any = None
@@ -89,22 +119,22 @@ class {{ module_name | pascal_case }}Node(RestNode):
             ),
             required_overrides=["resource_name"],
             tags=["{{ module_name }}", "slot", "liquid_handler"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize liquid handler slot resource instance
-        slot_resource_name = f"{{ module_name }}_slot_{self.node_definition.node_name}"
+        slot_resource_name = f"{{ module_name }}_slot_{self.node_info.node_name}"
         self.device_slot = self.resource_client.create_resource_from_template(
             template_name="{{ module_name }}_slot",
             resource_name=slot_resource_name,
             add_to_database=True,
         )
-        self.logger.log(
+        self.event_client.info(
             f"Initialized liquid handler slot resource from template: {self.device_slot.resource_id}"
         )
 
-        self.logger.log("{{ module_name | pascal_case }} liquid handler node initialized!")
+        self.event_client.info("{{ module_name | pascal_case }} liquid handler node initialized!")
 
     def shutdown_handler(self) -> None:
         """Clean shutdown of the liquid handler node.
@@ -112,7 +142,7 @@ class {{ module_name | pascal_case }}Node(RestNode):
         This method is called when the node is being shut down or restarted.
         It safely shuts down the device and closes connections.
         """
-        self.logger.log("Shutting down {{ module_name }} liquid handler node")
+        self.event_client.info("Shutting down {{ module_name }} liquid handler node")
         if self._interface:
             self._interface.shutdown()
             self._interface.disconnect()

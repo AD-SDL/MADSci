@@ -33,14 +33,15 @@ def main() -> None:
     logger.info("=" * 60)
 
     # Import here to allow environment to be loaded first
-    from madsci.squid import SquidServer, SquidSettings
+    from madsci.common.types.lab_types import LabManagerSettings
+    from madsci.squid.lab_server import LabManager
 
-    settings = SquidSettings(
+    settings = LabManagerSettings(
         name="{{ lab_name }}",
         server_url=os.getenv("LAB_SERVER_URL", "http://localhost:8000/"),
     )
 
-    server = SquidServer(settings=settings)
+    server = LabManager(settings=settings)
 
     logger.info(f"Lab Manager URL: {settings.server_url}")
     logger.info("Press Ctrl+C to stop")

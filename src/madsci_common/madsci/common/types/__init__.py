@@ -2,7 +2,7 @@
 
 from .backup_types import (
     BaseBackupSettings,
-    MongoDBBackupSettings,
+    DocumentDBBackupSettings,
     PostgreSQLBackupSettings,
 )
 from .interface_types import (
@@ -19,10 +19,10 @@ from .module_types import (
 
 __all__ = [
     "BaseBackupSettings",
+    "DocumentDBBackupSettings",
     "HTTPInterfaceSettings",
     "InterfaceSettings",
     "ModuleSettings",
-    "MongoDBBackupSettings",
     "NodeModuleSettings",
     "PostgreSQLBackupSettings",
     "SerialInterfaceSettings",

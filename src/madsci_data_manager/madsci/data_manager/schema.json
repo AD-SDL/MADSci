@@ -1,7 +1,7 @@
 {
     "database": "madsci_data",
     "schema_version": "1.0.1",
-    "description": "Schema definition for MADSci Data Manager MongoDB",
+    "description": "Schema definition for MADSci Data Manager document database",
     "collections": {
       "datapoints": {
         "description": "Main datapoints collection for storing all data references and metadata",

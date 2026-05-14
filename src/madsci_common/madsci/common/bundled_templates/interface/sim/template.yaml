@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "An interface for connecting to an external device simulator"
 category: "interface"
 tags: ["simulator", "testing", "development"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

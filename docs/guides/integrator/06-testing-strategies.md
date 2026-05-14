@@ -284,7 +284,7 @@ class TestNodeLifecycle:
 
 ## 3. Integration Tests
 
-Integration tests verify that the node works correctly as a REST server and can communicate with MADSci managers. For testing against real services, Docker is needed. However, MADSci also provides in-memory database handler drop-ins (`InMemoryMongoHandler`, `InMemoryRedisHandler`, `SQLiteHandler`) that allow integration testing of manager logic without Docker.
+Integration tests verify that the node works correctly as a REST server and can communicate with MADSci managers. For testing against real services, Docker is needed. However, MADSci also provides in-memory database handler drop-ins (`InMemoryDocumentStorageHandler`, `InMemoryCacheHandler`, `SQLiteHandler`) that allow integration testing of manager logic without Docker.
 
 ```python
 # tests/test_integration.py

@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A real hardware interface stub with connection lifecycle and error handling patterns"
 category: "interface"
 tags: ["real", "hardware", "interface"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

@@ -808,13 +808,7 @@
             "title": "Created Datetime",
             "description": "When the reservation was created."
           },
-          "start": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Start Datetime",
-            "description": "When the reservation starts."
-          },
-          "end": {
+          "expires": {
             "type": "string",
             "format": "date-time",
             "title": "End Datetime",
@@ -825,8 +819,7 @@
         "required": [
           "owned_by",
           "created",
-          "start",
-          "end"
+          "expires"
         ],
         "title": "LocationReservation",
         "description": "Reservation of a MADSci Location."

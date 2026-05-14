@@ -52,7 +52,7 @@ madsci status
 Docker Compose handles dependency ordering, but the logical startup sequence is:
 
 ```
-1. Infrastructure    MongoDB, PostgreSQL, Redis, MinIO
+1. Infrastructure    FerretDB, PostgreSQL, Valkey, SeaweedFS
        ↓
 2. Managers          Event, Experiment, Resource, Data, Location, Workcell
        ↓
@@ -78,7 +78,7 @@ madsci start manager event -d
 
 ```bash
 # Start only infrastructure
-docker compose up -d mongodb redis postgres minio
+docker compose up -d madsci_ferretdb madsci_valkey postgres madsci_seaweedfs
 
 # Start a specific manager via Docker
 docker compose up -d event_manager
@@ -103,7 +103,7 @@ python -m madsci.event_manager
 python example_modules/liquidhandler.py
 
 # Start with custom settings
-EVENT_SERVER_PORT=8001 EVENT_MONGO_DB_URL=mongodb://localhost:27017 \
+EVENT_SERVER_PORT=8001 EVENT_DOCUMENT_DB_URL=mongodb://localhost:27017 \
   python -m madsci.event_manager
 ```
 
@@ -180,12 +180,12 @@ Every MADSci manager exposes a `/health` endpoint:
 | Service | URL | What It Checks |
 |---------|-----|----------------|
 | Lab Manager | `http://localhost:8000/health` | Manager connectivity |
-| Event Manager | `http://localhost:8001/health` | MongoDB connection |
-| Experiment Manager | `http://localhost:8002/health` | MongoDB connection |
+| Event Manager | `http://localhost:8001/health` | FerretDB connection |
+| Experiment Manager | `http://localhost:8002/health` | FerretDB connection |
 | Resource Manager | `http://localhost:8003/health` | PostgreSQL connection |
-| Data Manager | `http://localhost:8004/health` | MongoDB + MinIO connection |
-| Workcell Manager | `http://localhost:8005/health` | MongoDB + Redis + node connectivity |
-| Location Manager | `http://localhost:8006/health` | MongoDB connection |
+| Data Manager | `http://localhost:8004/health` | FerretDB + SeaweedFS connection |
+| Workcell Manager | `http://localhost:8005/health` | FerretDB + Valkey + node connectivity |
+| Location Manager | `http://localhost:8006/health` | FerretDB connection |
 
 ### Node Health
 

@@ -32,7 +32,7 @@ Classes
 
     ### Descendants
 
-    * madsci.common.types.backup_types.MongoDBBackupSettings
+    * madsci.common.types.backup_types.DocumentDBBackupSettings
     * madsci.common.types.backup_types.PostgreSQLBackupSettings
 
     ### Class variables
@@ -54,8 +54,8 @@ Classes
     `convert_backup_dir_to_path(v: str | pathlib.Path) ‑> pathlib.Path`
     :   Convert backup_dir to Path object.
 
-`MongoDBBackupSettings(**kwargs: Any)`
-:   MongoDB-specific backup settings.
+`DocumentDBBackupSettings(**kwargs: Any)`
+:   Document database backup settings.
     
     Initialize settings with walk-up file discovery.
     
@@ -88,7 +88,7 @@ Classes
     `database: str | None`
     :
 
-    `mongo_db_url: pydantic.networks.AnyUrl`
+    `document_db_url: pydantic.networks.AnyUrl`
     :
 
 `PostgreSQLBackupSettings(**kwargs: Any)`

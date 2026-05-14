@@ -1,0 +1,23 @@
+name: "Gitignore"
+version: "1.0.0"
+description: "Add a Python + MADSci .gitignore to an existing module"
+category: "addon"
+tags: ["gitignore", "git"]
+skills: []
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+files:
+  - source: ".gitignore"
+    destination: ".gitignore"

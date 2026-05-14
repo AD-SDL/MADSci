@@ -22,11 +22,15 @@ from fastapi.exceptions import HTTPException
 from fastapi.params import Body
 from fastapi.responses import Response
 from madsci.client.event_client import EventClient
-from madsci.common.backup_tools import MongoDBBackupTool
-from madsci.common.db_handlers.mongo_handler import MongoHandler, PyMongoHandler
+from madsci.common.backup_tools import DocumentDBBackupTool
+from madsci.common.db_handlers.document_storage_handler import (
+    DocumentStorageHandler,
+    PyDocumentStorageHandler,
+)
+from madsci.common.document_db_version_checker import DocumentDBVersionChecker
 from madsci.common.manager_base import AbstractManagerBase
-from madsci.common.mongodb_version_checker import MongoDBVersionChecker
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.types.backup_types import DocumentDBBackupSettings
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.common.types.event_types import (
     Event,
     EventLogLevel,
@@ -34,7 +38,6 @@ from madsci.common.types.event_types import (
     EventManagerSettings,
     EventType,
 )
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
 from madsci.event_manager.events_csv_exporter import CSVExporter
 from madsci.event_manager.notifications import EmailAlerts
 from madsci.event_manager.time_series_analyzer import TimeSeriesAnalyzer
@@ -111,18 +114,18 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         self,
         settings: Optional[EventManagerSettings] = None,
         db_connection: Optional["Database"] = None,
-        mongo_handler: Optional[MongoHandler] = None,
+        document_handler: Optional[DocumentStorageHandler] = None,
         **kwargs: Any,
     ) -> None:
         """Initialize the Event Manager."""
         if db_connection is not None:
             warnings.warn(
-                "The 'db_connection' parameter is deprecated. Use 'mongo_handler' instead.",
+                "The 'db_connection' parameter is deprecated. Use 'document_handler' instead.",
                 DeprecationWarning,
                 stacklevel=2,
             )
         # Store additional dependencies before calling super().__init__
-        self._mongo_handler = mongo_handler
+        self._document_handler = document_handler
         self._db_connection = db_connection
         super().__init__(settings=settings, **kwargs)
 
@@ -134,7 +137,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         super().initialize(**kwargs)
 
         # Skip version validation if an external handler/connection was provided (e.g., in tests)
-        if self._mongo_handler is not None or self._db_connection is not None:
+        if self._document_handler is not None or self._db_connection is not None:
             # External connection provided, likely in test context - skip version validation
             self.logger.info(
                 "External db_connection provided, skipping MongoDB version validation",
@@ -150,9 +153,9 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
         schema_file_path = Path(__file__).parent / "schema.json"
 
-        mig_cfg = MongoDBMigrationSettings(database=self.settings.database_name)
-        version_checker = MongoDBVersionChecker(
-            db_url=str(self.settings.mongo_db_url),
+        mig_cfg = DocumentDBMigrationSettings(database=self.settings.database_name)
+        version_checker = DocumentDBVersionChecker(
+            db_url=str(self.settings.document_db_url),
             database_name=self.settings.database_name,
             schema_file_path=str(schema_file_path),
             backup_dir=str(mig_cfg.backup_dir),
@@ -183,17 +186,19 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
     def _setup_database(self) -> None:
         """Setup database connection and collections."""
-        if self._mongo_handler is None:
+        if self._document_handler is None:
             if self._db_connection is None:
-                self._mongo_handler = PyMongoHandler.from_url(
-                    str(self.settings.mongo_db_url),
+                self._document_handler = PyDocumentStorageHandler.from_url(
+                    str(self.settings.document_db_url),
                     self.settings.database_name,
                 )
             else:
                 # Legacy path: wrap an externally provided Database object
-                self._mongo_handler = PyMongoHandler(self._db_connection)
+                self._document_handler = PyDocumentStorageHandler(self._db_connection)
 
-        self.events = self._mongo_handler.get_collection(self.settings.collection_name)
+        self.events = self._document_handler.get_collection(
+            self.settings.collection_name
+        )
 
         # Setup indexes for retention and query performance
         self._setup_indexes()
@@ -267,7 +272,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
 
         try:
             # Test database connection
-            health.db_connected = self._mongo_handler.ping()
+            health.db_connected = self._document_handler.ping()
 
             # Get total event count
             health.total_events = self.events.count_documents({})
@@ -740,7 +745,7 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
     ) -> BackupResponse:
         """Create a one-time backup of all events.
 
-        Uses the MongoDBBackupTool from madsci_common for consistent backup
+        Uses the DocumentDBBackupTool from madsci_common for consistent backup
         handling across all MADSci managers.
 
         Args:
@@ -755,15 +760,15 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 attributes={"backup.description": request.description},
             ):
                 backup_dir = self._get_backup_dir()
-                backup_settings = MongoDBBackupSettings(
-                    mongo_db_url=self.settings.mongo_db_url,
+                backup_settings = DocumentDBBackupSettings(
+                    document_db_url=self.settings.document_db_url,
                     database=self.settings.database_name,
                     backup_dir=backup_dir,
                     max_backups=self.settings.backup_max_count,
                     validate_integrity=True,
                 )
 
-                backup_tool = MongoDBBackupTool(
+                backup_tool = DocumentDBBackupTool(
                     settings=backup_settings,
                     logger=self.logger,
                 )
@@ -806,14 +811,14 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
                 available_backups: List[Dict[str, Any]] = []
 
                 if self._backup_dir_exists(backup_dir):
-                    backup_settings = MongoDBBackupSettings(
-                        mongo_db_url=self.settings.mongo_db_url,
+                    backup_settings = DocumentDBBackupSettings(
+                        document_db_url=self.settings.document_db_url,
                         database=self.settings.database_name,
                         backup_dir=backup_dir,
                         max_backups=self.settings.backup_max_count,
                     )
 
-                    backup_tool = MongoDBBackupTool(
+                    backup_tool = DocumentDBBackupTool(
                         settings=backup_settings,
                         logger=self.logger,
                     )

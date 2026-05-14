@@ -112,7 +112,7 @@ Each manager settings class uses `prefixed_alias_generator()` from `base_types.p
 Key configuration patterns:
 - Each manager has its own settings class with environment prefix (e.g., `WORKCELL_`, `EVENT_`, `LOCATION_`)
 - Server URLs default to localhost with specific ports
-- Database connections default to MongoDB/PostgreSQL on localhost
+- Database connections default to FerretDB (MongoDB-compatible)/PostgreSQL on localhost
 - File storage paths default to `~/.madsci/` subdirectories
 
 ### Settings Directory (Walk-Up Discovery)
@@ -167,7 +167,7 @@ Each manager service follows this pattern:
 1. Settings class inheriting from `MadsciBaseSettings`
 2. Server class inheriting from `AbstractManagerBase` with FastAPI endpoints
 3. Client class for programmatic interaction
-4. Database models (SQLModel for PostgreSQL, Pydantic for MongoDB)
+4. Database models (SQLModel for PostgreSQL, Pydantic for document database)
 
 The `AbstractManagerBase` class provides:
 - Common functionality for all managers (settings, logging, CORS middleware)
@@ -181,6 +181,20 @@ The `AbstractManagerBase` class provides:
 - SQLModel for database ORM with PostgreSQL
 - Enum types for status and state management
 
+### Pydantic-First Data Modeling
+
+MADSci uses Pydantic models as the single source of truth for all data structures. This applies everywhere MADSci objects are created, generated, validated, or serialized:
+
+1. **Every YAML/JSON config format must have a corresponding Pydantic model.** If you're generating a config file, there must be a model that can parse it. If no model exists, create one first.
+2. **Use `model_dump()` for serialization** — never construct config dicts by hand or with ad-hoc templates that don't correspond to a model.
+3. **Use `model_validate()` / `from_yaml()` for deserialization** — always parse configs through their Pydantic model.
+4. **Templates must align with models** — when a Jinja2 template generates YAML/JSON, the output structure must be loadable by a specific Pydantic model. Declare this model via the `target_model` field in `template.yaml`.
+
+**Anti-patterns:**
+- Generating YAML from raw string interpolation or dicts without a backing model
+- Creating new config file formats without a Pydantic model to parse them
+- Using `yaml.dump(raw_dict)` instead of `yaml.dump(model.model_dump(...))`
+
 ### ID Generation
 - **ULID (Universally Unique Lexicographically Sortable Identifier)** is used for all IDs throughout MADSci
 - ULIDs provide better performance than UUIDs while maintaining uniqueness and sortability
@@ -193,7 +207,7 @@ MADSci uses two database systems optimized for different use cases:
 
 #### Database Types
 - **PostgreSQL**: Used by Resource Manager for relational data with strict schemas
-- **MongoDB**: Used by Event, Data, Experiment, and Workcell Managers for flexible document storage
+- **FerretDB** (MongoDB-compatible document database, backed by PostgreSQL): Used by Event, Data, Experiment, and Workcell Managers for flexible document storage
 
 #### Backup and Restore
 
@@ -213,17 +227,17 @@ settings = PostgreSQLBackupSettings(
 backup_tool = PostgreSQLBackupTool(settings)
 backup_path = backup_tool.create_backup("pre_migration")
 
-# MongoDB backups
-from madsci.common.backup_tools import MongoDBBackupTool
-from madsci.common.types.backup_types import MongoDBBackupSettings
+# Document database backups
+from madsci.common.backup_tools import DocumentDBBackupTool
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017"),
     database="events",
     backup_dir=Path("./backups"),
     max_backups=10
 )
-backup_tool = MongoDBBackupTool(settings)
+backup_tool = DocumentDBBackupTool(settings)
 backup_path = backup_tool.create_backup("hourly")
 ```
 
@@ -235,7 +249,7 @@ madsci-backup create --db-url mongodb://localhost:27017/events
 
 # Database-specific CLIs
 madsci-postgres-backup create --db-url postgresql://localhost/resources
-madsci-mongodb-backup create --mongo-url mongodb://localhost:27017 --database events
+madsci-document-db-backup create --mongo-url mongodb://localhost:27017 --database events
 ```
 
 #### Database Connections
@@ -255,11 +269,11 @@ with Session(engine) as session:
     session.commit()
 ```
 
-**MongoDB** (using pymongo):
+**FerretDB** (MongoDB-compatible, using pymongo):
 ```python
 from pymongo import MongoClient
 
-with MongoClient(mongo_url) as client:
+with MongoClient(document_db_url) as client:
     db = client[database_name]
     collection = db[collection_name]
     # Perform operations
@@ -275,7 +289,7 @@ with MongoClient(mongo_url) as client:
 python -m madsci.resource_manager.migration_tool --db-url postgresql://localhost/resources
 ```
 
-**MongoDB migrations** (per manager):
+**Document database migrations** (per manager):
 - Handle index creation and schema validation
 - Manager-specific migration tools
 - Automatic pre-migration backups
@@ -402,6 +416,50 @@ with ownership_context(experiment_id="exp-123", workflow_id="wf-456") as info:
     # All operations within this context include ownership metadata
     print(info.experiment_id)  # "exp-123"
 ```
+
+### Service Interaction Patterns
+
+When TUI screens, CLI commands, or application code needs to communicate with MADSci manager services, **always use the typed client classes** from `madsci.client`:
+
+| Client | Service | Port |
+|--------|---------|------|
+| `EventClient` | Event Manager | 8001 |
+| `ExperimentClient` | Experiment Manager | 8002 |
+| `ResourceClient` | Resource Manager | 8003 |
+| `DataClient` | Data Manager | 8004 |
+| `WorkcellClient` | Workcell Manager | 8005 |
+| `LocationClient` | Location Manager | 8006 |
+| `RestNodeClient` | Direct node communication | varies |
+
+Client classes handle Pydantic model deserialization (avoiding field alias bugs like `_id` vs `experiment_id`), retry strategies, connection pooling, consistent error handling, and rate limiting.
+
+**Anti-patterns (DO NOT DO):**
+- Creating raw `httpx.Client` or `httpx.AsyncClient` to call manager endpoints
+- Manually parsing JSON responses with `response.json()` instead of using Pydantic models
+- Hardcoding URL paths like `/events` or `/workflows/active` in UI/CLI code
+
+**Correct pattern for TUI screens:**
+```python
+from madsci.client.experiment_client import ExperimentClient
+
+class MyScreen(ServiceURLMixin, Screen):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._experiment_client: ExperimentClient | None = None
+
+    def _get_experiment_client(self) -> ExperimentClient:
+        if self._experiment_client is None:
+            url = self.get_service_url("experiment_manager")
+            self._experiment_client = ExperimentClient(experiment_server_url=url)
+        return self._experiment_client
+
+    async def refresh_data(self) -> None:
+        client = self._get_experiment_client()
+        experiments = await client.async_get_experiments()
+        # experiments is list[Experiment], not a raw dict
+```
+
+See `src/madsci_client/madsci/client/cli/tui/screens/experiments.py` for the canonical example.
 
 ### Testing
 - Uses pytest with in-memory database handlers for most tests (no Docker required)

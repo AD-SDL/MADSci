@@ -1,0 +1,44 @@
+# {{ module_name | pascal_case }} Module
+# Common development recipes
+
+# Default recipe: show help
+default:
+    @just --list
+
+# Run the node with fake interface
+run:
+    python src/{{ module_name }}_rest_node.py --fake
+
+# Run the node with real interface
+run-real:
+    python src/{{ module_name }}_rest_node.py
+
+# Run tests
+test:
+    pytest tests/
+
+# Run tests with coverage
+coverage:
+    pytest tests/ --cov=src --cov-report=html
+
+# Lint code
+lint:
+    ruff check .
+
+# Format code
+format:
+    ruff format .
+
+# Install in development mode
+build:
+    pip install -e ".[dev]"
+{% if include_dockerfile is defined and include_dockerfile %}
+
+# Build Docker image
+docker-build:
+    docker build -t {{ module_name }}-module .
+
+# Run in Docker with fake interface
+docker-run:
+    docker run -p {{ port }}:{{ port }} {{ module_name }}-module --fake
+{% endif %}

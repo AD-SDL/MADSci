@@ -5,15 +5,218 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [0.8.0] - 2026-05-13
+
+### Added
+- **`target_model` field on `TemplateManifest`**: Templates that generate YAML/JSON config can now declare which Pydantic model the output should validate against. Automated tests verify template output matches the declared model.
+- **Settings file validation in `madsci validate`**: The validate command now supports `settings.yaml` and `*.settings.yaml` files, validating against per-manager settings classes (Lab, Event, Experiment, Resource, Data, Workcell, Location).
+- **Pydantic-first data modeling guidance**: Added to CLAUDE.md, AGENTS.md, and agent skills to codify the rule that every YAML/JSON config format must have a corresponding Pydantic model.
+
+#### SiLA2 Native Node Client (Experimental)
+> **Status: Experimental.** This is a preview of native SiLA2 integration. The client surface, optional-dependency name, and binary/error handling may change. The broader migration is scoped in [`openspec/changes/sila2-native-node-design/`](../openspec/changes/sila2-native-node-design/) (umbrella issue #293). What ships now is **client-side consumption only** — authoring a MADSci node *as* a SiLA2 server is not yet supported.
+- **`SilaNodeClient`** (`madsci.client.node.sila_node_client`): New `AbstractNodeClient` subclass that connects to SiLA2 servers over gRPC via the `sila2` SDK. Supports `sila://host:port` URL dispatch, observable + unobservable command execution, server introspection (`get_info` / `get_status` / `get_state`), `FeatureName.CommandName` dot-notation resolution, binary responses surfaced as `ActionFiles` (with path-traversal hardening), and structured connection-error diagnostics with classification (`dns_resolution`, `connection_refused`, `connection_timeout`, `tls_error`, `grpc_error`).
+- **`madsci.client[sila]` extra**: Optional install (`pip install "madsci.client[sila]"`) that pulls in a compatible `sila2` SDK version. `SilaNodeClient` raises a clear `ImportError` if the extra is not installed.
+- **Example SiLA2 server** (`examples/example_lab/example_modules/sila_example_server/`): Minimal SiLA2 server exposing an `ExampleDevice` Feature (`Greet` unobservable, `CountDown` observable, `GenerateData` binary response, `ServerUptime` Property). Runs as a Docker Compose service on `sila://localhost:50052` with a TCP-socket healthcheck. Wired into `workcell_nodes` in `examples/example_lab/settings.yaml` as `sila_example`.
+- **`sila_node_notebook.ipynb`**: End-to-end walkthrough exercising every supported `SilaNodeClient` capability. Doubles as the SiLA validation harness — runnable via `just validate_nb_sila` (papermill against the live compose service).
+- **Documentation**: New "Consuming SiLA2 Devices (Experimental)" section in [`docs/guides/node_development.md`](guides/node_development.md). Example lab README documents the new `sila_example_server` service and notebook.
+- **OpenSpec**: Design-only change `sila2-native-node-design` published, scoping the broader native SiLA2 migration (~12 downstream implementation issues #A–#M tracked against #293).
+
+#### Layered Location Ownership Model
+- **`NodeIntrinsicLocationDefinition`**: Nodes declare locations intrinsic to their hardware via the `intrinsic_locations` ClassVar. Location names are auto-prefixed with `{node_name}.` for uniqueness (e.g., `deck_1` becomes `liquidhandler_1.deck_1`).
+- **`LocationManagement` enum**: Every location now tracks whether it is managed by a node (`NODE`) or by the lab configuration (`LAB`) via the `managed_by` field on `Location`.
+- **`owner` field on `Location`**: `OwnershipInfo` provenance tracking. Node-managed locations automatically set `owner.node_id`.
+- **`POST /location/init` endpoint**: Idempotent get-or-create for location registration, used by nodes during startup.
+- **`GET /locations?managed_by=node|lab` filtering**: Query locations by management type.
+- **`GET /reconciliation/status` endpoint**: Returns last reconciliation timestamp, results, and configuration.
+- **`LabLocationConfig`**: Reconcilable lab config file format (`locations.yaml`) with `representation_templates`, `location_templates`, `training`, and `locations` sections. Replaces the old `seed_locations_file` mechanism.
+- **`RepresentationTrainingEntry`**: Teaches a node how to access locations it does not own (e.g., robot arm coordinates for a liquid handler deck slot). Defined in the `training` section of the lab config file.
+- **`lab_config_file` setting**: `LocationManagerSettings` field (default: `locations.yaml`) for the lab config file path, discovered via walk-up search. Replaces `seed_locations_file`.
+- **Health endpoint enrichment**: `LocationManagerHealth` now includes `num_node_managed_locations`, `num_lab_managed_locations`, and `last_reconciliation_at` fields.
+- **`intrinsic_location_handler()` on `AbstractNode`**: Lifecycle method that registers intrinsic locations with the Location Manager at startup, after `template_handler()` and before `startup_handler()`.
+- **`NodeInfo.intrinsic_locations` field**: Exposes a node's declared intrinsic locations through its `/info` endpoint.
+- **Location Manager schema upgrade 2.0.0 to 3.0.0**: Adds `managed_by` (default `"lab"`) and `owner` (default `null`) fields to all existing location documents, plus a `managed_by_idx` index.
+
+#### CLI/TUI Buildout
+- **`madsci add` command** with 8 subcommands for adding components to existing module projects (docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all)
+- **8 addon templates** for optional project components: `addon/docs`, `addon/drivers`, `addon/notebooks`, `addon/gitignore`, `addon/compose`, `addon/dev_tools`, `addon/agent_config`, `addon/all`
+- **8 new CLI command groups** for direct manager interaction, each with short aliases:
+  - `madsci workflow` (`wf`): list, show, submit, pause, resume, cancel, retry, resubmit
+  - `madsci resource` (`res`): list, get, create, delete, restore, tree, lock, unlock, quantity, template, history
+  - `madsci location` (`loc`): list, get, create, create-from-template, delete, resources, attach, detach, set-repr, remove-repr, transfer-graph, plan-transfer, export, import, template, rep-template
+  - `madsci node` (`nd`): list, info, status, state, log, admin, action, action-result, action-history, config, set-config, add, shell
+  - `madsci experiment` (`exp`): list, get, start, run, pause, continue, cancel, end
+  - `madsci campaign` (`camp`): create, get
+  - `madsci data` (`dt`): list, get, metadata, submit, query
+  - `madsci events` (`ev`): query, get, archive, purge, backup
+- **4 new TUI main screens**: experiments, resources, locations, data browser — all with search/filter, detail panels, and action bars
+- **5 TUI detail/modal screens**: resource tree, transfer graph, workflow detail, step detail, action executor
+- **TUI node enhancements**: admin command panel and interactive action executor
+- **TUI workflow enhancements**: retry, resubmit, step details, and filtering
+- **Shared CLI/TUI utility layer**: `cli_utils.py` (formatting, health checks, output helpers) and reusable TUI widget library (7 widgets and screen mixins)
+- **httpx client migration**: All 8 service clients migrated from `requests` to `httpx` with `DualModeClientMixin` for sync/async support, configurable retry transports, and rate-limit tracking via `httpx_factory.py`
+- **ResourceClient async methods**: 16 new async methods for TUI integration
+- **LocationClient async methods**: Missing async methods added for TUI integration
+
+- **Transfer graph detailed view**: `GET /transfer/graph/detailed` endpoint on Location Manager returning `TransferGraphDetailedResponse` with per-edge node names; `get_detailed_transfer_graph()` / `async_get_detailed_transfer_graph()` on `LocationClient`; `TransferGraphDetailedEdge` and `TransferGraphDetailedResponse` models; dashboard redesign with location grouping, resource-fill colors, edge tooltips, location index numbers, and `transferEdges` polling on the location store.
+- **Bundled templates `_shared/` directory**: 13 canonical files (`.gitignore`, `CLAUDE.md.j2`, `AGENTS.md.j2`, `justfile.j2`, `ruff.toml.j2`, `.pre-commit-config.yaml.j2`, `docker-compose.yaml.j2`, notebooks, docs, drivers) deduplicated across all bundled templates. `TemplateEngine` extended with `_resolve_shared_dir()` (walk-up + importlib fallback), `_resolve_source_path()` (local-first fallback), multi-path `FileSystemLoader`, and expanded path-traversal check. Removes ~105 duplicated files across 14 template directories (6 module + 8 addon), net -4,678 lines.
+- **Node `try`/`except` pre-commit checker** (`scripts/precommit_check_try_catch_blocks.py`): pre-commit hook that fails when a node module catches an exception without re-raising or returning an `ActionResult`, enforcing the node error-handling contract.
+
+#### Node Location Template System (PR #228, #258)
+- `template_handler()` lifecycle method on `AbstractNode` for declarative registration of resource templates, location representation templates, and location templates at node startup
+- `location_representation_templates` and `location_templates` class variables on `AbstractNode` for declarative template definitions
+- `NodeInfo.location_templates` field exposing a node's registered location templates through its info endpoint
+- Location Templates panel on the Squid Dashboard with schema-aware forms for creating locations from templates
+- Resource Templates panel on the Squid Dashboard Resources tab
+- Database auto-initialization for document database collections not yet tracked by the migration system
+
+#### Agent Skills (PR #242)
+- Four bundled agent skills (`madsci-cli`, `madsci-nodes`, `madsci-managers`, `madsci-experiments`) providing AI coding agents with MADSci domain knowledge
+- Skills are automatically copied into generated projects via `madsci new` and `madsci init`
+
+#### Dashboard Workflow and Node Modal Redesign (PR #259)
+- Redesigned workflow modal with tabbed layout (Overview, Steps, Results tabs) and step indicators
+- Workflow retry and resubmit UX with confirmation dialogs and snackbar notifications
+- Redesigned node modal with tabbed layout (Overview, Info, Actions tabs)
+- `resubmit_workflow` endpoint on workcell manager and corresponding client method
+
+#### Experiment Ownership Propagation (PR #260)
+- Experiment ownership context (experiment_id, campaign_id, user) is now automatically propagated to workflows started within `manage_experiment()`
+
+#### FOSS Infrastructure Migration (Issue #212)
+- New FOSS migration tool (`madsci.common.foss_migration`) for automated data migration from proprietary infrastructure (MongoDB, Redis, MinIO) to FOSS alternatives (FerretDB, Valkey, SeaweedFS)
+  - `FossMigrationTool` orchestrator with 20+ methods covering prerequisite checks, Docker lifecycle management, database-specific migrations, and post-migration verification
+  - `FossMigrationSettings` with environment variable support and customizable compose file/service names
+  - `FossMigrationStepResult` and `FossMigrationReport` result models for structured migration reporting
+- New `madsci migrate foss` CLI command with `--dry-run`/`--apply` modes, per-step execution (`--step`), `--skip-backup`, `--skip-docker`, URL overrides, and Rich table output
+- Docker Compose migration overlay (`compose.migration.yaml`) for running old containers on alternate ports during migration (MongoDB:27018, PostgreSQL:5433, Redis:6380, MinIO:9002)
+- Automated Location Manager data migration from v0.7.x Redis to FerretDB document database as part of the FOSS migration pipeline — auto-discovers manager IDs, reads location data (resource attachments, node representations) from old Redis, and writes to FerretDB via `LocationMigrator`
+- Comprehensive FOSS migration guide (`docs/guides/foss_migration.md`) with prerequisites, quick start, Location Manager migration, troubleshooting, and data directory reference
+- FOSS migration test suites: CLI tests (129 lines) and tool unit tests (536 lines)
+
+### Changed
+- **`madsci validate` docstring**: Updated to reflect support for settings files alongside definitions and workflows.
+- **CLI commands refactored** to use shared utility layer for consistent output formatting and error handling
+- **TUI screens migrated** to shared widget library for consistent styling and behavior
+- **Example lab location management**: Inline `location_locations` definitions in `settings.yaml` replaced by a standalone `locations.yaml` lab config file using `LabLocationConfig` format. Node-intrinsic locations (liquid handler deck slots) are now auto-created by nodes on startup. Lab-managed locations (storage rack, plate carriage) and training entries (robot arm coordinates for LH deck slots) are defined in `locations.yaml`.
+- **Location Manager reconciliation**: Now processes the lab config file (`LabLocationConfig`) on each cycle, syncing representation templates, location templates, locations, and training entries with the live database.
+
+#### Location Manager Dual-Handler Architecture (PR #228)
+- Location Manager migrated from Redis-only to dual-handler architecture (document database + cache)
+- Location data persisted in document database with cache-backed fast reads
+
+#### Dashboard UX Improvements (PRs #255, #257)
+- Copyable workflow step output now uses `js-yaml` for YAML formatting with scoped toggle per action
+- JSON renderer for workflow steps has a depth limit to prevent browser freezes on deeply nested data
+- Action argument values in the node modal are now initialized from their declared defaults
+
+#### Default Infrastructure: FOSS Alternatives
+- **MongoDB → FerretDB v2**: Default document database switched to FerretDB (MongoDB wire protocol, backed by PostgreSQL with DocumentDB extension); Python `pymongo` client unchanged
+- **Redis → Valkey 8**: Default key-value store switched to Valkey (drop-in API-compatible); Python `redis` client unchanged
+- **MinIO → SeaweedFS 4.17**: Default object storage switched to SeaweedFS (S3-compatible); Python `minio` SDK unchanged
+- **PostgreSQL split**: Two separate PostgreSQL instances — `madsci_postgres` (port 5432, `postgres-documentdb-dev:17-ferretdb` for FerretDB) and `madsci_postgres_resources` (port 5434, `postgres:17` for Resource Manager) — replacing the single shared instance
+
+#### FOSS Terminology Audit
+- **BREAKING**: `DocumentDBBackupSettings` env prefix changed from `MONGODB_` to `DOCUMENT_DB_` (e.g., `MONGODB_BACKUP_DIR` → `DOCUMENT_DB_BACKUP_DIR`)
+- **BREAKING**: `DocumentDBMigrationSettings` env prefix changed from `MONGODB_MIGRATION_` to `DOCUMENT_DB_MIGRATION_` (e.g., `MONGODB_MIGRATION_DATABASE` → `DOCUMENT_DB_MIGRATION_DATABASE`)
+- **BREAKING**: Settings fields `redis_host`, `redis_port`, `redis_password` renamed to `cache_host`, `cache_port`, `cache_password` on `WorkcellManagerSettings` and `LocationManagerSettings` (old names accepted via `validation_alias` for backward compatibility)
+- **BREAKING**: Health model fields `redis_connected` renamed to `cache_connected` on `WorkcellManagerHealth` and `LocationManagerHealth`
+- **BREAKING**: Docker types field `REDIS_PORT` renamed to `CACHE_PORT` (old name accepted via `validation_alias`)
+- Default backup directory for document database migrations changed from `.madsci/backups/mongodb` to `.madsci/backups/document_db`
+- Backup metadata `backup_type` value changed from `"mongodb"` to `"document_db"` for document database backups
+- Comprehensive terminology updates across all comments, docstrings, schema descriptions, and documentation to use vendor-neutral terms ("document database" instead of "MongoDB", "cache" instead of "Redis")
+- Deleted stale auto-generated API doc files referencing old module names (`mongo_cli.md`, `mongodb_backup.md`, `mongo_handler.md`, etc.)
+- Test directory renamed: `test_mongodb_backup_tools/` → `test_document_db_backup_tools/`
+- Manual test file renamed: `manual_test_minio.py` → `manual_test_object_storage.py`
+
+#### Vendor-Neutral Renames
+- Handler files: `mongo_handler.py` → `document_storage_handler.py`, `minio_handler.py` → `object_storage_handler.py`
+- Handler classes: `PyMongoHandler` → `PyDocumentStorageHandler`, `InMemoryMongoHandler` → `InMemoryDocumentStorageHandler`, `RealMinioHandler` → `RealObjectStorageHandler`, `InMemoryMinioHandler` → `InMemoryObjectStorageHandler`
+- Backup tools: `mongodb_backup.py` → `document_db_backup.py`, `mongo_cli.py` → `document_db_cli.py`, `MongoDBBackupTool` → `DocumentDBBackupTool`, `MongoDBBackupSettings` → `DocumentDBBackupSettings`
+- Migration tools: `mongodb_migration_tool.py` → `document_db_migration_tool.py`, `mongodb_version_checker.py` → `document_db_version_checker.py`
+- Helper function: `create_minio_client()` → `create_object_storage_client()` (with new `_normalise_endpoint()` for URL scheme stripping)
+- Manager constructor parameters: `mongo_handler` → `document_handler`, `minio_handler` → `object_storage_handler`
+- Settings fields: `mongo_db_url` → `document_db_url` across all managers (backward-compatible via `AliasChoices` validation aliases)
+- Docker types: `MONGODB_PORT` → `DOCUMENT_DB_PORT`, `MINIO_PORT` → `OBJECT_STORAGE_PORT` (8333), `MINIO_CONSOLE_PORT` → `OBJECT_STORAGE_CONSOLE_PORT` (9333)
+- CLI entry point: `madsci-mongodb-backup` → `madsci-document-db-backup`
+- Backup settings files: now check for both `document_db_backup.*` and legacy `mongodb_backup.*` filenames
+
+#### Configuration and Port Changes
+- Default object storage ports changed from MinIO conventions (9000/9001) to SeaweedFS defaults (8333/9333)
+- Resource Manager PostgreSQL moved to port 5434 (FerretDB backend occupies 5432)
+- Default `POSTGRES_DB` changed from `resources` to `postgres` (FerretDB requirement)
+- SeaweedFS S3 credentials configured via `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` environment variables
+- New `public_endpoint` field on `ObjectStorageSettings` for customizable public-facing URLs (replaces hardcoded port rewriting)
+
+#### Templates
+- Lab templates (`standard`, `distributed`) updated: service names (`mongodb` → `ferretdb`, `redis` → `valkey`), environment variables, and dependencies aligned with FOSS stack
+
+#### Documentation
+- Operator guides updated for FOSS stack: backup/recovery, troubleshooting, updates/maintenance
+- Manager READMEs updated with FerretDB/Valkey/SeaweedFS references and new handler names
+- Tutorials updated with new service names, ports, and compose configuration
+- `madsci_common` README updated with new backup tool class names
+
+### Deprecated
+- **`LabManagerDefinition`**: Now emits `MadsciDeprecationWarning` on instantiation (v0.7.0 removal). Use `LabManagerSettings` for configuration.
+
+### Removed
+- **`madsci new workcell` subcommand**: The workcell template generated an orphaned YAML format that didn't correspond to any Pydantic model. Workcell configuration is handled by `WorkcellManagerSettings` via `settings.yaml`.
+- **`LabClient.get_definition()`**: The Lab Manager no longer serves a `/definition` endpoint. Use `get_lab_context()` or `get_lab_health()` instead.
+- **`WORKCELL` template category**: Removed from `TemplateCategory` enum.
+- **`NodeLocationTemplateDefinition`**: Replaced by `NodeIntrinsicLocationDefinition` for declaring node-intrinsic locations. Location templates are now defined as `LocationTemplate` objects (via lab config file or API) rather than on node classes.
+- **`seed_locations_file` setting**: Replaced by `lab_config_file` on `LocationManagerSettings`. The new `LabLocationConfig` format supports representation templates, location templates, training entries, and locations in a single reconcilable file.
+- `workcell_manager.compose.yaml` (redundant compose file)
+- MongoDB data volume from `compose.yaml` (FerretDB uses PostgreSQL backend)
+- Hardcoded MinIO console port rewriting logic in `object_storage_helpers.py` (replaced by configurable `public_endpoint`)
+
+### Fixed
+- TUI UX improvements: scrollable layouts, clickable ActionBar, screen discoverability
+- Dashboard scroll behavior and full ULID ID display
+- Transfer graph names, delete confirmation dialog, inventory button label
+- Double-slash URL bug in node client health checks
+- httpx migration fixes: stale `requests` imports, config attribute access, response closing in retry transports, async health checks, broken sync `.close()` call
+- **Object storage overwrites on repeated uploads** (closes #274): added `ULID_PREFIXED` value to `ObjectNamingStrategy` and incorporated `datapoint_id` into S3 object keys (`{ulid}_{label}`) in both server-side and client-side upload paths, matching the local filesystem backend.
+- **`madsci new <subcommand>` ignored `--name` in interactive mode**: `collect_parameters_interactive()` now accepts an `overrides` dict, and `generate_from_template()` passes CLI-provided names through it, so `madsci new lab -n my_lab` produces a lab named `my_lab` instead of prompting.
+- **Generated lab compose templates referenced nonexistent local images** (`madsci-squid:latest`, `madsci-event-manager:latest`): updated `standard` and `distributed` lab templates to use the published GHCR images (`ghcr.io/ad-sdl/madsci_dashboard:latest` for the lab manager, `ghcr.io/ad-sdl/madsci:latest` for all other services). Removed the stale `build:` section from the lab manager service.
+- **SiLA connection diagnostics**: `SilaNodeClient` now raises connection errors enriched with classification (`dns_resolution`, `connection_refused`, `connection_timeout`, `tls_error`, `grpc_error`) and remediation hints.
+
+#### Dashboard and UI Fixes (PRs #255, #256, #257, #259)
+- Fixed dashboard freeze caused by `@vue:updated` event handler creating infinite update loops; replaced with `@update:modelValue`
+- Typed action endpoints now return a failed `ActionResult` instead of HTTP 500 when actions raise exceptions
+- Action argument checkbox and input values in the node modal now correctly initialized from their declared defaults
+- Workflow steps that error before execution now show failed status instead of remaining pending
+
+#### Experiment Ownership (PR #260)
+- Restricted ownership context overrides to experiment-level fields only (`experiment_id`, `campaign_id`, `user`), preventing unintended overwrites of workflow-level ownership
+
+#### Template Import Fixes
+- Fixed `RestNodeConfig` import in all 6 module templates (was importing from `madsci.node_module` which does not export it; now imports from `madsci.common.types.node_types`)
+- Fixed `SquidServer`/`SquidSettings` imports in all 3 lab templates (classes do not exist; replaced with `LabManager` from `madsci.squid.lab_server` and `LabManagerSettings` from `madsci.common.types.lab_types`)
+
+#### FOSS Migration Location Data Loss
+- Fixed FOSS migration tool silently skipping Location Manager data stored in Redis, treating it as ephemeral; v0.7.x Location Manager stores primary location data (resource attachments, node representations, transfer state) in Redis, which is now automatically migrated to the document database during `madsci migrate foss --apply`
+
+#### Documentation URL Fixes
+- Fixed broken GitHub Pages documentation URLs in CLI output and generated project files
+
+#### CLI Scaffolding Fixes (`madsci new`)
+- Fixed `--template` argument being ignored in `madsci new module` (template selection prompt was always shown even when `--template` was explicitly provided)
+- Fixed default module name `my_module` creating a `my_module_module` directory; default changed to `my_device`
+- Fixed agent skills being placed in the current working directory instead of inside the generated project directory (e.g., `my_device_module/.agents/` instead of `./.agents/`)
+- Fixed next-steps output using hardcoded fallback names (e.g., `your_module_module`) instead of the actual names entered during interactive prompts; `generate_from_template` now returns the `GeneratedProject` result
+- Fixed documentation link in `madsci new module` pointing to non-existent URL
+
 ## [0.7.1] - 2026-03-10
 
 ### Added
 
 #### Database Handler Abstractions
-- New `madsci.common.db_handlers` package with abstract base classes (`MongoHandler`, `RedisHandler`, `PostgresHandler`, `MinioHandler`) and both real and in-memory implementations
-- Real implementations: `PyMongoHandler`, `PyRedisHandler`, `SQLAlchemyHandler`, `RealMinioHandler`
-- In-memory implementations: `InMemoryMongoHandler`, `InMemoryRedisHandler`, `SQLiteHandler`, `InMemoryMinioHandler`
-- All 6 database-backed managers now accept optional handler constructor parameters (`mongo_handler`, `minio_handler`, `redis_handler`, `postgres_handler`), enabling dependency injection for testing
+- New `madsci.common.db_handlers` package with abstract base classes (`DocumentStorageHandler`, `CacheHandler`, `PostgresHandler`, `ObjectStorageHandler`) and both real and in-memory implementations
+- Real implementations: `PyMongoHandler`, `PyCacheHandler`, `SQLAlchemyHandler`, `RealObjectStorageHandler`
+- In-memory implementations: `InMemoryDocumentStorageHandler`, `InMemoryCacheHandler`, `SQLiteHandler`, `InMemoryObjectStorageHandler`
+- All 6 database-backed managers now accept optional handler constructor parameters (`document_handler`, `object_storage_handler`, `cache_handler`, `postgres_handler`), enabling dependency injection for testing
 - `LocalRunner` updated to use handler abstractions instead of raw in-memory clients
 - `InMemoryCollection` gained projection support, `replace_one()`, `client` property, and `list_collection_names()`
 
@@ -35,9 +238,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Event delivery is now synchronous and fire-once; callers should handle failures explicitly
 - Added `madsci.eventclient.send_failures` OTEL counter and upgraded failure logging from `warning` to `error` with structured kwargs (`event_type`, `event_id`)
 
-#### DataManager MinIO Handler Consolidation
-- All MinIO operations now routed through `MinioHandler` abstraction; removed direct `self.minio_client` usage
-- `_setup_object_storage()` wraps legacy `Minio` clients in `RealMinioHandler` (same pattern as other managers wrapping raw connections)
+#### DataManager Object Storage Handler Consolidation
+- All object storage operations now routed through `ObjectStorageHandler` abstraction; removed direct `self.minio_client` usage
+- `_setup_object_storage()` wraps legacy `Minio` clients in `RealObjectStorageHandler` (same pattern as other managers wrapping raw connections)
 
 #### Legacy Constructor Parameter Deprecation
 - Legacy database connection parameters (`db_connection`, `db_client`, `redis_connection`, `mongo_connection`) now emit `DeprecationWarning` across all 6 managers and 2 state handlers
@@ -66,11 +269,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### EventManager Lazy pymongo Imports
 - Moved top-level `import pymongo` and `from pymongo import errors` behind `TYPE_CHECKING` guard and into methods, allowing the module to be imported without pymongo installed (in-memory-only usage)
 
-#### InMemoryMongoHandler `_client` Safety
-- `InMemoryMongoHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
+#### InMemoryDocumentStorageHandler `_client` Safety
+- `InMemoryDocumentStorageHandler.__init__` now sets `self._client = None` when an external `database` is provided, preventing `AttributeError` on `_client` access
 
 #### Handler ABC Return Type Annotations
-- Improved return type annotations on handler ABC methods: `MongoHandler.get_collection() -> Collection | Any`, `RedisHandler.create_dict() -> MutableMapping`, `RedisHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
+- Improved return type annotations on handler ABC methods: `DocumentStorageHandler.get_collection() -> Collection | Any`, `CacheHandler.create_dict() -> MutableMapping`, `CacheHandler.create_lock() -> ContextManager`, `PostgresHandler.get_engine() -> Engine | Any`
 
 #### Manager Registry Lock Retry + Shutdown Release
 - `AbstractManagerBase._resolve_identity_from_registry()` now retries lock acquisition for `registry_lock_timeout` seconds (default 60s) before raising, surviving ungraceful container restarts where the previous lock hasn't expired yet
@@ -117,7 +320,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `madsci run` - Workflow and experiment execution
 - `madsci validate` - Configuration and definition file validation
 - `madsci config` - Configuration management (export, create)
-- `madsci backup` - Database backup creation (PostgreSQL and MongoDB)
+- `madsci backup` - Database backup creation (PostgreSQL and document database)
 - `madsci registry` - Service registry management
 - `madsci migrate` - Database migration tooling
 - `madsci tui` - Interactive terminal user interface
@@ -150,7 +353,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Local Mode
 - `madsci start --mode=local` runs all managers in-process without Docker
-- In-memory drop-in backends for MongoDB and Redis operations; SQLite drop-in for PostgreSQL (Resource Manager)
+- In-memory drop-in backends for document database and Valkey operations; SQLite drop-in for PostgreSQL (Resource Manager)
 - Local data storage for development and testing without external database dependencies
 
 #### Configuration Management
@@ -188,7 +391,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Event Manager Analytics and Retention
 - Event archiving via `/events/archive` endpoint (by event IDs or date cutoff)
-- MongoDB TTL index for automatic hard-deletion of archived events
+- Document database TTL index for automatic hard-deletion of archived events
 - Background retention task for periodic event archiving
 - `UtilizationAnalyzer` for session-based system and node utilization analysis
 - `TimeSeriesAnalyzer` for timezone-aware time-series utilization reports (daily, hourly, weekly)
@@ -237,7 +440,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `module_types.py`: Module and node settings hierarchy for module development
 - `registry_types.py`: Registry entries, locks, and component type definitions
 - `migration_types.py`: Migration status and output format types
-- `backup_types.py`: PostgreSQL and MongoDB backup settings
+- `backup_types.py`: PostgreSQL and document database backup settings
 - `client_types.py`: `MadsciClientConfig` with standardized retry, timeout, and pooling configuration
 - `context_types.py`: `MadsciContext` unified server URL settings
 

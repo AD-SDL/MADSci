@@ -62,11 +62,13 @@ class ExperimentManagerSettings(
         description="The type of manager.",
         default=ManagerType.EXPERIMENT_MANAGER,
     )
-    mongo_db_url: AnyUrl = Field(
-        title="MongoDB URL",
-        description="The URL of the MongoDB database for the experiment manager.",
+    document_db_url: AnyUrl = Field(
+        title="Document Database URL",
+        description="The URL of the MongoDB-compatible document database for the experiment manager.",
         default=AnyUrl("mongodb://localhost:27017"),
-        validation_alias=AliasChoices("mongo_db_url", "EXPERIMENT_DB_URL", "db_url"),
+        validation_alias=AliasChoices(
+            "document_db_url", "mongo_db_url", "EXPERIMENT_DB_URL", "db_url"
+        ),
         json_schema_extra={"secret": True},
     )
     database_name: str = Field(

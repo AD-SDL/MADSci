@@ -1286,6 +1286,53 @@ class TestEnhancedActionResultTypeMapping:
         assert result["json_result"]["result"] == "success"
         assert result["files"] is not None
 
+    def test_failed_typed_action_returns_200(self, enhanced_test_node, enhanced_client):
+        """Test that a failed typed action returns 200 with FAILED status, not 500.
+
+        Regression test for issue #187: when a typed action (e.g. -> int) fails,
+        the action-specific result endpoint must still return the ActionResult
+        with status=failed, rather than a 500 error from Pydantic rejecting
+        json_result=None against a non-Optional type.
+        """
+
+        def _raise(*_args, **_kwargs):
+            raise RuntimeError("simulated failure")
+
+        # 1. Create the action
+        response = enhanced_client.post("/action/return_int", json={"args": {}})
+        assert response.status_code == 200
+        action_id = response.json()["action_id"]
+
+        # 2. Swap the handler in action_handlers dict so the action fails
+        original = enhanced_test_node.action_handlers["return_int"]
+        enhanced_test_node.action_handlers["return_int"] = _raise
+        try:
+            # 3. Start the action (will fail internally)
+            response = enhanced_client.post(f"/action/return_int/{action_id}/start")
+            assert response.status_code == 200
+
+            # 4. Wait for the action to finish
+            result = None
+            for _ in range(50):
+                response = enhanced_client.get(f"/action/return_int/{action_id}/result")
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get("status") in ["succeeded", "failed", "error"]:
+                        break
+                time.sleep(0.1)
+        finally:
+            enhanced_test_node.action_handlers["return_int"] = original
+            enhanced_test_node.node_status.errored = False
+
+        # 5. The typed endpoint must return 200, not 500
+        assert response.status_code == 200, (
+            f"Expected 200 but got {response.status_code} — "
+            "typed endpoint likely rejected json_result=None"
+        )
+        assert result is not None
+        assert result["status"] in ["failed", "error"]
+        assert result["json_result"] is None
+
 
 class TestEnhancedBackwardCompatibility:
     """Test that changes maintain backward compatibility."""

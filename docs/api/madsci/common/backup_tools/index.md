@@ -8,16 +8,16 @@ Sub-modules
 * madsci.common.backup_tools.backup_validator
 * madsci.common.backup_tools.base_backup
 * madsci.common.backup_tools.cli
-* madsci.common.backup_tools.mongo_cli
-* madsci.common.backup_tools.mongodb_backup
+* madsci.common.backup_tools.document_db_backup
+* madsci.common.backup_tools.document_db_cli
 * madsci.common.backup_tools.postgres_backup
 * madsci.common.backup_tools.postgres_cli
 
 Functions
 ---------
 
-`main_mongodb_backup() ‑> None`
-:   Entry point for MongoDB backup CLI.
+`main_document_db_backup() ‑> None`
+:   Entry point for document database backup CLI.
 
 `main_postgres_backup() ‑> None`
 :   Entry point for PostgreSQL backup CLI.
@@ -34,7 +34,7 @@ Classes
 
     ### Descendants
 
-    * madsci.common.backup_tools.mongodb_backup.MongoDBBackupTool
+    * madsci.common.backup_tools.document_db_backup.DocumentDBBackupTool
     * madsci.common.backup_tools.postgres_backup.PostgreSQLBackupTool
 
     ### Methods
@@ -314,13 +314,13 @@ Classes
         Returns:
             True if structure is valid, False otherwise
 
-`MongoDBBackupTool(settings: madsci.common.types.backup_types.MongoDBBackupSettings, logger: madsci.client.event_client.EventClient | None = None)`
-:   Standalone MongoDB backup and restore tool.
+`DocumentDBBackupTool(settings: madsci.common.types.backup_types.DocumentDBBackupSettings, logger: madsci.client.event_client.EventClient | None = None)`
+:   Standalone document database backup and restore tool.
     
-    Initialize MongoDB backup tool.
+    Initialize document database backup tool.
     
     Args:
-        settings: MongoDB backup configuration settings
+        settings: Document database backup configuration settings
         logger: Optional logger instance
 
     ### Ancestors (in MRO)
@@ -331,7 +331,7 @@ Classes
     ### Methods
 
     `create_backup(self, name_suffix: str | None = None) ‑> pathlib.Path`
-    :   Create a MongoDB backup using mongodump.
+    :   Create a document database backup using mongodump.
         
         Args:
             name_suffix: Optional suffix to add to backup name

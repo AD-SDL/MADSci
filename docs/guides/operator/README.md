@@ -103,7 +103,7 @@ madsci logs --level error --since 1h
 
 | Type | Examples | Purpose |
 |------|----------|--------|
-| **Infrastructure** | MongoDB, PostgreSQL, Redis, MinIO | Data storage |
+| **Infrastructure** | FerretDB, PostgreSQL, Valkey, SeaweedFS | Data storage |
 | **Managers** | Event, Experiment, Resource, Workcell | Coordination |
 | **Nodes** | temp_sensor, robot_arm | Instruments |
 
@@ -118,10 +118,10 @@ madsci logs --level error --since 1h
 | Data Manager | 8004 | http://localhost:8004 |
 | Workcell Manager | 8005 | http://localhost:8005 |
 | Location Manager | 8006 | http://localhost:8006 |
-| MongoDB | 27017 | mongodb://localhost:27017 |
+| FerretDB | 27017 | mongodb://localhost:27017 |
 | PostgreSQL | 5432 | postgresql://localhost:5432 |
-| Redis | 6379 | redis://localhost:6379 |
-| MinIO | 9000/9001 | http://localhost:9000 |
+| Valkey | 6379 | redis://localhost:6379 |
+| SeaweedFS | 8333/9333 | http://localhost:8333 |
 
 ### Health Check Endpoints
 

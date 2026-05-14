@@ -7,11 +7,14 @@ import zipfile
 from pathlib import Path
 from typing import Any, ClassVar, Optional, Union
 
+import httpx
 from madsci.client.event_client import EventClient
+from madsci.client.http import DualModeClientMixin
 from madsci.client.node.abstract_node_client import (
     AbstractNodeClient,
 )
 from madsci.common.context import get_event_client
+from madsci.common.http_client import create_httpx_client
 from madsci.common.types.action_types import (
     ActionFiles,
     ActionRequest,
@@ -30,7 +33,6 @@ from madsci.common.types.node_types import (
     NodeStatus,
 )
 from madsci.common.types.resource_types import ResourceDataModels
-from madsci.common.utils import create_http_session
 from pydantic import AnyUrl
 
 
@@ -57,7 +59,7 @@ def _serialize_for_json(obj: Any) -> Any:
     return obj
 
 
-class RestNodeClient(AbstractNodeClient):
+class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
     """REST-based node client."""
 
     url_protocols: ClassVar[list[str]] = ["http", "https"]
@@ -108,7 +110,13 @@ class RestNodeClient(AbstractNodeClient):
             )
 
         self.config = config if config is not None else RestNodeClientConfig()
-        self.session = create_http_session(config=self.config)
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
+
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
 
     def send_action(
         self,
@@ -203,7 +211,8 @@ class RestNodeClient(AbstractNodeClient):
         if serialized_var_kwargs is not None:
             request_data["var_kwargs"] = serialized_var_kwargs
 
-        rest_response = self.session.post(
+        rest_response = self._request(
+            "POST",
             f"{self.url}/action/{action_request.action_name}",
             json=request_data,
             timeout=timeout or self.config.timeout_data_operations,
@@ -242,7 +251,8 @@ class RestNodeClient(AbstractNodeClient):
                     )
 
                 try:
-                    rest_response = self.session.post(
+                    rest_response = self._request(
+                        "POST",
                         f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
                         files=files_to_upload,
                         timeout=timeout or self.config.timeout_data_operations,
@@ -256,7 +266,8 @@ class RestNodeClient(AbstractNodeClient):
             else:
                 # Handle single Path parameters
                 with Path(file_value).expanduser().open("rb") as file_handle:
-                    rest_response = self.session.post(
+                    rest_response = self._request(
+                        "POST",
                         f"{self.url}/action/{action_name}/{action_id}/upload/{file_key}",
                         files={"file": file_handle},
                         timeout=timeout or self.config.timeout_data_operations,
@@ -274,7 +285,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: The ID of the action.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
         """
-        rest_response = self.session.post(
+        rest_response = self._request(
+            "POST",
             f"{self.url}/action/{action_name}/{action_id}/start",
             timeout=timeout or self.config.timeout_data_operations,
         )
@@ -294,7 +306,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: The ID of the action.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        rest_response = self.session.get(
+        rest_response = self._request(
+            "GET",
             f"{self.url}/action/{action_name}/{action_id}/status",
             timeout=timeout or self.config.timeout_default,
         )
@@ -435,11 +448,25 @@ class RestNodeClient(AbstractNodeClient):
             include_files: Whether to include files in the result.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        rest_response = self.session.get(
+        rest_response = self._request(
+            "GET",
             f"{self.url}/action/{action_name}/{action_id}/result",
             timeout=timeout or self.config.timeout_default,
         )
-        rest_response.raise_for_status()
+        try:
+            rest_response.raise_for_status()
+        except httpx.HTTPStatusError:
+            if rest_response.status_code >= 500:
+                # Fall back to generic endpoint if typed endpoint returns a
+                # server error (e.g. unpatched nodes returning None for failed
+                # typed actions)
+                self.logger.warning(
+                    "Typed endpoint returned server error; falling back to generic endpoint",
+                    action_name=action_name,
+                    status_code=rest_response.status_code,
+                )
+                return self.get_action_result(action_id, timeout=timeout)
+            raise
 
         # If include_files is False, we can convert directly without fetching files
         if not include_files:
@@ -465,7 +492,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: Action ID used in the download endpoint
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
         """
-        rest_response = self.session.get(
+        rest_response = self._request(
+            "GET",
             f"{self.url}/action/{action_id}/download",
             timeout=timeout or self.config.timeout_data_operations,
         )
@@ -486,7 +514,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: Optional action ID to filter by.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.get(
+        response = self._request(
+            "GET",
             f"{self.url}/action",
             params={"action_id": action_id},
             timeout=timeout or self.config.timeout_default,
@@ -504,7 +533,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: The ID of the action.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        rest_response = self.session.get(
+        rest_response = self._request(
+            "GET",
             f"{self.url}/action/{action_id}/status",
             timeout=timeout or self.config.timeout_default,
         )
@@ -524,7 +554,8 @@ class RestNodeClient(AbstractNodeClient):
             action_id: The ID of the action.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        rest_response = self.session.get(
+        rest_response = self._request(
+            "GET",
             f"{self.url}/action/{action_id}/result",
             timeout=timeout or self.config.timeout_default,
         )
@@ -613,8 +644,8 @@ class RestNodeClient(AbstractNodeClient):
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.get(
-            f"{self.url}/status", timeout=timeout or self.config.timeout_default
+        response = self._request(
+            "GET", f"{self.url}/status", timeout=timeout or self.config.timeout_default
         )
         response.raise_for_status()
         return NodeStatus.model_validate(response.json())
@@ -626,8 +657,8 @@ class RestNodeClient(AbstractNodeClient):
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.get(
-            f"{self.url}/state", timeout=timeout or self.config.timeout_default
+        response = self._request(
+            "GET", f"{self.url}/state", timeout=timeout or self.config.timeout_default
         )
         response.raise_for_status()
         return response.json()
@@ -639,8 +670,8 @@ class RestNodeClient(AbstractNodeClient):
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.get(
-            f"{self.url}/info", timeout=timeout or self.config.timeout_default
+        response = self._request(
+            "GET", f"{self.url}/info", timeout=timeout or self.config.timeout_default
         )
         response.raise_for_status()
         return NodeInfo.model_validate(response.json())
@@ -655,7 +686,8 @@ class RestNodeClient(AbstractNodeClient):
             new_config: Dictionary of configuration values to update.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_data_operations.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.url}/config",
             json=new_config,
             timeout=timeout or self.config.timeout_data_operations,
@@ -673,7 +705,8 @@ class RestNodeClient(AbstractNodeClient):
             admin_command: The administrative command to send.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.post(
+        response = self._request(
+            "POST",
             f"{self.url}/admin/{admin_command}",
             timeout=timeout or self.config.timeout_default,
         )
@@ -694,8 +727,269 @@ class RestNodeClient(AbstractNodeClient):
         Args:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
-        response = self.session.get(
-            f"{self.url}/log", timeout=timeout or self.config.timeout_default
+        response = self._request(
+            "GET", f"{self.url}/log", timeout=timeout or self.config.timeout_default
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Async methods
+    # ------------------------------------------------------------------
+
+    async def async_get_status(self, timeout: Optional[float] = None) -> NodeStatus:
+        """Get the status of the node asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.url}/status",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return NodeStatus.model_validate(response.json())
+
+    async def async_get_state(self, timeout: Optional[float] = None) -> dict[str, Any]:
+        """Get the state of the node asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.url}/state",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def async_get_info(self, timeout: Optional[float] = None) -> NodeInfo:
+        """Get information about the node asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.url}/info",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return NodeInfo.model_validate(response.json())
+
+    async def async_set_config(
+        self, new_config: dict[str, Any], timeout: Optional[float] = None
+    ) -> NodeSetConfigResponse:
+        """Update configuration values of the node asynchronously."""
+        response = await self._async_request(
+            "POST",
+            f"{self.url}/config",
+            json=new_config,
+            timeout=timeout or self.config.timeout_data_operations,
+        )
+        response.raise_for_status()
+        return NodeSetConfigResponse.model_validate(response.json())
+
+    async def async_send_admin_command(
+        self, admin_command: AdminCommands, timeout: Optional[float] = None
+    ) -> AdminCommandResponse:
+        """Perform an administrative command on the node asynchronously."""
+        response = await self._async_request(
+            "POST",
+            f"{self.url}/admin/{admin_command}",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return AdminCommandResponse.model_validate(response.json())
+
+    async def async_get_action_history(
+        self, action_id: Optional[str] = None, timeout: Optional[float] = None
+    ) -> dict[str, list[ActionResult]]:
+        """Get action history asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.url}/action",
+            params={"action_id": action_id},
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def async_get_log(self, timeout: Optional[float] = None) -> dict[str, Event]:
+        """Get the log from the node asynchronously."""
+        response = await self._async_request(
+            "GET",
+            f"{self.url}/log",
+            timeout=timeout or self.config.timeout_default,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    async def async_send_action(
+        self,
+        action_request: ActionRequest,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
+        """
+        Send an action to the node asynchronously.
+
+        Unlike the synchronous ``send_action``, this method does **not** poll or
+        wait for the action to reach a terminal state.  It creates the action,
+        starts it, and returns the initial ``ActionResult`` immediately.
+
+        Args:
+            action_request: The action request to send.
+            timeout: Optional timeout override in seconds for individual HTTP
+                requests.  If ``None``, uses ``config.timeout_data_operations``.
+        """
+        try:
+            # Step 1: Create the action
+            action_id = await self._async_create_action(action_request, timeout=timeout)
+
+            # Step 2: Start the action
+            return await self._async_start_action(
+                action_request.action_name, action_id, timeout=timeout
+            )
+
+        except Exception as e:
+            if hasattr(e, "response") and e.response is not None:
+                self.logger.error(
+                    "REST node async action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    status_code=e.response.status_code,
+                    response_text=e.response.text,
+                )
+            else:
+                self.logger.error(
+                    "REST node async action request failed",
+                    event_type=EventType.LOG_ERROR,
+                    error=str(e),
+                )
+            raise e
+
+    async def _async_create_action(
+        self, action_request: ActionRequest, timeout: Optional[float] = None
+    ) -> str:
+        """
+        Create a new action asynchronously and return the action_id.
+
+        Args:
+            action_request: The action request to create.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_data_operations``.
+        """
+        args = dict(action_request.args) if action_request.args else {}
+
+        serialized_args = _serialize_for_json(args)
+        serialized_var_args = (
+            _serialize_for_json(action_request.var_args)
+            if action_request.var_args is not None
+            else None
+        )
+        serialized_var_kwargs = (
+            _serialize_for_json(action_request.var_kwargs)
+            if action_request.var_kwargs is not None
+            else None
+        )
+
+        request_data = {"args": serialized_args}
+        if serialized_var_args is not None:
+            request_data["var_args"] = serialized_var_args
+        if serialized_var_kwargs is not None:
+            request_data["var_kwargs"] = serialized_var_kwargs
+
+        rest_response = await self._async_request(
+            "POST",
+            f"{self.url}/action/{action_request.action_name}",
+            json=request_data,
+            timeout=timeout or self.config.timeout_data_operations,
+        )
+        rest_response.raise_for_status()
+        response_data = rest_response.json()
+        return response_data["action_id"]
+
+    async def _async_start_action(
+        self, action_name: str, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Start an action that has been created, asynchronously.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_data_operations``.
+        """
+        rest_response = await self._async_request(
+            "POST",
+            f"{self.url}/action/{action_name}/{action_id}/start",
+            timeout=timeout or self.config.timeout_data_operations,
+        )
+        rest_response.raise_for_status()
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id, timeout=timeout
+        )
+
+    async def async_get_action_result_by_name(
+        self,
+        action_name: str,
+        action_id: str,
+        include_files: bool = True,
+        timeout: Optional[float] = None,
+    ) -> ActionResult:
+        """
+        Get the result of an action by name asynchronously.
+
+        Args:
+            action_name: The name of the action.
+            action_id: The ID of the action.
+            include_files: Whether to include files in the result.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+        """
+        rest_response = await self._async_request(
+            "GET",
+            f"{self.url}/action/{action_name}/{action_id}/result",
+            timeout=timeout or self.config.timeout_default,
+        )
+        try:
+            rest_response.raise_for_status()
+        except httpx.HTTPStatusError:
+            if rest_response.status_code >= 500:
+                self.logger.warning(
+                    "Typed endpoint returned server error; falling back to generic endpoint",
+                    action_name=action_name,
+                    status_code=rest_response.status_code,
+                )
+                return await self.async_get_action_result(action_id, timeout=timeout)
+            raise
+
+        if not include_files:
+            response_data = rest_response.json()
+            response_data = response_data.copy()
+            response_data["files"] = None
+            return self._convert_rest_result_to_action_result(
+                response_data, action_name, action_id, timeout=timeout
+            )
+
+        return self._convert_rest_result_to_action_result(
+            rest_response.json(), action_name, action_id, timeout=timeout
+        )
+
+    async def async_get_action_result(
+        self, action_id: str, timeout: Optional[float] = None
+    ) -> ActionResult:
+        """
+        Get the result of an action on the node asynchronously.
+
+        Note: This method uses the legacy API endpoint and cannot fetch files
+        since it lacks the action_name needed for file download URLs.
+
+        Args:
+            action_id: The ID of the action.
+            timeout: Optional timeout override in seconds.
+                If ``None``, uses ``config.timeout_default``.
+        """
+        rest_response = await self._async_request(
+            "GET",
+            f"{self.url}/action/{action_id}/result",
+            timeout=timeout or self.config.timeout_default,
+        )
+        rest_response.raise_for_status()
+
+        response_data = rest_response.json()
+        response_data = response_data.copy()
+
+        return self._convert_rest_result_to_action_result(
+            response_data, "action_name", action_id, timeout=timeout
+        )

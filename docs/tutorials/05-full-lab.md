@@ -29,8 +29,8 @@ A full MADSci lab includes:
 │   ┌─────────────────────────────────────────────────────────────────────┐   │
 │   │                         Infrastructure                               │   │
 │   │   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐        │   │
-│   │   │ MongoDB  │   │PostgreSQL│   │  Redis   │   │  MinIO   │        │   │
-│   │   │  :27017  │   │  :5432   │   │  :6379   │   │  :9000   │        │   │
+│   │   │ FerretDB │   │PostgreSQL│   │  Valkey  │   │SeaweedFS │        │   │
+│   │   │  :27017  │   │  :5432   │   │  :6379   │   │  :8333   │        │   │
 │   │   └──────────┘   └──────────┘   └──────────┘   └──────────┘        │   │
 │   └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                              │
@@ -80,14 +80,14 @@ Or create the files manually:
 LAB_NAME=my_lab
 
 # Database URLs
-MONGO_DB_URL=mongodb://mongodb:27017
+DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
 POSTGRES_URL=postgresql://postgres:postgres@postgres:5432/madsci
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://madsci_valkey:6379
 
-# MinIO (S3-compatible storage)
-MINIO_ENDPOINT=minio:9000
-MINIO_ACCESS_KEY=madsci
-MINIO_SECRET_KEY=madsci123
+# SeaweedFS (S3-compatible object storage)
+SEAWEEDFS_ENDPOINT=madsci_seaweedfs:8333
+SEAWEEDFS_ACCESS_KEY=madsci
+SEAWEEDFS_SECRET_KEY=madsci123
 
 # Manager URLs (internal Docker network)
 LAB_SERVER_URL=http://lab_manager:8000
@@ -118,18 +118,16 @@ services:
   # Infrastructure
   # ==========================================================================
 
-  mongodb:
-    image: mongo:7
+  madsci_ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:2
     <<: *madsci-service
     ports:
       - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    environment:
+      - FERRETDB_POSTGRESQL_URL=postgres://postgres:postgres@postgres:5432/madsci
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   postgres:
     image: postgres:16-alpine
@@ -148,31 +146,28 @@ services:
       timeout: 5s
       retries: 5
 
-  redis:
-    image: redis:7-alpine
+  madsci_valkey:
+    image: valkey/valkey:8-alpine
     <<: *madsci-service
     ports:
       - "6379:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "valkey-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  minio:
-    image: minio/minio:latest
+  madsci_seaweedfs:
+    image: chrislusf/seaweedfs:4.17
     <<: *madsci-service
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: madsci
-      MINIO_ROOT_PASSWORD: madsci123
-    command: server /data --console-address ":9001"
+      - "8333:8333"
+      - "9333:9333"
+    command: server -s3
     volumes:
-      - minio_data:/data
+      - seaweedfs_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: ["CMD", "curl", "-f", "http://localhost:8333/status"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -187,7 +182,7 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   event_manager:
@@ -196,7 +191,7 @@ services:
     ports:
       - "8001:8001"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   experiment_manager:
@@ -205,7 +200,7 @@ services:
     ports:
       - "8002:8002"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   resource_manager:
@@ -223,13 +218,13 @@ services:
     ports:
       - "8004:8004"
     environment:
-      DATA_MINIO_ENDPOINT: ${MINIO_ENDPOINT}
-      DATA_MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      DATA_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      DATA_OBJECT_STORAGE_ENDPOINT: ${SEAWEEDFS_ENDPOINT}
+      DATA_OBJECT_STORAGE_ACCESS_KEY: ${SEAWEEDFS_ACCESS_KEY}
+      DATA_OBJECT_STORAGE_SECRET_KEY: ${SEAWEEDFS_SECRET_KEY}
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
-      minio:
+      madsci_seaweedfs:
         condition: service_healthy
 
   workcell_manager:
@@ -238,9 +233,9 @@ services:
     ports:
       - "8005:8005"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
-      redis:
+      madsci_valkey:
         condition: service_healthy
 
   location_manager:
@@ -249,7 +244,7 @@ services:
     ports:
       - "8006:8006"
     depends_on:
-      mongodb:
+      madsci_ferretdb:
         condition: service_healthy
 
   # ==========================================================================
@@ -279,9 +274,9 @@ networks:
     driver: bridge
 
 volumes:
-  mongo_data:
+  ferretdb_data:
   postgres_data:
-  minio_data:
+  seaweedfs_data:
 ```
 
 ## Step 2: Start the Lab
@@ -345,208 +340,169 @@ The Lab Manager dashboard provides:
 
 ## Step 5: Configure Resources
 
-Define the resources (labware, samples, etc.) in your lab:
+Define resource templates and create instances of them. The Resource Manager models labware, consumables, and assets as Pydantic resource types (Asset, Container, Stack, Slot, Pool, etc.) and persists them to PostgreSQL.
 
 ```python
 from madsci.client.resource_client import ResourceClient
-from madsci.common.types.resource_types import ResourceTemplate, ResourceInstance
+from madsci.common.types.resource_types import Container
 
-client = ResourceClient(base_url="http://localhost:8003")
+client = ResourceClient("http://localhost:8003")
 
-# Create a resource template for sample tubes
-template = ResourceTemplate(
-    name="sample_tube",
+# Register a reusable template for sample tubes
+client.init_template(
+    resource=Container(
+        resource_name="sample_tube_template",
+        resource_class="sample_tube",
+        resource_description="Standard 2mL sample tube",
+        capacity=1,
+        attributes={"volume_ml": 2.0, "material": "polypropylene"},
+    ),
+    template_name="sample_tube",
     description="Standard 2mL sample tube",
-    category="container",
-    attributes={
-        "volume_ml": 2.0,
-        "material": "polypropylene",
-    }
+    required_overrides=["resource_name"],
+    tags=["consumable", "tube"],
 )
-client.create_template(template)
 
-# Create resource instances
+# Instantiate 10 tubes from the template
 for i in range(10):
-    tube = ResourceInstance(
-        template_id=template.template_id,
-        name=f"tube_{i+1:03d}",
-        barcode=f"TUBE{i+1:03d}",
+    tube = client.create_resource_from_template(
+        template_name="sample_tube",
+        resource_name=f"tube_{i + 1:03d}",
     )
-    client.create_resource(tube)
-
-print("Created 10 sample tubes")
+    print(f"Created {tube.resource_name} ({tube.resource_id})")
 ```
+
+`init_template()` is idempotent: calling it again with the same template name updates the existing template instead of erroring.
 
 ## Step 6: Configure Locations
 
-Define physical locations in your lab:
+Locations are best declared once in `locations.yaml` (a `LabLocationConfig` document the Location Manager reconciles on each cycle), or as `intrinsic_locations` on a node class. The example below creates a lab-managed location at runtime via a registered location template — useful for ad-hoc additions like a temporary storage rack:
 
 ```python
 from madsci.client.location_client import LocationClient
 
-client = LocationClient(base_url="http://localhost:8006")
+client = LocationClient("http://localhost:8006")
 
-# Create storage rack
-rack = client.create_location(
-    name="sample_rack_a",
-    location_type="rack",
-    capacity=24,  # 24 tube slots
-    parent_location=None,
+# Look up an existing location by name (e.g., one declared in locations.yaml
+# or auto-registered by a node's intrinsic_locations).
+deck = client.get_location_by_name("liquidhandler_1.deck_1")
+print(f"{deck.location_name} -> resource {deck.resource_id}")
+
+# Create a lab-managed location from a previously registered template
+rack = client.create_location_from_template(
+    location_name="overflow_rack",
+    template_name="storage_rack_nest",
+    node_bindings={"transfer_arm": "robotarm_1"},
+    representation_overrides={"transfer_arm": {"position": [40, 25, 10]}},
+    description="Temporary overflow rack for sample tubes",
 )
+print(f"Created {rack.location_name}")
 
-# Create individual slots
-for row in "ABCD":
-    for col in range(1, 7):
-        slot = client.create_location(
-            name=f"slot_{row}{col}",
-            location_type="slot",
-            parent_location=rack.location_id,
-        )
-
-print("Created rack with 24 slots")
+# List every lab-managed location
+for loc in client.get_locations(managed_by="lab"):
+    print(f"  {loc.location_name} (managed_by={loc.managed_by})")
 ```
+
+For the canonical declarative approach, see [Layered Location Ownership](../guides/integrator/10-location-templates.md) and the example lab's `locations.yaml`.
 
 ## Step 7: Configure Data Capture
 
-Set up data capture for experiments:
+The Data Manager stores datapoints — JSON values or files — and tags them with workflow/experiment ownership. Nodes typically submit datapoints automatically by returning them from action results, but you can also submit directly:
 
 ```python
 from madsci.client.data_client import DataClient
+from madsci.common.types.datapoint_types import ValueDataPoint
 
-client = DataClient(base_url="http://localhost:8004")
+client = DataClient("http://localhost:8004")
 
-# Create a data collection for temperature readings
-collection = client.create_collection(
-    name="temperature_readings",
-    description="Temperature sensor data",
-    schema={
-        "type": "object",
-        "properties": {
-            "value": {"type": "number"},
-            "unit": {"type": "string"},
-            "timestamp": {"type": "string", "format": "date-time"},
-            "sensor_id": {"type": "string"},
-        }
-    }
+# Submit a JSON datapoint (e.g., a temperature reading)
+reading = client.submit_datapoint(
+    ValueDataPoint(
+        label="temperature_reading",
+        value={"celsius": 23.7, "sensor_id": "temp_sensor_1"},
+    )
 )
+print(f"Stored datapoint {reading.datapoint_id}")
 
-print(f"Created data collection: {collection.collection_id}")
+# Query datapoints — the selector is a MongoDB-style filter on stored fields
+matches = client.query_datapoints({"label": "temperature_reading"})
+for dp_id, dp in matches.items():
+    print(f"  {dp_id}: {dp.value}")
 ```
+
+To submit a file instead, use `FileDataPoint` (`from madsci.common.types.datapoint_types`) with a `path` pointing at a local file — the client uploads the file to object storage and stores the resulting URL alongside the datapoint metadata.
 
 ## Step 8: Run a Full Experiment
 
-Now run an experiment that uses all the services:
+Now run an experiment that uses all the services. `ExperimentScript` provides every manager client as an attribute — `self.workcell_client`, `self.resource_client`, `self.location_client`, `self.data_client`, plus `self.logger` (an `EventClient`) — so you don't construct them yourself.
 
 ```python
 """Complete lab experiment with resource tracking and data capture."""
 
-from madsci.experiment_application import ExperimentScript, ExperimentDesign
-from madsci.client import (
-    WorkcellClient,
-    ResourceClient,
-    LocationClient,
-    DataClient,
-    EventClient,
-)
+from madsci.common.types.experiment_types import ExperimentDesign
+from madsci.common.types.resource_types import Asset
+from madsci.experiment_application import ExperimentScript
 
 
 class FullLabExperiment(ExperimentScript):
     """Experiment demonstrating full MADSci lab capabilities."""
 
     experiment_design = ExperimentDesign(
-        name="Full Lab Demo",
-        description="Demonstrates resource tracking, data capture, and workflow execution",
-        version="1.0.0",
+        experiment_name="Full Lab Demo",
+        experiment_description="Resource tracking, data capture, and workflow execution",
     )
 
-    def __init__(self):
-        super().__init__()
-        self.workcell = WorkcellClient(base_url="http://localhost:8005")
-        self.resources = ResourceClient(base_url="http://localhost:8003")
-        self.locations = LocationClient(base_url="http://localhost:8006")
-        self.data = DataClient(base_url="http://localhost:8004")
-        self.events = EventClient(base_url="http://localhost:8001")
-
-    def run(self) -> dict:
-        """Execute the full experiment."""
-        results = {
-            "samples_processed": [],
-            "readings": [],
-        }
-
-        # Log experiment start
-        self.events.info(
-            "Starting full lab experiment",
-            experiment_name=self.experiment_design.name,
+    def run_experiment(self, samples: int = 3) -> dict:
+        """Process `samples` plates through the example workflow."""
+        self.logger.info(
+            "Starting full lab experiment", samples_planned=samples
         )
 
-        # Find available samples
-        samples = self.resources.query_resources(
-            template_name="sample_tube",
-            status="available",
-            limit=3,
-        )
+        readings: list[dict] = []
+        for i in range(samples):
+            # 1. Stage a fresh plate on liquidhandler_1.deck_1
+            plate = self.resource_client.add_resource(
+                Asset(resource_name=f"sample_plate_{i + 1}")
+            )
+            deck = self.location_client.get_location_by_name(
+                "liquidhandler_1.deck_1"
+            )
+            # Clear any plate already on the deck before staging the new one.
+            deck_resource = self.resource_client.get_resource(deck.resource_id)
+            if deck_resource.quantity > 0:
+                self.resource_client.pop(deck.resource_id)
+            self.resource_client.push(deck.resource_id, plate.resource_id)
 
-        self.events.info(f"Found {len(samples)} available samples")
-
-        for sample in samples:
-            # Mark sample as in-use
-            self.resources.update_status(sample.resource_id, "in_use")
-
-            # Get sample location
-            location = self.locations.get_resource_location(sample.resource_id)
-            self.events.info(
-                f"Processing sample {sample.name} from {location.name}"
+            # 2. Run the workflow defined elsewhere (YAML or WorkflowDefinition)
+            workflow = self.workcell_client.start_workflow(
+                workflow_definition="sample_collection.workflow.yaml",
+                json_inputs={"sample_location": "liquidhandler_1.deck_1"},
+                prompt_on_error=False,
+            )
+            self.logger.info(
+                "Workflow finished",
+                workflow_id=workflow.workflow_id,
+                status=workflow.status.value,
             )
 
-            # Run workflow
-            run = self.workcell.start_workflow(
-                workflow_path="sample_collection.workflow.yaml",
-                parameters={"sample_location": location.name},
-            )
-
-            result = self.workcell.wait_for_workflow(run.workflow_run_id)
-
-            if result.status == "completed":
-                # Capture data
-                reading = {
-                    "sample_id": sample.resource_id,
-                    "temperature": result.outputs.get("temperature"),
-                    "timestamp": result.completed_at,
-                }
-                self.data.store_data(
-                    collection="temperature_readings",
-                    data=reading,
-                )
-                results["readings"].append(reading)
-                results["samples_processed"].append(sample.name)
-
-                # Move sample to processed location
-                self.locations.move_resource(
-                    sample.resource_id,
-                    destination="processed_rack",
-                )
-                self.resources.update_status(sample.resource_id, "processed")
-
-            else:
-                self.events.error(
-                    f"Workflow failed for sample {sample.name}",
-                    error=str(result.error),
+            # 3. Pull the temperature datapoint produced by the `measure` step.
+            #    The `measure` key is set on the measure_temperature step in the
+            #    workflow YAML from tutorial 04.
+            try:
+                datapoint = workflow.get_datapoint(step_key="measure")
+            except KeyError:
+                datapoint = None
+            if datapoint is not None:
+                readings.append(
+                    {"sample": plate.resource_name, "value": datapoint.value}
                 )
 
-        # Log experiment complete
-        self.events.info(
-            "Experiment complete",
-            samples_processed=len(results["samples_processed"]),
-            readings_captured=len(results["readings"]),
-        )
-
-        return results
+        self.logger.info("Experiment complete", readings_captured=len(readings))
+        return {"readings": readings}
 
 
 if __name__ == "__main__":
-    experiment = FullLabExperiment()
-    experiment.main()
+    FullLabExperiment.main(lab_server_url="http://localhost:8000")
 ```
 
 ## Step 9: Enable Observability (Optional)
@@ -629,7 +585,7 @@ Access the UIs:
 ### Database Backups
 
 ```bash
-# Backup MongoDB
+# Backup document database
 madsci-backup create --db-url mongodb://localhost:27017 --output ./backups
 
 # Backup PostgreSQL

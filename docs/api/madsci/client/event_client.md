@@ -41,12 +41,28 @@ Classes
     
     Keyword Arguments are used to override the values of the passed in/default config.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
     `config: madsci.common.types.event_types.EventClientConfig`
     :
 
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
+
     ### Methods
+
+    `aclose(self) ‑> None`
+    :   Close async resources properly.
+        
+        Use this method in async contexts for proper cleanup. Bound child
+        clients (created via bind()/unbind()) share resources with their
+        parent and will skip cleanup.
 
     `alert(self, event: madsci.common.types.event_types.Event | str, **kwargs: Any) ‑> None`
     :   Log an event at the alert level (critical with alert flag).
@@ -54,6 +70,39 @@ Classes
         Args:
             event: The event or message to log
             **kwargs: Additional structured data
+
+    `archive_events(self, before_date: str | None = None, event_ids: list[str] | None = None, timeout: float | None = None) ‑> dict`
+    :   Archive events by date or by specific IDs.
+        
+        Args:
+            before_date: Archive events before this ISO date string.
+            event_ids: List of specific event IDs to archive.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"archived_count": N}).
+
+    `async_get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
+    :   Get a specific event by ID asynchronously.
+        
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_get_events(self, number: int = 100, level: int = -1, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for a certain number of recent events asynchronously.
+        
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+
+    `async_query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
+    :   Query the event server for events based on a selector asynchronously.
+        
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
 
     `bind(self, **context: Any) ‑> madsci.client.event_client.EventClient`
     :   Create a new client with additional bound context.
@@ -84,6 +133,15 @@ Classes
         Note: Bound child clients (created via bind()/unbind()) share resources
         with their parent and will skip cleanup to avoid closing shared resources.
 
+    `create_backup(self, timeout: float | None = None) ‑> dict`
+    :   Create an event backup.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server.
+
     `critical(self, message: str, **kwargs: Any) ‑> None`
     :   Log a critical message.
         
@@ -111,6 +169,15 @@ Classes
         Args:
             message: The log message
             **kwargs: Additional structured data to include in the log entry
+
+    `get_backup_status(self, timeout: float | None = None) ‑> dict`
+    :   Get event backup status.
+        
+        Args:
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server describing backup status.
 
     `get_event(self, event_id: str, timeout: float | None = None) ‑> madsci.common.types.event_types.Event | None`
     :   Get a specific event by ID.
@@ -236,6 +303,16 @@ Classes
             event: The event or message to log
             warning_category: Optional warning category for warnings module integration
             **kwargs: Additional structured data
+
+    `purge_events(self, older_than_days: int = 30, timeout: float | None = None) ‑> dict`
+    :   Permanently delete archived events older than specified days.
+        
+        Args:
+            older_than_days: Delete archived events older than this many days.
+            timeout: Optional timeout override in seconds.
+        
+        Returns:
+            Response dict from the event server (e.g. {"purged_count": N}).
 
     `query_events(self, selector: dict, timeout: float | None = None) ‑> dict[str, madsci.common.types.event_types.Event]`
     :   Query the event server for events based on a selector.

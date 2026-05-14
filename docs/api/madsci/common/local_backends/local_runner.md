@@ -3,7 +3,7 @@ Module madsci.common.local_backends.local_runner
 LocalRunner: single-process orchestrator for all MADSci managers.
 
 Starts all 7 managers in one process with in-memory backends, enabling the
-full MADSci stack to run without Docker, Redis, MongoDB, or PostgreSQL.
+full MADSci stack to run without Docker, Valkey, FerretDB, or PostgreSQL.
 
 Usage::
 

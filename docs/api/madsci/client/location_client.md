@@ -19,10 +19,19 @@ Classes
     config : Optional[LocationClientConfig]
         Client configuration for retry and timeout settings. If not provided, uses default LocationClientConfig.
 
+    ### Ancestors (in MRO)
+
+    * madsci.client.http.DualModeClientMixin
+
     ### Class variables
 
     `location_server_url: pydantic.networks.AnyUrl | None`
     :
+
+    ### Instance variables
+
+    `session: httpx.Client`
+    :   Backward-compatible accessor for the underlying HTTP client.
 
     ### Methods
 
@@ -41,13 +50,98 @@ Classes
         Location
             The created location.
 
-    `attach_resource(self, location_id: str, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    `async_add_location(self, location: madsci.common.types.location_types.Location, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Add a location asynchronously.
+
+    `async_attach_resource(self, location_name: str, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Attach a resource to a location asynchronously.
+
+    `async_create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Create a location from a LocationTemplate asynchronously.
+
+    `async_create_location_template(self, template: madsci.common.types.location_types.LocationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Create a new location template asynchronously.
+
+    `async_create_representation_template(self, template: madsci.common.types.location_types.LocationRepresentationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Create a new representation template asynchronously.
+
+    `async_delete_location(self, location_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a specific location by name asynchronously.
+
+    `async_delete_location_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a location template by name asynchronously.
+
+    `async_delete_representation_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a representation template by name asynchronously.
+
+    `async_detach_resource(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Detach the resource from a location asynchronously.
+
+    `async_export_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Export all locations from the server asynchronously.
+
+    `async_get_location(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Get details of a specific location by ID asynchronously.
+
+    `async_get_location_by_name(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Get a specific location by name asynchronously.
+
+    `async_get_location_resources(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
+    :   Get the resource hierarchy for resources at a specific location asynchronously.
+
+    `async_get_location_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Get a location template by name asynchronously.
+
+    `async_get_location_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationTemplate]`
+    :   Get all location templates asynchronously.
+
+    `async_get_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Get all locations asynchronously.
+
+    `async_get_representation_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Get a representation template by name asynchronously.
+
+    `async_get_representation_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationRepresentationTemplate]`
+    :   Get all representation templates asynchronously.
+
+    `async_get_transfer_graph(self, timeout: float | None = None) ‑> dict[str, list[str]]`
+    :   Get the current transfer graph as adjacency list asynchronously.
+
+    `async_import_locations(self, location_file_path: pathlib.Path | None = None, locations: list[madsci.common.types.location_types.Location] | None = None, overwrite: bool = False, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationImportResult`
+    :   Import multiple locations from a file or a list asynchronously.
+        
+        Parameters
+        ----------
+        location_file_path : Optional[Path]
+            Path to a YAML file containing location definitions.
+        locations : Optional[list[Location]]
+            A list of Location objects to import directly.
+        overwrite : bool
+            If True, overwrite existing locations with the same name.
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        LocationImportResult
+            Result with imported/skipped/error counts and imported locations.
+
+    `async_plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    :   Plan a transfer from source to target location asynchronously.
+
+    `async_remove_representation(self, location_name: str, node_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Remove representations for a location for a specific node asynchronously.
+
+    `async_set_representation(self, location_name: str, node_name: str, representation: Any, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Set a representation for a location for a specific node asynchronously.
+
+    `attach_resource(self, location_name: str, resource_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Attach a resource to a location.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         resource_id : str
             The ID of the resource to attach.
         timeout : Optional[float]
@@ -58,13 +152,25 @@ Classes
         Location
             The updated location.
 
-    `delete_location(self, location_id: str, timeout: float | None = None) ‑> dict[str, str]`
-    :   Delete a specific location.
+    `close(self) ‑> None`
+    :   Close HTTP clients and embedded logger.
+
+    `create_location_from_template(self, location_name: str, template_name: str, node_bindings: dict[str, str] | None = None, representation_overrides: dict[str, dict[str, typing.Any]] | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Create a location from a LocationTemplate.
+
+    `create_location_template(self, template: madsci.common.types.location_types.LocationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Create a new location template.
+
+    `create_representation_template(self, template: madsci.common.types.location_types.LocationRepresentationTemplate, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Create a new representation template.
+
+    `delete_location(self, location_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a specific location by name.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location to delete.
+        location_name : str
+            The name of the location to delete.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
         
@@ -73,13 +179,19 @@ Classes
         dict[str, str]
             A message confirming deletion.
 
-    `detach_resource(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    `delete_location_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a location template by name.
+
+    `delete_representation_template(self, template_name: str, timeout: float | None = None) ‑> dict[str, str]`
+    :   Delete a representation template by name.
+
+    `detach_resource(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Detach the resource from a location.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
         
@@ -88,8 +200,37 @@ Classes
         Location
             The updated location.
 
+    `export_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    :   Export all locations from the server.
+        
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        list[Location]
+            All locations managed by the location server.
+
+    `get_detailed_transfer_graph(self, timeout: float | None = None) ‑> madsci.common.types.location_types.TransferGraphDetailedResponse`
+    :   Get the current transfer graph with detailed edge information.
+        
+        Returns edge list with node names that can execute each transfer
+        and the minimum cost for each edge.
+        
+        Parameters
+        ----------
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        TransferGraphDetailedResponse
+            Detailed transfer graph with edges containing node names and costs.
+
     `get_location(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
-    :   Get details of a specific location.
+    :   Get details of a specific location by ID.
         
         Parameters
         ----------
@@ -118,13 +259,13 @@ Classes
         Location
             The requested location.
 
-    `get_location_resources(self, location_id: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
+    `get_location_resources(self, location_name: str, timeout: float | None = None) ‑> madsci.common.types.resource_types.server_types.ResourceHierarchy`
     :   Get the resource hierarchy for resources currently at a specific location.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
         
@@ -133,11 +274,20 @@ Classes
         ResourceHierarchy
             Hierarchy of resources at the location, or empty hierarchy if no attached resource.
 
-    `get_locations(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
+    `get_location_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Get a location template by name.
+
+    `get_location_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationTemplate]`
+    :   Get all location templates.
+
+    `get_locations(self, managed_by: str | None = None, timeout: float | None = None) ‑> list[madsci.common.types.location_types.Location]`
     :   Get all locations.
         
         Parameters
         ----------
+        managed_by : Optional[str]
+            Filter by management type ('node' or 'lab'). If None, returns all
+            locations. Must be a valid LocationManagement value.
         timeout : Optional[float]
             Optional timeout override in seconds. If None, uses config.timeout_default.
         
@@ -145,6 +295,12 @@ Classes
         -------
         list[Location]
             A list of all locations.
+
+    `get_representation_template(self, template_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Get a representation template by name.
+
+    `get_representation_templates(self, timeout: float | None = None) ‑> list[madsci.common.types.location_types.LocationRepresentationTemplate]`
+    :   Get all representation templates.
 
     `get_transfer_graph(self, timeout: float | None = None) ‑> dict[str, list[str]]`
     :   Get the current transfer graph as adjacency list.
@@ -159,6 +315,77 @@ Classes
         dict[str, list[str]]
             Transfer graph as adjacency list mapping source location IDs to
             lists of reachable destination location IDs.
+
+    `import_locations(self, location_file_path: pathlib.Path | None = None, locations: list[madsci.common.types.location_types.Location] | None = None, overwrite: bool = False, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationImportResult`
+    :   Import multiple locations from a file or a list.
+        
+        Posts the full list to the server's /locations/import endpoint.
+        
+        Parameters
+        ----------
+        location_file_path : Optional[Path]
+            Path to a YAML file containing location definitions.
+        locations : Optional[list[Location]]
+            A list of Location objects to import directly.
+        overwrite : bool
+            If True, overwrite existing locations with the same name.
+        timeout : Optional[float]
+            Optional timeout override in seconds. If None, uses config.timeout_default.
+        
+        Returns
+        -------
+        LocationImportResult
+            Result with imported/skipped/error counts and imported locations.
+
+    `init_location(self, location_name: str, representations: dict[str, typing.Any] | None = None, resource_template_name: str | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, description: str | None = None, allow_transfers: bool = True, managed_by: madsci.common.types.location_types.LocationManagement | None = None, owner: madsci.common.types.auth_types.OwnershipInfo | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    :   Idempotent init: get-or-create a location.
+        
+        If a location with the given name exists, returns it unchanged.
+        If it does not exist, creates it with the provided data.
+        
+        Retries with exponential backoff on connection errors to tolerate
+        Location Manager starting after the calling node.
+        
+        Parameters
+        ----------
+        location_name : str
+            The name of the location to get or create.
+        representations : Optional[dict[str, Any]]
+            Node-specific representation data for the location.
+        resource_template_name : Optional[str]
+            Name of the resource template to use for creating a container resource.
+        resource_template_overrides : Optional[dict[str, Any]]
+            Overrides to apply when creating a resource from the template.
+        description : Optional[str]
+            Description of the location.
+        allow_transfers : bool
+            Whether this location participates in transfers (default True).
+        managed_by : Optional[LocationManagement]
+            How this location is managed (node or lab). Defaults to LAB.
+        owner : Optional[OwnershipInfo]
+            Ownership provenance for this location.
+        timeout : Optional[float]
+            Optional timeout override in seconds.
+        
+        Returns
+        -------
+        Location
+            The existing or newly created location.
+
+    `init_location_template(self, template_name: str, representation_templates: dict[str, str] | None = None, resource_template_name: str | None = None, resource_template_overrides: dict[str, typing.Any] | None = None, default_allow_transfers: bool = True, tags: list[str] | None = None, created_by: str | None = None, version: str = '1.0.0', description: str | None = None, timeout: float | None = None) ‑> madsci.common.types.location_types.LocationTemplate`
+    :   Idempotent init: get-or-create, version-update for a location template.
+        
+        Retries with exponential backoff on connection errors to tolerate
+        transient unavailability of the location manager during startup.
+
+    `init_representation_template(self, template_name: str, default_values: dict[str, typing.Any] | None = None, schema: dict[str, typing.Any] | None = None, required_overrides: list[str] | None = None, tags: list[str] | None = None, created_by: str | None = None, version: str = '1.0.0', description: str | None = None, timeout: float | None = None, schema_def: dict[str, typing.Any] | None = None) ‑> madsci.common.types.location_types.LocationRepresentationTemplate`
+    :   Idempotent init: get-or-create, version-update for a representation template.
+        
+        Retries with exponential backoff on connection errors to tolerate
+        transient unavailability of the location manager during startup.
+        
+        The ``schema`` parameter is deprecated; use ``schema_def`` instead.
+        If both are provided, ``schema_def`` takes precedence.
 
     `plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> dict[str, typing.Any]`
     :   Plan a transfer from source to target location.
@@ -179,13 +406,13 @@ Classes
         WorkflowDefinition
             A WorkflowDefinition including the necessary steps to transfer a resource between locations.
 
-    `remove_representation(self, location_id: str, node_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    `remove_representation(self, location_name: str, node_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Remove representations for a location for a specific node.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         node_name : str
             The name of the node.
         timeout : Optional[float]
@@ -196,13 +423,13 @@ Classes
         Location
             The updated location.
 
-    `set_representations(self, location_id: str, node_name: str, representation: Any, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
+    `set_representation(self, location_name: str, node_name: str, representation: Any, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
     :   Set a representation for a location for a specific node.
         
         Parameters
         ----------
-        location_id : str
-            The ID of the location.
+        location_name : str
+            The name of the location.
         node_name : str
             The name of the node.
         representation : Any

@@ -26,6 +26,7 @@ from madsci.common.exceptions import (
     ExperimentFailedError,
     ExperimentPauseTimeoutError,
 )
+from madsci.common.ownership import global_ownership_info, ownership_context
 from madsci.common.types.base_types import MadsciBaseSettings, PathLike
 from madsci.common.types.event_types import EventType
 from madsci.common.types.experiment_types import (
@@ -37,6 +38,33 @@ from pydantic import AnyUrl, Field
 
 if TYPE_CHECKING:
     from madsci.common.types.context_types import MadsciContext
+
+_EXPERIMENT_OWNERSHIP_FIELDS = ("campaign_id", "user_id", "project_id")
+
+
+def set_experiment_ownership(experiment: "Experiment") -> None:
+    """Set experiment ownership fields on the global ownership info.
+
+    Called after an experiment run is started so that downstream code
+    (e.g., WorkcellClient.start_workflow) picks up the experiment context
+    via get_current_ownership_info().
+    """
+    if not isinstance(getattr(experiment, "experiment_id", None), str):
+        return
+    global_ownership_info.experiment_id = experiment.experiment_id
+    ownership_info = getattr(experiment, "ownership_info", None)
+    if ownership_info:
+        for field in _EXPERIMENT_OWNERSHIP_FIELDS:
+            value = getattr(ownership_info, field, None)
+            if isinstance(value, str):
+                setattr(global_ownership_info, field, value)
+
+
+def clear_experiment_ownership() -> None:
+    """Clear experiment-specific ownership fields from global ownership info."""
+    global_ownership_info.experiment_id = None
+    for field in _EXPERIMENT_OWNERSHIP_FIELDS:
+        setattr(global_ownership_info, field, None)
 
 
 class ExperimentBaseConfig(
@@ -335,6 +363,8 @@ class ExperimentBase(MadsciClientMixin):
             experiment_name=experiment_name,
         )
 
+        set_experiment_ownership(self.experiment)
+
         return self.experiment
 
     def end_experiment(
@@ -380,6 +410,8 @@ class ExperimentBase(MadsciClientMixin):
             experiment_name=experiment_name,
             status=str(status) if status else "completed",
         )
+
+        clear_experiment_ownership()
 
         return self.experiment
 
@@ -484,7 +516,7 @@ class ExperimentBase(MadsciClientMixin):
         """
         self.start_experiment_run(run_name=run_name, run_description=run_description)
 
-        # Build context for hierarchical logging
+        # Build context for hierarchical logging and ownership tracking
         experiment_id = self.experiment.experiment_id if self.experiment else None
         experiment_name = (
             self.experiment.experiment_design.experiment_name
@@ -492,12 +524,26 @@ class ExperimentBase(MadsciClientMixin):
             else None
         )
 
-        with event_client_context(
-            name="experiment",
-            experiment_id=experiment_id,
-            experiment_name=experiment_name,
-            run_name=run_name,
-            experiment_type=self.__class__.__name__,
+        # Build ownership overrides from the experiment's ownership info,
+        # restricted to experiment-level fields only
+        ownership_overrides: dict = {}
+        if experiment_id:
+            ownership_overrides["experiment_id"] = experiment_id
+        if self.experiment and self.experiment.ownership_info:
+            for field in _EXPERIMENT_OWNERSHIP_FIELDS:
+                value = getattr(self.experiment.ownership_info, field, None)
+                if value is not None and field not in ownership_overrides:
+                    ownership_overrides[field] = value
+
+        with (
+            ownership_context(**ownership_overrides),
+            event_client_context(
+                name="experiment",
+                experiment_id=experiment_id,
+                experiment_name=experiment_name,
+                run_name=run_name,
+                experiment_type=self.__class__.__name__,
+            ),
         ):
             try:
                 yield self

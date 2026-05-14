@@ -1,0 +1,31 @@
+name: "Documentation"
+version: "1.0.0"
+description: "Add documentation directories to an existing module"
+category: "addon"
+tags: ["docs", "documentation"]
+skills: []
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+  - name: module_description
+    type: string
+    description: "Human-readable description of the module"
+    required: false
+    default: "A MADSci node module"
+
+files:
+  - source: "docs/README.md.j2"
+    destination: "docs/README.md"
+  - source: "docs/private/.gitkeep"
+    destination: "docs/private/.gitkeep"

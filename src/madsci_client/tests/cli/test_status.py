@@ -20,9 +20,9 @@ class TestStatusCommand:
         assert "status" in result.output.lower() or "service" in result.output.lower()
 
     def test_status_json(self) -> None:
-        """Test JSON output format."""
+        """Test JSON output format via the global --json flag."""
         runner = CliRunner()
-        result = runner.invoke(madsci, ["status", "--json"])
+        result = runner.invoke(madsci, ["--json", "status"])
 
         assert result.exit_code == 0
 

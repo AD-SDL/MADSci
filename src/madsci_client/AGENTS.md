@@ -107,3 +107,40 @@ logger = get_event_client()
 # Legacy: Creates isolated client
 logger = EventClient()
 ```
+
+## Service Communication Requirements
+
+**All HTTP communication with MADSci services MUST go through client classes.** Direct httpx/requests calls in UI/CLI code are prohibited.
+
+### Available Clients
+
+| Client | Service | Async Methods |
+|--------|---------|---------------|
+| `EventClient` | Event Manager (8001) | `async_get_events`, `async_get_event`, `async_query_events` |
+| `ExperimentClient` | Experiment Manager (8002) | `async_get_experiments`, `async_pause_experiment`, `async_cancel_experiment` |
+| `WorkcellClient` | Workcell Manager (8005) | `async_get_nodes`, `async_get_active_workflows`, `async_pause_workflow` |
+| `ResourceClient` | Resource Manager (8003) | `async_query_resource`, `async_remove_resource`, `async_is_locked` |
+| `LocationClient` | Location Manager (8006) | `async_get_locations`, `async_get_transfer_graph` |
+| `DataClient` | Data Manager (8004) | `async_get_datapoints`, `async_query_datapoints` |
+| `RestNodeClient` | Node (direct) | `async_get_status`, `async_send_admin_command`, `async_send_action` |
+
+### TUI Screen Pattern
+
+See `experiments.py` for the canonical example. Key elements:
+1. Lazy client initialization via `_get_X_client()` method
+2. Client constructed from `ServiceURLMixin.get_service_url()`
+3. All data fetching through async client methods
+4. All data is Pydantic models, not raw dicts
+5. Helper functions accept typed models, not dicts
+
+### Anti-patterns
+```python
+# BAD: Raw httpx in TUI/CLI code
+async with httpx.AsyncClient() as client:
+    response = await client.get(f"{url}/experiments")
+    data = response.json()  # raw dict, no type safety
+
+# GOOD: Use typed client
+client = ExperimentClient(experiment_server_url=url)
+experiments = await client.async_get_experiments()  # list[Experiment]
+```

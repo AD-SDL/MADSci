@@ -23,28 +23,30 @@ from madsci.common.types.datapoint_types import (
     ObjectStorageSettings,
     ValueDataPoint,
 )
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.data_manager.data_server import DataManager
 from starlette.testclient import TestClient
 
 
 @pytest.fixture
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_data")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_data")
     yield handler
     handler.close()
 
 
 @pytest.fixture
-def test_client(mongo_handler) -> TestClient:
+def test_client(document_handler) -> TestClient:
     """Data Server Test Client Fixture"""
     settings = DataManagerSettings(
         manager_name="Test Data Manager", enable_registry_resolution=False
     )
     manager = DataManager(
         settings=settings,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     app = manager.create_server()
     return TestClient(app)
@@ -53,28 +55,26 @@ def test_client(mongo_handler) -> TestClient:
 @pytest.fixture
 def client(test_client: TestClient) -> Generator[DataClient, None, None]:
     """Fixture for DataClient patched to use TestClient"""
-    with patch("madsci.client.data_client.create_http_session") as mock_create_session:
+    with patch("madsci.client.data_client.create_httpx_client") as mock_create_client:
+        method_map = {
+            "GET": test_client.get,
+            "POST": test_client.post,
+            "PUT": test_client.put,
+            "DELETE": test_client.delete,
+        }
 
-        def add_ok_property(resp: Any) -> Any:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
+        def request_via_test_client(method: str, url: str, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            handler = method_map.get(method.upper(), test_client.get)
+            resp = handler(url, **kwargs)
+            if not hasattr(resp, "is_success"):
+                resp.is_success = resp.status_code < 400
             return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
-
-        # Create a mock session that routes to TestClient
-        mock_session = type("MockSession", (), {})()
-        mock_session.post = post_no_timeout
-        mock_session.get = get_no_timeout
-        mock_create_session.return_value = mock_session
+        # Create a mock client that routes to TestClient
+        mock_client = type("MockClient", (), {})()
+        mock_client.request = request_via_test_client
+        mock_create_client.return_value = mock_client
 
         yield DataClient(data_server_url="http://testserver")
 
@@ -166,7 +166,7 @@ def test_local_only_dataclient(tmp_path: str) -> None:
 
 
 def find_free_port():
-    """Find a free port to use for MinIO."""
+    """Find a free port to use for object storage."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         s.listen(1)
@@ -190,26 +190,25 @@ def is_docker_available():
 
 
 @pytest.fixture(scope="session")
-def minio_server():
+def object_storage_server():
     """
-    Fixture that starts a temporary MinIO server using Docker CLI directly.
+    Fixture that starts a temporary SeaweedFS S3-compatible server using Docker CLI.
     This is more reliable than testcontainers for some environments.
     """
     if not is_docker_available():
         pytest.skip("Docker not available")
 
-    # Find free ports
-    minio_port = find_free_port()
-    console_port = find_free_port()
+    # Find free port for S3 API
+    s3_port = find_free_port()
 
-    # Create temporary directory for MinIO data
-    temp_dir = tempfile.mkdtemp(prefix="minio_test_")
+    # Create temporary directory for SeaweedFS data
+    temp_dir = tempfile.mkdtemp(prefix="seaweedfs_test_")
 
     # Container name with timestamp to avoid conflicts
     timestamp = int(time.time())
-    container_name = f"minio_test_{timestamp}_{minio_port}"
+    container_name = f"seaweedfs_test_{timestamp}_{s3_port}"
 
-    # Start MinIO container using docker CLI
+    # Start SeaweedFS container using docker CLI
     docker_cmd = [
         "docker",
         "run",
@@ -217,44 +216,41 @@ def minio_server():
         "--name",
         container_name,
         "-p",
-        f"{minio_port}:9000",
-        "-p",
-        f"{console_port}:9001",
+        f"{s3_port}:8333",
         "-e",
-        "MINIO_ROOT_USER=minioadmin",
+        "AWS_ACCESS_KEY_ID=minioadmin",
         "-e",
-        "MINIO_ROOT_PASSWORD=minioadmin",
+        "AWS_SECRET_ACCESS_KEY=minioadmin",
         "-v",
         f"{temp_dir}:/data",
-        "minio/minio:latest",
+        "chrislusf/seaweedfs:4.17",
         "server",
-        "/data",
-        "--console-address",
-        ":9001",
+        "-s3",
+        "-dir=/data",
+        "-s3.port=8333",
     ]
 
     container_id = None
     try:
         # Start the container
-        print(f"Starting MinIO container on port {minio_port}...")
+        print(f"Starting SeaweedFS container on port {s3_port}...")
         result = subprocess.run(docker_cmd, capture_output=True, text=True, check=True)
         container_id = result.stdout.strip()
-        print(f"MinIO container started: {container_id[:12]}")
+        print(f"SeaweedFS container started: {container_id[:12]}")
 
-        # Wait for MinIO to be ready
-        minio_url = f"http://localhost:{minio_port}"
-        _wait_for_minio(minio_url)
-        print(f"MinIO is ready at {minio_url}")
+        # Wait for SeaweedFS to be ready
+        s3_url = f"http://localhost:{s3_port}"
+        _wait_for_object_storage(s3_url)
+        print(f"SeaweedFS is ready at {s3_url}")
 
         # Create test bucket
-        _create_test_bucket("localhost", minio_port)
+        _create_test_bucket("localhost", s3_port)
 
         yield {
             "host": "localhost",
-            "port": minio_port,
-            "console_port": console_port,
-            "endpoint": f"localhost:{minio_port}",
-            "url": minio_url,
+            "port": s3_port,
+            "endpoint": f"localhost:{s3_port}",
+            "url": s3_url,
             "access_key": "minioadmin",
             "secret_key": "minioadmin",
             "container_id": container_id,
@@ -262,68 +258,41 @@ def minio_server():
         }
 
     except subprocess.CalledProcessError as e:
-        pytest.skip(f"Failed to start MinIO container: {e.stderr}")
+        pytest.skip(f"Failed to start SeaweedFS container: {e.stderr}")
 
     finally:
-        # Individual container cleanup
         if container_id:
-            print(f"Cleaning up MinIO container {container_name}...")
             try:
-                # Stop container
-                stop_result = subprocess.run(
+                subprocess.run(
                     ["docker", "stop", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-                # Remove container
-                rm_result = subprocess.run(
+                subprocess.run(
                     ["docker", "rm", container_name],
                     capture_output=True,
                     timeout=30,
                     check=False,
                 )
-
-                if stop_result.returncode == 0 and rm_result.returncode == 0:
-                    print(f"Container {container_name} cleaned up")
-                else:
-                    print(
-                        f" Warning: Could not fully clean up container {container_name}"
-                    )
-
             except Exception as e:
                 print(f"Warning: Could not clean up container {container_name}: {e}")
 
-        # Remove temp directory
         try:
             shutil.rmtree(temp_dir)
-            print(f"Temporary directory {temp_dir} cleaned up")
         except Exception as e:
-            print(f" Warning: Could not remove temp directory {temp_dir}: {e}")
+            print(f"Warning: Could not remove temp directory {temp_dir}: {e}")
 
 
-def _wait_for_minio(minio_url, timeout=60):
-    """Wait for MinIO server to be ready."""
-    print(f"Waiting for MinIO at {minio_url} to be ready...")
+def _wait_for_object_storage(url, timeout=60):
+    """Wait for S3-compatible object storage server to be ready."""
+    print(f"Waiting for object storage at {url} to be ready...")
     start_time = time.time()
 
     while time.time() - start_time < timeout:
         try:
-            # Try the health endpoint
-            response = requests.get(f"{minio_url}/minio/health/live", timeout=5)
-            if response.status_code == 200:
-                return
-        except requests.exceptions.RequestException:
-            pass
-
-        # Also try a basic GET to see if the server responds
-        try:
-            response = requests.get(minio_url, timeout=5)
-            if response.status_code in [
-                200,
-                403,
-                404,
-            ]:  # Any response means server is up
+            response = requests.get(url, timeout=5)
+            if response.status_code in [200, 403, 404]:
                 return
         except requests.exceptions.RequestException:
             pass
@@ -332,7 +301,7 @@ def _wait_for_minio(minio_url, timeout=60):
         time.sleep(2)
 
     raise TimeoutError(
-        f"MinIO server at {minio_url} did not become ready within {timeout} seconds"
+        f"Object storage server at {url} did not become ready within {timeout} seconds"
     )
 
 
@@ -361,22 +330,22 @@ def _create_test_bucket(host, port):  # noqa
 
 
 @pytest.fixture(scope="function")
-def minio_config(minio_server):  # noqa
+def object_storage_config(object_storage_server):  # noqa
     """
-    Fixture that provides MinIO configuration for individual tests.
+    Fixture that provides object storage configuration for individual tests.
     """
     return ObjectStorageSettings(
-        endpoint=minio_server["endpoint"],
-        access_key=minio_server["access_key"],
-        secret_key=minio_server["secret_key"],
+        endpoint=object_storage_server["endpoint"],
+        access_key=object_storage_server["access_key"],
+        secret_key=object_storage_server["secret_key"],
         secure=False,  # Use HTTP for testing
         default_bucket="madsci-test",
     )
 
 
-def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # noqa
+def test_object_storage_from_file_datapoint(tmp_path: Path, object_storage_config):  # noqa
     """
-    Test uploading and downloading a file using MinIO.
+    Test uploading and downloading a file using S3-compatible object storage.
     Uses the subprocess Docker CLI approach.
     """
     # Create a test file
@@ -384,10 +353,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     file_content = "This is a test file for MinIO storage"
     file_path.write_text(file_content)
 
-    # Initialize DataClient with the test MinIO configuration
+    # Initialize DataClient with the test object storage configuration
     with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
-            object_storage_settings=minio_config,
+            object_storage_settings=object_storage_config,
         )
 
     # Create file datapoint
@@ -426,7 +395,10 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
     # Verify object storage specifics
     if uploaded_datapoint.data_type.value == "object_storage":
         assert uploaded_datapoint.bucket_name == "madsci-test", "Wrong bucket name"
-        assert uploaded_datapoint.object_name == file_path.name, "Wrong object name"
+        assert (
+            uploaded_datapoint.object_name
+            == f"{file_datapoint.datapoint_id}_{file_path.name}"
+        ), "Wrong object name"
     else:
         # Even if data_type still shows as "file", check if it has object storage attributes
         pytest.xfail(
@@ -436,8 +408,8 @@ def test_object_storage_from_file_datapoint(tmp_path: Path, minio_config):  # no
 
 def test_direct_object_storage_datapoint_submission(  # noqa
     tmp_path: Path,
-    minio_config,
-    minio_server,  # noqa
+    object_storage_config,
+    object_storage_server,  # noqa
 ):
     """
     Test creating and submitting an ObjectStorageDataPoint directly.
@@ -448,10 +420,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     file_content = "This is a direct ObjectStorageDataPoint test file"
     file_path.write_text(file_content)
 
-    # Initialize DataClient with the test MinIO configuration
+    # Initialize DataClient with the test object storage configuration
     with pytest.warns(MadsciLocalOnlyWarning):
         client = DataClient(
-            object_storage_settings=minio_config,
+            object_storage_settings=object_storage_config,
         )
 
     # Custom metadata for the object
@@ -469,8 +441,10 @@ def test_direct_object_storage_datapoint_submission(  # noqa
         path=str(file_path),
         bucket_name=bucket_name,
         object_name=object_name,
-        storage_endpoint=minio_server["endpoint"],
-        public_endpoint=minio_server["endpoint"],  # Use same endpoint for testing
+        storage_endpoint=object_storage_server["endpoint"],
+        public_endpoint=object_storage_server[
+            "endpoint"
+        ],  # Use same endpoint for testing
         content_type="text/plain",
         custom_metadata=metadata,
         size_bytes=file_path.stat().st_size,
@@ -508,7 +482,7 @@ def test_direct_object_storage_datapoint_submission(  # noqa
     assert downloaded_content == file_content, "File contents don't match"
 
     # Verify the URL format is correct
-    expected_url_prefix = f"http://{minio_server['host']}:{minio_server['port']}/madsci-test/direct_{file_path.name}"
+    expected_url_prefix = f"http://{object_storage_server['host']}:{object_storage_server['port']}/madsci-test/direct_{file_path.name}"
     assert uploaded_datapoint.url.startswith(expected_url_prefix), (
         f"URL format incorrect. Expected to start with {expected_url_prefix}, got {uploaded_datapoint.url}"
     )
@@ -549,60 +523,43 @@ def cleanup_on_interrupt():
         raise
 
 
-# Enhanced cleanup function with better logging
 def cleanup_test_containers():
-    """Clean up any leftover MinIO test containers."""
+    """Clean up any leftover object storage test containers."""
     try:
-        # List all containers with our test prefix
-        result = subprocess.run(
-            [
-                "docker",
-                "ps",
-                "-a",
-                "--filter",
-                "name=minio_test_",
-                "--format",
-                "{{.Names}}",
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            check=False,
-        )
+        for prefix in ("seaweedfs_test_", "minio_test_"):
+            result = subprocess.run(
+                [
+                    "docker",
+                    "ps",
+                    "-a",
+                    "--filter",
+                    f"name={prefix}",
+                    "--format",
+                    "{{.Names}}",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
 
-        if result.returncode == 0 and result.stdout.strip():
-            container_names = result.stdout.strip().split("\n")
-            containers_cleaned = 0
+            if result.returncode == 0 and result.stdout.strip():
+                container_names = result.stdout.strip().split("\n")
 
-            for name in container_names:
-                if name.startswith("minio_test_"):
-                    print(f"  Stopping container: {name}")
-                    stop_result = subprocess.run(
-                        ["docker", "stop", name],
-                        capture_output=True,
-                        timeout=30,
-                        check=False,
-                    )
-
-                    print(f"  Removing container: {name}")
-                    rm_result = subprocess.run(
-                        ["docker", "rm", name],
-                        capture_output=True,
-                        timeout=30,
-                        check=False,
-                    )
-
-                    if stop_result.returncode == 0 and rm_result.returncode == 0:
-                        containers_cleaned += 1
-                    else:
-                        print(f"   Warning: Could not fully clean up {name}")
-
-            if containers_cleaned > 0:
-                print(f"Cleaned up {containers_cleaned} test container(s)")
-            else:
-                print("No containers needed cleanup")
-        else:
-            print("No MinIO test containers found")
+                for name in container_names:
+                    if name.startswith(prefix):
+                        subprocess.run(
+                            ["docker", "stop", name],
+                            capture_output=True,
+                            timeout=30,
+                            check=False,
+                        )
+                        subprocess.run(
+                            ["docker", "rm", name],
+                            capture_output=True,
+                            timeout=30,
+                            check=False,
+                        )
 
     except Exception as e:
         print(f"Could not clean up test containers: {e}")
@@ -651,6 +608,126 @@ def test_s3_provider_configurations():
 
     # AWS should have region
     assert aws_config.region == "us-west-2"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for get_datapoints (C1/C2 fix — sorted() and params key)
+# ---------------------------------------------------------------------------
+
+
+class TestGetDatapointsLocalMode:
+    """Regression tests for get_datapoints in local mode (data_server_url=None).
+
+    Covers the bugs fixed in commit ed4b4544:
+      C1: list.sort() returns None — slicing crashed with TypeError
+      C2: params={number: number} used int as dict key
+    """
+
+    @pytest.fixture
+    def local_client(self):
+        """Create a DataClient in local-only mode."""
+        with pytest.warns(MadsciLocalOnlyWarning):
+            client = DataClient()
+        return client
+
+    def test_get_datapoints_returns_list(self, local_client):
+        """get_datapoints must return a list, not None (C1 regression)."""
+        # Submit a few datapoints so the local store is non-empty
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        dp3 = ValueDataPoint(label="c", value="v3")
+        local_client.submit_datapoint(dp1)
+        local_client.submit_datapoint(dp2)
+        local_client.submit_datapoint(dp3)
+
+        result = local_client.get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 3
+
+    def test_get_datapoints_empty_store(self, local_client):
+        """get_datapoints on empty store returns empty list, not None."""
+        result = local_client.get_datapoints(number=5)
+        assert result == []
+
+    def test_get_datapoints_respects_number_limit(self, local_client):
+        """get_datapoints slices to the requested number."""
+        for i in range(5):
+            local_client.submit_datapoint(ValueDataPoint(label=f"dp{i}", value=f"v{i}"))
+
+        result = local_client.get_datapoints(number=3)
+        assert len(result) == 3
+
+    def test_get_datapoints_sorted_descending(self, local_client):
+        """get_datapoints returns datapoints sorted by ID descending."""
+        dps = []
+        for i in range(3):
+            dp = ValueDataPoint(label=f"dp{i}", value=f"v{i}")
+            local_client.submit_datapoint(dp)
+            dps.append(dp)
+
+        result = local_client.get_datapoints(number=10)
+        ids = [dp.datapoint_id for dp in result]
+        assert ids == sorted(ids, reverse=True)
+
+
+class TestGetDatapointsRemoteMode:
+    """Regression tests for get_datapoints in remote mode (with server URL).
+
+    Covers C2: params key must be the string "number", not the int variable.
+    """
+
+    def test_get_datapoints_sends_correct_params(self, client):
+        """get_datapoints passes params={'number': N} to the server (C2 regression)."""
+        # Submit some datapoints via the test server
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        client.submit_datapoint(dp1)
+        client.submit_datapoint(dp2)
+
+        # Fetch — this exercises the real HTTP path with the test client
+        result = client.get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    def test_get_datapoints_returns_empty_for_no_data(self, client):
+        """get_datapoints returns empty list when no datapoints exist."""
+        result = client.get_datapoints(number=10)
+        assert result == []
+
+
+@pytest.mark.asyncio
+class TestAsyncGetDatapointsLocalMode:
+    """Regression tests for async_get_datapoints in local mode."""
+
+    @pytest.fixture
+    def local_client(self):
+        with pytest.warns(MadsciLocalOnlyWarning):
+            client = DataClient()
+        return client
+
+    async def test_async_get_datapoints_returns_list(self, local_client):
+        """async_get_datapoints must return a list, not None (C1 regression)."""
+        dp1 = ValueDataPoint(label="a", value="v1")
+        dp2 = ValueDataPoint(label="b", value="v2")
+        local_client.submit_datapoint(dp1)
+        local_client.submit_datapoint(dp2)
+
+        result = await local_client.async_get_datapoints(number=10)
+        assert isinstance(result, list)
+        assert len(result) == 2
+
+    async def test_async_get_datapoints_empty_store(self, local_client):
+        """async_get_datapoints on empty store returns empty list."""
+        result = await local_client.async_get_datapoints(number=5)
+        assert result == []
+
+    async def test_async_get_datapoints_respects_limit(self, local_client):
+        """async_get_datapoints slices to the requested number."""
+        for i in range(5):
+            local_client.submit_datapoint(ValueDataPoint(label=f"dp{i}", value=f"v{i}"))
+
+        result = await local_client.async_get_datapoints(number=2)
+        assert len(result) == 2
 
 
 # Additional tests for improved data client functionality

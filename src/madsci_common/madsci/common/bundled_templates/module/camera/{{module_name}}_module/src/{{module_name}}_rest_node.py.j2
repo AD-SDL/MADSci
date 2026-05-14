@@ -88,22 +88,22 @@ class {{ module_name | pascal_case }}Node(RestNode):
             ),
             required_overrides=["resource_name"],
             tags=["{{ module_name }}", "slot", "camera"],
-            created_by=self.node_definition.node_id,
+            created_by=self.node_info.node_id,
             version="1.0.0",
         )
 
         # Initialize camera slot resource instance
-        slot_resource_name = f"{{ module_name }}_slot_{self.node_definition.node_name}"
+        slot_resource_name = f"{{ module_name }}_slot_{self.node_info.node_name}"
         self.camera_slot = self.resource_client.create_resource_from_template(
             template_name="{{ module_name }}_slot",
             resource_name=slot_resource_name,
             add_to_database=True,
         )
-        self.logger.log(
+        self.event_client.info(
             f"Initialized camera slot resource from template: {self.camera_slot.resource_id}"
         )
 
-        self.logger.log("{{ module_name | pascal_case }} camera node initialized!")
+        self.event_client.info("{{ module_name | pascal_case }} camera node initialized!")
 
     def shutdown_handler(self) -> None:
         """Clean shutdown of the camera node.
@@ -111,7 +111,7 @@ class {{ module_name | pascal_case }}Node(RestNode):
         This method is called when the node is being shut down or restarted.
         It safely shuts down the camera and closes connections.
         """
-        self.logger.log("Shutting down {{ module_name }} camera node")
+        self.event_client.info("Shutting down {{ module_name }} camera node")
         if self._interface:
             self._interface.shutdown()
             self._interface.disconnect()
@@ -192,10 +192,10 @@ class {{ module_name | pascal_case }}Node(RestNode):
         Returns:
             str: Confirmation message.
         """
-        self.logger.log("Resetting {{ module_name }} camera...")
+        self.event_client.info("Resetting {{ module_name }} camera...")
         self._interface.shutdown()
         self._interface.initialize()
-        self.logger.log("{{ module_name | pascal_case }} camera reset complete")
+        self.event_client.info("{{ module_name | pascal_case }} camera reset complete")
         return "Camera reset successfully"
 
 
