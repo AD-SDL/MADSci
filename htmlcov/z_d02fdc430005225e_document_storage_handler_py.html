@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_common/madsci/common/db_handlers/mongo_handler.py: 89%</title>
+    <title>Coverage for src/madsci_common/madsci/common/db_handlers/document_storage_handler.py: 89%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -11,7 +11,7 @@
 <header>
     <div class="content">
         <h1>
-            <span class="text">Coverage for </span><b>src&#8201;/&#8201;madsci_common&#8201;/&#8201;madsci&#8201;/&#8201;common&#8201;/&#8201;db_handlers&#8201;/&#8201;mongo_handler.py</b>:
+            <span class="text">Coverage for </span><b>src&#8201;/&#8201;madsci_common&#8201;/&#8201;madsci&#8201;/&#8201;common&#8201;/&#8201;db_handlers&#8201;/&#8201;document_storage_handler.py</b>:
             <span class="pc_cov">89%</span>
         </h1>
         <aside id="help_panel_wrapper">
@@ -60,12 +60,12 @@
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
-            <a id="prevFileLink" class="nav" href="z_d02fdc430005225e_minio_handler_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a id="prevFileLink" class="nav" href="z_d02fdc430005225e_cache_handler_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a id="indexLink" class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a id="nextFileLink" class="nav" href="z_d02fdc430005225e_postgres_handler_py.html">&#xbb; next</a>
+            <a id="nextFileLink" class="nav" href="z_d02fdc430005225e_object_storage_handler_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-05-12 14:22 +0000
+            created at 2026-05-14 19:08 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -80,11 +80,11 @@
     </div>
 </header>
 <main id="source">
-    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">"""MongoDB handler abstraction.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t1" href="#t1">1</a></span><span class="t"><span class="str">"""MongoDB-compatible document storage handler abstraction.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t2" href="#t2">2</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="str">Provides an ABC for MongoDB database access and two implementations:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="str">- PyMongoHandler: wraps a real pymongo Database</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="str">- InMemoryMongoHandler: wraps InMemoryMongoClient for testing</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t3" href="#t3">3</a></span><span class="t"><span class="str">Provides an ABC for document database access and two implementations:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t4" href="#t4">4</a></span><span class="t"><span class="str">- PyDocumentStorageHandler: wraps a real pymongo Database (works with MongoDB, FerretDB, etc.)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t5" href="#t5">5</a></span><span class="t"><span class="str">- InMemoryDocumentStorageHandler: wraps InMemoryMongoClient for testing</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t6" href="#t6">6</a></span><span class="t"><span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t7" href="#t7">7</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t8" href="#t8">8</a></span><span class="t"><span class="key">from</span> <span class="nam">__future__</span> <span class="key">import</span> <span class="nam">annotations</span>&nbsp;</span><span class="r"></span></p>
@@ -97,8 +97,8 @@
     <p class="mis show_mis"><span class="n"><a id="t15" href="#t15">15</a></span><span class="t">    <span class="key">from</span> <span class="nam">pymongo</span><span class="op">.</span><span class="nam">collection</span> <span class="key">import</span> <span class="nam">Collection</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t16" href="#t16">16</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t17" href="#t17">17</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="key">class</span> <span class="nam">MongoHandler</span><span class="op">(</span><span class="nam">ABC</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t">    <span class="str">"""Abstract interface for MongoDB database access.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t18" href="#t18">18</a></span><span class="t"><span class="key">class</span> <span class="nam">DocumentStorageHandler</span><span class="op">(</span><span class="nam">ABC</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t19" href="#t19">19</a></span><span class="t">    <span class="str">"""Abstract interface for MongoDB-compatible document database access.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t20" href="#t20">20</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t21" href="#t21">21</a></span><span class="t"><span class="str">    Managers use this interface instead of directly depending on</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t22" href="#t22">22</a></span><span class="t"><span class="str">    ``pymongo.Database``, enabling in-memory substitution for tests.</span>&nbsp;</span><span class="r"></span></p>
@@ -134,12 +134,12 @@
     <p class="pln"><span class="n"><a id="t52" href="#t52">52</a></span><span class="t">        <span class="str">"""Execute a database command (e.g. ``ping``)."""</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t53" href="#t53">53</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t54" href="#t54">54</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t"><span class="key">class</span> <span class="nam">PyMongoHandler</span><span class="op">(</span><span class="nam">MongoHandler</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">    <span class="str">"""MongoDB handler backed by a real pymongo connection.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t55" href="#t55">55</a></span><span class="t"><span class="key">class</span> <span class="nam">PyDocumentStorageHandler</span><span class="op">(</span><span class="nam">DocumentStorageHandler</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t56" href="#t56">56</a></span><span class="t">    <span class="str">"""Document storage handler backed by a real pymongo connection (MongoDB, FerretDB, etc.).</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t57" href="#t57">57</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t58" href="#t58">58</a></span><span class="t"><span class="str">    Usage::</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t59" href="#t59">59</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t"><span class="str">        handler = PyMongoHandler.from_url("mongodb://localhost:27017", "my_db")</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t60" href="#t60">60</a></span><span class="t"><span class="str">        handler = PyDocumentStorageHandler.from_url("mongodb://localhost:27017", "my_db")</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t61" href="#t61">61</a></span><span class="t"><span class="str">        collection = handler.get_collection("events")</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t62" href="#t62">62</a></span><span class="t"><span class="str">        collection.insert_one({"key": "value"})</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t63" href="#t63">63</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
@@ -153,15 +153,15 @@
     <p class="run"><span class="n"><a id="t71" href="#t71">71</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_database</span> <span class="op">=</span> <span class="nam">database</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t72" href="#t72">72</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t73" href="#t73">73</a></span><span class="t">    <span class="op">@</span><span class="nam">classmethod</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">    <span class="key">def</span> <span class="nam">from_url</span><span class="op">(</span><span class="nam">cls</span><span class="op">,</span> <span class="nam">url</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">database_name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">PyMongoHandler</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t">        <span class="str">"""Create a handler by connecting to a MongoDB server.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t74" href="#t74">74</a></span><span class="t">    <span class="key">def</span> <span class="nam">from_url</span><span class="op">(</span><span class="nam">cls</span><span class="op">,</span> <span class="nam">url</span><span class="op">:</span> <span class="nam">str</span><span class="op">,</span> <span class="nam">database_name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">PyDocumentStorageHandler</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t75" href="#t75">75</a></span><span class="t">        <span class="str">"""Create a handler by connecting to a MongoDB-compatible server.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t76" href="#t76">76</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t77" href="#t77">77</a></span><span class="t"><span class="str">        Args:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t"><span class="str">            url: MongoDB connection URL.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t78" href="#t78">78</a></span><span class="t"><span class="str">            url: MongoDB-compatible connection URL.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t79" href="#t79">79</a></span><span class="t"><span class="str">            database_name: Name of the database to use.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t80" href="#t80">80</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t81" href="#t81">81</a></span><span class="t"><span class="str">        Returns:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t"><span class="str">            A new PyMongoHandler instance.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t82" href="#t82">82</a></span><span class="t"><span class="str">            A new PyDocumentStorageHandler instance.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t83" href="#t83">83</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t84" href="#t84">84</a></span><span class="t">        <span class="key">from</span> <span class="nam">pymongo</span> <span class="key">import</span> <span class="nam">MongoClient</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t85" href="#t85">85</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -173,7 +173,7 @@
     <p class="run"><span class="n"><a id="t91" href="#t91">91</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_database</span><span class="op">[</span><span class="nam">name</span><span class="op">]</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t92" href="#t92">92</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t93" href="#t93">93</a></span><span class="t">    <span class="key">def</span> <span class="nam">ping</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="nam">bool</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">        <span class="str">"""Ping the MongoDB server."""</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t94" href="#t94">94</a></span><span class="t">        <span class="str">"""Ping the document database server."""</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t95" href="#t95">95</a></span><span class="t">        <span class="key">try</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t96" href="#t96">96</a></span><span class="t">            <span class="nam">self</span><span class="op">.</span><span class="nam">_database</span><span class="op">.</span><span class="nam">client</span><span class="op">.</span><span class="nam">admin</span><span class="op">.</span><span class="nam">command</span><span class="op">(</span><span class="str">"ping"</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t97" href="#t97">97</a></span><span class="t">            <span class="key">return</span> <span class="key">True</span>&nbsp;</span><span class="r"></span></p>
@@ -194,12 +194,12 @@
     <p class="mis show_mis"><span class="n"><a id="t112" href="#t112">112</a></span><span class="t">        <span class="key">return</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_database</span><span class="op">.</span><span class="nam">command</span><span class="op">(</span><span class="nam">cmd</span><span class="op">,</span> <span class="op">**</span><span class="nam">kwargs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t113" href="#t113">113</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t114" href="#t114">114</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t"><span class="key">class</span> <span class="nam">InMemoryMongoHandler</span><span class="op">(</span><span class="nam">MongoHandler</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t116" href="#t116">116</a></span><span class="t">    <span class="str">"""MongoDB handler backed by in-memory collections for testing.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t115" href="#t115">115</a></span><span class="t"><span class="key">class</span> <span class="nam">InMemoryDocumentStorageHandler</span><span class="op">(</span><span class="nam">DocumentStorageHandler</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t116" href="#t116">116</a></span><span class="t">    <span class="str">"""Document storage handler backed by in-memory collections for testing.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t117" href="#t117">117</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t118" href="#t118">118</a></span><span class="t"><span class="str">    Usage::</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t119" href="#t119">119</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t120" href="#t120">120</a></span><span class="t"><span class="str">        handler = InMemoryMongoHandler()</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t120" href="#t120">120</a></span><span class="t"><span class="str">        handler = InMemoryDocumentStorageHandler()</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t121" href="#t121">121</a></span><span class="t"><span class="str">        collection = handler.get_collection("events")</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t122" href="#t122">122</a></span><span class="t"><span class="str">        collection.insert_one({"key": "value"})</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t123" href="#t123">123</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
@@ -249,12 +249,12 @@
 <footer>
     <div class="content">
         <p>
-            <a class="nav" href="z_d02fdc430005225e_minio_handler_py.html">&#xab; prev</a> &nbsp; &nbsp;
+            <a class="nav" href="z_d02fdc430005225e_cache_handler_py.html">&#xab; prev</a> &nbsp; &nbsp;
             <a class="nav" href="index.html">&Hat; index</a> &nbsp; &nbsp;
-            <a class="nav" href="z_d02fdc430005225e_postgres_handler_py.html">&#xbb; next</a>
+            <a class="nav" href="z_d02fdc430005225e_object_storage_handler_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-05-12 14:22 +0000
+            created at 2026-05-14 19:08 +0000
         </p>
     </div>
 </footer>

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Coverage for src/madsci_common/madsci/common/utils.py: 80%</title>
+    <title>Coverage for src/madsci_common/madsci/common/utils.py: 78%</title>
     <link rel="icon" sizes="32x32" href="favicon_32_cb_c827f16f.png">
     <link rel="stylesheet" href="style_cb_9ff733b0.css" type="text/css">
     <script src="coverage_html_cb_dd2e7eb5.js" defer></script>
@@ -12,7 +12,7 @@
     <div class="content">
         <h1>
             <span class="text">Coverage for </span><b>src&#8201;/&#8201;madsci_common&#8201;/&#8201;madsci&#8201;/&#8201;common&#8201;/&#8201;utils.py</b>:
-            <span class="pc_cov">80%</span>
+            <span class="pc_cov">78%</span>
         </h1>
         <aside id="help_panel_wrapper">
             <input id="help_panel_state" type="checkbox">
@@ -55,8 +55,8 @@
         </aside>
         <h2>
             <span class="text">308 statements &nbsp;</span>
-            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">245<span class="text"> run</span></button>
-            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">63<span class="text"> missing</span></button>
+            <button type="button" class="run button_toggle_run" value="run" data-shortcut="r" title="Toggle lines run">240<span class="text"> run</span></button>
+            <button type="button" class="mis show_mis button_toggle_mis" value="mis" data-shortcut="m" title="Toggle lines missing">68<span class="text"> missing</span></button>
             <button type="button" class="exc show_exc button_toggle_exc" value="exc" data-shortcut="x" title="Toggle lines excluded">0<span class="text"> excluded</span></button>
         </h2>
         <p class="text">
@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_4bb681ccf265c7f0_validators_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-05-12 14:22 +0000
+            created at 2026-05-14 19:08 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -107,7 +107,7 @@
     <p class="run"><span class="n"><a id="t25" href="#t25">25</a></span><span class="t"><span class="key">if</span> <span class="nam">TYPE_CHECKING</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t26" href="#t26">26</a></span><span class="t">    <span class="key">import</span> <span class="nam">requests</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t27" href="#t27">27</a></span><span class="t">    <span class="key">from</span> <span class="nam">madsci</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">types</span><span class="op">.</span><span class="nam">base_types</span> <span class="key">import</span> <span class="nam">MadsciBaseModel</span><span class="op">,</span> <span class="nam">PathLike</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t">    <span class="key">from</span> <span class="nam">madsci</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">types</span><span class="op">.</span><span class="nam">client_types</span> <span class="key">import</span> <span class="nam">MadsciClientConfig</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t28" href="#t28">28</a></span><span class="t">    <span class="key">from</span> <span class="nam">madsci</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">types</span><span class="op">.</span><span class="nam">client_types</span> <span class="key">import</span> <span class="nam">MadsciHttpClientConfig</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t29" href="#t29">29</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t30" href="#t30">30</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t31" href="#t31">31</a></span><span class="t"><span class="key">def</span> <span class="nam">utcnow</span><span class="op">(</span><span class="op">)</span> <span class="op">-></span> <span class="nam">datetime</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
@@ -774,12 +774,12 @@
     <p class="pln"><span class="n"><a id="t692" href="#t692">692</a></span><span class="t"><span class="str">            The response from the adapter</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t693" href="#t693">693</a></span><span class="t"><span class="str">        """</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t694" href="#t694">694</a></span><span class="t">        <span class="com"># Check if we should delay before sending</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t695" href="#t695">695</a></span><span class="t">        <span class="nam">delay</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">rate_limit_tracker</span><span class="op">.</span><span class="nam">get_delay_seconds</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t696" href="#t696">696</a></span><span class="t">        <span class="key">if</span> <span class="nam">delay</span> <span class="op">></span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t695" href="#t695">695</a></span><span class="t">        <span class="nam">delay</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">rate_limit_tracker</span><span class="op">.</span><span class="nam">get_delay_seconds</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t696" href="#t696">696</a></span><span class="t">        <span class="key">if</span> <span class="nam">delay</span> <span class="op">></span> <span class="num">0</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t697" href="#t697">697</a></span><span class="t">            <span class="nam">time</span><span class="op">.</span><span class="nam">sleep</span><span class="op">(</span><span class="nam">delay</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t698" href="#t698">698</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t699" href="#t699">699</a></span><span class="t">        <span class="com"># Send the request using the underlying adapter</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t700" href="#t700">700</a></span><span class="t">        <span class="nam">response</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_adapter</span><span class="op">.</span><span class="nam">send</span><span class="op">(</span><span class="nam">request</span><span class="op">,</span> <span class="op">**</span><span class="nam">kwargs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t700" href="#t700">700</a></span><span class="t">        <span class="nam">response</span> <span class="op">=</span> <span class="nam">self</span><span class="op">.</span><span class="nam">_adapter</span><span class="op">.</span><span class="nam">send</span><span class="op">(</span><span class="nam">request</span><span class="op">,</span> <span class="op">**</span><span class="nam">kwargs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t701" href="#t701">701</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t702" href="#t702">702</a></span><span class="t">        <span class="com"># Update rate limit tracking from response headers</span>&nbsp;</span><span class="r"></span></p>
     <p class="mis show_mis"><span class="n"><a id="t703" href="#t703">703</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">rate_limit_tracker</span><span class="op">.</span><span class="nam">update_from_headers</span><span class="op">(</span><span class="nam">dict</span><span class="op">(</span><span class="nam">response</span><span class="op">.</span><span class="nam">headers</span><span class="op">)</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
@@ -788,7 +788,7 @@
     <p class="pln"><span class="n"><a id="t706" href="#t706">706</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t707" href="#t707">707</a></span><span class="t">    <span class="key">def</span> <span class="nam">close</span><span class="op">(</span><span class="nam">self</span><span class="op">)</span> <span class="op">-></span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t708" href="#t708">708</a></span><span class="t">        <span class="str">"""Close the underlying adapter."""</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t709" href="#t709">709</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_adapter</span><span class="op">.</span><span class="nam">close</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t709" href="#t709">709</a></span><span class="t">        <span class="nam">self</span><span class="op">.</span><span class="nam">_adapter</span><span class="op">.</span><span class="nam">close</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t710" href="#t710">710</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t711" href="#t711">711</a></span><span class="t">    <span class="key">def</span> <span class="nam">__getattr__</span><span class="op">(</span><span class="nam">self</span><span class="op">,</span> <span class="nam">name</span><span class="op">:</span> <span class="nam">str</span><span class="op">)</span> <span class="op">-></span> <span class="nam">Any</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t712" href="#t712">712</a></span><span class="t">        <span class="str">"""Delegate all other attributes to the underlying adapter."""</span>&nbsp;</span><span class="r"></span></p>
@@ -796,7 +796,7 @@
     <p class="pln"><span class="n"><a id="t714" href="#t714">714</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t715" href="#t715">715</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t716" href="#t716">716</a></span><span class="t"><span class="key">def</span> <span class="nam">create_http_session</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t717" href="#t717">717</a></span><span class="t">    <span class="nam">config</span><span class="op">:</span> <span class="nam">Optional</span><span class="op">[</span><span class="str">"MadsciClientConfig"</span><span class="op">]</span> <span class="op">=</span> <span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t717" href="#t717">717</a></span><span class="t">    <span class="nam">config</span><span class="op">:</span> <span class="nam">Optional</span><span class="op">[</span><span class="str">"MadsciHttpClientConfig"</span><span class="op">]</span> <span class="op">=</span> <span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t718" href="#t718">718</a></span><span class="t">    <span class="nam">retry_enabled</span><span class="op">:</span> <span class="nam">Optional</span><span class="op">[</span><span class="nam">bool</span><span class="op">]</span> <span class="op">=</span> <span class="key">None</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t719" href="#t719">719</a></span><span class="t"><span class="op">)</span> <span class="op">-></span> <span class="str">"requests.Session"</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t720" href="#t720">720</a></span><span class="t">    <span class="str">"""</span>&nbsp;</span><span class="r"></span></p>
@@ -812,21 +812,21 @@
     <p class="pln"><span class="n"><a id="t730" href="#t730">730</a></span><span class="t"><span class="str">    the session.rate_limit_tracker attribute.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t731" href="#t731">731</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t732" href="#t732">732</a></span><span class="t"><span class="str">    Args:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t733" href="#t733">733</a></span><span class="t"><span class="str">        config: Client configuration object. If None, uses default MadsciClientConfig.</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t733" href="#t733">733</a></span><span class="t"><span class="str">        config: Client configuration object. If None, uses default MadsciHttpClientConfig.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t734" href="#t734">734</a></span><span class="t"><span class="str">        retry_enabled: Override for retry_enabled from config. If None, uses config value.</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t735" href="#t735">735</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t736" href="#t736">736</a></span><span class="t"><span class="str">    Returns:</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t737" href="#t737">737</a></span><span class="t"><span class="str">        Configured requests.Session object with optional rate_limit_tracker attribute</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t738" href="#t738">738</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t739" href="#t739">739</a></span><span class="t"><span class="str">    Example:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t740" href="#t740">740</a></span><span class="t"><span class="str">        >>> from madsci.common.types.client_types import MadsciClientConfig</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t740" href="#t740">740</a></span><span class="t"><span class="str">        >>> from madsci.common.types.client_types import MadsciHttpClientConfig</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t741" href="#t741">741</a></span><span class="t"><span class="str">        >>> from madsci.common.utils import create_http_session</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t742" href="#t742">742</a></span><span class="t"><span class="str">        >>></span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t743" href="#t743">743</a></span><span class="t"><span class="str">        >>> # Use default configuration</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t744" href="#t744">744</a></span><span class="t"><span class="str">        >>> session = create_http_session()</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t745" href="#t745">745</a></span><span class="t"><span class="str">        >>></span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t746" href="#t746">746</a></span><span class="t"><span class="str">        >>> # Use custom configuration</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t747" href="#t747">747</a></span><span class="t"><span class="str">        >>> config = MadsciClientConfig(retry_total=5, timeout_default=30.0)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t747" href="#t747">747</a></span><span class="t"><span class="str">        >>> config = MadsciHttpClientConfig(retry_total=5, timeout_default=30.0)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t748" href="#t748">748</a></span><span class="t"><span class="str">        >>> session = create_http_session(config=config)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t749" href="#t749">749</a></span><span class="t"><span class="str">        >>></span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t750" href="#t750">750</a></span><span class="t"><span class="str">        >>> # Disable retry for a specific session</span>&nbsp;</span><span class="r"></span></p>
@@ -839,13 +839,13 @@
     <p class="pln"><span class="n"><a id="t757" href="#t757">757</a></span><span class="t"><span class="str">    """</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t758" href="#t758">758</a></span><span class="t">    <span class="com"># Import here to avoid circular dependencies</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t759" href="#t759">759</a></span><span class="t">    <span class="key">import</span> <span class="nam">requests</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t760" href="#t760">760</a></span><span class="t">    <span class="key">from</span> <span class="nam">madsci</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">types</span><span class="op">.</span><span class="nam">client_types</span> <span class="key">import</span> <span class="nam">MadsciClientConfig</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t760" href="#t760">760</a></span><span class="t">    <span class="key">from</span> <span class="nam">madsci</span><span class="op">.</span><span class="nam">common</span><span class="op">.</span><span class="nam">types</span><span class="op">.</span><span class="nam">client_types</span> <span class="key">import</span> <span class="nam">MadsciHttpClientConfig</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t761" href="#t761">761</a></span><span class="t">    <span class="key">from</span> <span class="nam">requests</span><span class="op">.</span><span class="nam">adapters</span> <span class="key">import</span> <span class="nam">HTTPAdapter</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t762" href="#t762">762</a></span><span class="t">    <span class="key">from</span> <span class="nam">urllib3</span><span class="op">.</span><span class="nam">util</span><span class="op">.</span><span class="nam">retry</span> <span class="key">import</span> <span class="nam">Retry</span>  <span class="com"># noqa: PLC0415</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t763" href="#t763">763</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t764" href="#t764">764</a></span><span class="t">    <span class="com"># Use default config if none provided</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t765" href="#t765">765</a></span><span class="t">    <span class="key">if</span> <span class="nam">config</span> <span class="key">is</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t766" href="#t766">766</a></span><span class="t">        <span class="nam">config</span> <span class="op">=</span> <span class="nam">MadsciClientConfig</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t766" href="#t766">766</a></span><span class="t">        <span class="nam">config</span> <span class="op">=</span> <span class="nam">MadsciHttpClientConfig</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t767" href="#t767">767</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t768" href="#t768">768</a></span><span class="t">    <span class="com"># Determine if retry should be enabled</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t769" href="#t769">769</a></span><span class="t">    <span class="nam">enable_retry</span> <span class="op">=</span> <span class="nam">retry_enabled</span> <span class="key">if</span> <span class="nam">retry_enabled</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span> <span class="key">else</span> <span class="nam">config</span><span class="op">.</span><span class="nam">retry_enabled</span>&nbsp;</span><span class="r"></span></p>
@@ -854,7 +854,7 @@
     <p class="run"><span class="n"><a id="t772" href="#t772">772</a></span><span class="t">    <span class="nam">session</span> <span class="op">=</span> <span class="nam">requests</span><span class="op">.</span><span class="nam">Session</span><span class="op">(</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t773" href="#t773">773</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t774" href="#t774">774</a></span><span class="t">    <span class="com"># Create rate limit tracker if enabled</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t775" href="#t775">775</a></span><span class="t">    <span class="com"># Check if config has rate limit fields (only MadsciClientConfig has them)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t775" href="#t775">775</a></span><span class="t">    <span class="com"># Check if config has rate limit fields (only MadsciHttpClientConfig has them)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t776" href="#t776">776</a></span><span class="t">    <span class="nam">rate_limit_tracker</span> <span class="op">=</span> <span class="key">None</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t777" href="#t777">777</a></span><span class="t">    <span class="key">if</span> <span class="nam">getattr</span><span class="op">(</span><span class="nam">config</span><span class="op">,</span> <span class="str">"rate_limit_tracking_enabled"</span><span class="op">,</span> <span class="key">False</span><span class="op">)</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t778" href="#t778">778</a></span><span class="t">        <span class="nam">rate_limit_tracker</span> <span class="op">=</span> <span class="nam">RateLimitTracker</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
@@ -874,7 +874,7 @@
     <p class="pln"><span class="n"><a id="t792" href="#t792">792</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t793" href="#t793">793</a></span><span class="t">        <span class="com"># Only add allowed_methods if specified (None means use urllib3 defaults)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t794" href="#t794">794</a></span><span class="t">        <span class="key">if</span> <span class="nam">config</span><span class="op">.</span><span class="nam">retry_allowed_methods</span> <span class="key">is</span> <span class="key">not</span> <span class="key">None</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t795" href="#t795">795</a></span><span class="t">            <span class="nam">retry_kwargs</span><span class="op">[</span><span class="str">"allowed_methods"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">config</span><span class="op">.</span><span class="nam">retry_allowed_methods</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t795" href="#t795">795</a></span><span class="t">            <span class="nam">retry_kwargs</span><span class="op">[</span><span class="str">"allowed_methods"</span><span class="op">]</span> <span class="op">=</span> <span class="nam">config</span><span class="op">.</span><span class="nam">retry_allowed_methods</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t796" href="#t796">796</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t797" href="#t797">797</a></span><span class="t">        <span class="nam">retry_strategy</span> <span class="op">=</span> <span class="nam">Retry</span><span class="op">(</span><span class="op">**</span><span class="nam">retry_kwargs</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t798" href="#t798">798</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -926,7 +926,7 @@
             <a class="nav" href="z_4bb681ccf265c7f0_validators_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.13.5">coverage.py v7.13.5</a>,
-            created at 2026-05-12 14:22 +0000
+            created at 2026-05-14 19:08 +0000
         </p>
     </div>
 </footer>
