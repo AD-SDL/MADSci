@@ -202,17 +202,17 @@ Create a `docker-compose.yaml`:
 version: "3.8"
 
 services:
-  # MongoDB for Event and Workcell managers
-  mongodb:
-    image: mongo:7
+  # FerretDB (document database) for Event and Workcell managers
+  madsci_ferretdb:
+    image: ghcr.io/ferretdb/ferretdb:latest
     ports:
       - "27017:27017"
     volumes:
-      - mongo_data:/data/db
+      - ferretdb_data:/state
 
-  # Redis for Workcell manager queues
-  redis:
-    image: redis:7-alpine
+  # Valkey for Workcell manager queues
+  madsci_valkey:
+    image: valkey/valkey:8-alpine
     ports:
       - "6379:6379"
 
@@ -222,9 +222,9 @@ services:
     ports:
       - "8001:8001"
     environment:
-      - EVENT_MONGO_DB_URL=mongodb://mongodb:27017
+      - EVENT_DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
     depends_on:
-      - mongodb
+      - madsci_ferretdb
 
   # Workcell Manager - workflow orchestration
   workcell_manager:
@@ -232,14 +232,14 @@ services:
     ports:
       - "8005:8005"
     environment:
-      - WORKCELL_MONGO_DB_URL=mongodb://mongodb:27017
-      - WORKCELL_REDIS_URL=redis://redis:6379
+      - WORKCELL_DOCUMENT_DB_URL=mongodb://madsci_ferretdb:27017
+      - WORKCELL_REDIS_URL=redis://madsci_valkey:6379
     depends_on:
-      - mongodb
-      - redis
+      - madsci_ferretdb
+      - madsci_valkey
 
 volumes:
-  mongo_data:
+  ferretdb_data:
 ```
 
 Start the services:
@@ -320,53 +320,55 @@ Edit `sample_collection.workflow.yaml`:
 ```yaml
 # sample_collection.workflow.yaml
 name: sample_collection
-description: Collect a sample and measure temperature
 
-# Workflow parameters (can be passed at runtime)
+metadata:
+  description: Collect a sample and measure temperature
+  version: 1.0
+
+# Workflow parameters (passed at runtime via json_inputs)
 parameters:
-  sample_location:
+  - name: sample_location
     type: string
-    default: "rack_a1"
-    description: Location to pick sample from
-  measurement_count:
+    default: rack_a1
+  - name: measurement_count
     type: integer
     default: 3
-    description: Number of temperature readings to take
 
 steps:
-  # Step 1: Move robot to sample location
+  # Step 1: Move robot to the sample location supplied at runtime
   - name: move_to_sample
     node: robot_arm
     action: move_to
-    args:
-      location: "{{ parameters.sample_location }}"
+    parameters:           # alias for use_parameters
+      args:
+        location: sample_location  # references the workflow parameter
 
   # Step 2: Pick up the sample
   - name: pick_sample
     node: robot_arm
     action: pick
     args:
-      item: "sample_tube"
+      item: sample_tube
 
   # Step 3: Move to the sensor
   - name: move_to_sensor
     node: robot_arm
     action: move_to
     args:
-      location: "sensor"
+      location: sensor
 
   # Step 4: Take temperature reading
   - name: measure_temperature
+    key: measure          # stable handle so callers can pull the datapoint by step key
     node: temp_sensor
     action: read_temperature
-    # Result will be available as steps.measure_temperature.result
 
   # Step 5: Return sample to storage
   - name: move_to_storage
     node: robot_arm
     action: move_to
     args:
-      location: "storage"
+      location: storage
 
   # Step 6: Place sample
   - name: place_sample
@@ -377,13 +379,6 @@ steps:
   - name: return_home
     node: robot_arm
     action: home
-
-# Output what we collected
-outputs:
-  temperature:
-    source: steps.measure_temperature.result.value
-  sample_location:
-    source: parameters.sample_location
 ```
 
 ## Step 7: Run the Workflow
@@ -394,31 +389,30 @@ outputs:
 from madsci.client.workcell_client import WorkcellClient
 
 # Connect to workcell manager
-client = WorkcellClient(base_url="http://localhost:8005")
+client = WorkcellClient("http://localhost:8005")
 
-# Start the workflow
-result = client.start_workflow(
-    workflow_path="sample_collection.workflow.yaml",
-    parameters={
+# Submit and await the workflow (await_completion is True by default)
+workflow = client.start_workflow(
+    workflow_definition="sample_collection.workflow.yaml",
+    json_inputs={
         "sample_location": "rack_b2",
         "measurement_count": 5,
-    }
+    },
 )
 
-print(f"Workflow started: {result.workflow_run_id}")
+print(f"Workflow {workflow.workflow_id} finished with status: {workflow.status}")
 
-# Wait for completion and get results
-final_result = client.wait_for_workflow(result.workflow_run_id)
-print(f"Workflow completed!")
-print(f"Temperature: {final_result.outputs['temperature']}°C")
+# Each completed step exposes its ActionResult on `step.result`
+measure_step = next(s for s in workflow.steps if s.name == "measure_temperature")
+temperature = measure_step.result.json_result["value"]  # depends on the node's response shape
+print(f"Temperature: {temperature}°C")
 ```
 
-### Via CLI (Coming Soon)
+### Via CLI
 
 ```bash
-madsci run workflow sample_collection.workflow.yaml \
-  --param sample_location=rack_b2 \
-  --param measurement_count=5
+madsci workflow submit sample_collection.workflow.yaml \
+  --parameters '{"sample_location": "rack_b2", "measurement_count": 5}'
 ```
 
 ## Step 8: Monitor Workflow Execution
@@ -428,12 +422,15 @@ madsci run workflow sample_collection.workflow.yaml \
 ```python
 from madsci.client.workcell_client import WorkcellClient
 
-client = WorkcellClient()
+client = WorkcellClient("http://localhost:8005")
 
-# List recent workflow runs
-runs = client.list_workflow_runs(limit=10)
-for run in runs:
-    print(f"{run.workflow_run_id}: {run.status} - {run.workflow_name}")
+# List currently active workflows
+for workflow in client.get_active_workflows():
+    print(f"{workflow.workflow_id}: {workflow.status} - {workflow.name}")
+
+# Or query archived (completed) workflows
+for workflow in client.get_archived_workflows():
+    print(f"{workflow.workflow_id}: {workflow.status} - {workflow.name}")
 ```
 
 ### View Events
@@ -441,12 +438,12 @@ for run in runs:
 ```python
 from madsci.client.event_client import EventClient
 
-client = EventClient(base_url="http://localhost:8001")
+client = EventClient(event_server_url="http://localhost:8001")
 
-# Get recent events
-events = client.query_events(limit=20)
-for event in events:
-    print(f"{event.timestamp}: [{event.level}] {event.message}")
+# Get the most recent 20 events
+events = client.get_events(number=20)
+for event in events.values():
+    print(f"{event.event_timestamp}: [{event.log_level.name}] {event.event_type} {event.event_data}")
 ```
 
 ### Using the TUI
@@ -464,139 +461,109 @@ Now integrate workflows into an experiment:
 ```python
 """Sample collection experiment using workflows."""
 
-from madsci.experiment_application import ExperimentScript, ExperimentDesign
-from madsci.client.workcell_client import WorkcellClient
+from madsci.common.types.experiment_types import ExperimentDesign
+from madsci.common.types.workflow_types import WorkflowStatus
+from madsci.experiment_application import ExperimentScript
 
 
 class SampleCollectionExperiment(ExperimentScript):
-    """Experiment that runs multiple sample collection workflows."""
+    """Experiment that runs the sample_collection workflow at multiple locations."""
 
     experiment_design = ExperimentDesign(
-        name="Multi-Sample Collection",
-        description="Collect samples from multiple locations",
-        version="1.0.0",
+        experiment_name="Multi-Sample Collection",
+        experiment_description="Collect samples from multiple locations",
     )
 
-    def __init__(
+    def run_experiment(
         self,
-        workcell_url: str = "http://localhost:8005",
-        sample_locations: list[str] = None,
-    ):
-        super().__init__()
-        self.workcell_url = workcell_url
-        self.sample_locations = sample_locations or ["rack_a1", "rack_a2", "rack_b1"]
-        self.results: list[dict] = []
+        sample_locations: list[str] | None = None,
+    ) -> dict:
+        sample_locations = sample_locations or ["rack_a1", "rack_a2", "rack_b1"]
+        results: list[dict] = []
 
-    def run(self) -> dict:
-        """Run sample collection for all locations."""
-        client = WorkcellClient(base_url=self.workcell_url)
+        for location in sample_locations:
+            self.logger.info("Processing sample location", location=location)
 
-        print(f"Collecting samples from {len(self.sample_locations)} locations")
-
-        for location in self.sample_locations:
-            print(f"\nProcessing {location}...")
-
-            # Start workflow
-            run = client.start_workflow(
-                workflow_path="sample_collection.workflow.yaml",
-                parameters={"sample_location": location},
+            workflow = self.workcell_client.start_workflow(
+                workflow_definition="sample_collection.workflow.yaml",
+                json_inputs={"sample_location": location},
+                # Don't raise — we want to record failures and continue
+                raise_on_failed=False,
+                prompt_on_error=False,
             )
 
-            # Wait for completion
-            result = client.wait_for_workflow(run.workflow_run_id, timeout=60)
-
-            if result.status == "completed":
-                temp = result.outputs.get("temperature")
-                print(f"  Temperature: {temp}°C")
-                self.results.append({
-                    "location": location,
-                    "temperature": temp,
-                    "status": "success",
-                })
+            if workflow.status == WorkflowStatus.COMPLETED:
+                measure = next(
+                    s for s in workflow.steps if s.name == "measure_temperature"
+                )
+                temp = measure.result.json_result.get("value") if measure.result else None
+                self.logger.info("Reading captured", location=location, temperature=temp)
+                results.append({"location": location, "temperature": temp, "status": "success"})
             else:
-                print(f"  Failed: {result.error}")
-                self.results.append({
-                    "location": location,
-                    "status": "failed",
-                    "error": str(result.error),
-                })
+                self.logger.error(
+                    "Workflow failed",
+                    location=location,
+                    status=workflow.status.value,
+                )
+                results.append({"location": location, "status": "failed"})
 
-        # Summary
-        successful = [r for r in self.results if r["status"] == "success"]
-        temps = [r["temperature"] for r in successful]
-
+        successful = [r for r in results if r["status"] == "success"]
+        temps = [r["temperature"] for r in successful if r["temperature"] is not None]
         summary = {
-            "total_samples": len(self.sample_locations),
+            "total_samples": len(sample_locations),
             "successful": len(successful),
-            "failed": len(self.results) - len(successful),
+            "failed": len(results) - len(successful),
         }
-
         if temps:
             summary["mean_temperature"] = sum(temps) / len(temps)
-            summary["min_temperature"] = min(temps)
-            summary["max_temperature"] = max(temps)
 
-        print(f"\nExperiment complete: {summary}")
-
-        return {
-            "results": self.results,
-            "summary": summary,
-        }
+        return {"results": results, "summary": summary}
 
 
 if __name__ == "__main__":
-    experiment = SampleCollectionExperiment()
-    experiment.main()
+    SampleCollectionExperiment.main(lab_server_url="http://localhost:8000")
 ```
 
 ## Workflow Features
 
 ### Conditional Steps
 
-```yaml
-steps:
-  - name: check_temperature
-    node: temp_sensor
-    action: read_temperature
-
-  - name: alert_if_high
-    node: notification_service
-    action: send_alert
-    condition: "{{ steps.check_temperature.result.value > 30 }}"
-    args:
-      message: "Temperature too high!"
-```
-
-### Parallel Steps
+Steps support a `conditions` list. Each condition is a structured Pydantic model (resource-in-location, resource-field check, etc.) — not a templated expression. See `madsci.common.types.condition_types` for the supported condition types.
 
 ```yaml
 steps:
-  - name: parallel_readings
-    parallel:
-      - name: read_sensor_1
-        node: temp_sensor_1
-        action: read_temperature
-
-      - name: read_sensor_2
-        node: temp_sensor_2
-        action: read_temperature
+  - name: read_well
+    node: platereader_1
+    action: read_well
+    conditions:
+      - condition_type: resource_present
+        location_name: platereader_1.plate_carriage
 ```
 
-### Data Passing Between Steps
+### Data Passing Between Steps (Feed-Forward)
+
+To pass an output of one step into a later step, declare a `feed_forward` workflow parameter pointing at the producing step's `key`, then reference that parameter from the consuming step.
 
 ```yaml
+parameters:
+  feed_forward:
+    - key: measurement_file
+      step: measure          # the key of the step that produces it
+      data_type: file
 steps:
-  - name: first_reading
-    node: temp_sensor
-    action: read_temperature
+  - name: Measure
+    key: measure
+    node: platereader_1
+    action: read_plate
 
-  - name: log_reading
-    node: data_logger
-    action: log
-    args:
-      value: "{{ steps.first_reading.result.value }}"
-      timestamp: "{{ steps.first_reading.result.timestamp }}"
+  - name: Process Measurement
+    node: liquidhandler_1
+    action: run_protocol
+    files:
+      protocol: measurement_file   # consumes the feed-forward parameter
 ```
+
+For more workflow patterns, see [`docs/guides/workflow_development.md`](../guides/workflow_development.md) and the example workflows in `examples/example_lab/workflows/`.
 
 ## Key Takeaways
 

@@ -190,10 +190,10 @@ Classes
     `database_name: str`
     :
 
-    `manager_type: madsci.common.types.manager_types.ManagerType | None`
+    `document_db_url: pydantic.networks.AnyUrl`
     :
 
-    `mongo_db_url: pydantic.networks.AnyUrl`
+    `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
     `server_url: pydantic.networks.AnyUrl`

@@ -1,7 +1,7 @@
 """
 Test the Event Manager's REST server.
 
-Uses in-memory MongoDB handler for fast, Docker-free tests.
+Uses in-memory document storage handler for fast, Docker-free tests.
 """
 
 import asyncio
@@ -11,7 +11,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers.mongo_handler import InMemoryMongoHandler
+from madsci.common.db_handlers.document_storage_handler import (
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.types.event_types import (
     EmailAlertsConfig,
     Event,
@@ -28,15 +30,15 @@ event_manager_settings = EventManagerSettings(
 
 
 @pytest.fixture()
-def mongo_handler():
-    """Create an InMemoryMongoHandler for testing."""
-    handler = InMemoryMongoHandler(database_name="test_events")
+def document_handler():
+    """Create an InMemoryDocumentStorageHandler for testing."""
+    handler = InMemoryDocumentStorageHandler(database_name="test_events")
     yield handler
     handler.close()
 
 
 @pytest.fixture()
-def test_client(mongo_handler) -> TestClient:
+def test_client(document_handler) -> TestClient:
     """Event Server Test Client Fixture"""
     settings = EventManagerSettings(
         manager_name="test_event_manager",
@@ -45,7 +47,7 @@ def test_client(mongo_handler) -> TestClient:
     )
     manager = EventManager(
         settings=settings,
-        mongo_handler=mongo_handler,
+        document_handler=document_handler,
     )
     app = manager.create_server()
     client = TestClient(app)
@@ -349,8 +351,8 @@ class TestEventBackup:
     def test_create_backup(self, test_client: TestClient) -> None:
         """Test creating a one-time backup.
 
-        Note: This test mocks MongoDBBackupTool since the actual backup requires
-        mongodump to be installed and connected to the correct MongoDB instance,
+        Note: This test mocks DocumentDBBackupTool since the actual backup requires
+        mongodump to be installed and connected to the correct database instance,
         which is handled differently in the test environment.
         """
         # Create some events first
@@ -361,9 +363,9 @@ class TestEventBackup:
             )
             test_client.post("/event", json=event.model_dump(mode="json"))
 
-        # Mock the MongoDBBackupTool to avoid requiring mongodump and actual DB connection
+        # Mock the DocumentDBBackupTool to avoid requiring mongodump and actual DB connection
         with patch(
-            "madsci.event_manager.event_server.MongoDBBackupTool"
+            "madsci.event_manager.event_server.DocumentDBBackupTool"
         ) as mock_backup_tool_class:
             mock_backup_tool = MagicMock()
             mock_backup_tool.create_backup.return_value = Path(
@@ -550,7 +552,7 @@ class TestTTLIndex:
 class TestBackgroundRetentionTask:
     """Test the background retention task functionality."""
 
-    def test_archive_old_events_method(self, mongo_handler) -> None:
+    def test_archive_old_events_method(self, document_handler) -> None:
         """Test that _archive_old_events correctly archives old events."""
         # Create manager with retention enabled and short soft_delete period for testing
         settings = EventManagerSettings(
@@ -562,7 +564,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            mongo_handler=mongo_handler,
+            document_handler=document_handler,
         )
 
         # Create old events (2 days ago)
@@ -599,7 +601,7 @@ class TestBackgroundRetentionTask:
         doc = manager.events.find_one({"_id": recent_event.event_id})
         assert doc["archived"] is False
 
-    def test_archive_old_events_respects_batch_limit(self, mongo_handler) -> None:
+    def test_archive_old_events_respects_batch_limit(self, document_handler) -> None:
         """Test that _archive_old_events respects max_batches_per_run limit."""
         # Create manager with small batch limits
         settings = EventManagerSettings(
@@ -612,7 +614,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            mongo_handler=mongo_handler,
+            document_handler=document_handler,
         )
 
         # Create 10 old events
@@ -640,7 +642,7 @@ class TestBackgroundRetentionTask:
         archived_docs = list(manager.events.find({"archived": True}))
         assert len(archived_docs) == 8
 
-    def test_archive_old_events_no_events_to_archive(self, mongo_handler) -> None:
+    def test_archive_old_events_no_events_to_archive(self, document_handler) -> None:
         """Test that _archive_old_events handles case with no events to archive."""
         settings = EventManagerSettings(
             manager_name="test_event_manager",
@@ -650,7 +652,7 @@ class TestBackgroundRetentionTask:
         )
         manager = EventManager(
             settings=settings,
-            mongo_handler=mongo_handler,
+            document_handler=document_handler,
         )
 
         # Create only recent events

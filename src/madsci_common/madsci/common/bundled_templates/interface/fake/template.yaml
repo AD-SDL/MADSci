@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "Add a fake interface for testing without hardware"
 category: "interface"
 tags: ["fake", "testing", "simulation"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

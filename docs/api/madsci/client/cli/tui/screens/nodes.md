@@ -2,23 +2,25 @@ Module madsci.client.cli.tui.screens.nodes
 ==========================================
 Node management screen for MADSci TUI.
 
-Provides node discovery, status monitoring, and action display
-by querying the Workcell Manager.
+Provides node discovery, status monitoring, admin command actions,
+enhanced detail display, and action execution by querying the
+Workcell Manager and communicating with nodes directly.
 
 Classes
 -------
 
-`NodeDetailScreen(node_name: str, node_data: dict, **kwargs: Any)`
+`NodeDetailScreen(node_name: str, node_data: Node, **kwargs: Any)`
 :   Screen showing details for a single node, pushed on top of NodesScreen.
     
     Initialize the detail screen.
     
     Args:
         node_name: Name of the node.
-        node_data: Node data dictionary.
+        node_data: Node model instance.
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -27,7 +29,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -50,6 +52,9 @@ Classes
     `on_mount(self) ‑> None`
     :   Render the detail content on mount.
 
+    `on_unmount(self) ‑> None`
+    :   Clean up client connections when screen is unmounted.
+
 `NodesScreen(**kwargs: Any)`
 :   Screen showing node management and monitoring.
     
@@ -57,6 +62,9 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.ActionBarMixin
+    * madsci.client.cli.tui.mixins.AutoRefreshMixin
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -65,7 +73,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -76,19 +84,31 @@ Classes
 
     ### Methods
 
+    `action_execute_action(self) ‑> None`
+    :   Open the action executor screen for the selected node.
+
     `action_go_back(self) ‑> None`
     :   Go back to the previous screen.
+
+    `action_pause_node(self) ‑> None`
+    :   Pause the selected node.
 
     `action_refresh(self) ‑> None`
     :   Refresh node data.
 
-    `action_toggle_auto_refresh(self) ‑> None`
-    :   Toggle auto-refresh on/off.
+    `action_reset_node(self) ‑> None`
+    :   Reset the selected node (clear errors).
+
+    `action_resume_node(self) ‑> None`
+    :   Resume the selected node.
+
+    `action_toggle_lock_node(self) ‑> None`
+    :   Toggle lock/unlock on the selected node.
 
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the nodes screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection - push detail screen.
 
     `on_mount(self) ‑> None`
@@ -96,3 +116,6 @@ Classes
 
     `refresh_data(self) ‑> None`
     :   Refresh node data from workcell manager.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   React to auto_refresh_enabled changes by updating the footer.

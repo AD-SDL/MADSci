@@ -1,0 +1,25 @@
+name: "Drivers"
+version: "1.0.0"
+description: "Add instrument driver directories to an existing module"
+category: "addon"
+tags: ["drivers", "instruments"]
+skills: []
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+files:
+  - source: "src/drivers/__init__.py.j2"
+    destination: "src/drivers/__init__.py"
+  - source: "src/drivers/private/.gitkeep"
+    destination: "src/drivers/private/.gitkeep"

@@ -66,7 +66,7 @@ class TestUnifiedCLICreate:
 
     def test_create_mongodb_backup_auto_detect(self, runner: CliRunner) -> None:
         """Test creating MongoDB backup with auto-detection."""
-        with patch("madsci.common.backup_tools.cli.MongoDBBackupTool") as mock_tool:
+        with patch("madsci.common.backup_tools.cli.DocumentDBBackupTool") as mock_tool:
             mock_instance = MagicMock()
             mock_instance.create_backup.return_value = Path("/test/backup")
             mock_tool.return_value = mock_instance

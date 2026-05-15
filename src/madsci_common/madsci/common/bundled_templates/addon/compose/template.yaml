@@ -1,0 +1,31 @@
+name: "Docker Compose"
+version: "1.0.0"
+description: "Add a Docker Compose file to an existing module"
+category: "addon"
+tags: ["docker", "compose", "container"]
+skills: []
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+  - name: port
+    type: integer
+    description: "Default port number for the node REST API"
+    required: false
+    default: 2000
+    min: 1024
+    max: 65535
+
+files:
+  - source: "docker-compose.yaml.j2"
+    destination: "docker-compose.yaml"

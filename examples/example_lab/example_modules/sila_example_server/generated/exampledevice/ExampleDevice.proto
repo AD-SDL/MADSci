@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+import "SiLAFramework.proto";
+
+package sila2.org.madsci.examples.exampledevice.v1;
+
+/* A minimal SiLA2 feature for demonstrating MADSci SilaNodeClient capabilities. Provides an unobservable command, an observable command, and a readable property. */
+service ExampleDevice {
+  /* Returns a greeting for the given name. Demonstrates unobservable (synchronous) command execution. */
+  rpc Greet (sila2.org.madsci.examples.exampledevice.v1.Greet_Parameters) returns (sila2.org.madsci.examples.exampledevice.v1.Greet_Responses) {}
+  /* Counts down from the given number, pausing 1 second between each count. Demonstrates observable (long-running) command execution with status polling. */
+  rpc CountDown (sila2.org.madsci.examples.exampledevice.v1.CountDown_Parameters) returns (sila2.org.silastandard.CommandConfirmation) {}
+  /* Monitor the state of CountDown */
+  rpc CountDown_Info (sila2.org.silastandard.CommandExecutionUUID) returns (stream sila2.org.silastandard.ExecutionInfo) {}
+  /* Retrieve intermediate responses of CountDown */
+  rpc CountDown_Intermediate (sila2.org.silastandard.CommandExecutionUUID) returns (stream sila2.org.madsci.examples.exampledevice.v1.CountDown_IntermediateResponses) {}
+  /* Retrieve result of CountDown */
+  rpc CountDown_Result(sila2.org.silastandard.CommandExecutionUUID) returns (sila2.org.madsci.examples.exampledevice.v1.CountDown_Responses) {}
+  /* The number of seconds since the server started. Demonstrates property reading via get_state(). */
+  rpc Get_ServerUptime (sila2.org.madsci.examples.exampledevice.v1.Get_ServerUptime_Parameters) returns (sila2.org.madsci.examples.exampledevice.v1.Get_ServerUptime_Responses) {}
+}
+
+/* Parameters for Greet */
+message Greet_Parameters {
+  sila2.org.silastandard.String Name = 1;  /* The name to greet. */
+}
+
+/* Responses of Greet */
+message Greet_Responses {
+  sila2.org.silastandard.String Greeting = 1;  /* The greeting message. */
+}
+
+/* Parameters for CountDown */
+message CountDown_Parameters {
+  sila2.org.silastandard.Integer Count = 1;  /* The number to count down from. */
+}
+
+/* Responses of CountDown */
+message CountDown_Responses {
+  sila2.org.silastandard.String Message = 1;  /* A completion message when the countdown finishes. */
+}
+
+/* Intermediate responses of CountDown */
+message CountDown_IntermediateResponses {
+  sila2.org.silastandard.Integer CurrentCount = 1;  /* The current count value during the countdown. */
+}
+
+/* Parameters for ServerUptime */
+message Get_ServerUptime_Parameters {
+}
+
+/* Responses of ServerUptime */
+message Get_ServerUptime_Responses {
+  sila2.org.silastandard.Real ServerUptime = 1;  /* The number of seconds since the server started. Demonstrates property reading via get_state(). */
+}

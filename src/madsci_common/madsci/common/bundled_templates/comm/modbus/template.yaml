@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A Modbus TCP/RTU communication interface using pymodbus patterns"
 category: "comm"
 tags: ["modbus", "plc", "industrial", "communication"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

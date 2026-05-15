@@ -7,8 +7,88 @@ using the template engine.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from madsci.common.types.template_types import GeneratedProject
+    from rich.console import Console
+
+
+def _collect_parameters(
+    lab_name: str | None,
+    lab_description: str | None,
+    no_interactive: bool,
+) -> tuple[str, str]:
+    """Collect lab name and description via prompts or defaults.
+
+    Args:
+        lab_name: Pre-supplied lab name, or None to prompt.
+        lab_description: Pre-supplied description, or None to prompt.
+        no_interactive: If True, skip prompts and use defaults.
+
+    Returns:
+        Tuple of (lab_name, lab_description).
+    """
+    from rich.prompt import Prompt
+
+    if not no_interactive:
+        if not lab_name:
+            lab_name = Prompt.ask(
+                "  Lab name (lowercase, underscores or hyphens)",
+                default="my_lab",
+            )
+        if not lab_description:
+            lab_description = Prompt.ask(
+                "  Lab description",
+                default="A MADSci self-driving laboratory",
+            )
+    else:
+        lab_name = lab_name or "my_lab"
+        lab_description = lab_description or "A MADSci self-driving laboratory"
+
+    return lab_name, lab_description
+
+
+def _display_results(
+    console: Console,
+    result: GeneratedProject,
+    output_dir: Path,
+    lab_name: str,
+) -> None:
+    """Display rendered template results and next-steps guidance.
+
+    Args:
+        console: Rich console instance.
+        result: GeneratedProject from the template engine.
+        output_dir: Directory where the lab was created.
+        lab_name: Name of the lab.
+    """
+    from madsci.common.sentry import ensure_madsci_dir
+
+    for path in result.files_created:
+        console.print(f"  [green]\u2713[/green] Created {path}")
+
+    if result.skills_included:
+        console.print(
+            f"  [green]\u2713[/green] Included {len(result.skills_included)} agent skill(s)"
+        )
+
+    lab_dir = output_dir / lab_name
+    madsci_dir = ensure_madsci_dir(lab_dir)
+    console.print(
+        f"  [green]\u2713[/green] Initialized {madsci_dir.relative_to(output_dir)}/"
+    )
+
+    console.print()
+    console.print("[bold]Next steps:[/bold]")
+    console.print(f"  1. cd {lab_name}")
+    console.print("  2. madsci start")
+    console.print("  3. Open http://localhost:8000 in your browser")
+    console.print()
+    console.print("For more information, run:")
+    console.print("  madsci --help")
 
 
 @click.command()
@@ -51,7 +131,6 @@ def init(
     from madsci.client.cli.utils.output import get_console
     from madsci.common.templates.registry import TemplateRegistry
     from rich.panel import Panel
-    from rich.prompt import Prompt
 
     console = get_console(ctx)
 
@@ -64,21 +143,9 @@ def init(
     )
     console.print()
 
-    # Collect parameters
-    if not no_interactive:
-        if not lab_name:
-            lab_name = Prompt.ask(
-                "  Lab name (lowercase, underscores or hyphens)",
-                default="my_lab",
-            )
-        if not lab_description:
-            lab_description = Prompt.ask(
-                "  Lab description",
-                default="A MADSci self-driving laboratory",
-            )
-    else:
-        lab_name = lab_name or "my_lab"
-        lab_description = lab_description or "A MADSci self-driving laboratory"
+    lab_name, lab_description = _collect_parameters(
+        lab_name, lab_description, no_interactive
+    )
 
     # Determine output directory
     output_dir = Path(directory) if directory else Path.cwd()
@@ -103,8 +170,10 @@ def init(
     # Validate parameters
     errors = engine.validate_parameters(parameters)
     if errors:
+        from rich.markup import escape
+
         for err in errors:
-            console.print(f"  [red]Error:[/red] {err}")
+            console.print(f"  [red]Error:[/red] {escape(str(err))}")
         raise click.ClickException("Invalid parameters. See errors above.")
 
     console.print(f'Creating lab "[bold]{lab_name}[/bold]" in {output_dir / lab_name}/')
@@ -115,23 +184,4 @@ def init(
     except Exception as exc:
         raise click.ClickException(f"Failed to render template: {exc}") from exc
 
-    for path in result.files_created:
-        console.print(f"  [green]\u2713[/green] Created {path}")
-
-    # Initialize .madsci/ sentry directory
-    from madsci.common.sentry import ensure_madsci_dir
-
-    lab_dir = output_dir / lab_name
-    madsci_dir = ensure_madsci_dir(lab_dir)
-    console.print(
-        f"  [green]\u2713[/green] Initialized {madsci_dir.relative_to(output_dir)}/"
-    )
-
-    console.print()
-    console.print("[bold]Next steps:[/bold]")
-    console.print(f"  1. cd {lab_name}")
-    console.print("  2. madsci start")
-    console.print("  3. Open http://localhost:8000 in your browser")
-    console.print()
-    console.print("For more information, run:")
-    console.print("  madsci --help")
+    _display_results(console, result, output_dir, lab_name)

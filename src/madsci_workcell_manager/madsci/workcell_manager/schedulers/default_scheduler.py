@@ -1,5 +1,6 @@
 """Default MADSci Workcell scheduler"""
 
+import contextlib
 import traceback
 from datetime import datetime, timedelta
 
@@ -94,9 +95,9 @@ class Scheduler(AbstractScheduler):
             # Get the current location state from LocationManager
             current_location = location
             try:
-                if self.location_client is not None:
-                    current_location = self.location_client.get_location(
-                        location.location_id
+                if self.location_client is not None and location.location_name:
+                    current_location = self.location_client.get_location_by_name(
+                        location.location_name
                     )
             except Exception:
                 # If LocationManager is not available or location not found, use step's location
@@ -106,8 +107,8 @@ class Scheduler(AbstractScheduler):
                 current_location.resource_id is not None
                 and self.resource_client is not None
             ):
-                self.resource_client.get_resource(current_location.resource_id)
-                # TODO: what do we do with the location_resource?
+                with contextlib.suppress(Exception):
+                    self.resource_client.get_resource(current_location.resource_id)
             if current_location.reservation is not None:
                 metadata.ready_to_run = False
                 metadata.reasons.append(

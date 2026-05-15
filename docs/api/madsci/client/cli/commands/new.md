@@ -11,12 +11,15 @@ within functions to reduce CLI startup time.
 Functions
 ---------
 
-`collect_parameters_interactive(engine: TemplateEngine, console: Console) ‑> dict[str, object]`
+`collect_parameters_interactive(engine: TemplateEngine, console: Console, overrides: Optional[dict[str, object]] = None) ‑> dict[str, object]`
 :   Collect parameter values interactively.
     
     Args:
         engine: Template engine with manifest.
         console: Rich console for output.
+        overrides: Optional dict of parameter values to use as defaults,
+            overriding the template's built-in defaults. Useful for passing
+            CLI-provided values (e.g., ``-n``) into interactive mode.
     
     Returns:
         Dictionary of parameter names to values.
@@ -29,7 +32,7 @@ Functions
         console: Rich console for output.
         title: Table title.
 
-`generate_from_template(template_id: str, output_dir: Path, name: Optional[str], no_interactive: bool, console: Console, extra_params: Optional[dict] = None) ‑> bool`
+`generate_from_template(template_id: str, output_dir: Path, name: Optional[str], no_interactive: bool, console: Console, extra_params: Optional[dict] = None) ‑> GeneratedProject | None`
 :   Generate from a template with optional interactive prompts.
     
     Args:
@@ -41,7 +44,7 @@ Functions
         extra_params: Additional parameters to pass.
     
     Returns:
-        True if generation succeeded, False otherwise.
+        GeneratedProject on success, None on failure.
 
 `get_console(ctx: click.Context) ‑> Console`
 :   Get console from context or create new one.

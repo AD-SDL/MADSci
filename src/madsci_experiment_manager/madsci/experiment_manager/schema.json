@@ -1,18 +1,11 @@
 {
     "database": "madsci_experiments",
     "schema_version": "1.0.0",
-    "description": "Schema definition for MADSci Experiment Manager MongoDB",
+    "description": "Schema definition for MADSci Experiment Manager document database",
     "collections": {
       "experiments": {
         "description": "Main experiments collection for storing experiment data",
         "indexes": [
-          {
-            "keys": [["experiment_id", 1]],
-            "name": "experiment_id_1",
-            "background": true,
-            "unique": true,
-            "description": "Unique constraint on experiment_id for fast lookups"
-          },
           {
             "keys": [["status", 1], ["started_at", -1]],
             "name": "status_started_at",

@@ -108,22 +108,22 @@
         }
       }
     },
-    "/location/{location_id}/attach_resource": {
+    "/location/{location_name}/attach_resource": {
       "post": {
         "tags": [
           "Locations"
         ],
         "summary": "Attach Resource",
         "description": "Attach a resource to a location.",
-        "operationId": "attach_resource_location__location_id__attach_resource_post",
+        "operationId": "attach_resource_location__location_name__attach_resource_post",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           },
           {
@@ -158,22 +158,142 @@
         }
       }
     },
-    "/location/{location_id}": {
+    "/location/from_template": {
+      "post": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Create Location From Template",
+        "description": "Create a new location by instantiating a LocationTemplate.\n\nRequires node bindings to map abstract roles to concrete node instance names.\nRepresentation data is merged from template defaults + overrides.",
+        "operationId": "create_location_from_template_location_from_template_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateLocationFromTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location_template": {
+      "post": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Create Location Template",
+        "description": "Create a new location template.",
+        "operationId": "create_location_template_location_template_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/representation_template": {
+      "post": {
+        "tags": [
+          "Representation Templates"
+        ],
+        "summary": "Create Representation Template",
+        "description": "Create a new representation template.",
+        "operationId": "create_representation_template_representation_template_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationRepresentationTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_name}": {
       "delete": {
         "tags": [
           "Locations"
         ],
         "summary": "Delete Location",
-        "description": "Delete a specific location by ID.",
-        "operationId": "delete_location_location__location_id__delete",
+        "description": "Delete a specific location by name.",
+        "operationId": "delete_location_location__location_name__delete",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           }
         ],
@@ -202,17 +322,17 @@
         "tags": [
           "Locations"
         ],
-        "summary": "Get Location By Id",
-        "description": "Get a specific location by ID.",
-        "operationId": "get_location_by_id_location__location_id__get",
+        "summary": "Get Location",
+        "description": "Get a specific location by name.",
+        "operationId": "get_location_location__location_name__get",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           }
         ],
@@ -238,22 +358,182 @@
         }
       }
     },
-    "/location/{location_id}/detach_resource": {
+    "/location_template/{template_name}": {
+      "delete": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Delete Location Template",
+        "description": "Delete a location template by name.",
+        "operationId": "delete_location_template_location_template__template_name__delete",
+        "parameters": [
+          {
+            "name": "template_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Get Location Template",
+        "description": "Get a location template by name.",
+        "operationId": "get_location_template_location_template__template_name__get",
+        "parameters": [
+          {
+            "name": "template_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/representation_template/{template_name}": {
+      "delete": {
+        "tags": [
+          "Representation Templates"
+        ],
+        "summary": "Delete Representation Template",
+        "description": "Delete a representation template by name.",
+        "operationId": "delete_representation_template_representation_template__template_name__delete",
+        "parameters": [
+          {
+            "name": "template_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Representation Templates"
+        ],
+        "summary": "Get Representation Template",
+        "description": "Get a representation template by name.",
+        "operationId": "get_representation_template_representation_template__template_name__get",
+        "parameters": [
+          {
+            "name": "template_name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Template Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_name}/detach_resource": {
       "delete": {
         "tags": [
           "Locations"
         ],
         "summary": "Detach Resource",
         "description": "Detach the resource from a location.",
-        "operationId": "detach_resource_location__location_id__detach_resource_delete",
+        "operationId": "detach_resource_location__location_name__detach_resource_delete",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           }
         ],
@@ -279,22 +559,42 @@
         }
       }
     },
-    "/location/{location_id}/resources": {
+    "/locations/export": {
+      "get": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Export Locations",
+        "description": "Export all locations as a JSON list.\n\nSemantically distinct from GET /locations for import/export workflows.",
+        "operationId": "export_locations_locations_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location/{location_name}/resources": {
       "get": {
         "tags": [
           "Resources"
         ],
         "summary": "Get Location Resources",
-        "description": "Get the resource hierarchy for resources currently at a specific location.\n\nArgs:\n    location_id: Location ID to query\n\nReturns:\n    ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource\n\nRaises:\n    HTTPException: If location not found",
-        "operationId": "get_location_resources_location__location_id__resources_get",
+        "description": "Get the resource hierarchy for resources currently at a specific location.\n\nArgs:\n    location_name: Location name to query\n\nReturns:\n    ResourceHierarchy: Hierarchy of resources at the location, or empty hierarchy if no attached resource\n\nRaises:\n    HTTPException: If location not found",
+        "operationId": "get_location_resources_location__location_name__resources_get",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           }
         ],
@@ -314,6 +614,26 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location_templates": {
+      "get": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Get Location Templates",
+        "description": "Get all location templates.",
+        "operationId": "get_location_templates_location_templates_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -328,6 +648,26 @@
         "summary": "Get Locations",
         "description": "Get all locations.",
         "operationId": "get_locations_locations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/representation_templates": {
+      "get": {
+        "tags": [
+          "Representation Templates"
+        ],
+        "summary": "Get Representation Templates",
+        "description": "Get all representation templates.",
+        "operationId": "get_representation_templates_representation_templates_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -426,13 +766,149 @@
         }
       }
     },
+    "/locations/import": {
+      "post": {
+        "tags": [
+          "Locations"
+        ],
+        "summary": "Import Locations",
+        "description": "Import multiple locations in bulk.\n\nParameters\n----------\nlocations:\n    List of Location objects to import.\noverwrite:\n    If True, overwrite existing locations with the same name.\n    If False (default), skip duplicates.\n\nReturns\n-------\nLocationImportResult with counts and imported locations.",
+        "operationId": "import_locations_locations_import_post",
+        "parameters": [
+          {
+            "name": "overwrite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Overwrite"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Location"
+                },
+                "title": "Locations"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location_template/init": {
+      "post": {
+        "tags": [
+          "Location Templates"
+        ],
+        "summary": "Init Location Template",
+        "description": "Idempotent init: get-or-create, version-update.\n\nIf template exists with same version, return it unchanged.\nIf template exists with different version, update and return.\nIf template doesn't exist, create and return.",
+        "operationId": "init_location_template_location_template_init_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/representation_template/init": {
+      "post": {
+        "tags": [
+          "Representation Templates"
+        ],
+        "summary": "Init Representation Template",
+        "description": "Idempotent init: get-or-create, version-update.\n\nIf template exists with same version, return it unchanged.\nIf template exists with different version, update and return.\nIf template doesn't exist, create and return.",
+        "operationId": "init_representation_template_representation_template_init_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationRepresentationTemplate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/transfer/plan": {
       "post": {
         "tags": [
           "Transfer"
         ],
         "summary": "Plan Transfer",
-        "description": "Plan a transfer workflow from source to target.\n\nArgs:\n    source_location_id: Source location ID\n    target_location_id: Target location ID\n\nReturns:\n    Composite workflow definition to execute the transfer\n\nRaises:\n    HTTPException: If no transfer path exists",
+        "description": "Plan a transfer workflow from source to target.\n\nArgs:\n    source_location: Source location ID\n    target_location: Target location ID\n\nReturns:\n    Composite workflow definition to execute the transfer\n\nRaises:\n    HTTPException: If no transfer path exists",
         "operationId": "plan_transfer_transfer_plan_post",
         "parameters": [
           {
@@ -476,22 +952,22 @@
         }
       }
     },
-    "/location/{location_id}/remove_representation/{node_name}": {
+    "/location/{location_name}/remove_representation/{node_name}": {
       "delete": {
         "tags": [
           "Locations"
         ],
         "summary": "Remove Representation",
         "description": "Remove representations for a location for a specific node.",
-        "operationId": "remove_representation_location__location_id__remove_representation__node_name__delete",
+        "operationId": "remove_representation_location__location_name__remove_representation__node_name__delete",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           },
           {
@@ -526,22 +1002,22 @@
         }
       }
     },
-    "/location/{location_id}/set_representation/{node_name}": {
+    "/location/{location_name}/set_representation/{node_name}": {
       "post": {
         "tags": [
           "Locations"
         ],
-        "summary": "Set Representations",
+        "summary": "Set Representation",
         "description": "Set representations for a location for a specific node.",
-        "operationId": "set_representations_location__location_id__set_representation__node_name__post",
+        "operationId": "set_representation_location__location_name__set_representation__node_name__post",
         "parameters": [
           {
-            "name": "location_id",
+            "name": "location_name",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
-              "title": "Location Id"
+              "title": "Location Name"
             }
           },
           {
@@ -585,10 +1061,105 @@
           }
         }
       }
+    },
+    "/reconcile": {
+      "post": {
+        "tags": [
+          "Reconciliation"
+        ],
+        "summary": "Trigger Reconcile",
+        "description": "Manually trigger reconciliation of unresolved template references.",
+        "operationId": "trigger_reconcile_reconcile_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "CreateLocationFromTemplateRequest": {
+        "properties": {
+          "location_name": {
+            "type": "string",
+            "title": "Location Name",
+            "description": "Name for the new location."
+          },
+          "template_name": {
+            "type": "string",
+            "title": "Template Name",
+            "description": "Name of the LocationTemplate to instantiate."
+          },
+          "node_bindings": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Node Bindings",
+            "description": "Mapping of abstract role names to concrete node instance names."
+          },
+          "representation_overrides": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Representation Overrides",
+            "description": "Per-role overrides to merge with representation template defaults. Key is role name."
+          },
+          "resource_template_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Template Overrides",
+            "description": "Overrides for resource template fields (merged with template defaults)."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Optional description for the new location."
+          },
+          "allow_transfers": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allow Transfers",
+            "description": "Override the template default for allow_transfers."
+          }
+        },
+        "type": "object",
+        "required": [
+          "location_name",
+          "template_name"
+        ],
+        "title": "CreateLocationFromTemplateRequest",
+        "description": "Request to create a location from a LocationTemplate.\n\nRequires node bindings to map abstract roles to concrete node instance names."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -604,15 +1175,27 @@
       },
       "Location": {
         "properties": {
+          "location_name": {
+            "type": "string",
+            "title": "Location Name",
+            "description": "The name of the location."
+          },
           "location_id": {
             "type": "string",
             "title": "Location ID",
             "description": "The ID of the location."
           },
-          "location_name": {
-            "type": "string",
-            "title": "Location Name",
-            "description": "The name of the location."
+          "resource_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource ID",
+            "description": "The ID of the resource associated with the Location."
           },
           "description": {
             "anyOf": [
@@ -627,6 +1210,24 @@
             "description": "A description of the location."
           },
           "representations": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Location Representation Map",
+            "description": "A dictionary of different representations of the location. Allows creating an association between a specific key (like a node name or id) and a relevant representation of the location (like joint angles, a specific actuator, etc)."
+          },
+          "resource_template_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Template Name",
+            "description": "Name of the Resource Template to be used for creating a resource associated with this location (if any) on location initialization."
+          },
+          "resource_template_overrides": {
             "anyOf": [
               {
                 "additionalProperties": true,
@@ -636,8 +1237,14 @@
                 "type": "null"
               }
             ],
-            "title": "Location Representations",
-            "description": "A dictionary of node-specific representations for the location."
+            "title": "Resource Template Overrides",
+            "description": "Optional overrides to apply when creating a resource from the template for this specific location."
+          },
+          "allow_transfers": {
+            "type": "boolean",
+            "title": "Allow Transfers",
+            "description": "Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
+            "default": true
           },
           "reservation": {
             "anyOf": [
@@ -648,10 +1255,10 @@
                 "type": "null"
               }
             ],
-            "title": "Location Reservation",
-            "description": "The reservation for the location."
+            "title": "Reservation",
+            "description": "The current reservation on this location, if any."
           },
-          "resource_id": {
+          "location_template_name": {
             "anyOf": [
               {
                 "type": "string"
@@ -660,14 +1267,23 @@
                 "type": "null"
               }
             ],
-            "title": "Resource ID",
-            "description": "The ID of an existing Resource associated with the location, if any (deprecated, use resource_ids)."
+            "title": "Location Template Name",
+            "description": "Name of the LocationTemplate used to create this location (for traceability)."
           },
-          "allow_transfers": {
-            "type": "boolean",
-            "title": "Allow Transfers",
-            "description": "Whether this location can be used as a source or target in transfers. Non-transfer locations are excluded from transfer graph construction.",
-            "default": true
+          "node_bindings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Bindings",
+            "description": "Mapping of abstract role names to concrete node instance names (for traceability)."
           }
         },
         "type": "object",
@@ -676,6 +1292,110 @@
         ],
         "title": "Location",
         "description": "A location in the lab."
+      },
+      "LocationRepresentationTemplate": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "title": "Template ID",
+            "description": "Unique identifier for this template."
+          },
+          "template_name": {
+            "type": "string",
+            "title": "Template Name",
+            "description": "Unique name for this representation template (e.g. 'robotarm_deck_access')."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Human-readable description of this representation template."
+          },
+          "default_values": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Default Values",
+            "description": "Default field values for this representation. Merged with overrides at instantiation."
+          },
+          "schema_def": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "JSON Schema",
+            "description": "Optional JSON Schema for validating representation data."
+          },
+          "required_overrides": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Required Overrides",
+            "description": "Fields that must be provided when instantiating a location from this template."
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization and discovery."
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By",
+            "description": "ID of the node or operator that created this template."
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Semantic version of this template.",
+            "default": "1.0.0"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When this template was created."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When this template was last updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_name"
+        ],
+        "title": "LocationRepresentationTemplate",
+        "description": "A named, versioned template for node-specific location representation data.\n\nRegistered by nodes during startup or by operators via API. Defines the\nschema, defaults, and required overrides for a particular node type's\nrepresentation of locations.\n\nExample: A robot arm registers ``\"robotarm_deck_access\"`` with defaults\n``{\"gripper_config\": \"standard\", \"max_payload\": 2.0}`` and\n``required_overrides=[\"position\"]``."
       },
       "LocationReservation": {
         "properties": {
@@ -690,13 +1410,7 @@
             "title": "Created Datetime",
             "description": "When the reservation was created."
           },
-          "start": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Start Datetime",
-            "description": "When the reservation starts."
-          },
-          "end": {
+          "expires": {
             "type": "string",
             "format": "date-time",
             "title": "End Datetime",
@@ -707,11 +1421,126 @@
         "required": [
           "owned_by",
           "created",
-          "start",
-          "end"
+          "expires"
         ],
         "title": "LocationReservation",
         "description": "Reservation of a MADSci Location."
+      },
+      "LocationTemplate": {
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "title": "Template ID",
+            "description": "Unique identifier for this template."
+          },
+          "template_name": {
+            "type": "string",
+            "title": "Template Name",
+            "description": "Unique name for this location template (e.g. 'ot2_deck_slot')."
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "Human-readable description of this location template."
+          },
+          "resource_template_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Template Name",
+            "description": "Name of the ResourceTemplate to use for creating a resource on instantiation."
+          },
+          "resource_template_overrides": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Template Overrides",
+            "description": "Default overrides to apply when creating a resource from the template."
+          },
+          "representation_templates": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Representation Templates",
+            "description": "Mapping of abstract role names to representation template names."
+          },
+          "default_allow_transfers": {
+            "type": "boolean",
+            "title": "Default Allow Transfers",
+            "description": "Default value for allow_transfers when creating locations from this template.",
+            "default": true
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Tags",
+            "description": "Tags for categorization and discovery."
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By",
+            "description": "ID of the node or operator that created this template."
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Semantic version of this template.",
+            "default": "1.0.0"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "When this template was created."
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At",
+            "description": "When this template was last updated."
+          }
+        },
+        "type": "object",
+        "required": [
+          "template_name"
+        ],
+        "title": "LocationTemplate",
+        "description": "A named, versioned blueprint for creating locations.\n\nMaps abstract role names to representation template names. Resource-free\nand node-free \u2014 no specific node instances or resource IDs. At instantiation\ntime, node bindings map roles to concrete node names.\n\nExample: ``\"ot2_deck_slot\"`` with\n``representation_templates: {\"deck_controller\": \"lh_deck_repr\", \"transfer_arm\": \"robotarm_deck_access\"}``"
       },
       "OwnershipInfo": {
         "properties": {

@@ -1,0 +1,78 @@
+# MADSci Example Lab - Location Configuration
+#
+# This file defines lab-level locations, location templates, and training
+# (cross-node representation additions). Node-intrinsic locations (e.g.,
+# liquid handler deck slots, plate reader carriage) are auto-created by
+# nodes on startup via their intrinsic_locations class variable.
+#
+# Format: LabLocationConfig (reconcilable living document)
+#   - representation_templates: lab-level representation templates
+#   - location_templates: reusable location blueprints
+#   - training: add node representations to existing locations
+#   - locations: lab-managed locations not owned by any node
+
+# Location templates: reusable blueprints for creating locations.
+# Roles map to representation templates; at instantiation time, node
+# bindings map roles to concrete node instance names.
+location_templates:
+  - template_name: storage_rack_nest
+    description: >-
+      A single nest/slot in a storage rack. Each nest holds one plate
+      and is accessed by a transfer arm. Instantiate multiple nests
+      to build out a full rack.
+    resource_template_name: location_container
+    representation_templates:
+      transfer_arm: robotarm_wide_access
+    default_allow_transfers: true
+    tags:
+      - storage
+      - rack
+      - nest
+    version: "1.0.0"
+
+# Training: teach the robot arm how to access specific node-managed locations.
+# These add robotarm_1's representation to node-owned locations.
+training:
+  # liquidhandler_1 — decks 1 and 3 accessible by robotarm_1
+  - location_name: liquidhandler_1.deck_1
+    node_name: robotarm_1
+    representation_template_name: robotarm_deck_access
+    overrides:
+      position: [10, 15, 5]
+
+  - location_name: liquidhandler_1.deck_3
+    node_name: robotarm_1
+    representation_template_name: robotarm_deck_access
+    overrides:
+      position: [20, 15, 5]
+
+  # liquidhandler_2 — decks 1 and 3 accessible by robotarm_1
+  - location_name: liquidhandler_2.deck_1
+    node_name: robotarm_1
+    representation_template_name: robotarm_deck_access
+    overrides:
+      position: [5, 15, 5]
+
+  - location_name: liquidhandler_2.deck_3
+    node_name: robotarm_1
+    representation_template_name: robotarm_deck_access
+    overrides:
+      position: [25, 15, 5]
+
+  # platereader_1 — plate carriage accessible by robotarm_1
+  - location_name: platereader_1.plate_carriage
+    node_name: robotarm_1
+    representation_template_name: robotarm_wide_access
+    overrides:
+      position: [15, 10, 8]
+
+# Lab-managed locations (not owned by any node)
+locations:
+  - location_name: storage_rack
+    description: "Storage Rack - High-capacity storage accessible only by robot arm"
+    representations:
+      robotarm_1:
+        gripper_config: wide
+        max_payload: 10.0
+        position: [30, 25, 10]
+    resource_template_name: location_container

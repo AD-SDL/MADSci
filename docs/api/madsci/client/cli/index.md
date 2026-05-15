@@ -33,6 +33,9 @@ Classes
 
     ### Methods
 
+    `format_commands(self, ctx: click.core.Context, formatter: click.formatting.HelpFormatter) ‑> None`
+    :   Show commands with their aliases in help output.
+
     `get_command(self, ctx: click.core.Context, cmd_name: str) ‑> click.core.Command | None`
     :   Resolve command aliases and lazily import commands.
 

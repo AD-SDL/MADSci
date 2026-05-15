@@ -61,5 +61,5 @@ See Also
 --------
 - :mod:`madsci.client.event_client`: Client library for event operations
 - :mod:`madsci.common.types.event_types`: Event type definitions
-- :mod:`madsci.common.mongodb_migration_tool`: Database migration utilities
+- :mod:`madsci.common.document_db_migration_tool`: Database migration utilities
 """
