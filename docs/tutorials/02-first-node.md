@@ -112,7 +112,7 @@ This file centralizes all type definitions for the module:
 
 from typing import Literal
 from pydantic import BaseModel, Field
-from madsci.node_module import RestNodeConfig
+from madsci.common.types.node_types import RestNodeConfig
 
 
 class TempSensorNodeConfig(RestNodeConfig):

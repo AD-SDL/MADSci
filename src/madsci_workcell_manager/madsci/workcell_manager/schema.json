@@ -1,7 +1,7 @@
 {
     "database": "madsci_workcells",
     "schema_version": "1.0.0",
-    "description": "Schema definition for MADSci Workcell Manager MongoDB",
+    "description": "Schema definition for MADSci Workcell Manager document database",
     "collections": {
       "archived_workflows": {
         "description": "Archived workflows collection",

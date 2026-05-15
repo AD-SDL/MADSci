@@ -1,6 +1,6 @@
 Module madsci.common.object_storage_helpers
 ===========================================
-Module to create and manage an object storage client using MinIO.
+Module to create and manage an S3-compatible storage client.
 
 Functions
 ---------
@@ -17,14 +17,14 @@ Functions
     Returns:
         Complete URL to the object
 
-`create_minio_client(object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None) ‑> minio.api.Minio | None`
-:   Initialize the object storage client using the provided configuration.
+`create_object_storage_client(object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None) ‑> minio.api.Minio | None`
+:   Initialize the S3-compatible storage client using the provided configuration.
 
-`download_file_from_object_storage(minio_client: minio.api.Minio, bucket_name: str, object_name: str, output_path: str | pathlib.Path) ‑> bool`
-:   Download a file from object storage.
+`download_file_from_object_storage(storage_client: minio.api.Minio, bucket_name: str, object_name: str, output_path: str | pathlib.Path) ‑> bool`
+:   Download a file from S3-compatible storage.
     
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket
         object_name: Name of the object
         output_path: Path where the file should be saved
@@ -32,23 +32,24 @@ Functions
     Returns:
         True if download was successful, False otherwise
 
-`ensure_bucket_exists(minio_client: minio.api.Minio, bucket_name: str) ‑> bool`
+`ensure_bucket_exists(storage_client: minio.api.Minio, bucket_name: str) ‑> bool`
 :   Ensure a bucket exists, creating it if necessary.
     
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket to check/create
     
     Returns:
         True if bucket exists or was created successfully, False otherwise
 
-`generate_object_name(filename: str, strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, prefix: str | None = None) ‑> str`
+`generate_object_name(filename: str, strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, prefix: str | None = None, ulid: str | None = None) ‑> str`
 :   Generate an object name using the specified strategy.
     
     Args:
         filename: The original filename
         strategy: Naming strategy to use
         prefix: Optional prefix to add to the object name
+        ulid: ULID to use as a prefix (required for ULID_PREFIXED strategy)
     
     Returns:
         Generated object name
@@ -62,22 +63,22 @@ Functions
     Returns:
         MIME content type string
 
-`get_object_data_from_storage(minio_client: minio.api.Minio, bucket_name: str, object_name: str) ‑> bytes | None`
-:   Get object data directly from storage.
+`get_object_data_from_storage(storage_client: minio.api.Minio, bucket_name: str, object_name: str) ‑> bytes | None`
+:   Get object data directly from S3-compatible storage.
     
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         bucket_name: Name of the bucket
         object_name: Name of the object
     
     Returns:
         Object data as bytes, or None if retrieval failed
 
-`upload_file_to_object_storage(minio_client: minio.api.Minio, file_path: str | pathlib.Path, bucket_name: str | None = None, object_name: str | None = None, content_type: str | None = None, metadata: dict[str, str] | None = None, naming_strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, public_endpoint: str | None = None, label: str | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None) ‑> dict[str, typing.Any] | None`
-:   Upload a file to object storage and return storage information.
+`upload_file_to_object_storage(storage_client: minio.api.Minio, file_path: str | pathlib.Path, bucket_name: str | None = None, object_name: str | None = None, content_type: str | None = None, metadata: dict[str, str] | None = None, naming_strategy: madsci.common.object_storage_helpers.ObjectNamingStrategy = ObjectNamingStrategy.FILENAME_ONLY, public_endpoint: str | None = None, label: str | None = None, object_storage_settings: madsci.common.types.datapoint_types.ObjectStorageSettings | None = None, ulid: str | None = None) ‑> dict[str, typing.Any] | None`
+:   Upload a file to S3-compatible storage and return storage information.
     
     Args:
-        minio_client: The MinIO client instance
+        storage_client: The S3-compatible storage client instance
         object_storage_settings: Object storage configuration
         file_path: Path to the file to upload
         bucket_name: Name of the bucket (defaults to config default_bucket)
@@ -107,4 +108,7 @@ Classes
     :
 
     `TIMESTAMPED_PATH`
+    :
+
+    `ULID_PREFIXED`
     :

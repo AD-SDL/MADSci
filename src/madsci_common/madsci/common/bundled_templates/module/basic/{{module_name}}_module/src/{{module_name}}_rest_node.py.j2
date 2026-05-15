@@ -7,10 +7,10 @@ Template version: {{ template_version }}
 """
 
 import argparse
-import sys
 from typing import Literal
 
-from madsci.node_module import ActionHandler, ActionRequest, ActionResult, RestNode
+from madsci.node_module.helpers import action
+from madsci.node_module.rest_node_module import RestNode
 
 from {{ module_name }}_types import {{ module_name | pascal_case }}NodeConfig
 
@@ -57,37 +57,20 @@ class {{ module_name | pascal_case }}Node(RestNode):
         if self._interface:
             self._interface.disconnect()
 
-    @ActionHandler(
-        description="Perform an example action",
-    )
-    def example_action(self, action: ActionRequest) -> ActionResult:
+    @action
+    def example_action(self, message: str = "Hello from {{ module_name }}!") -> str:
         """Execute an example action.
 
         This is a placeholder action. Replace with your actual device operations.
 
         Args:
-            action: The action request with parameters.
+            message: A message to echo back.
 
         Returns:
-            ActionResult indicating success or failure.
+            The result from the interface.
         """
-        try:
-            # Get optional message parameter
-            message = action.args.get("message", "Hello from {{ module_name }}!")
-
-            # Call the interface method
-            result = self._interface.do_something(message)
-
-            return ActionResult.succeeded(
-                action=action,
-                message=f"Action completed: {result}",
-                data={"result": result},
-            )
-        except Exception as e:
-            return ActionResult.failed(
-                action=action,
-                message=f"Action failed: {e}",
-            )
+        result = self._interface.do_something(message)
+        return result
 
 
 def main() -> None:

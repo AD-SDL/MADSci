@@ -18,13 +18,15 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Optional, Union
 
-import requests
+import httpx
+from madsci.client.http import DualModeClientMixin
 from madsci.client.structlog_config import (
     AnsiStrippingFormatter,
     create_instance_logger,
     get_log_level_value,
 )
 from madsci.common.context import get_current_madsci_context
+from madsci.common.http_client import create_httpx_client
 from madsci.common.otel import (
     OtelBootstrapConfig,
     configure_otel,
@@ -37,7 +39,7 @@ from madsci.common.types.event_types import (
     EventLogLevel,
     EventType,
 )
-from madsci.common.utils import create_http_session, threaded_task
+from madsci.common.utils import threaded_task
 from pydantic import BaseModel, ValidationError
 
 
@@ -53,7 +55,7 @@ def get_madsci_version() -> str:
         return "unknown (development mode)"
 
 
-class EventClient:
+class EventClient(DualModeClientMixin):
     """A logger and event handler for MADSci system components.
 
     Uses structlog for structured logging with context binding support.
@@ -141,8 +143,9 @@ class EventClient:
             or get_current_madsci_context().event_server_url
         )
 
-        # Create HTTP session for requests to event server
-        self.session = create_http_session(config=self.config)
+        # Create httpx client for requests to event server
+        self._client = create_httpx_client(config=self.config)
+        self._async_client = None
 
         self._otel_runtime = None
         self._otel_event_counter = None
@@ -153,6 +156,11 @@ class EventClient:
 
         # Log startup information
         self._log_startup_info()
+
+    @property
+    def session(self) -> httpx.Client:
+        """Backward-compatible accessor for the underlying HTTP client."""
+        return self._client
 
     def _setup_otel(self) -> None:
         try:
@@ -245,7 +253,7 @@ class EventClient:
         Logs MADSci version, client configuration, and environment info
         to help with debugging and auditing.
         """
-        self._structlog_logger.info(
+        self._structlog_logger.debug(
             "EventClient initialized",
             madsci_version=get_madsci_version(),
             client_name=self.name,
@@ -363,18 +371,29 @@ class EventClient:
                     handler.close()
                     self.logger.removeHandler(handler)
 
-        # Close HTTP session
-        if hasattr(self, "session") and self.session:
-            with contextlib.suppress(Exception):
-                self.session.close()
+        # Delegate HTTP client cleanup to mixin
+        super().close()
 
-    def __enter__(self) -> "EventClient":
-        """Context manager entry."""
-        return self
+    async def aclose(self) -> None:
+        """Close async resources properly.
 
-    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        """Context manager exit - clean up resources."""
-        self.close()
+        Use this method in async contexts for proper cleanup. Bound child
+        clients (created via bind()/unbind()) share resources with their
+        parent and will skip cleanup.
+        """
+        # Bound child clients share resources with parent - don't close them
+        if getattr(self, "_is_bound_child", False):
+            return
+
+        # Close file handlers (sync operation, safe to do before async close)
+        if hasattr(self, "logger") and self.logger:
+            for handler in self.logger.handlers[:]:
+                with contextlib.suppress(Exception):
+                    handler.close()
+                    self.logger.removeHandler(handler)
+
+        # Delegate HTTP client cleanup to mixin
+        await super().aclose()
 
     # ==================== Context Binding ====================
 
@@ -715,11 +734,12 @@ class EventClient:
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         if self.event_server:
-            response = self.session.get(
-                str(self.event_server) + f"event/{event_id}",
+            response = self._request(
+                "GET",
+                f"{self.event_server}event/{event_id}",
                 timeout=timeout or self.config.timeout_default,
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             return Event.model_validate(response.json())
         events = self.get_log()
@@ -742,12 +762,13 @@ class EventClient:
             level = int(self.logger.getEffectiveLevel())
         events = OrderedDict()
         if self.event_server:
-            response = self.session.get(
-                str(self.event_server) + "events",
+            response = self._request(
+                "GET",
+                f"{self.event_server}events",
                 timeout=timeout or self.config.timeout_default,
                 params={"number": number, "level": level},
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
@@ -759,6 +780,91 @@ class EventClient:
             if len(selected_events) >= number:
                 break
         return selected_events
+
+    def archive_events(
+        self,
+        before_date: Optional[str] = None,
+        event_ids: Optional[list[str]] = None,
+        timeout: Optional[float] = None,
+    ) -> dict:
+        """Archive events by date or by specific IDs.
+
+        Args:
+            before_date: Archive events before this ISO date string.
+            event_ids: List of specific event IDs to archive.
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server (e.g. {"archived_count": N}).
+        """
+        payload: dict = {}
+        if before_date:
+            payload["before_date"] = before_date
+        if event_ids:
+            payload["event_ids"] = event_ids
+        response = self._request(
+            "POST",
+            f"{self.event_server}events/archive",
+            json=payload,
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def purge_events(
+        self, older_than_days: int = 30, timeout: Optional[float] = None
+    ) -> dict:
+        """Permanently delete archived events older than specified days.
+
+        Args:
+            older_than_days: Delete archived events older than this many days.
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server (e.g. {"purged_count": N}).
+        """
+        response = self._request(
+            "DELETE",
+            f"{self.event_server}events/archived",
+            params={"older_than_days": older_than_days},
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def create_backup(self, timeout: Optional[float] = None) -> dict:
+        """Create an event backup.
+
+        Args:
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server.
+        """
+        response = self._request(
+            "POST",
+            f"{self.event_server}backup",
+            timeout=timeout or 30.0,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_backup_status(self, timeout: Optional[float] = None) -> dict:
+        """Get event backup status.
+
+        Args:
+            timeout: Optional timeout override in seconds.
+
+        Returns:
+            Response dict from the event server describing backup status.
+        """
+        response = self._request(
+            "GET",
+            f"{self.event_server}backup",
+            timeout=timeout or 10.0,
+        )
+        response.raise_for_status()
+        return response.json()
 
     def query_events(
         self, selector: dict, timeout: Optional[float] = None
@@ -774,12 +880,13 @@ class EventClient:
         """
         events = OrderedDict()
         if self.event_server:
-            response = self.session.post(
-                str(self.event_server) + "events/query",
+            response = self._request(
+                "POST",
+                f"{self.event_server}events/query",
                 timeout=timeout or self.config.timeout_default,
                 params={"selector": selector},
             )
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
             for key, value in response.json().items():
                 events[key] = Event.model_validate(value)
@@ -901,12 +1008,13 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
-                str(self.event_server) + "utilization/periods",
+            response = self._request(
+                "GET",
+                f"{self.event_server}utilization/periods",
                 params=params,
                 timeout=self.config.timeout_data_operations,
             )
-            if not response.ok:
+            if not response.is_success:
                 self.logger.error(
                     "Error getting utilization periods",
                     extra={"http_status_code": response.status_code},
@@ -921,7 +1029,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             self.logger.error(
                 "Error getting utilization periods",
                 exc_info=True,
@@ -970,13 +1078,14 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
-                str(self.event_server) + "utilization/sessions",
+            response = self._request(
+                "GET",
+                f"{self.event_server}utilization/sessions",
                 params=params,
                 timeout=self.config.timeout_long_operations,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
 
             # Handle CSV response - check if content type contains 'text/csv'
@@ -987,7 +1096,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             return None
 
     def get_user_utilization_report(
@@ -1030,13 +1139,14 @@ class EventClient:
                     params["save_to_file"] = "true"
                     params["output_path"] = output_path
 
-            response = self.session.get(
-                str(self.event_server) + "utilization/users",
+            response = self._request(
+                "GET",
+                f"{self.event_server}utilization/users",
                 params=params,
                 timeout=self.config.timeout_long_operations,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 self.logger.error(
                     "Error getting user utilization report",
                     extra={"http_status_code": response.status_code},
@@ -1051,7 +1161,7 @@ class EventClient:
             # Handle JSON response (either regular JSON or file save results)
             return response.json()
 
-        except requests.RequestException:
+        except httpx.HTTPError:
             self.logger.error(
                 "Error getting user utilization report",
                 exc_info=True,
@@ -1078,14 +1188,15 @@ class EventClient:
             if self._otel_runtime and self._otel_runtime.enabled:
                 with contextlib.suppress(Exception):
                     inject_headers(headers)
-            response = self.session.post(
+            response = self._request(
+                "POST",
                 url=f"{self.event_server}event",
                 json=event.model_dump(mode="json"),
                 headers=headers,
                 timeout=self.config.timeout_default,
             )
 
-            if not response.ok:
+            if not response.is_success:
                 response.raise_for_status()
 
             elapsed_ms = (time.perf_counter() - start) * 1000.0
@@ -1137,3 +1248,87 @@ class EventClient:
             event_type=event_type,
             event_data=event_data,
         )
+
+    # ==================== Async Methods ====================
+
+    async def async_get_event(
+        self, event_id: str, timeout: Optional[float] = None
+    ) -> Optional[Event]:
+        """
+        Get a specific event by ID asynchronously.
+
+        Args:
+            event_id: The ID of the event to retrieve.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        if self.event_server:
+            response = await self._async_request(
+                "GET",
+                f"{self.event_server}event/{event_id}",
+                timeout=timeout or self.config.timeout_default,
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            return Event.model_validate(response.json())
+        events = self.get_log()
+        return events.get(event_id, None)
+
+    async def async_get_events(
+        self, number: int = 100, level: int = -1, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for a certain number of recent events asynchronously.
+
+        Args:
+            number: Number of events to retrieve.
+            level: Log level filter. -1 uses effective log level.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        if level == -1:
+            level = int(self.logger.getEffectiveLevel())
+        events = OrderedDict()
+        if self.event_server:
+            response = await self._async_request(
+                "GET",
+                f"{self.event_server}events",
+                timeout=timeout or self.config.timeout_default,
+                params={"number": number, "level": level},
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            for key, value in response.json().items():
+                events[key] = Event.model_validate(value)
+            return dict(events)
+        events = self.get_log()
+        selected_events = {}
+        for event in reversed(list(events.values())):
+            selected_events[event.event_id] = event
+            if len(selected_events) >= number:
+                break
+        return selected_events
+
+    async def async_query_events(
+        self, selector: dict, timeout: Optional[float] = None
+    ) -> dict[str, Event]:
+        """
+        Query the event server for events based on a selector asynchronously.
+
+        Args:
+            selector: Dictionary selector for filtering events.
+            timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+        """
+        events = OrderedDict()
+        if self.event_server:
+            response = await self._async_request(
+                "POST",
+                f"{self.event_server}events/query",
+                timeout=timeout or self.config.timeout_default,
+                params={"selector": selector},
+            )
+            if not response.is_success:
+                response.raise_for_status()
+            for key, value in response.json().items():
+                events[key] = Event.model_validate(value)
+            return dict(events)
+        self.logger.warning("No event server configured. Cannot query events.")
+        return {}

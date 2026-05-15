@@ -110,7 +110,7 @@ Classes
 `EventClientConfig(**kwargs: Any)`
 :   Configuration for an Event Client.
     
-    Inherits all HTTP client configuration from MadsciClientConfig including:
+    Inherits all HTTP client configuration from MadsciHttpClientConfig including:
     - Retry configuration (retry_enabled, retry_total, retry_backoff_factor, etc.)
     - Timeout configuration (timeout_default, timeout_data_operations, etc.)
     - Connection pooling (pool_connections, pool_maxsize)
@@ -134,7 +134,7 @@ Classes
 
     ### Ancestors (in MRO)
 
-    * madsci.common.types.client_types.MadsciClientConfig
+    * madsci.common.types.client_types.MadsciHttpClientConfig
     * madsci.common.types.base_types.MadsciBaseSettings
     * pydantic_settings.main.BaseSettings
     * pydantic.main.BaseModel
@@ -402,6 +402,9 @@ Classes
     `database_name: str`
     :
 
+    `document_db_url: pydantic.networks.AnyUrl`
+    :
+
     `email_alerts: madsci.common.types.event_types.EmailAlertsConfig | None`
     :
 
@@ -415,9 +418,6 @@ Classes
     :
 
     `max_batches_per_run: int`
-    :
-
-    `mongo_db_url: pydantic.networks.AnyUrl`
     :
 
     `retention_check_interval_hours: int`

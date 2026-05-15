@@ -13,7 +13,7 @@ Provides an ExperimentApplication class that manages the execution of an experim
     - For interactive terminal: Use ExperimentTUI
     - For server mode: Use ExperimentNode
 
-    See https://ad-sdl.github.io/MADSci/migration/experiment-modalities for details.
+    See https://ad-sdl.github.io/MADSci/running-experiments for details.
 
 Classes
 -------

@@ -68,41 +68,32 @@ def test_client(interface: ResourceInterface) -> TestClient:
 def client(test_client: TestClient) -> Generator[ResourceClient, None, None]:
     """Fixture for ResourceClient patched to use TestClient"""
     with patch(
-        "madsci.client.resource_client.create_http_session"
+        "madsci.client.resource_client.create_httpx_client"
     ) as mock_create_session:
+        method_map = {
+            "GET": test_client.get,
+            "POST": test_client.post,
+            "PUT": test_client.put,
+            "DELETE": test_client.delete,
+            "PATCH": test_client.patch,
+        }
 
-        def add_ok_property(resp: Any) -> Any:
-            if not hasattr(resp, "ok"):
-                resp.ok = resp.status_code < 400
+        def request_via_test_client(method: str, url: str, **kwargs: Any) -> Any:
+            kwargs.pop("timeout", None)
+            handler = method_map.get(method.upper(), test_client.get)
+            resp = handler(url, **kwargs)
+            if not hasattr(resp, "is_success"):
+                resp.is_success = resp.status_code < 400
             return resp
 
-        def post_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.post(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def get_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.get(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def delete_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.delete(*args, **kwargs)
-            return add_ok_property(resp)
-
-        def put_no_timeout(*args: Any, **kwargs: Any) -> Any:
-            kwargs.pop("timeout", None)
-            resp = test_client.put(*args, **kwargs)
-            return add_ok_property(resp)
-
-        # Create a mock session that routes to TestClient
-        mock_session = type("MockSession", (), {})()
-        mock_session.post = post_no_timeout
-        mock_session.get = get_no_timeout
-        mock_session.delete = delete_no_timeout
-        mock_session.put = put_no_timeout
-        mock_create_session.return_value = mock_session
+        # Create a mock client that routes to TestClient
+        mock_client = type("MockClient", (), {})()
+        mock_client.request = request_via_test_client
+        # Also provide get for the connectivity check in __init__
+        mock_client.get = lambda *args, **kwargs: test_client.get(
+            *args, **{k: v for k, v in kwargs.items() if k != "timeout"}
+        )
+        mock_create_session.return_value = mock_client
 
         yield ResourceClient(resource_server_url="http://testserver")
 

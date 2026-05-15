@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "An interactive Jupyter notebook experiment"
 category: "experiment"
 tags: ["notebook", "jupyter", "interactive"]
+skills: ["madsci-experiments"]
 
 author: "MADSci Team"
 license: "MIT"

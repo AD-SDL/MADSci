@@ -351,7 +351,7 @@ def format_status_icon(status: CheckStatus) -> str:
 @click.option(
     "--check",
     "categories",
-    type=click.Choice(["python", "docker", "ports", "network"]),
+    type=click.Choice(["python", "docker", "ports"]),
     multiple=True,
     default=None,
     help="Only run specific check categories.",
@@ -371,8 +371,8 @@ def doctor(  # noqa: C901
 ) -> None:
     """Perform system diagnostics for MADSci.
 
-    Checks Python environment, Docker availability, port availability,
-    and network connectivity to ensure MADSci can run properly.
+    Checks Python environment, Docker availability, and port availability
+    to ensure MADSci can run properly.
 
     \b
     Examples:

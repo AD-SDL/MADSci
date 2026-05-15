@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A standalone REST node server for an existing interface"
 category: "node"
 tags: ["basic", "standalone", "minimal"]
+skills: ["madsci-nodes"]
 
 author: "MADSci Team"
 license: "MIT"

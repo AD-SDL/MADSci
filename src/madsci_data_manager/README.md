@@ -7,7 +7,7 @@ Handles capturing, storing, and querying data generated during experiments - bot
 ## Features
 
 - **DataPoint storage**: JSON values and files with metadata
-- **Flexible storage**: Local filesystem or S3-compatible object storage (MinIO, AWS S3, GCS)
+- **Flexible storage**: Local filesystem or S3-compatible object storage (SeaweedFS, AWS S3, GCS)
 - **Rich metadata**: Ownership info, timestamps, custom labels
 - **Queryable**: Search by value and metadata
 - **Cloud integration**: Multi-provider cloud storage support
@@ -20,7 +20,7 @@ See the main [README](../../README.md#installation) for installation options. Th
 - Docker: Included in `ghcr.io/ad-sdl/madsci`
 - **Example configuration**: See [example_lab/managers/example_data.manager.yaml](../../examples/example_lab/managers/example_data.manager.yaml)
 
-**Dependencies**: MongoDB database, optional MinIO/S3 storage (see [example_lab](../../examples/example_lab/))
+**Dependencies**: FerretDB database, optional SeaweedFS/S3 storage (see [example_lab](../../examples/example_lab/))
 
 ## Usage
 
@@ -82,13 +82,13 @@ client.save_datapoint_value(submitted_file.datapoint_id, "/local/save/path.txt")
 ### Local Storage (Default)
 - Files stored on filesystem with date-based hierarchy
 - Simple setup, no additional dependencies
-- File paths stored in MongoDB database
+- File paths stored in FerretDB database
 
 ### Object Storage (S3-Compatible)
 Supports cloud and self-hosted storage providers:
 - **AWS S3**
 - **Google Cloud Storage** (with HMAC keys)
-- **MinIO** (self-hosted or cloud)
+- **SeaweedFS** (self-hosted)
 - **Any S3-compatible service**
 
 Benefits:
@@ -98,9 +98,9 @@ Benefits:
 
 ### Quick Setup
 ```bash
-# Use example_lab with pre-configured MinIO
+# Use example_lab with pre-configured SeaweedFS
 docker compose up  # From repo root
-# MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
+# SeaweedFS Console: http://localhost:9001
 ```
 
 ### Configuration Examples
@@ -150,12 +150,12 @@ uploaded = client.submit_datapoint(storage_dp)
 
 ## Database Migration Tools
 
-MADSci Data Manager includes automated MongoDB migration tools that handle schema changes and version tracking for the data management system.
+MADSci Data Manager includes automated FerretDB migration tools that handle schema changes and version tracking for the data management system.
 
 ### Features
 
-- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and MongoDB schema version
-- **Automated Backup**: Creates MongoDB dumps using `mongodump` before applying migrations to enable rollback on failure
+- **Version Compatibility Checking**: Automatically detects mismatches between MADSci package version and FerretDB schema version
+- **Automated Backup**: Creates database dumps using `mongodump` before applying migrations to enable rollback on failure
 - **Schema Management**: Creates collections and indexes based on schema definitions
 - **Index Management**: Ensures required indexes exist for optimal query performance
 - **Location Independence**: Auto-detects schema files or accepts explicit paths
@@ -166,22 +166,22 @@ MADSci Data Manager includes automated MongoDB migration tools that handle schem
 #### Standard Usage
 ```bash
 # Run migration for data database (auto-detects schema file)
-python -m madsci.common.mongodb_migration_tool --database madsci_data
+python -m madsci.common.document_db_migration_tool --database madsci_data
 
 # Migrate with explicit database URL
-python -m madsci.common.mongodb_migration_tool --db-url mongodb://localhost:27017 --database madsci_data
+python -m madsci.common.document_db_migration_tool --db-url mongodb://localhost:27017 --database madsci_data
 
 # Use custom schema file
-python -m madsci.common.mongodb_migration_tool --database madsci_data --schema-file /path/to/schema.json
+python -m madsci.common.document_db_migration_tool --database madsci_data --schema-file /path/to/schema.json
 
 # Create backup only
-python -m madsci.common.mongodb_migration_tool --database madsci_data --backup-only
+python -m madsci.common.document_db_migration_tool --database madsci_data --backup-only
 
 # Restore from backup
-python -m madsci.common.mongodb_migration_tool --database madsci_data --restore-from /path/to/backup
+python -m madsci.common.document_db_migration_tool --database madsci_data --restore-from /path/to/backup
 
 # Check version compatibility without migrating
-python -m madsci.common.mongodb_migration_tool --database madsci_data --check-version
+python -m madsci.common.document_db_migration_tool --database madsci_data --check-version
 ```
 
 #### Docker Usage
@@ -189,13 +189,13 @@ When running in Docker containers, use docker-compose to execute migration comma
 
 ```bash
 # Run migration for data database in Docker
-docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json'
+docker-compose run --rm data-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json'
 
 # Create backup only in Docker
-docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --backup-only
+docker-compose run --rm data-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --backup-only
 
 # Check version compatibility in Docker
-docker-compose run --rm data-manager python -m madsci.common.mongodb_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --check-version
+docker-compose run --rm data-manager python -m madsci.common.document_db_migration_tool --db-url 'mongodb://mongodb:27017' --database 'madsci_data' --schema-file '/app/madsci/data_manager/schema.json' --check-version
 ```
 
 ### Server Integration
@@ -215,12 +215,12 @@ The migration tool automatically searches for schema files in:
 
 ### Backup Location
 
-Backups are stored in `.madsci/mongodb/backups/` with timestamped filenames:
+Backups are stored in `.madsci/document_db/backups/` with timestamped filenames:
 - Format: `madsci_data_backup_YYYYMMDD_HHMMSS`
 - Can be restored using the `--restore-from` option
 
 ### Requirements
 
-- MongoDB server running and accessible
-- MongoDB tools (`mongodump`, `mongorestore`) installed
+- FerretDB server running and accessible
+- MongoDB tools (`mongodump`, `mongorestore`) installed (for FerretDB backup/restore via the MongoDB wire protocol)
 - Appropriate database permissions for the specified user

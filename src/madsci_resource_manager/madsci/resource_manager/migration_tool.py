@@ -41,7 +41,7 @@ class DatabaseMigrationSettings(
     db_url: Optional[str] = Field(
         default=None,
         title="Database URL",
-        description="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/resources). "
+        description="PostgreSQL connection URL (e.g., postgresql://user:pass@localhost:5432/postgres). "
         "If not provided, will try RESOURCES_DB_URL environment variable.",
     )
     target_version: Optional[str] = Field(
@@ -85,7 +85,7 @@ class DatabaseMigrationSettings(
             "Please either:\n"
             "1. Provide --db-url argument, or\n"
             "2. Set RESOURCES_DB_URL in your environment/.env file\n"
-            "Example: RESOURCES_DB_URL=postgresql://user:pass@localhost:5432/resources"
+            "Example: RESOURCES_DB_URL=postgresql://user:pass@localhost:5432/postgres"
         )
 
 

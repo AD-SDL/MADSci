@@ -1,0 +1,41 @@
+name: "Developer Tools"
+version: "1.0.0"
+description: "Add developer tooling (pre-commit, ruff, justfile) to an existing module"
+category: "addon"
+tags: ["dev-tools", "linting", "formatting", "pre-commit"]
+skills: []
+
+author: "MADSci Team"
+license: "MIT"
+min_madsci_version: "0.6.0"
+schema_version: "1.0"
+
+parameters:
+  - name: module_name
+    type: string
+    description: "Module name (lowercase, underscores allowed)"
+    required: true
+    pattern: "^[a-z][a-z0-9_]*$"
+    default: "my_device"
+
+  - name: port
+    type: integer
+    description: "Default port number for the node REST API"
+    required: false
+    default: 2000
+    min: 1024
+    max: 65535
+
+  - name: include_dockerfile
+    type: boolean
+    description: "Include Docker-related recipes in justfile"
+    required: false
+    default: true
+
+files:
+  - source: ".pre-commit-config.yaml.j2"
+    destination: ".pre-commit-config.yaml"
+  - source: "ruff.toml.j2"
+    destination: "ruff.toml"
+  - source: "justfile.j2"
+    destination: "justfile"

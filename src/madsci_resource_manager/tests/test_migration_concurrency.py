@@ -9,8 +9,8 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
-from madsci.common.mongodb_migration_tool import MongoDBMigrator
-from madsci.common.types.mongodb_migration_types import MongoDBMigrationSettings
+from madsci.common.document_db_migration_tool import DocumentDBMigrator
+from madsci.common.types.document_db_migration_types import DocumentDBMigrationSettings
 from madsci.resource_manager.migration_tool import (
     DatabaseMigrationSettings,
     DatabaseMigrator,
@@ -236,8 +236,8 @@ class TestConcurrentBackupHandling:
 
     def test_unique_backup_timestamps(self):
         """Test that concurrent backups get unique timestamps."""
-        settings = MongoDBMigrationSettings(
-            mongo_db_url=self.test_mongo_url,
+        settings = DocumentDBMigrationSettings(
+            document_db_url=self.test_mongo_url,
             database="madsci_test",
             schema_file=self.temp_schema_file,
         )
@@ -266,10 +266,12 @@ class TestConcurrentBackupHandling:
         # Mock the MongoClient to avoid actual connection
         with (
             mock.patch("pymongo.MongoClient"),
-            mock.patch("madsci.common.mongodb_version_checker.MongoDBVersionChecker"),
+            mock.patch(
+                "madsci.common.document_db_version_checker.DocumentDBVersionChecker"
+            ),
         ):
-            migrator1 = MongoDBMigrator(settings)
-            migrator2 = MongoDBMigrator(settings)
+            migrator1 = DocumentDBMigrator(settings)
+            migrator2 = DocumentDBMigrator(settings)
 
             backup_paths = []
 
@@ -299,8 +301,8 @@ class TestConcurrentBackupHandling:
 
     def test_backup_file_locking(self):
         """Test that backup files are locked during creation."""
-        settings = MongoDBMigrationSettings(
-            mongo_db_url=self.test_mongo_url,
+        settings = DocumentDBMigrationSettings(
+            document_db_url=self.test_mongo_url,
             database="madsci_test",
             schema_file=self.temp_schema_file,
         )
@@ -328,9 +330,11 @@ class TestConcurrentBackupHandling:
 
         with (
             mock.patch("pymongo.MongoClient"),
-            mock.patch("madsci.common.mongodb_version_checker.MongoDBVersionChecker"),
+            mock.patch(
+                "madsci.common.document_db_version_checker.DocumentDBVersionChecker"
+            ),
         ):
-            migrator = MongoDBMigrator(settings)
+            migrator = DocumentDBMigrator(settings)
 
             # Test backup creation with proper mocking
             with (

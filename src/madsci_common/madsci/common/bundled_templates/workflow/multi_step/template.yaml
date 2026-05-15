@@ -3,11 +3,13 @@ version: "1.0.0"
 description: "A multi-step workflow with sequential node actions"
 category: "workflow"
 tags: ["multi-step", "sequential", "workflow"]
+skills: ["madsci-nodes", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"
 min_madsci_version: "0.6.0"
 schema_version: "1.0"
+target_model: "madsci.common.types.workflow_types.WorkflowDefinition"
 
 parameters:
   - name: workflow_name

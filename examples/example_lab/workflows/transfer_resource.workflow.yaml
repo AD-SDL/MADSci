@@ -2,7 +2,7 @@ name: Transfer Resource Test
 
 metadata:
   author: Claude AI Assistant
-  info: Workflow to test the new transfer_resource functionality that automatically finds a resource by ID and transfers it
+  description: Workflow to test the new transfer_resource functionality that automatically finds a resource by ID and transfers it
   version: 1.0
 
 parameters:

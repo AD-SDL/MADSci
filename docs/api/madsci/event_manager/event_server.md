@@ -140,7 +140,7 @@ Classes
     `model_config`
     :
 
-`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, db_connection: ForwardRef('Database') | None = None, mongo_handler: madsci.common.db_handlers.mongo_handler.MongoHandler | None = None, **kwargs: Any)`
+`EventManager(settings: madsci.common.types.event_types.EventManagerSettings | None = None, db_connection: ForwardRef('Database') | None = None, document_handler: madsci.common.db_handlers.document_storage_handler.DocumentStorageHandler | None = None, **kwargs: Any)`
 :   Event Manager REST Server.
     
     Initialize the Event Manager.
@@ -180,7 +180,7 @@ Classes
     `create_backup(self, request: madsci.event_manager.event_server.BackupRequest = Body(PydanticUndefined)) ‑> madsci.event_manager.event_server.BackupResponse`
     :   Create a one-time backup of all events.
         
-        Uses the MongoDBBackupTool from madsci_common for consistent backup
+        Uses the DocumentDBBackupTool from madsci_common for consistent backup
         handling across all MADSci managers.
         
         Args:

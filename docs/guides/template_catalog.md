@@ -1,12 +1,23 @@
 # Template Catalog
 
-MADSci includes 26 built-in templates for scaffolding lab components. Browse templates with:
+MADSci includes 33 built-in templates for scaffolding lab components. Browse templates with:
 
 ```bash
 madsci new list                       # Show all templates
 madsci new list --category module     # Filter by category
 madsci new list --tag device          # Filter by tag
 ```
+
+### Bundled Agent Skills
+
+All templates automatically include relevant **agent skills** in the generated project's `.agents/skills/` directory. These skills provide AI coding agents (Claude Code, etc.) with domain-specific knowledge about MADSci patterns and conventions. See [Agent Skills Reference](agent_skills.md) for details.
+
+| Category | Bundled Skills |
+|----------|---------------|
+| Module, Node, Interface, Comm | `madsci-nodes` |
+| Experiment | `madsci-experiments` |
+| Workflow | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
+| Lab | `madsci-nodes`, `madsci-experiments`, `madsci-managers`, `madsci-cli` |
 
 ---
 
@@ -55,6 +66,8 @@ Parameters: Same as module/basic (default name: `my_instrument`).
 
 **Liquid handling module with aspirate, dispense, and transfer actions.**
 
+Includes location representation template boilerplate with JSON Schema definitions for deck slot positions and plate type configuration. See the [Location Templates Guide](integrator/10-location-templates.md) for details on customizing these templates.
+
 ```bash
 madsci new module --template module/liquid_handler --name my_liquid_handler
 ```
@@ -74,6 +87,8 @@ Parameters: Same as module/basic (default name: `my_camera`).
 ### module/robot_arm
 
 **Robot arm module with pick, place, move, and home actions for material handling.**
+
+Includes location representation template boilerplate with JSON Schema definitions for deck access positions, gripper configuration, and payload limits. See the [Location Templates Guide](integrator/10-location-templates.md) for details on customizing these templates.
 
 ```bash
 madsci new module --template module/robot_arm --name my_robot_arm
@@ -259,24 +274,6 @@ madsci new workflow --template workflow/multi_step --name process_pipeline
 
 ---
 
-## Workcell Templates (1)
-
-### workcell/basic
-
-**Basic workcell configuration for coordinating multiple nodes.**
-
-```bash
-madsci new workcell --name my_lab_workcell
-madsci new workcell --nodes liquidhandler,platereader,incubator
-```
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `workcell_name` | string | `my_workcell` | Workcell name |
-| `workcell_description` | string | `A MADSci workcell` | Description |
-
----
-
 ## Lab Templates (3)
 
 ### lab/minimal
@@ -368,6 +365,76 @@ Templates for instrument communication interfaces, used within node modules.
 
 ---
 
+## Addon Templates (8)
+
+Templates for adding optional components to existing module projects via `madsci add`.
+
+### addon/docs
+
+**Add documentation directories (docs/, guides/, API reference stubs).**
+
+```bash
+madsci add docs
+```
+
+### addon/drivers
+
+**Add instrument driver directories with connection boilerplate.**
+
+```bash
+madsci add drivers
+```
+
+### addon/notebooks
+
+**Add testing notebooks (Jupyter notebooks for interactive testing).**
+
+```bash
+madsci add notebooks
+```
+
+### addon/gitignore
+
+**Add a Python .gitignore file.**
+
+```bash
+madsci add gitignore
+```
+
+### addon/compose
+
+**Add a Docker Compose file for containerized deployment.**
+
+```bash
+madsci add compose
+```
+
+### addon/dev_tools
+
+**Add developer tooling configuration (ruff, pytest, pre-commit).**
+
+```bash
+madsci add dev_tools
+```
+
+### addon/agent_config
+
+**Add agentic coding configuration (CLAUDE.md, AGENTS.md).**
+
+```bash
+madsci add agent_config
+```
+
+### addon/all
+
+**Add all available addon components at once.**
+
+```bash
+madsci add all
+```
+
+---
+
 ## Summary
 
 | Category | Count | Templates |
@@ -377,7 +444,7 @@ Templates for instrument communication interfaces, used within node modules.
 | Node | 1 | basic |
 | Experiment | 4 | script, notebook, tui, node |
 | Workflow | 2 | basic, multi_step |
-| Workcell | 1 | basic |
 | Lab | 3 | minimal, standard, distributed |
 | Communication | 5 | serial, socket, rest, sdk, modbus |
-| **Total** | **26** | |
+| Addon | 8 | docs, drivers, notebooks, gitignore, compose, dev_tools, agent_config, all |
+| **Total** | **33** | |

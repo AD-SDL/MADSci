@@ -2,7 +2,7 @@ name: Admin Commands Test
 
 metadata:
   author: Aileen Cleary
-  info: A workflow for testing admin command functionality on workflows/nodes through liquidhandler.
+  description: A workflow for testing admin command functionality on workflows/nodes through liquidhandler.
   version: 0.1
 
 steps:

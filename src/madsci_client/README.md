@@ -68,6 +68,49 @@ status = client.get_status()
 
 **Examples**: See [node_notebook.ipynb](../../examples/notebooks/node_notebook.ipynb) for detailed usage.
 
+### SiLA2 Client (Experimental)
+
+> **Status: Experimental.** `SilaNodeClient` is an early preview of native [SiLA2](https://sila-standard.com/) integration. The client surface, optional-dependency name, and binary handling may change. Authoring a MADSci node *as* a SiLA2 server is **not yet supported** — only client-side consumption. The broader migration is scoped in [`openspec/changes/sila2-native-node-design/`](../../openspec/changes/sila2-native-node-design/) (umbrella issue #293).
+
+Communicate with SiLA2-based laboratory instruments over gRPC via the [`sila2`](https://gitlab.com/SiLA2/sila_python) SDK:
+
+```bash
+pip install "madsci.client[sila]"
+```
+
+```python
+from madsci.client.node.sila_node_client import SilaNodeClient
+from madsci.common.types.action_types import ActionRequest
+
+client = SilaNodeClient(url="sila://localhost:50052")
+
+# Discover features and commands (FeatureName.CommandName)
+info = client.get_info()
+
+# Unobservable (synchronous) command
+result = client.send_action(ActionRequest(
+    action_name="ExampleDevice.Greet",
+    args={"Name": "MADSci"},
+))
+
+# Observable (long-running) command
+result = client.send_action(ActionRequest(
+    action_name="ExampleDevice.CountDown",
+    args={"Count": 3},
+), await_result=True, timeout=30)
+
+client.close()
+```
+
+**Key Features:**
+- `sila://host:port` URL scheme, auto-dispatched by `find_node_client()` alongside `http://`
+- Observable + unobservable command execution with `FeatureName.CommandName` dot notation
+- Server introspection (`get_info` / `get_status` / `get_state`)
+- Binary responses surfaced as `ActionFiles` (with path-traversal hardening)
+- Structured connection-error diagnostics (DNS / refused / TLS / gRPC classification)
+
+**Try it end-to-end:** the example lab ships a minimal SiLA2 server on `sila://localhost:50052`; [sila_node_notebook.ipynb](../../examples/notebooks/sila_node_notebook.ipynb) walks through every supported capability and is the SiLA validation harness (`just validate_nb_sila`).
+
 ## Event Client
 
 Allows a user or system to interface with a MADSci EventManager, or log events locally if one isn't available/configured. Can be used to both log new events and query logged events.

@@ -4,14 +4,19 @@ import tempfile
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import HTTPStatusError, Request, Response
 from madsci.client.workcell_client import WorkcellClient
-from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
+from madsci.common.db_handlers import (
+    InMemoryCacheHandler,
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.exceptions import WorkflowFailedError
 from madsci.common.types.context_types import MadsciContext
+from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import (
@@ -26,7 +31,6 @@ from madsci.common.types.workflow_types import (
 )
 from madsci.common.utils import new_ulid_str
 from madsci.workcell_manager.workcell_server import WorkcellManager
-from requests import Response
 
 
 @pytest.fixture
@@ -140,8 +144,8 @@ def test_client() -> Generator[TestClient, None, None]:
 
         manager = WorkcellManager(
             settings=custom_settings,
-            redis_handler=InMemoryRedisHandler(),
-            mongo_handler=InMemoryMongoHandler(),
+            cache_handler=InMemoryCacheHandler(),
+            document_handler=InMemoryDocumentStorageHandler(),
             start_engine=False,
         )
         app = manager.create_server()
@@ -154,30 +158,21 @@ def test_client() -> Generator[TestClient, None, None]:
 def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
     """Fixture for WorkcellClient patched to use TestClient."""
 
-    def add_ok_property(resp: Response) -> Response:
-        if not hasattr(resp, "ok"):
-            resp.ok = resp.status_code < 400
+    method_map = {
+        "GET": test_client.get,
+        "POST": test_client.post,
+        "PUT": test_client.put,
+        "DELETE": test_client.delete,
+        "PATCH": test_client.patch,
+    }
+
+    def request_via_test_client(method: str, url: str, **kwargs: Any) -> Response:
+        kwargs.pop("timeout", None)
+        handler = method_map.get(method.upper(), test_client.get)
+        resp = handler(url, **kwargs)
+        if not hasattr(resp, "is_success"):
+            resp.is_success = resp.status_code < 400
         return resp
-
-    def post_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.post(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def get_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.get(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def delete_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.delete(*args, **kwargs)
-        return add_ok_property(resp)
-
-    def put_no_timeout(*args: Any, **kwargs: Any) -> Response:
-        kwargs.pop("timeout", None)
-        resp = test_client.put(*args, **kwargs)
-        return add_ok_property(resp)
 
     # Create a mock event client to prevent connection attempts
     mock_event_client = Mock()
@@ -187,11 +182,8 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
         workcell_server_url="http://testserver", event_client=mock_event_client
     )
 
-    # Mock session to use the test client
-    workcell_client.session.get = get_no_timeout
-    workcell_client.session.post = post_no_timeout
-    workcell_client.session.delete = delete_no_timeout
-    workcell_client.session.put = put_no_timeout
+    # Patch the httpx client's request method to use the test client
+    workcell_client._client.request = request_via_test_client
 
     yield workcell_client
 
@@ -199,23 +191,23 @@ def client(test_client: TestClient) -> Generator[WorkcellClient, None, None]:
 def test_get_nodes(client: WorkcellClient) -> None:
     """Test retrieving nodes from the workcell."""
     response = client.add_node("node1", "http://node1/")
-    assert response["node_url"] == "http://node1/"
+    assert str(response.node_url) == "http://node1/"
     nodes = client.get_nodes()
     assert "node1" in nodes
-    assert nodes["node1"]["node_url"] == "http://node1/"
+    assert str(nodes["node1"].node_url) == "http://node1/"
 
 
 def test_get_node(client: WorkcellClient) -> None:
     """Test retrieving a specific node."""
     client.add_node("node1", "http://node1/")
     node = client.get_node("node1")
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_add_node(client: WorkcellClient) -> None:
     """Test adding a node to the workcell."""
     node = client.add_node("node1", "http://node1/")
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_get_nodes_empty(client: WorkcellClient) -> None:
@@ -230,7 +222,7 @@ def test_add_node_with_description(client: WorkcellClient) -> None:
     node = client.add_node(
         "node1", "http://node1/", node_description="Custom Node", permanent=True
     )
-    assert node["node_url"] == "http://node1/"
+    assert str(node.node_url) == "http://node1/"
 
 
 def test_get_active_workflows(client: WorkcellClient) -> None:
@@ -456,6 +448,48 @@ def test_retry_workflow_no_await(
         )
 
 
+def test_resubmit_workflow(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    with patch.object(client, "await_workflow") as mock_await:
+        mock_workflow = Workflow(
+            workflow_id=new_ulid_str(),
+            name="Test Workflow",
+            status=WorkflowStatus(completed=True),
+            steps=[],
+        )
+        mock_await.return_value = mock_workflow
+
+        resubmitted = client.resubmit_workflow(
+            submitted_workflow.workflow_id, await_completion=True
+        )
+
+        assert isinstance(resubmitted, Workflow)
+        # resubmit creates a new workflow, so await_workflow is called with the new ID
+        mock_await.assert_called_once()
+
+
+def test_resubmit_workflow_no_await(
+    client: WorkcellClient, sample_workflow: WorkflowDefinition
+) -> None:
+    """Test resubmitting a workflow without waiting for completion."""
+    client.add_node("test_node", "http://test_node/")
+    submitted_workflow = client.submit_workflow(sample_workflow, await_completion=False)
+
+    resubmitted = client.resubmit_workflow(
+        submitted_workflow.workflow_id, await_completion=False
+    )
+
+    assert isinstance(resubmitted, Workflow)
+    # Resubmit creates a new workflow with a new ID
+    assert resubmitted.workflow_id != submitted_workflow.workflow_id
+    assert resubmitted.name == submitted_workflow.name
+
+
 def test_await_workflow_completed(
     client: WorkcellClient, sample_workflow_instance: Workflow
 ) -> None:
@@ -634,8 +668,340 @@ def test_add_node_error_handling(client: WorkcellClient) -> None:
     """Test error handling when adding nodes."""
     # Add a node to verify the method works
     node = client.add_node("test_node", "http://test_node/")
-    assert node["node_url"] == "http://test_node/"
+    assert str(node.node_url) == "http://test_node/"
 
     # Get the node to verify it exists
     retrieved_node = client.get_node("test_node")
-    assert retrieved_node["node_url"] == "http://test_node/"
+    assert str(retrieved_node.node_url) == "http://test_node/"
+
+
+# ------------------------------------------------------------------
+# Sync node method model-validation tests
+# ------------------------------------------------------------------
+
+
+class TestGetNodesReturnsValidatedModels:
+    """Tests that sync get_nodes() returns validated Node models, not raw dicts."""
+
+    def test_get_nodes_returns_validated_models(self, client: WorkcellClient) -> None:
+        """get_nodes() should return dict[str, Node] with validated Node instances."""
+        client.add_node("node1", "http://node1/")
+        nodes = client.get_nodes()
+        assert isinstance(nodes, dict)
+        assert "node1" in nodes
+        assert isinstance(nodes["node1"], Node), (
+            f"Expected Node instance, got {type(nodes['node1'])}"
+        )
+        assert str(nodes["node1"].node_url) == "http://node1/"
+
+
+class TestGetNodeReturnsValidatedModel:
+    """Tests that sync get_node() returns a validated Node model, not a raw dict."""
+
+    def test_get_node_returns_validated_model(self, client: WorkcellClient) -> None:
+        """get_node() should return a Node instance, not a raw dict."""
+        client.add_node("node1", "http://node1/")
+        node = client.get_node("node1")
+        assert isinstance(node, Node), f"Expected Node instance, got {type(node)}"
+        assert str(node.node_url) == "http://node1/"
+
+
+class TestAddNodeReturnsValidatedModel:
+    """Tests that sync add_node() returns a validated Node model, not a raw dict."""
+
+    def test_add_node_returns_validated_model(self, client: WorkcellClient) -> None:
+        """add_node() should return a Node instance, not a raw dict."""
+        node = client.add_node("node1", "http://node1/")
+        assert isinstance(node, Node), f"Expected Node instance, got {type(node)}"
+        assert str(node.node_url) == "http://node1/"
+
+
+class TestGetNodesRaisesOnError:
+    """Tests that sync get_nodes() raises on HTTP errors via raise_for_status()."""
+
+    def test_get_nodes_raises_on_error(self, async_client: WorkcellClient) -> None:
+        """get_nodes() should call raise_for_status() to surface HTTP errors."""
+        mock_resp = _make_mock_response({}, status_code=500)
+        mock_resp.raise_for_status.side_effect = HTTPStatusError(
+            "Internal Server Error",
+            request=Request("GET", "http://testserver/nodes"),
+            response=mock_resp,
+        )
+        async_client._client.request = MagicMock(return_value=mock_resp)
+
+        with pytest.raises(HTTPStatusError):
+            async_client.get_nodes()
+
+
+# ------------------------------------------------------------------
+# Async method tests
+# ------------------------------------------------------------------
+
+
+def _make_mock_response(json_data: Any, status_code: int = 200) -> MagicMock:
+    """Create a mock httpx.Response with the given JSON data."""
+    mock_resp = MagicMock(spec=Response)
+    mock_resp.json.return_value = json_data
+    mock_resp.status_code = status_code
+    mock_resp.is_success = status_code < 400
+    mock_resp.raise_for_status = MagicMock()
+    return mock_resp
+
+
+@pytest.fixture
+def async_client() -> Generator[WorkcellClient, None, None]:
+    """Fixture for WorkcellClient with mocked async request for async tests."""
+    mock_event_client = Mock()
+    workcell_client = WorkcellClient(
+        workcell_server_url="http://testserver", event_client=mock_event_client
+    )
+    yield workcell_client
+
+
+class TestAsyncGetNodes:
+    """Tests for async_get_nodes returning proper Node models."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_returns_dict_of_node_models(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_nodes should return dict[str, Node], not raw JSON."""
+        node_data = {
+            "node1": {
+                "node_url": "http://node1/",
+                "node_name": "node1",
+            },
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_nodes()
+
+        assert isinstance(result, dict)
+        assert "node1" in result
+        assert isinstance(result["node1"], Node)
+        assert str(result["node1"].node_url) == "http://node1/"
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_nodes should call raise_for_status on the response."""
+        node_data = {}
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_get_nodes()
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_get_nodes_empty(self, async_client: WorkcellClient) -> None:
+        """async_get_nodes should handle an empty nodes dict."""
+        mock_resp = _make_mock_response({})
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_nodes()
+
+        assert result == {}
+
+
+class TestAsyncGetNode:
+    """Tests for async_get_node returning a proper Node model."""
+
+    @pytest.mark.asyncio
+    async def test_async_get_node_returns_node_model(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_node should return a Node instance, not raw JSON."""
+        node_data = {
+            "node_url": "http://node1/",
+            "node_name": "node1",
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_get_node("node1")
+
+        assert isinstance(result, Node)
+        assert str(result.node_url) == "http://node1/"
+
+    @pytest.mark.asyncio
+    async def test_async_get_node_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_get_node should call raise_for_status on the response."""
+        node_data = {
+            "node_url": "http://node1/",
+            "node_name": "node1",
+        }
+        mock_resp = _make_mock_response(node_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_get_node("node1")
+
+        mock_resp.raise_for_status.assert_called_once()
+
+
+class TestAsyncRetryWorkflow:
+    """Tests for the async_retry_workflow method."""
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_exists(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow method should exist on WorkcellClient."""
+        assert hasattr(async_client, "async_retry_workflow")
+        assert callable(async_client.async_retry_workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_returns_workflow(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should return a Workflow instance."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {"completed": False},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_retry_workflow(workflow_id)
+
+        assert isinstance(result, Workflow)
+        assert result.workflow_id == workflow_id
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should call raise_for_status."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id)
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_posts_to_correct_url(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should POST to the correct retry endpoint."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id)
+
+        call_args = async_client._async_request.call_args
+        assert call_args[0][0] == "POST"
+        assert f"workflow/{workflow_id}/retry" in call_args[0][1]
+
+    @pytest.mark.asyncio
+    async def test_async_retry_workflow_with_index(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_retry_workflow should pass index as a query param when provided."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_retry_workflow(workflow_id, index=2)
+
+        call_args = async_client._async_request.call_args
+        params = call_args[1].get("params", {})
+        assert params.get("index") == 2
+
+
+class TestAsyncResubmitWorkflow:
+    """Tests for the async_resubmit_workflow method."""
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_exists(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow method should exist on WorkcellClient."""
+        assert hasattr(async_client, "async_resubmit_workflow")
+        assert callable(async_client.async_resubmit_workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_returns_workflow(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should return a Workflow instance."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        result = await async_client.async_resubmit_workflow(workflow_id)
+
+        assert isinstance(result, Workflow)
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_calls_raise_for_status(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should call raise_for_status."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_resubmit_workflow(workflow_id)
+
+        mock_resp.raise_for_status.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_async_resubmit_workflow_posts_to_correct_url(
+        self, async_client: WorkcellClient
+    ) -> None:
+        """async_resubmit_workflow should POST to the correct resubmit endpoint."""
+        workflow_id = new_ulid_str()
+        workflow_data = {
+            "workflow_id": workflow_id,
+            "name": "Test Workflow",
+            "steps": [],
+            "status": {},
+        }
+        mock_resp = _make_mock_response(workflow_data)
+        async_client._async_request = AsyncMock(return_value=mock_resp)
+
+        await async_client.async_resubmit_workflow(workflow_id)
+
+        call_args = async_client._async_request.call_args
+        assert call_args[0][0] == "POST"
+        assert f"workflow/{workflow_id}/resubmit" in call_args[0][1]

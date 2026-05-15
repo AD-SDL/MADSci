@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from madsci.common.db_handlers import InMemoryMongoHandler, InMemoryRedisHandler
+from madsci.common.db_handlers import (
+    InMemoryCacheHandler,
+    InMemoryDocumentStorageHandler,
+)
 from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import (
     ParameterFeedForwardJson,
@@ -28,20 +31,21 @@ from pydantic import AnyUrl
 
 
 @pytest.fixture
-def redis_handler() -> InMemoryRedisHandler:
-    """Create an in-memory Redis handler for testing."""
-    return InMemoryRedisHandler()
+def cache_handler() -> InMemoryCacheHandler:
+    """Create an in-memory cache handler for testing."""
+    return InMemoryCacheHandler()
 
 
 @pytest.fixture
-def mongo_handler() -> InMemoryMongoHandler:
-    """Create an in-memory MongoDB handler for testing."""
-    return InMemoryMongoHandler()
+def document_handler() -> InMemoryDocumentStorageHandler:
+    """Create an in-memory document storage handler for testing."""
+    return InMemoryDocumentStorageHandler()
 
 
 @pytest.fixture
 def test_client(
-    redis_handler: InMemoryRedisHandler, mongo_handler: InMemoryMongoHandler
+    cache_handler: InMemoryCacheHandler,
+    document_handler: InMemoryDocumentStorageHandler,
 ) -> TestClient:
     """Workcell Server Test Client Fixture"""
     settings = WorkcellManagerSettings(
@@ -49,8 +53,8 @@ def test_client(
     )
     manager = WorkcellManager(
         settings=settings,
-        redis_handler=redis_handler,
-        mongo_handler=mongo_handler,
+        cache_handler=cache_handler,
+        document_handler=document_handler,
         start_engine=False,
     )
     app = manager.create_server()
@@ -236,6 +240,41 @@ def test_retry_workflow(test_client: TestClient) -> None:
         assert new_workflow.status.ok is True
 
 
+def test_resubmit_workflow(test_client: TestClient) -> None:
+    """Test resubmitting a workflow creates a new workflow from the same definition."""
+    with test_client as client:
+        workflow_def = WorkflowDefinition(name="Test Workflow")
+        response1 = client.post(
+            "/workflow_definition", json=workflow_def.model_dump(mode="json")
+        )
+        assert response1.status_code == 200
+        definition_id = response1.json()
+        response = client.post(
+            "/workflow",
+            data={"workflow_definition_id": definition_id},
+        )
+        assert response.status_code == 200
+        original_workflow = Workflow.model_validate(response.json())
+
+        # Resubmit
+        response = client.post(f"/workflow/{original_workflow.workflow_id}/resubmit")
+        assert response.status_code == 200
+        new_workflow = Workflow.model_validate(response.json())
+        # Must be a different workflow
+        assert new_workflow.workflow_id != original_workflow.workflow_id
+        # Same name (from the same definition)
+        assert new_workflow.name == original_workflow.name
+        # New workflow should be in ok state
+        assert new_workflow.status.ok is True
+
+
+def test_resubmit_workflow_not_found(test_client: TestClient) -> None:
+    """Test resubmitting a nonexistent workflow returns 404."""
+    with test_client as client:
+        response = client.post("/workflow/nonexistent_id/resubmit")
+        assert response.status_code == 404
+
+
 def test_check_parameter_missing() -> None:
     """Test parameter insertion with missing required parameter."""
     workflow = WorkflowDefinition(
@@ -305,13 +344,13 @@ def test_health_endpoint(test_client: TestClient) -> None:
     health_data = response.json()
     assert "healthy" in health_data
     assert "description" in health_data
-    assert "redis_connected" in health_data
+    assert "cache_connected" in health_data
     assert "nodes_reachable" in health_data
     assert "total_nodes" in health_data
 
     # Health should be True for basic functionality
     assert health_data["healthy"] is True
-    # Note: redis_connected may be None if Redis is not configured
+    # Note: cache_connected may be None if cache is not configured
     assert isinstance(health_data["total_nodes"], int)
     assert isinstance(health_data["nodes_reachable"], int)
     assert health_data["total_nodes"] >= 0

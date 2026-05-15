@@ -20,3 +20,9 @@ Functions
 
 `ulid_validator(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
 :   Validates that a string field is a valid ULID.
+
+`url_safe_name_validator(v: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+:   Validates that a string field is a URL-safe name.
+    
+    Allows alphanumeric characters, underscores, dots, and hyphens.
+    Rejects empty strings.

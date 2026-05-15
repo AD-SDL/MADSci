@@ -1,7 +1,7 @@
 """Template browser screen for MADSci TUI.
 
 Provides an interactive template browser for ``madsci new --tui``,
-allowing users to browse all 26 built-in templates by category
+allowing users to browse all 25 built-in templates by category
 with search filtering before selecting one for generation.
 """
 

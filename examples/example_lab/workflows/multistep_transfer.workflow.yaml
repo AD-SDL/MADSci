@@ -2,7 +2,7 @@ name: Multistep Transfer Test
 
 metadata:
   author: Ryan D. Lewis
-  info: Multistep workflow to test complex transfer functionality across multiple instruments
+  description: Multistep workflow to test complex transfer functionality across multiple instruments
   version: 1.0
 
 steps:

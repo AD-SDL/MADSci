@@ -31,7 +31,10 @@ class AbstractNodeClient:
 
     def __init__(self, url: AnyUrl) -> "AbstractNodeClient":
         """Initialize the client."""
-        self.url = url
+        # Strip trailing slash to prevent double-slash in URL construction
+        # (AnyUrl always adds a trailing slash, but endpoints are built as
+        # f"{self.url}/status" which would produce "http://host//status")
+        self.url = str(url).rstrip("/")
 
     def send_action(
         self,
