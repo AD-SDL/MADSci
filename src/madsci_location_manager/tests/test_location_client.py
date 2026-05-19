@@ -8,6 +8,7 @@ import requests
 from madsci.client.location_client import LocationClient
 from madsci.common.types.location_types import Location, LocationImportResult
 from madsci.common.types.resource_types.server_types import ResourceHierarchy
+from madsci.common.types.workflow_types import WorkflowDefinition
 from madsci.common.utils import new_ulid_str
 
 
@@ -79,6 +80,18 @@ def test_transfer_method_signatures(location_client):
     params = list(sig.parameters.keys())
     assert "location_name" in params
     assert "timeout" in params
+
+
+def test_plan_transfer_return_annotation(location_client):
+    """plan_transfer should declare WorkflowDefinition as its return type, not dict."""
+    sig = inspect.signature(location_client.plan_transfer)
+    assert sig.return_annotation is WorkflowDefinition
+
+
+def test_async_plan_transfer_return_annotation(location_client):
+    """async_plan_transfer should declare WorkflowDefinition as its return type, not dict."""
+    sig = inspect.signature(location_client.async_plan_transfer)
+    assert sig.return_annotation is WorkflowDefinition
 
 
 def test_get_location_by_name_method_exists(location_client):
