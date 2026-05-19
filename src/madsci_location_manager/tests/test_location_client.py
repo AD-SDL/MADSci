@@ -88,6 +88,12 @@ def test_plan_transfer_return_annotation(location_client):
     assert sig.return_annotation is WorkflowDefinition
 
 
+def test_async_plan_transfer_return_annotation(location_client):
+    """async_plan_transfer should declare WorkflowDefinition as its return type, not dict."""
+    sig = inspect.signature(location_client.async_plan_transfer)
+    assert sig.return_annotation is WorkflowDefinition
+
+
 def test_get_location_by_name_method_exists(location_client):
     """Test that get_location_by_name method exists and is callable."""
     assert hasattr(location_client, "get_location_by_name")

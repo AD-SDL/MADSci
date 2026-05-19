@@ -1169,7 +1169,7 @@ class LocationClient(DualModeClientMixin):
         target_location_id: str,
         resource_id: Optional[str] = None,
         timeout: Optional[float] = None,
-    ) -> dict[str, Any]:
+    ) -> WorkflowDefinition:
         """Plan a transfer from source to target location asynchronously."""
         self._validate_server_url()
         params = {
