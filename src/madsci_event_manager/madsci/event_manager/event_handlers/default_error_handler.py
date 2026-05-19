@@ -6,7 +6,7 @@ from madsci.common.types.event_types import Event, EventLogLevel, EventManagerSe
 
 
 class ErrorHandler(AbstractEventHandler):
-    """Default error handler that pauses workflows for nodes that throw have an error"""
+    """Default error handler that pauses workflows for nodes that throw an error"""
 
     def __init__(self, settings: EventManagerSettings) -> None:
         """Initialize the Error handler."""
