@@ -925,8 +925,6 @@ class WorkcellClient(DualModeClientMixin):
 
         Parameters
         ----------
-        node_name : str
-            The name of the node to send the command to.
         command : str
             The admin command to send.
         timeout : Optional[float]
