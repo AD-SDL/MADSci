@@ -1,6 +1,6 @@
 """Default Error Handler for MADSci Event Manager."""
 
-from event_handler import AbstractEventHandler
+from event_handler import AbstractEventHandler, EventHandlerSettings
 from madsci.client.workcell_client import WorkcellClient
 from madsci.common.types.event_types import Event, EventLogLevel, EventManagerSettings
 
@@ -8,9 +8,14 @@ from madsci.common.types.event_types import Event, EventLogLevel, EventManagerSe
 class ErrorHandler(AbstractEventHandler):
     """Default error handler that pauses workflows for nodes that throw an error"""
 
-    def __init__(self, settings: EventManagerSettings) -> None:
-        """Initialize the Error handler."""
-        super().__init__(settings)
+    def __init__(
+        self,
+        custom_settings: EventHandlerSettings,
+        event_manager_settings: EventManagerSettings,
+    ) -> None:
+        """Initialize the event handler with the given settings."""
+        self.custom_settings = custom_settings
+        self.event_manager_settings = event_manager_settings
         self.workcell_client = WorkcellClient()
 
     def handle_event(self, event: Event) -> None:

@@ -1,7 +1,6 @@
 """Example Event Manager implementation using the new AbstractManagerBase class."""
 
 import asyncio
-import importlib
 import warnings
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timedelta, timezone
@@ -130,10 +129,8 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         self._db_connection = db_connection
         super().__init__(settings=settings, **kwargs)
         self.event_handlers = []
-        for handler_name in settings.event_handlers:
-            handler_module = importlib.import_module(handler_name)
-            handler = handler_module.EventHandler(self.settings)
-            self.event_handlers.append(handler)
+        for handler in settings.event_handlers:
+            self.event_handlers.append(handler(settings))
         # Initialize database connection and collections
         self._setup_database()
 

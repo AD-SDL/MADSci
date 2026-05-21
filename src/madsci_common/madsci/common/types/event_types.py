@@ -26,7 +26,7 @@ from madsci.common.types.manager_types import (
     ManagerType,
 )
 from madsci.common.utils import new_ulid_str
-from pydantic import AliasChoices, AnyUrl, Field
+from pydantic import AliasChoices, AnyUrl, Field, ImportString
 from pydantic.functional_validators import field_validator
 from pydantic_settings import SettingsConfigDict
 
@@ -113,17 +113,11 @@ class EventManagerSettings(
         title="Alert Level",
         description="The log level at which to send an alert.",
     )
-    # TODO: Break out email alert config into separate settings
-    email_alerts: Optional["EmailAlertsConfig"] = Field(
-        default=None,
-        title="Email Alerts Configuration",
-        description="The configuration for sending email alerts.",
-    )
 
-    event_handlers: list[str] = Field(
+    event_handlers: list[ImportString] = Field(
         default=[
-            "madsci.event_manager.event_handlers.default_error_handler",
-            "madsci.event_manager.event_handlers.default_notification_handler",
+            "madsci.event_manager.event_handlers.default_error_handler.EventHandler",
+            "madsci.event_manager.event_handlers.default_notification_handler.EventHandler",
         ],
         title="Event Handlers",
         description="Comma-separated list of event handler modules to use",
@@ -650,53 +644,6 @@ EVENT_TYPE_DESCRIPTIONS: dict[EventType, str] = {
     EventType.BACKUP_CREATE: "Backup created.",
     EventType.BACKUP_RESTORE: "Backup restored.",
 }
-
-
-class EmailAlertsConfig(MadsciBaseModel):
-    """Configuration for sending emails."""
-
-    smtp_server: str = Field(
-        default="smtp.example.com",
-        title="SMTP Server",
-        description="The SMTP server address used for sending emails.",
-    )
-    smtp_port: int = Field(
-        default=587,
-        title="SMTP Port",
-        description="The port number used by the SMTP server.",
-    )
-    smtp_username: Optional[str] = Field(
-        default=None,
-        title="SMTP Username",
-        description="The username for authenticating with the SMTP server.",
-        json_schema_extra={"secret": True},
-    )
-    smtp_password: Optional[str] = Field(
-        default=None,
-        title="SMTP Password",
-        description="The password for authenticating with the SMTP server.",
-        json_schema_extra={"secret": True},
-    )
-    use_tls: bool = Field(
-        default=True,
-        title="Use TLS",
-        description="Whether to use TLS for the SMTP connection.",
-    )
-    sender: str = Field(
-        default="no-reply@example.com",
-        title="Sender Email",
-        description="The default sender email address.",
-    )
-    default_importance: str = Field(
-        default="Normal",
-        title="Default Importance",
-        description="The default importance level of the email. Options are: High, Normal, Low.",
-    )
-    email_addresses: list[str] = Field(
-        default_factory=list,
-        title="Default Email Addresses",
-        description="The default email addresses to send alerts to.",
-    )
 
 
 class EventManagerDefinition(ManagerDefinition):
