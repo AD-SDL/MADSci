@@ -5,11 +5,11 @@ Main Textual application for the MADSci terminal user interface.
 
 from __future__ import annotations
 
-import contextlib
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from madsci.client.cli.tui.constants import AUTO_REFRESH_INTERVAL, get_default_services
+from madsci.client.cli.tui.refresh_coordinator import ScreenRefreshCoordinator
 from madsci.client.cli.tui.screens.dashboard import DashboardScreen
 from madsci.client.cli.tui.screens.data_browser import DataBrowserScreen
 from madsci.client.cli.tui.screens.experiments import ExperimentsScreen
@@ -86,6 +86,7 @@ class MadsciApp(App):
         self._initial_screen = initial_screen
         self.context = context
         self.service_urls = get_default_services(context)
+        self._refresh_coordinator = ScreenRefreshCoordinator()
 
     def compose(self) -> ComposeResult:
         """Compose the application layout."""
@@ -103,12 +104,7 @@ class MadsciApp(App):
 
     async def _auto_refresh_active_screen(self) -> None:
         """Auto-refresh the active screen if it supports and enables auto-refresh."""
-        screen = self.screen
-        if getattr(screen, "auto_refresh_enabled", False) and hasattr(
-            screen, "refresh_data"
-        ):
-            with contextlib.suppress(Exception):
-                await screen.refresh_data()
+        await self._refresh_coordinator.refresh(self.screen)
 
     def action_switch_screen(self, screen: str) -> None:
         """Switch to a named screen.
@@ -146,5 +142,5 @@ class MadsciApp(App):
         """Refresh the current screen."""
         screen = self.screen
         if hasattr(screen, "refresh_data"):
-            await screen.refresh_data()
+            await self._refresh_coordinator.force_refresh(screen)
             self.notify("Refreshed", timeout=2)
