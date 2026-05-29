@@ -126,7 +126,7 @@ Classes
         LocationImportResult
             Result with imported/skipped/error counts and imported locations.
 
-    `async_plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    `async_plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Plan a transfer from source to target location asynchronously.
 
     `async_remove_representation(self, location_name: str, node_name: str, timeout: float | None = None) ‑> madsci.common.types.location_types.Location`
@@ -387,7 +387,7 @@ Classes
         The ``schema`` parameter is deprecated; use ``schema_def`` instead.
         If both are provided, ``schema_def`` takes precedence.
 
-    `plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> dict[str, typing.Any]`
+    `plan_transfer(self, source_location_id: str, target_location_id: str, resource_id: str | None = None, timeout: float | None = None) ‑> madsci.common.types.workflow_types.WorkflowDefinition`
     :   Plan a transfer from source to target location.
         
         Parameters
