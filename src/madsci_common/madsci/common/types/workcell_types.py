@@ -20,7 +20,7 @@ from madsci.common.types.node_types import Node
 from madsci.common.types.workflow_types import AliasChoices, Workflow
 from madsci.common.utils import new_ulid_str
 from madsci.common.validators import ulid_validator
-from pydantic import Field, computed_field
+from pydantic import Field, ImportString, computed_field
 from pydantic.functional_validators import field_validator
 from pydantic.networks import AnyUrl
 from pydantic_settings import SettingsConfigDict
@@ -275,11 +275,31 @@ class WorkcellManagerSettings(
         title="Cold Start Delay",
         description="How long the Workcell engine should sleep on startup",
     )
-    scheduler: str = Field(
-        default="madsci.workcell_manager.schedulers.default_scheduler",
-        title="scheduler",
-        description="Scheduler module that contains a Scheduler class that inherits from AbstractScheduler to use",
+    scheduler: ImportString = Field(
+        default="madsci.workcell_manager.schedulers.default_scheduler:Scheduler",
+        title="Scheduler",
+        description=(
+            "Scheduler class to use, as a 'module:ClassName' import path "
+            "(e.g. 'madsci.workcell_manager.schedulers.default_scheduler:Scheduler'). "
+            "Must inherit from AbstractScheduler."
+        ),
     )
+
+    @field_validator("scheduler", mode="before")
+    @classmethod
+    def _handle_legacy_scheduler_string(cls, v: object) -> object:
+        """Accept old bare-module strings and rewrite them to module:ClassName form."""
+        if isinstance(v, str) and ":" not in v:
+            warnings.warn(
+                f"Scheduler config '{v}' uses the legacy bare-module format. "
+                f"Use '{v}:Scheduler' instead. "
+                "Bare-module scheduler strings will be removed in a future version.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return f"{v}:Scheduler"
+        return v
+
     document_db_url: Optional[AnyUrl] = Field(
         default=AnyUrl("mongodb://localhost:27017"),
         title="Document Database URL",
