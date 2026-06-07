@@ -5,7 +5,7 @@
 groups = ["default", "dev", "docs"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:e6fa611ab50dd35c57bedd18fbeaec5a37c7eced79b57add49e52c382c9930fd"
+content_hash = "sha256:c02a6202de82b449bd768ed15e9a19da5a288f0e7f4a40f94adc9544faab889a"
 
 [[metadata.targets]]
 requires_python = ">=3.10.0"
@@ -2110,6 +2110,7 @@ dependencies = [
     "classy-fastapi",
     "click",
     "fastapi",
+    "filelock",
     "httpx",
     "multiprocess",
     "opentelemetry-api",
