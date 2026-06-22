@@ -35,6 +35,7 @@ from madsci.common.types.workflow_types import (
     Workflow,
     WorkflowDefinition,
 )
+from madsci.common.types.step_types import StepDefinition
 from madsci.workcell_manager.state_handler import WorkcellStateHandler
 from madsci.workcell_manager.workcell_engine import Engine
 from madsci.workcell_manager.workcell_utils import find_node_client
@@ -355,6 +356,47 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
             return client.send_admin_command(command)
         raise HTTPException(
             status_code=400, detail="Node cannot perform that admin command"
+        )
+    
+    @post("/admin/{command}/{node}/action")
+    async def send_admin_action_to_node(
+        self,
+        command: str,
+        node: str,
+    ) -> AdminCommandResponse:
+        node_object = self.state_handler.get_node(node)
+        if command not in node_object.info.capabilities.admin_commands:
+            raise HTTPException(
+                status_code=400,
+                detail="Node cannot perform that admin command."
+            )
+        wf_def = WorkflowDefinition(
+            name=f"{command.title()} {node}",
+            steps=[
+                StepDefinition(
+                    name=command,
+                    node=node,
+                    action=command,
+                    args={},
+                    locations={},
+                    files={},
+                )
+            ],
+        )
+        wf_definition_id = await self.submit_workflow_definition(wf_def)
+        wf = await self.start_workflow(
+            workflow_definition_id=wf_definition_id,
+            ownership_info=None,
+            json_inputs=None,
+            file_input_paths=None,
+            files=[],
+        )
+        return AdminCommandResponse(
+            success=True,
+            data={
+                "workflow_id": wf.workflow_id,
+                "workflow_definition_id": wf_definition_id,
+            },
         )
 
     @get("/workflows/active")

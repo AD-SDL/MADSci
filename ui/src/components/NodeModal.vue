@@ -27,7 +27,6 @@
             <HomeButton
               :node="modal_title"
               :node_status="wc_state.nodes[modal_title].state.status"
-              @Home="send_wf(Object.values(modal_text.actions).find((a: any) => a.name === 'Home'))"
               class="ml-2"/>
           </template>
 

@@ -462,7 +462,7 @@ class LiquidHandlerNode(RestNode):
         )
 
     @action
-    def Home(self) -> ActionSucceeded:
+    def home(self) -> ActionSucceeded:
         self.node_status.homed = False
         self._wait(10 * self.config.wait_time) # ***
 
@@ -500,12 +500,6 @@ class LiquidHandlerNode(RestNode):
         """Resume a paused action."""
         self.logger.debug("Resuming, setting paused status to False")
         self.node_status.paused = False
-        return AdminCommandResponse()
-    
-    def home(self) -> AdminCommandResponse:
-        """Send a homing action."""
-        self.logger.debug("Homing, setting homed status to True.")
-        # *** TO DO: What goes in the home admin command that isn't accomplished by Home?
         return AdminCommandResponse()
 
 
