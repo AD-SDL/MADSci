@@ -74,7 +74,7 @@
           </v-container>
           <h3>Actions</h3>
           <v-expansion-panels>
-            <v-expansion-panel v-for="action in (Object.values(modal_text.actions) as any[]).filter((a: any) => a.name !== 'Home')" :key="action.name">
+            <v-expansion-panel v-for="action in actions" :key="action.name">
               <v-expansion-panel-title @click="set_text(action)">
                 <h4>{{ action.name }}</h4>
               </v-expansion-panel-title>
@@ -175,7 +175,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { get_status } from '../store';
 import { urls } from "@/store";
 declare function require(name: string): any;
@@ -215,6 +215,12 @@ const result_headers = [
 ]
 const text = ref()
 const json_text = ref()
+
+const actions: any = computed(() =>
+  Object.values(props.modal_text.actions).filter((a: any) =>
+    props.wc_state.nodes[props.modal_title].info.capabilities.admin_commands.includes(a.name)
+  )
+)
 
 function set_text(action: any) {
   var input_args = Object.keys(action.args).map(function(key){

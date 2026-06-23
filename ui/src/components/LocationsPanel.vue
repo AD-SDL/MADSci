@@ -23,6 +23,7 @@
            <TransferGraph
              :locations="locations"
              :resources="resources"
+             :nodes="workcell_state?.nodes"
              @node-click="handleNodeClick"
            />
          </v-card-text>

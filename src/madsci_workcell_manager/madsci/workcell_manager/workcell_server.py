@@ -398,6 +398,17 @@ class WorkcellManager(AbstractManagerBase[WorkcellManagerSettings]):
                 "workflow_definition_id": wf_definition_id,
             },
         )
+    
+    @post("/admin/{command}/action")
+    async def send_admin_action_command(self, command: str) -> list:
+        """Send an admin command to all capable nodes."""
+        responses = []
+        for node in self.state_handler.get_nodes().values():
+            if command in node.info.capabilities.admin_commands:
+                node_name = node.info.node_name
+                response = await self.send_admin_action_to_node(command=command, node=node_name)
+                responses.append(response)
+        return responses
 
     @get("/workflows/active")
     def get_active_workflows(self) -> dict[str, Workflow]:

@@ -52,13 +52,19 @@
               <!-- Node circle -->
               <circle
                 :r="node.radius || 25"
-                :fill="getNodeColor(node)"
-                stroke="#333"
+                :class="[
+                  'node-circle',
+                  node.type === 'madsci_node'
+                    ? node.homed
+                      ? 'madsci-node'
+                      : 'unhomed-node'
+                    : ''
+                ]"
+                :fill="node.type === 'location' ? getNodeColor(node) : undefined"
+                stroke="#333" 
                 stroke-width="2"
-                class="node-circle"
               />
 
-              <!-- Resource indicator (only for location nodes) -->
               <circle
                 v-if="node.type === 'location' && node.hasResource"
                 :cx="15"
@@ -153,6 +159,10 @@
               <span>MADSci Node</span>
             </div>
             <div class="legend-item d-flex align-center mb-2">
+              <div class="legend-color unhomed-node mr-2"></div>
+              <span>Unhomed Node</span>
+            </div>
+            <div class="legend-item d-flex align-center mb-2">
               <div class="transfer-line mr-2"></div>
               <span>Location-Node Access</span>
             </div>
@@ -174,6 +184,7 @@
 
         <!-- MADSci node-specific information -->
         <div v-if="selectedNode.type === 'madsci_node'">
+          <p><strong>Homed:</strong> {{ selectedNode.homed }}</p>
           <p><strong>Connected Locations:</strong> {{ getConnectedLocations(selectedNode).length }}</p>
           <div v-if="getConnectedLocations(selectedNode).length > 0">
             <p><strong>Accessible Locations:</strong></p>
@@ -195,6 +206,7 @@ import { ref, computed, onMounted, watch } from 'vue';
 const props = defineProps<{
   locations: Record<string, any>;
   resources: any[];
+  nodes?: Record<string, any>;
   transfers?: any[]; // Future: transfer events/history
 }>();
 
@@ -248,7 +260,7 @@ const nodes = computed(() => {
     // Determine occupation status
     const occupied = hasResource ? 'Occupied' :
                     location.resource_id ? 'Empty' : 'Unknown';
-
+    
     allNodes.push({
       id: location.location_id || key,
       name: location.name || location.location_name || key,
@@ -275,7 +287,8 @@ const nodes = computed(() => {
       vy: 0,
       radius: 15,
       type: 'madsci_node',
-      nodeId: nodeId
+      nodeId: nodeId,
+      homed: props.nodes?.[nodeId]?.status.homed ?? true,
     });
   });
 
@@ -523,6 +536,30 @@ onMounted(() => {
   filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
 }
 
+.madsci-node {
+  fill: #2196F3;
+}
+
+.unhomed-node {
+  animation: pulse-homed 1.5s infinite alternate;
+}
+
+@keyframes pulse-homed {
+  from {
+    fill: #2196F3;
+    background-color: #2196F3;
+  }
+  to {
+    fill: #e24c4c;
+    background-color: #e24c4c
+  }
+}
+
+.unhomed-node-warning {
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  animation: pulse 1s infinite;
+}
+
 .resource-indicator {
   animation: pulse 2s infinite;
 }
@@ -560,6 +597,11 @@ onMounted(() => {
 
 .legend-color.madsci-node {
   background-color: #2196F3;
+}
+
+.legend-color.unhomed-node {
+  background-color: #2196F3;
+  animation: pulse-homed 1.5s infinite alternate;
 }
 
 .transfer-line {

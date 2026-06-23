@@ -42,7 +42,7 @@ watchEffect(() => {
         hoverText.value = "Home Node"
     }
     else {
-        home_url.value = urls.value.workcell_server_url.concat('admin/home')
+        home_url.value = urls.value.workcell_server_url.concat('admin/home/action')
         hoverText.value = "Home All Nodes"
     }
 })
