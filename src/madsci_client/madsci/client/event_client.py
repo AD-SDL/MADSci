@@ -1211,8 +1211,6 @@ class EventClient(DualModeClientMixin):
             )
             self.logger.error(
                 "Failed to send event to event server; event persisted locally only",
-                event_type=str(event.event_type),
-                event_id=event.event_id,
                 exc_info=True,
             )
 
