@@ -14,7 +14,7 @@ Classes
 
     ### Descendants
 
-    * madsci.common.backup_tools.mongodb_backup.MongoDBBackupTool
+    * madsci.common.backup_tools.document_db_backup.DocumentDBBackupTool
     * madsci.common.backup_tools.postgres_backup.PostgreSQLBackupTool
 
     ### Methods

@@ -3,6 +3,7 @@ version: "1.0.0"
 description: "A distributed lab configuration for multi-host deployments"
 category: "lab"
 tags: ["distributed", "multi-host", "production"]
+skills: ["madsci-nodes", "madsci-experiments", "madsci-managers", "madsci-cli"]
 
 author: "MADSci Team"
 license: "MIT"

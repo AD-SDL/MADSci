@@ -2,7 +2,7 @@ name: Example Workflow
 
 metadata:
   author: Tobias Gisburg
-  info: An Example Workflow
+  description: An Example Workflow
   version: 0.1
 
 parameters:

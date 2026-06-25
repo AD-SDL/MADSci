@@ -143,11 +143,45 @@ class InMemoryCollection:
     # --- Write operations ---
 
     def insert_one(self, document: dict[str, Any]) -> InMemoryInsertResult:
-        """Insert a single document and return the result."""
+        """Insert a single document and return the result.
+
+        Raises ``pymongo.errors.DuplicateKeyError`` if the document violates
+        a unique index constraint.
+        """
         doc = copy.deepcopy(document)
         with self._lock:
+            self._check_unique_constraints(doc)
             self._documents.append(doc)
         return InMemoryInsertResult(doc.get("_id"))
+
+    def _check_unique_constraints(self, doc: dict[str, Any]) -> None:
+        """Check unique index constraints for a document (must hold self._lock)."""
+        for index_name, index_info in self._indexes.items():
+            if not index_info.get("unique", False):
+                continue
+            key = index_info.get("key")
+            if key is None:
+                continue
+            # key can be a string field name or list of (field, direction) tuples
+            if isinstance(key, str):
+                fields = [key]
+            elif isinstance(key, list):
+                fields = [f for f, _ in key]
+            else:
+                continue
+            # Get the values for the indexed fields from the new document
+            new_values = tuple(doc.get(f) for f in fields)
+            # Check against existing documents
+            for existing in self._documents:
+                existing_values = tuple(existing.get(f) for f in fields)
+                if new_values == existing_values and all(
+                    v is not None for v in new_values
+                ):
+                    from pymongo.errors import DuplicateKeyError  # noqa: PLC0415
+
+                    raise DuplicateKeyError(
+                        f"E11000 duplicate key error collection: index: {index_name} dup key: {dict(zip(fields, new_values, strict=True))}"
+                    )
 
     def update_one(
         self, filter_query: dict[str, Any], update: dict[str, Any]
@@ -271,6 +305,15 @@ class InMemoryCollection:
     def index_information(self) -> dict[str, Any]:
         """Return metadata for all indexes."""
         return dict(self._indexes)
+
+    def list_indexes(self) -> list[dict[str, Any]]:
+        """Return a list of index info dicts, matching pymongo's ``Collection.list_indexes()``."""
+        result: list[dict[str, Any]] = []
+        for name, info in self._indexes.items():
+            entry = dict(info)
+            entry["name"] = name
+            result.append(entry)
+        return result
 
 
 # ---------------------------------------------------------------------------
@@ -397,20 +440,29 @@ def _nested_set(doc: dict[str, Any], key: str, value: Any) -> None:
     current[parts[-1]] = value
 
 
+def _matches_field(doc_val: Any, condition: Any) -> bool:
+    """Check if a single document field matches a query condition."""
+    if isinstance(condition, dict):
+        # Operator query: {"field": {"$gte": 10, "$lt": 20}}
+        return all(
+            _apply_operator(doc_val, op, op_val) for op, op_val in condition.items()
+        )
+    if isinstance(condition, re.Pattern):
+        return doc_val is not None and condition.search(str(doc_val)) is not None
+    # Exact match
+    return doc_val == condition
+
+
 def _matches(doc: dict[str, Any], query: dict[str, Any]) -> bool:
     """Check if a document matches a MongoDB-style query filter."""
     for key, condition in query.items():
-        doc_val = _nested_get(doc, key)
-        if isinstance(condition, dict):
-            # Operator query: {"field": {"$gte": 10, "$lt": 20}}
-            for op, op_val in condition.items():
-                if not _apply_operator(doc_val, op, op_val):
-                    return False
-        elif isinstance(condition, re.Pattern):
-            if doc_val is None or not condition.search(str(doc_val)):
+        if key == "$or":
+            if not any(_matches(doc, sub) for sub in condition):
                 return False
-        # Exact match
-        elif doc_val != condition:
+        elif key == "$and":
+            if not all(_matches(doc, sub) for sub in condition):
+                return False
+        elif not _matches_field(_nested_get(doc, key), condition):
             return False
     return True
 

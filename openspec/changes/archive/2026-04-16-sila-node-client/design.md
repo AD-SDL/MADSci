@@ -1,0 +1,77 @@
+## Context
+
+MADSci's node client architecture uses URL-scheme-based dispatch: `find_node_client()` iterates registered `AbstractNodeClient` subclasses and matches on `url.scheme`. Currently only `RestNodeClient` exists (claiming `http://` and `https://`). The workcell config stores nodes as `dict[str, AnyUrl]`, and the workcell engine caches clients by URL string.
+
+SiLA 2 is an instrument communication standard built on gRPC. The `unitelabs-sila` Python SDK provides `SilaClient` which connects to a host:port, exposes Features as attributes, and lets you call Commands and read Properties. Commands can be unobservable (synchronous) or observable (long-running with status polling).
+
+Pydantic v2's `AnyUrl` accepts custom schemes — `AnyUrl("sila://host:port")` parses correctly with `.scheme = "sila"`, `.host`, and `.port`. This means the existing dispatch and config infrastructure requires zero changes.
+
+## Goals / Non-Goals
+
+**Goals:**
+- Implement `SilaNodeClient(AbstractNodeClient)` that connects to SiLA2 servers via gRPC
+- Support sending actions (both observable and unobservable SiLA commands) and getting results
+- Support server introspection (features → ActionDefinitions, properties → state)
+- Integrate via URL-scheme dispatch with no changes to workcell manager code
+- Make `unitelabs-sila` an optional dependency that doesn't affect users who don't need it
+
+**Non-Goals:**
+- No `SilaNode` or `SilaNodeModule` helper class (server-side SiLA integration)
+- No SiLA Server Discovery (zeroconf) integration — users provide explicit `sila://host:port` URLs
+- No file transfer support (SiLA uses binary parameters, a different paradigm from MADSci's file upload/download)
+- No DualModeClientMixin / async HTTP support (SiLA uses gRPC, not HTTP)
+- No admin command mapping (no standard SiLA equivalent)
+
+## Decisions
+
+### 1. URL scheme: `sila://host:port`
+
+Use `sila://` as the URL scheme, with default port 50052 (SiLA standard). This integrates with the existing `find_node_client()` dispatch without any config or engine changes.
+
+**Alternatives considered:**
+- `grpc://` — too generic; not all gRPC servers are SiLA
+- Adding a `node_type` field to workcell config — unnecessary complexity when URL scheme works
+
+### 2. Action name format: dot notation
+
+Map SiLA commands to MADSci action names as `"FeatureName.CommandName"` (e.g., `"GreetingProvider.SayHello"`). Also support short-form `"CommandName"` when unambiguous across features, raising `ValueError` on ambiguity.
+
+**Alternatives considered:**
+- Slash notation (`Feature/Command`) — less natural, no clear advantage
+- Only qualified names — too strict for simple servers with few features
+
+### 3. SiLA SDK: `sila2`
+
+Use the `sila2` package. While maintenance-only, it provides the only Python SiLA2 client API (`SilaClient` with attribute-style feature access). The `unitelabs-sila` alternative is server-only with no client abstraction.
+
+### 4. Optional dependency with conditional registration
+
+Add `sila2` as an optional extra (`pip install "madsci.client[sila]"`). The client module uses a `try/except ImportError` guard with a `SILA2_AVAILABLE` sentinel. Registration in `NODE_CLIENT_MAP` is conditional. Attempting to construct `SilaNodeClient` without the SDK installed raises a clear `ImportError`.
+
+**Alternatives considered:**
+- `unitelabs-sila` — server-only, no client API
+- Making it a hard dependency — too heavy (grpcio, lxml, zeroconf) for users who don't need SiLA
+
+### 5. Rename MadsciClientConfig to MadsciHttpClientConfig; separate SiLA config
+
+Rename `MadsciClientConfig` → `MadsciHttpClientConfig` to clarify it's HTTP-specific. Keep a `MadsciClientConfig = MadsciHttpClientConfig` backward-compat alias. `SilaNodeClientConfig` inherits `MadsciBaseSettings` directly — the HTTP-oriented fields (retry, pool, rate limit) are irrelevant for gRPC. SiLA-specific fields: `insecure`, `root_certs_path`, `command_timeout`, `poll_interval`, `poll_backoff_factor`, `max_poll_interval`.
+
+**Alternatives considered:**
+- Refactoring into a shared `MadsciClientConfig` base with HTTP and gRPC subclasses — not enough field overlap to justify (timeout semantics differ, retry vs polling are fundamentally different patterns)
+
+### 6. Observable command tracking
+
+Store observable command instances in a `_running_commands: dict[action_id, ...]` dict. When `send_action(await_result=False)`, return `RUNNING` and track the instance. `get_action_status()` and `get_action_result()` poll/retrieve from this dict. `await_action_result()` blocks with exponential backoff.
+
+### 7. Properties via `get_state()`
+
+`get_state()` iterates all SiLA features and reads all property values, returning a dict keyed by `"FeatureName.PropertyName"`. This enables monitoring and debugging. Properties are read on-demand (not cached).
+
+## Risks / Trade-offs (updated with implementation learnings)
+
+- **`get_responses()` is non-blocking** (RESOLVED) → In sila2 v0.14.0, `get_responses()` raises `CommandExecutionNotFinished` instead of blocking. The client polls `instance.done` with exponential backoff before calling `get_responses()`.
+- **Feature IDs are fully qualified** (RESOLVED) → `SiLAService.ImplementedFeatures` returns FQIs like `"org.madsci/examples/ExampleDevice/v1"`, not short identifiers. The client extracts the short identifier (penultimate path segment) for attribute access on the SilaClient object.
+- **Observable command detection is heuristic** (`hasattr(result, "status") and hasattr(result, "get_responses")`) → Works correctly with the sila2 SDK's `ClientObservableCommandInstance`.
+- **Memory leak in `_running_commands`** for commands never polled → Acceptable for v1; document that callers should always retrieve results. Add TTL cleanup in a future iteration.
+- **Thread safety of SiLA gRPC client** → gRPC channels are thread-safe; protect client creation with `threading.Lock`. Concurrent command execution should work but needs validation.
+- **`get_state()` could be slow** on servers with many properties → Acceptable trade-off for v1; callers control when they call it.

@@ -267,7 +267,7 @@ def _find_resource_and_transfer(
         for location in locations:
             # Get the resource hierarchy for this location
             location_resources = location_client.get_location_resources(
-                location.location_id
+                location.location_name
             )
 
             # Check if the resource is at this location (could be the main resource or a descendant)

@@ -7,38 +7,6 @@ Provides detailed service status with health information.
 Classes
 -------
 
-`ServiceDetailPanel(**kwargs: Any)`
-:   Panel showing details for a selected service.
-    
-    Initialize the panel.
-
-    ### Ancestors (in MRO)
-
-    * textual.widgets._static.Static
-    * textual.widget.Widget
-    * textual.dom.DOMNode
-    * textual.message_pump.MessagePump
-
-    ### Class variables
-
-    `can_focus`
-    :
-
-    `can_focus_children`
-    :
-
-    ### Methods
-
-    `compose(self) ‑> Iterable[textual.widget.Widget]`
-    :   Compose the panel.
-
-    `update_details(self, name: str, data: dict) ‑> None`
-    :   Update the detail display.
-        
-        Args:
-            name: Service name.
-            data: Service data dictionary.
-
 `StatusScreen(**kwargs: Any)`
 :   Screen showing detailed service status.
     
@@ -46,6 +14,8 @@ Classes
 
     ### Ancestors (in MRO)
 
+    * madsci.client.cli.tui.mixins.AutoRefreshMixin
+    * madsci.client.cli.tui.mixins.ServiceURLMixin
     * textual.screen.Screen
     * typing.Generic
     * textual.widget.Widget
@@ -54,7 +24,7 @@ Classes
 
     ### Class variables
 
-    `BINDINGS: ClassVar[list['Binding | tuple[str, str] | tuple[str, str, str]']]`
+    `BINDINGS: ClassVar[list[BindingType]]`
     :
 
     `can_focus`
@@ -71,17 +41,17 @@ Classes
     `action_refresh(self) ‑> None`
     :   Refresh status data.
 
-    `action_toggle_auto_refresh(self) ‑> None`
-    :   Toggle auto-refresh on/off.
-
     `compose(self) ‑> Iterable[textual.widget.Widget]`
     :   Compose the status screen layout.
 
-    `on_data_table_row_selected(self, event: textual.widgets._data_table.DataTable.RowSelected) ‑> None`
+    `on_data_table_row_selected(self, event: DataTable.RowSelected) ‑> None`
     :   Handle row selection in the table.
 
     `on_mount(self) ‑> None`
     :   Handle screen mount - set up tables and load data.
 
     `refresh_data(self) ‑> None`
-    :   Refresh all service statuses.
+    :   Refresh all service statuses concurrently.
+
+    `watch_auto_refresh_enabled(self, _value: bool) ‑> None`
+    :   Update the footer when auto-refresh is toggled.

@@ -30,7 +30,6 @@ MADSci SQUID serves as the central lab configuration manager and dashboard provi
 - `GET /context` - Returns all service URLs and lab configuration
 - `GET /health` - Standard service health check
 - `GET /lab_health` - Comprehensive lab-wide health status
-- `GET /definition` - Lab definition and metadata
 
 ### Dashboard Integration
 - Static files served from root `/` when dashboard path is configured
@@ -43,7 +42,6 @@ MADSci SQUID serves as the central lab configuration manager and dashboard provi
 Uses `LAB_` prefix for all configuration:
 - `LAB_SERVER_URL` - Lab manager server URL (default: http://localhost:8000)
 - `LAB_DASHBOARD_FILES_PATH` - Path to dashboard static files
-- `LAB_DEFINITION` - Path to lab definition YAML file
 
 ### Service Discovery
 Provides context with URLs for all manager services:
@@ -53,14 +51,6 @@ Provides context with URLs for all manager services:
 - Data Manager (port 8004)
 - Workcell Manager (port 8005)
 - Location Manager (port 8006)
-
-### Lab Definition Format
-```yaml
-name: Lab_Name
-description: Laboratory description
-manager_type: lab_manager
-manager_id: <ULID>  # Generate with new_ulid_str()
-```
 
 ## Health Monitoring
 

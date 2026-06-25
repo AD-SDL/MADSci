@@ -1,0 +1,57 @@
+# Docker Compose overlay for FOSS stack migration.
+# Starts old MongoDB, PostgreSQL, Redis, and MinIO containers on alternate ports
+# so data can be migrated to the new FOSS stack (FerretDB, Valkey, SeaweedFS).
+#
+# Usage:
+#   docker compose -f compose.infra.yaml -f compose.migration.yaml up -d \
+#     madsci_old_mongodb madsci_old_postgres madsci_old_redis madsci_old_minio
+#
+# See docs/guides/foss_migration.md for the full migration guide.
+
+services:
+  madsci_old_mongodb:
+    container_name: madsci_old_mongodb
+    image: mongo:${OLD_MONGODB_VERSION:-8}
+    restart: "no"
+    ports:
+      - "${OLD_MONGODB_PORT:-27018}:27017"
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/mongodb:/data/db
+
+  madsci_old_postgres:
+    container_name: madsci_old_postgres
+    image: ${OLD_POSTGRES_IMAGE:-postgres:17}
+    restart: "no"
+    environment:
+      - POSTGRES_USER=${OLD_POSTGRES_USER:-madsci}
+      - POSTGRES_PASSWORD=${OLD_POSTGRES_PASSWORD:-madsci}
+      - POSTGRES_DB=${OLD_POSTGRES_DB:-resources}
+    ports:
+      - "${OLD_POSTGRES_PORT:-5433}:5432"
+    volumes:
+      # Uses a separate copy so the live .madsci/postgresql/data path is free
+      # for the new FOSS PostgreSQL + FerretDB stack.
+      - ${REPO_PATH:-../..}/.madsci/postgresql_old/data:/var/lib/postgresql/data
+
+  madsci_old_redis:
+    container_name: madsci_old_redis
+    image: redis:${OLD_REDIS_VERSION:-7.4}
+    restart: "no"
+    ports:
+      - "${OLD_REDIS_PORT:-6380}:6379"
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/redis:/data
+    command: redis-server --appendonly yes
+
+  madsci_old_minio:
+    container_name: madsci_old_minio
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    restart: "no"
+    environment:
+      - MINIO_ROOT_USER=${OLD_MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${OLD_MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "${OLD_MINIO_PORT:-9002}:9000"
+    volumes:
+      - ${REPO_PATH:-../..}/.madsci/minio:/data
+    command: server /data

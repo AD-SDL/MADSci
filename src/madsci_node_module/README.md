@@ -105,8 +105,8 @@ module_version: 1.0.0
 # Run directly
 python my_instrument_node.py
 
-# Or with a pre-defined node
-python my_instrument_node.py --node_definition my_instrument.node.yaml
+# Configuration is provided via environment variables (NODE_NAME, NODE_URL, etc.)
+# or settings files (settings.yaml, .env)
 
 # Node will be available at http://localhost:2000/docs
 ```
@@ -1266,3 +1266,11 @@ def get_multiple_files(self) -> list[Path]:
 ```
 
 **Working examples**: See [example_lab/](../../examples/example_lab/) for a complete working laboratory with multiple integrated nodes.
+
+
+## Development Steps
+In order to ensure a MADSci module is up to standard and will run reliably, developers should:
+1. Document expected behavior for each action exposed by the Node, and then test it on the device to ensure it behaves as documented
+2. Ensure that the module folder contains no extraneous files unused by the code.
+3. Ensure that the code passes automated linting and code quality checks (we use [pre-commit](https://pre-commit.com/) and [ruff](https://astral.sh/ruff), for instance. See [our pre-commit config](../../.pre-commit-config.yaml) and [ruff config](../../ruff.toml).
+4. Where appropriate, write a Docker image for the module and ensure that it builds and runs.

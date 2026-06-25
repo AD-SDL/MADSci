@@ -1,6 +1,7 @@
 """MADSci CLI logs command.
 
-View and aggregate logs from MADSci services.
+View and aggregate logs from MADSci services, using the shared utility layer
+for timestamp formatting, level colouring, and output rendering.
 """
 
 from __future__ import annotations
@@ -12,19 +13,17 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import click
+from madsci.client.cli.utils.formatting import format_timestamp
+from madsci.client.cli.utils.output import (
+    OutputFormat,
+    determine_output_format,
+    get_console,
+    output_result,
+)
+from madsci.client.event_client import EventClient
 
 # Default Event Manager URL
 DEFAULT_EVENT_MANAGER_URL = "http://localhost:8001/"
-
-# Log level colors
-LEVEL_COLORS = {
-    "DEBUG": "dim",
-    "INFO": "blue",
-    "WARNING": "yellow",
-    "WARN": "yellow",
-    "ERROR": "red",
-    "CRITICAL": "bold red",
-}
 
 # Log level priority for filtering
 LEVEL_PRIORITY = {
@@ -34,6 +33,35 @@ LEVEL_PRIORITY = {
     "WARN": 2,
     "ERROR": 3,
     "CRITICAL": 4,
+}
+
+# Map log levels to status-like keys so format_status_colored can colour them
+_LEVEL_STATUS_MAP = {
+    "DEBUG": "pending",  # dim
+    "INFO": "running",  # blue
+    "WARNING": "unhealthy",  # yellow
+    "WARN": "unhealthy",  # yellow
+    "ERROR": "failed",  # red
+    "CRITICAL": "failed",  # red
+}
+
+# Map integer log levels to their name strings
+_INT_TO_LEVEL_NAME: dict[int, str] = {
+    10: "DEBUG",
+    20: "INFO",
+    30: "WARNING",
+    40: "ERROR",
+    50: "CRITICAL",
+}
+
+# Map level name strings to Python logging int values
+_LEVEL_NAME_TO_INT: dict[str, int] = {
+    "debug": 10,
+    "info": 20,
+    "warning": 30,
+    "warn": 30,
+    "error": 40,
+    "critical": 50,
 }
 
 
@@ -56,53 +84,99 @@ def parse_duration(duration: str) -> timedelta:
     return unit_map[unit]
 
 
+def _resolve_level_name(entry: dict[str, Any]) -> str:
+    """Extract the log level name from an entry dict.
+
+    Handles both string levels (``"INFO"``) and integer levels (``20``).
+
+    Args:
+        entry: A log entry dictionary.
+
+    Returns:
+        Uppercase level name string.
+    """
+    raw = entry.get("level", entry.get("log_level", "INFO"))
+    if isinstance(raw, int):
+        return _INT_TO_LEVEL_NAME.get(raw, str(raw))
+    return str(raw).upper()
+
+
+def _resolve_message(entry: dict[str, Any]) -> str:
+    """Extract the message text from an entry dict.
+
+    Supports both flat ``message``/``msg`` keys and nested
+    ``event_data.message``.
+
+    Args:
+        entry: A log entry dictionary.
+
+    Returns:
+        Message string.
+    """
+    # Try top-level keys first
+    message = entry.get("message", entry.get("msg"))
+    if message is not None:
+        return str(message)
+    # Try nested event_data.message (from Event.model_dump)
+    event_data = entry.get("event_data")
+    if isinstance(event_data, dict):
+        nested_msg = event_data.get("message")
+        if nested_msg is not None:
+            return str(nested_msg)
+    return str(entry)
+
+
 def format_log_entry(
     entry: dict[str, Any],
     show_timestamps: bool = True,
     no_color: bool = False,
 ) -> Any:
-    """Format a log entry for display."""
+    """Format a log entry for display using shared formatting utilities."""
     from rich.text import Text
 
     text = Text()
 
+    # Timestamp - use shared format_timestamp helper
     if show_timestamps:
-        timestamp = entry.get("timestamp", entry.get("logged_at", ""))
+        timestamp = entry.get(
+            "timestamp",
+            entry.get("logged_at", entry.get("event_timestamp", "")),
+        )
         if timestamp:
-            if isinstance(timestamp, str):
-                try:
-                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                    timestamp_str = dt.strftime("%H:%M:%S.%f")[:-3]
-                except ValueError:
-                    timestamp_str = timestamp[:12]
-            else:
-                timestamp_str = str(timestamp)[:12]
-
+            timestamp_str = format_timestamp(timestamp, short=True)
             if not no_color:
                 text.append(timestamp_str, style="dim")
             else:
                 text.append(timestamp_str)
             text.append("  ")
 
-    level = entry.get("level", entry.get("log_level", "INFO")).upper()
+    # Level - use shared format_status_colored via level->status mapping
+    level = _resolve_level_name(entry)
     level_str = f"{level:8}"
     if not no_color:
-        level_style = LEVEL_COLORS.get(level, "")
-        text.append(level_str, style=level_style)
+        status_key = _LEVEL_STATUS_MAP.get(level, "unknown")
+        # Extract the Rich markup colour from format_status_colored
+        # We need just the colour name, so use get_status_style directly
+        from madsci.client.cli.utils.formatting import get_status_style
+
+        _, colour = get_status_style(status_key)
+        text.append(level_str, style=colour)
     else:
         text.append(level_str)
     text.append("  ")
 
+    # Source
     source = entry.get("source", entry.get("service", entry.get("name", "")))
     if source:
-        source_str = f"{source[:12]:12}"
+        source_str = source if isinstance(source, str) else str(source)
         if not no_color:
             text.append(source_str, style="cyan")
         else:
             text.append(source_str)
         text.append("  ")
 
-    message = entry.get("message", entry.get("msg", str(entry)))
+    # Message
+    message = _resolve_message(entry)
     text.append(str(message))
 
     return text
@@ -117,34 +191,78 @@ def fetch_logs_from_event_manager(
     grep: str | None = None,
     timeout: float = 10.0,
 ) -> list[dict[str, Any]]:
-    """Fetch logs from the Event Manager."""
-    import httpx
+    """Fetch logs from the Event Manager using EventClient.
 
-    url = base_url.rstrip("/") + "/events"
-    params: dict[str, Any] = {"limit": limit}
+    Level and grep filters are applied internally (level server-side via
+    EventClient, grep client-side). Callers do **not** need to call
+    ``filter_logs`` again on the returned entries.
 
-    if level:
-        params["min_level"] = level.upper()
-    if source:
-        params["source"] = source
-    if since:
-        params["since"] = since.isoformat()
-    if grep:
-        params["search"] = grep
+    Args:
+        base_url: Base URL for the Event Manager.
+        limit: Maximum number of events to retrieve.
+        level: Minimum log level name (e.g. ``"error"``). Passed to
+            EventClient as an integer filter.
+        source: Source service name. Applied client-side after fetching.
+        since: Only return events after this datetime. Applied client-side.
+        grep: Search pattern. Applied client-side after fetching.
+        timeout: Request timeout in seconds.
 
+    Returns:
+        List of log entry dictionaries.
+    """
+    client = EventClient(
+        name="cli-logs",
+        event_server_url=base_url,
+    )
     try:
-        with httpx.Client(timeout=timeout) as client:
-            response = client.get(url, params=params)
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    return data
-                if isinstance(data, dict) and "events" in data:
-                    return data["events"]
-                return []
-            return []
+        # Map the level name to an int for EventClient (-1 means no filter)
+        level_int = _LEVEL_NAME_TO_INT.get(level.lower(), -1) if level else -1
+
+        events = client.get_events(
+            number=limit,
+            level=level_int,
+            timeout=timeout,
+        )
+
+        # Convert Event models to plain dicts for the existing display logic
+        entries = [event.model_dump(mode="json") for event in events.values()]
+
+        # Apply client-side filters not supported by EventClient
+        if source:
+            entries = [e for e in entries if _extract_source_name(e) == source]
+        if since:
+            since_iso = since.isoformat()
+            entries = [
+                e for e in entries if (e.get("event_timestamp") or "") >= since_iso
+            ]
+        if grep:
+            grep_lower = grep.lower()
+            entries = [e for e in entries if grep_lower in _resolve_message(e).lower()]
+
+        return entries
     except Exception:
         return []
+    finally:
+        client.close()
+
+
+def _extract_source_name(entry: dict[str, Any]) -> str:
+    """Extract the source name string from an entry dict.
+
+    Handles both string ``source`` values and nested OwnershipInfo dicts.
+
+    Args:
+        entry: A log entry dictionary.
+
+    Returns:
+        Source name string, or empty string if unavailable.
+    """
+    raw = entry.get("source", entry.get("service", entry.get("name", "")))
+    if isinstance(raw, str):
+        return raw
+    if isinstance(raw, dict):
+        return raw.get("name", raw.get("component_name", ""))
+    return str(raw)
 
 
 def filter_logs(
@@ -160,10 +278,7 @@ def filter_logs(
         result = [
             log
             for log in result
-            if LEVEL_PRIORITY.get(
-                log.get("level", log.get("log_level", "INFO")).upper(), 0
-            )
-            >= min_priority
+            if LEVEL_PRIORITY.get(_resolve_level_name(log), 0) >= min_priority
         ]
 
     if grep:
@@ -171,11 +286,7 @@ def filter_logs(
             pattern = re.compile(grep, re.IGNORECASE)
         except re.error as e:
             raise click.ClickException(f"Invalid regex pattern '{grep}': {e}") from e
-        result = [
-            log
-            for log in result
-            if pattern.search(log.get("message", log.get("msg", str(log))))
-        ]
+        result = [log for log in result if pattern.search(_resolve_message(log))]
 
     return result
 
@@ -224,7 +335,7 @@ def filter_logs(
     help="Output as JSON.",
 )
 @click.pass_context
-def logs(  # noqa: C901, PLR0912
+def logs(  # noqa: C901, PLR0912, PLR0915
     ctx: click.Context,
     services: tuple[str, ...],
     follow: bool,
@@ -246,12 +357,19 @@ def logs(  # noqa: C901, PLR0912
         madsci logs --level error            Only show errors
         madsci logs --grep "workflow"        Filter by pattern
         madsci logs workcell_manager         Logs from specific service
+        madsci --yaml logs                   Output as YAML
     """
-    from madsci.client.cli.utils.output import get_console
     from rich.panel import Panel
 
     console = get_console(ctx)
     no_color = ctx.obj.get("no_color", False)
+
+    # Merge local --json flag into ctx.obj so determine_output_format sees it
+    if as_json:
+        ctx.ensure_object(dict)
+        ctx.obj["json"] = True
+
+    fmt = determine_output_format(ctx)
 
     since_dt = None
     if since:
@@ -278,8 +396,14 @@ def logs(  # noqa: C901, PLR0912
     )
 
     if not log_entries:
-        if as_json or ctx.obj.get("json"):
-            console.print_json(json.dumps({"logs": [], "message": "No logs available"}))
+        if fmt in (OutputFormat.JSON, OutputFormat.YAML):
+            payload = {"logs": [], "message": "No logs available"}
+            if fmt == OutputFormat.JSON:
+                console.print_json(json.dumps(payload))
+            else:
+                output_result(console, payload, format="yaml")
+        elif fmt == OutputFormat.QUIET:
+            console.print("No logs available")
         else:
             console.print(
                 Panel(
@@ -302,12 +426,21 @@ def logs(  # noqa: C901, PLR0912
             if entry.get("source", entry.get("service", "")) in services
         ]
 
-    log_entries = filter_logs(log_entries, level=level, grep=grep)
-
-    if as_json or ctx.obj.get("json"):
+    # --- Structured output modes ---
+    if fmt == OutputFormat.JSON:
         console.print_json(json.dumps({"logs": log_entries}))
         return
+    if fmt == OutputFormat.YAML:
+        output_result(console, {"logs": log_entries}, format="yaml")
+        return
+    if fmt == OutputFormat.QUIET:
+        for entry in log_entries:
+            lvl = _resolve_level_name(entry)
+            msg = _resolve_message(entry)
+            console.print(f"{lvl}: {msg}")
+        return
 
+    # --- Follow mode ---
     if follow:
         seen_ids: set[str] = set()
         for entry in log_entries:
@@ -327,7 +460,6 @@ def logs(  # noqa: C901, PLR0912
                     source=services[0] if len(services) == 1 else None,
                     grep=grep,
                 )
-                new_entries = filter_logs(new_entries, level=level, grep=grep)
 
                 for entry in new_entries:
                     entry_id = entry.get(
@@ -340,6 +472,7 @@ def logs(  # noqa: C901, PLR0912
             console.print("\n[dim]Stopped following logs.[/dim]")
             return
 
+    # --- Default table output ---
     for entry in log_entries:
         console.print(format_log_entry(entry, timestamps, no_color))
 

@@ -1,6 +1,7 @@
 <template>
- <LocationModal :location="modal_text" :location_name="modal_title" v-model="modal" />
+ <LocationModal v-if="modal_text" :location="modal_text" :location_name="modal_title" v-model="modal" />
  <AddLocationModal v-model="add_modal" />
+ <CreateLocationFromTemplateModal v-model="create_from_template_modal" />
 
  <!-- Conditional Layout: Tabbed view, stacked view, or responsive grid -->
  <div v-if="tabbedLayout">
@@ -24,6 +25,8 @@
              :locations="locations"
              :resources="resources"
              :nodes="workcell_state?.nodes"
+             :transferEdges="transfer_edges"
+             :locationIndices="locationIndexMap"
              @node-click="handleNodeClick"
            />
          </v-card-text>
@@ -31,19 +34,30 @@
 
        <v-window-item value="table">
          <v-card-text>
+           <ManagedByFilter v-model="managedByFilter" />
            <v-data-table :headers="location_headers" hover
            :items="location_items(locations, resources)"
            no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
            <template v-slot:item="{ item }: { item: any }">
              <tr @click="set_modal(item.name || item.location_name, item)">
                <td>{{ item.name || item.location_name }}</td>
+               <td>
+                 <v-chip
+                   :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                   size="small"
+                   :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+                 >
+                   {{ (item.managed_by || 'lab').toUpperCase() }}
+                 </v-chip>
+               </td>
                <td>{{ get_resource(resources, item) }}</td>
                <td>{{ item.location_id }}</td>
                <td>{{ Object.keys(item.representations || {}) }}</td>
              </tr>
            </template>
          </v-data-table>
-         <v-btn @click="active_add()">Add Location</v-btn>
+         <v-btn @click="active_add()" class="mr-2">Add Location</v-btn>
+        <v-btn @click="create_from_template_modal = true" color="secondary" variant="outlined">Create from Template</v-btn>
          </v-card-text>
        </v-window-item>
      </v-window>
@@ -57,6 +71,8 @@
      <TransferGraph
        :locations="locations"
        :resources="resources"
+       :transferEdges="transfer_edges"
+       :locationIndices="locationIndexMap"
        @node-click="handleNodeClick"
      />
    </div>
@@ -64,12 +80,22 @@
    <!-- Locations Table Section -->
    <v-card class="pa-1 ma-1" title="Locations">
       <v-card-text>
+        <ManagedByFilter v-model="managedByFilter" />
         <v-data-table :headers="location_headers" hover
         :items="location_items(locations, resources)"
         no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
         <template v-slot:item="{ item }: { item: any }">
           <tr @click="set_modal(item.name || item.location_name, item)">
             <td>{{ item.name || item.location_name }}</td>
+            <td>
+              <v-chip
+                :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                size="small"
+                :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+              >
+                {{ (item.managed_by || 'lab').toUpperCase() }}
+              </v-chip>
+            </td>
             <td>{{ get_resource(resources, item) }}</td>
             <td>{{ item.location_id }}</td>
             <td>{{ Object.keys(item.representations || {}) }}</td>
@@ -88,6 +114,8 @@
      <TransferGraph
        :locations="locations"
        :resources="resources"
+       :transferEdges="transfer_edges"
+       :locationIndices="locationIndexMap"
        @node-click="handleNodeClick"
      />
    </v-col>
@@ -96,19 +124,31 @@
    <v-col cols="12" lg="6" xl="6">
      <v-card class="pa-1 ma-1" title="Locations">
         <v-card-text>
+          <ManagedByFilter v-model="managedByFilter" />
           <v-data-table :headers="location_headers" hover
           :items="location_items(locations, resources)"
           no-data-text="No Locations" density="compact" :sort-by="sortBy" :hide-default-footer="location_items(locations, resources).length <= 10">
           <template v-slot:item="{ item }: { item: any }">
             <tr @click="set_modal(item.name || item.location_name, item)">
+              <td><strong>{{ item.graph_index }}</strong></td>
               <td>{{ item.name || item.location_name }}</td>
+              <td>
+                <v-chip
+                  :color="(item.managed_by || 'lab') === 'node' ? 'info' : 'success'"
+                  size="small"
+                  :prepend-icon="(item.managed_by || 'lab') === 'node' ? 'mdi-robot-industrial' : 'mdi-flask'"
+                >
+                  {{ (item.managed_by || 'lab').toUpperCase() }}
+                </v-chip>
+              </td>
               <td>{{ get_resource(resources, item) }}</td>
               <td>{{ item.location_id }}</td>
               <td>{{ Object.keys(item.representations || {}) }}</td>
             </tr>
           </template>
         </v-data-table>
-        <v-btn @click="active_add()">Add Location</v-btn>
+        <v-btn @click="active_add()" class="mr-2">Add Location</v-btn>
+        <v-btn @click="create_from_template_modal = true" color="secondary" variant="outlined">Create from Template</v-btn>
         </v-card-text>
       </v-card>
    </v-col>
@@ -116,17 +156,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 import { VDataTable } from 'vuetify/components';
 
 import {
   locations,
   resources,
+  transfer_edges,
   workcell_state,
 } from '@/store';
 
 import AddLocationModal from './AddLocationModal.vue';
+import CreateLocationFromTemplateModal from './CreateLocationFromTemplateModal.vue';
 import LocationModal from './LocationModal.vue';
 import TransferGraph from './TransferGraph.vue';
 
@@ -142,14 +184,46 @@ const props = withDefaults(defineProps<LocationsPanelProps>(), {
 });
 
 const modal_title = ref()
-const modal_text = ref()
+const modal_location_id = ref<string | null>(null)
 const modal = ref(false)
+
+// Managed-by filter state
+const managedByFilter = ref<'all' | 'node' | 'lab'>('all')
+
+// Derive the modal location from the store so it stays in sync after refreshes
+const modal_text = computed(() => {
+  if (!modal_location_id.value) return null
+  const locs = locations.value || {}
+  // locations may be keyed by name or ID; search both
+  for (const loc of Object.values(locs) as any[]) {
+    if (loc.location_id === modal_location_id.value) return loc
+  }
+  return null
+})
 const add_modal = ref(false)
+const create_from_template_modal = ref(false)
 const activeTab = ref('graph') // Default to showing the graph tab
 
-const sortBy: VDataTable['sortBy'] = [{ key: 'occupied', order: 'desc' }];
+// Stable index mapping: location_id -> 1-based index, sorted by name
+const locationIndexMap = computed(() => {
+  const locs = Object.values(locations.value || {}) as any[];
+  const sorted = [...locs].sort((a, b) => {
+    const nameA = (a.name || a.location_name || '').toLowerCase();
+    const nameB = (b.name || b.location_name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+  const map: Record<string, number> = {};
+  sorted.forEach((loc, i) => {
+    map[loc.location_id] = i + 1;
+  });
+  return map;
+});
+
+const sortBy: VDataTable['sortBy'] = [{ key: 'graph_index', order: 'asc' }];
 const location_headers = [
+  { title: '#', key: 'graph_index', width: '50px' },
   { title: 'Name', key: 'name' },
+  { title: 'Managed By', key: 'managed_by' },
   { title: 'Occupied', key: 'occupied', sort: (a: string, b: string) => occupied_compare(a, b) },
   { title: 'ID', key: 'location_id' },
   { title: 'Nodes', key: 'nodes' },
@@ -174,9 +248,9 @@ function occupied_compare(a: string, b: string) {
 }
 
 
-const set_modal = (title: string, value: Object) => {
+const set_modal = (title: string, value: any) => {
   modal_title.value = title
-  modal_text.value = value
+  modal_location_id.value = value?.location_id ?? null
   modal.value = true
 }
 
@@ -201,8 +275,13 @@ function location_items(locations: any, resources: any) {
   Object.values(locations || {}).forEach((location: any) => {
     location["occupied"] = get_resource(resources, location);
     location["name"] = location.name || location.location_name; // Ensure backwards compatibility
+    location["graph_index"] = locationIndexMap.value[location.location_id] ?? '';
     new_locations.push(location);
   })
+  // Apply managed_by filter
+  if (managedByFilter.value !== 'all') {
+    return new_locations.filter((loc: any) => (loc.managed_by || 'lab') === managedByFilter.value)
+  }
   return new_locations
 
 }

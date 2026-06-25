@@ -378,6 +378,7 @@ class Engine:
                 status=ActionStatus.FAILED,
                 errors=Error.from_exception(e),
             )
+            step.status = ActionStatus.FAILED
             wf = self.update_step(wf, step)
             self.finalize_step(workflow_id, step)
 

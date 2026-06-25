@@ -40,6 +40,92 @@ Classes
     `model_config`
     :
 
+`CreateLocationFromTemplateRequest(**data: Any)`
+:   Request to create a location from a LocationTemplate.
+    
+    Requires node bindings to map abstract roles to concrete node instance names.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `allow_transfers: bool | None`
+    :
+
+    `description: str | None`
+    :
+
+    `location_name: str`
+    :
+
+    `model_config`
+    :
+
+    `node_bindings: dict[str, str]`
+    :
+
+    `representation_overrides: dict[str, dict[str, typing.Any]]`
+    :
+
+    `resource_template_overrides: dict[str, typing.Any] | None`
+    :
+
+    `template_name: str`
+    :
+
+    ### Methods
+
+    `is_url_safe_name(v: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a URL-safe name.
+        
+        Allows alphanumeric characters, underscores, dots, and hyphens.
+        Rejects empty strings.
+
+`LabLocationConfig(**data: Any)`
+:   Schema for the lab-level location configuration file.
+    
+    This is a reconcilable living document. The Location Manager re-reads it
+    on each reconciliation cycle and merges contents with the live database.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `location_templates: list[madsci.common.types.location_types.LocationTemplate]`
+    :
+
+    `locations: list[madsci.common.types.location_types.Location]`
+    :
+
+    `model_config`
+    :
+
+    `representation_templates: list[madsci.common.types.location_types.LocationRepresentationTemplate]`
+    :
+
+    `training: list[madsci.common.types.location_types.RepresentationTrainingEntry]`
+    :
+
 `Location(**data: Any)`
 :   A location in the lab.
     
@@ -69,16 +155,34 @@ Classes
     `location_name: str`
     :
 
+    `location_template_name: str | None`
+    :
+
+    `managed_by: madsci.common.types.location_types.LocationManagement`
+    :
+
     `model_config`
     :
 
-    `representations: dict[str, typing.Any] | None`
+    `node_bindings: dict[str, str] | None`
+    :
+
+    `owner: madsci.common.types.auth_types.OwnershipInfo | None`
+    :
+
+    `representations: dict[str, typing.Any]`
     :
 
     `reservation: madsci.common.types.location_types.LocationReservation | None`
     :
 
     `resource_id: str | None`
+    :
+
+    `resource_template_name: str | None`
+    :
+
+    `resource_template_overrides: dict[str, typing.Any] | None`
     :
 
     ### Instance variables
@@ -90,6 +194,12 @@ Classes
 
     `is_ulid(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
     :   Validates that a string field is a valid ULID.
+
+    `is_url_safe_name(v: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a URL-safe name.
+        
+        Allows alphanumeric characters, underscores, dots, and hyphens.
+        Rejects empty strings.
 
 `LocationArgument(**data: Any)`
 :   Location Argument to be used by MADSCI nodes.
@@ -134,8 +244,8 @@ Classes
     `name: str | None`
     :   Return the name of the location, if available.
 
-`LocationDefinition(**data: Any)`
-:   The Definition of a Location in a setup.
+`LocationImportResult(**data: Any)`
+:   Result of a bulk location import operation.
     
     Create a new model by parsing and validating input data from keyword arguments.
     
@@ -151,39 +261,36 @@ Classes
 
     ### Class variables
 
-    `allow_transfers: bool`
+    `errors: list[str]`
     :
 
-    `description: str | None`
+    `imported: int`
     :
 
-    `location_id: str`
-    :
-
-    `location_name: str`
+    `locations: list[madsci.common.types.location_types.Location]`
     :
 
     `model_config`
     :
 
-    `representations: dict[str, typing.Any]`
+    `skipped: int`
     :
 
-    `resource_template_name: str | None`
-    :
+`LocationManagement(value, names=None, *, module=None, qualname=None, type=None, start=1)`
+:   How a location is managed — determines lifecycle and visibility.
 
-    `resource_template_overrides: dict[str, typing.Any] | None`
-    :
+    ### Ancestors (in MRO)
 
-    ### Instance variables
+    * builtins.str
+    * enum.Enum
 
-    `name: str`
-    :   Get the name of the location.
+    ### Class variables
 
-    ### Methods
+    `LAB`
+    :   Created by lab config or API. Lifecycle managed by operator/integrator.
 
-    `is_ulid(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
-    :   Validates that a string field is a valid ULID.
+    `NODE`
+    :   Created/owned by a node. Lifecycle tied to node registration.
 
 `LocationManagerDefinition(**data: Any)`
 :   Definition for a LocationManager.
@@ -203,7 +310,7 @@ Classes
 
     ### Class variables
 
-    `locations: list[madsci.common.types.location_types.LocationDefinition]`
+    `locations: list[madsci.common.types.location_types.Location]`
     :
 
     `manager_type: Literal[<ManagerType.LOCATION_MANAGER: 'location_manager'>]`
@@ -217,7 +324,7 @@ Classes
 
     ### Static methods
 
-    `sort_locations(locations: list[madsci.common.types.location_types.LocationDefinition]) ‑> list[madsci.common.types.location_types.LocationDefinition]`
+    `sort_locations(locations: list[madsci.common.types.location_types.Location]) ‑> list[madsci.common.types.location_types.Location]`
     :   Sort locations by name after validation.
 
 `LocationManagerHealth(**data: Any)`
@@ -238,13 +345,34 @@ Classes
 
     ### Class variables
 
+    `cache_connected: bool | None`
+    :
+
+    `document_db_connected: bool | None`
+    :
+
+    `last_reconciliation_at: str | None`
+    :
+
     `model_config`
+    :
+
+    `num_lab_managed_locations: int`
+    :
+
+    `num_location_templates: int`
     :
 
     `num_locations: int`
     :
 
-    `redis_connected: bool | None`
+    `num_node_managed_locations: int`
+    :
+
+    `num_representation_templates: int`
+    :
+
+    `num_unresolved_locations: int`
     :
 
 `LocationManagerSettings(**kwargs: Any)`
@@ -275,19 +403,31 @@ Classes
 
     ### Class variables
 
-    `locations: list['LocationDefinition'] | None`
+    `cache_host: str`
+    :
+
+    `cache_password: str | None`
+    :
+
+    `cache_port: int`
+    :
+
+    `database_name: str`
+    :
+
+    `document_db_url: pydantic.networks.AnyUrl`
+    :
+
+    `lab_config_file: str | None`
     :
 
     `manager_type: madsci.common.types.manager_types.ManagerType | None`
     :
 
-    `redis_host: str`
+    `reconciliation_enabled: bool`
     :
 
-    `redis_password: str | None`
-    :
-
-    `redis_port: int`
+    `reconciliation_interval_seconds: float`
     :
 
     `server_url: pydantic.networks.AnyUrl`
@@ -295,6 +435,72 @@ Classes
 
     `transfer_capabilities: madsci.common.types.location_types.LocationTransferCapabilities | None`
     :
+
+`LocationRepresentationTemplate(**data: Any)`
+:   A named, versioned template for node-specific location representation data.
+    
+    Registered by nodes during startup or by operators via API. Defines the
+    schema, defaults, and required overrides for a particular node type's
+    representation of locations.
+    
+    Example: A robot arm registers ``"robotarm_deck_access"`` with defaults
+    ``{"gripper_config": "standard", "max_payload": 2.0}`` and
+    ``required_overrides=["position"]``.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `created_at: datetime.datetime`
+    :
+
+    `created_by: str | None`
+    :
+
+    `default_values: dict[str, typing.Any]`
+    :
+
+    `description: str | None`
+    :
+
+    `model_config`
+    :
+
+    `required_overrides: list[str]`
+    :
+
+    `schema_def: dict[str, typing.Any] | None`
+    :
+
+    `tags: list[str]`
+    :
+
+    `template_id: str`
+    :
+
+    `template_name: str`
+    :
+
+    `updated_at: datetime.datetime | None`
+    :
+
+    `version: str`
+    :
+
+    ### Methods
+
+    `is_ulid(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a valid ULID.
 
 `LocationReservation(**data: Any)`
 :   Reservation of a MADSci Location.
@@ -316,7 +522,7 @@ Classes
     `created: datetime.datetime`
     :
 
-    `end: datetime.datetime`
+    `expires: datetime.datetime`
     :
 
     `model_config`
@@ -325,13 +531,78 @@ Classes
     `owned_by: madsci.common.types.auth_types.OwnershipInfo`
     :
 
-    `start: datetime.datetime`
-    :
-
     ### Methods
 
     `check(self, ownership: madsci.common.types.auth_types.OwnershipInfo) ‑> bool`
     :   Check if the reservation is 1.) active or not, and 2.) owned by the given ownership.
+
+`LocationTemplate(**data: Any)`
+:   A named, versioned blueprint for creating locations.
+    
+    Maps abstract role names to representation template names. Resource-free
+    and node-free — no specific node instances or resource IDs. At instantiation
+    time, node bindings map roles to concrete node names.
+    
+    Example: ``"ot2_deck_slot"`` with
+    ``representation_templates: {"deck_controller": "lh_deck_repr", "transfer_arm": "robotarm_deck_access"}``
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `created_at: datetime.datetime`
+    :
+
+    `created_by: str | None`
+    :
+
+    `default_allow_transfers: bool`
+    :
+
+    `description: str | None`
+    :
+
+    `model_config`
+    :
+
+    `representation_templates: dict[str, str]`
+    :
+
+    `resource_template_name: str | None`
+    :
+
+    `resource_template_overrides: dict[str, typing.Any] | None`
+    :
+
+    `tags: list[str]`
+    :
+
+    `template_id: str`
+    :
+
+    `template_name: str`
+    :
+
+    `updated_at: datetime.datetime | None`
+    :
+
+    `version: str`
+    :
+
+    ### Methods
+
+    `is_ulid(id: str, info: pydantic_core.core_schema.ValidationInfo) ‑> str`
+    :   Validates that a string field is a valid ULID.
 
 `LocationTransferCapabilities(**data: Any)`
 :   Transfer capabilities for a location manager.
@@ -360,6 +631,96 @@ Classes
     :
 
     `transfer_templates: list[madsci.common.types.location_types.TransferStepTemplate]`
+    :
+
+`RepresentationTrainingEntry(**data: Any)`
+:   Add a node's representation to an existing location ('training').
+    
+    Used to teach a node (e.g., robot arm) how to access a location it doesn't own
+    (e.g., a liquid handler deck slot).
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `location_name: str`
+    :
+
+    `model_config`
+    :
+
+    `node_name: str`
+    :
+
+    `overrides: dict[str, typing.Any]`
+    :
+
+    `representation_template_name: str | None`
+    :
+
+`TransferGraphDetailedEdge(**data: Any)`
+:   A transfer edge with all node names that can execute the transfer.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `min_cost: float`
+    :
+
+    `model_config`
+    :
+
+    `node_names: list[str]`
+    :
+
+    `source_location_id: str`
+    :
+
+    `target_location_id: str`
+    :
+
+`TransferGraphDetailedResponse(**data: Any)`
+:   Response containing the detailed transfer graph with node information per edge.
+    
+    Create a new model by parsing and validating input data from keyword arguments.
+    
+    Raises [`ValidationError`][pydantic_core.ValidationError] if the input data cannot be
+    validated to form a valid model.
+    
+    `self` is explicitly positional-only to allow `self` as a field name.
+
+    ### Ancestors (in MRO)
+
+    * madsci.common.types.base_types.MadsciBaseModel
+    * pydantic.main.BaseModel
+
+    ### Class variables
+
+    `edges: list[madsci.common.types.location_types.TransferGraphDetailedEdge]`
+    :
+
+    `model_config`
     :
 
 `TransferGraphEdge(**data: Any)`

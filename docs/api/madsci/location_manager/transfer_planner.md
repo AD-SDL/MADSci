@@ -39,6 +39,15 @@ Classes
         Returns:
             List of edges representing the transfer path, or None if no path exists
 
+    `get_detailed_transfer_graph(self) ‑> madsci.common.types.location_types.TransferGraphDetailedResponse`
+    :   Get the cached transfer graph with detailed edge information.
+        
+        Returns all node names that can execute each transfer and the minimum
+        cost among available templates for each location pair.
+        
+        Returns:
+            TransferGraphDetailedResponse with a list of detailed edges
+
     `get_transfer_graph_adjacency_list(self) ‑> dict[str, list[str]]`
     :   Get the current transfer graph as adjacency list.
         

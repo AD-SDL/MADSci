@@ -50,7 +50,22 @@
             <h2>Locations</h2>
           </v-card-title>
           <v-card-text>
-            <LocationsPanel />
+            <v-tabs v-model="locationsSubTab" align-tabs="center" color="primary">
+              <v-tab :value="0">Locations</v-tab>
+              <v-tab :value="1">Repr Templates</v-tab>
+              <v-tab :value="2">Location Templates</v-tab>
+            </v-tabs>
+            <v-window v-model="locationsSubTab">
+              <v-window-item :value="0">
+                <LocationsPanel />
+              </v-window-item>
+              <v-window-item :value="1">
+                <RepresentationTemplatesPanel />
+              </v-window-item>
+              <v-window-item :value="2">
+                <LocationTemplatesPanel />
+              </v-window-item>
+            </v-window>
           </v-card-text>
         </v-card>
       </v-container>
@@ -62,7 +77,18 @@
             <h2>Resources</h2>
           </v-card-title>
           <v-card-text>
-            <ResourcesPanel />
+            <v-tabs v-model="resourcesSubTab" align-tabs="center" color="primary">
+              <v-tab :value="0">Resources</v-tab>
+              <v-tab :value="1">Resource Templates</v-tab>
+            </v-tabs>
+            <v-window v-model="resourcesSubTab">
+              <v-window-item :value="0">
+                <ResourcesPanel />
+              </v-window-item>
+              <v-window-item :value="1">
+                <ResourceTemplatesPanel />
+              </v-window-item>
+            </v-window>
           </v-card-text>
         </v-card>
       </v-container>
@@ -94,8 +120,13 @@ import WorkcellPanel from './WorkcellPanel.vue';
 import CreaetWorkcellPanel from './CreateWorkcellPanel.vue';
 import WorkflowTable from './WorkflowTable.vue';
 import LocationsPanel from './LocationsPanel.vue';
+import LocationTemplatesPanel from './LocationTemplatesPanel.vue';
+import RepresentationTemplatesPanel from './RepresentationTemplatesPanel.vue';
 import ResourcesPanel from './ResourcesPanel.vue';
+import ResourceTemplatesPanel from './ResourceTemplatesPanel.vue';
 const tab = ref(1)
+const locationsSubTab = ref(0)
+const resourcesSubTab = ref(0)
 
 </script>
 

@@ -117,6 +117,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [lint.per-file-ignores]
 "**/tests/**/*.py" = ["S101", "ANN", "D", "ARG002"]
+"**/sila_example_server/generated/**/*.py" = ["N", "ARG", "D", "ANN", "E722", "PTH", "PIE", "ERA", "RUF012", "RUF022"]  # SiLA codegen
+"**/sila_example_server/*.py" = ["N", "ARG002", "D"]  # SiLA interface implementations (naming conventions + required metadata param)
+"**/sila_example_server/feature_implementations/*.py" = ["N", "ARG002", "D"]  # SiLA interface implementations
 "**/*.ipynb" = ["T20"]
 "scripts/**/*.py" = ["D", "T20", "S101", "C901", "SIM", "C401"]
 "**/cli/**/*.py" = ["PLC0415"]  # Allow lazy imports in CLI for startup performance

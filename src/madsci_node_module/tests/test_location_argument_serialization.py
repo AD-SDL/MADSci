@@ -91,7 +91,7 @@ class TestLocationArgumentSerialization:
         )
         assert serialized_var_kwargs["regular_kwarg"] == "value"
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_rest_client_serializes_location_arguments(self, mock_create_session):
         """Test that RestNodeClient properly serializes LocationArguments."""
         # Mock the response
@@ -101,7 +101,7 @@ class TestLocationArgumentSerialization:
         mock_response.raise_for_status.return_value = None
 
         mock_session = MagicMock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         # Create client and LocationArgument
@@ -125,8 +125,8 @@ class TestLocationArgumentSerialization:
         assert result == "test_action_id"
 
         # Verify the call was made correctly
-        assert mock_session.post.called
-        call_args = mock_session.post.call_args
+        assert mock_session.request.called
+        call_args = mock_session.request.call_args
 
         # Check the JSON payload structure
         json_payload = call_args[1]["json"]
@@ -147,7 +147,7 @@ class TestLocationArgumentSerialization:
         # Other args should be preserved
         assert args["speed"] == 75
 
-    @patch("madsci.client.node.rest_node_client.create_http_session")
+    @patch("madsci.client.node.rest_node_client.create_httpx_client")
     def test_rest_client_serializes_location_arguments_in_var_args_kwargs(
         self, mock_create_session
     ):
@@ -159,7 +159,7 @@ class TestLocationArgumentSerialization:
         mock_response.raise_for_status.return_value = None
 
         mock_session = MagicMock()
-        mock_session.post.return_value = mock_response
+        mock_session.request.return_value = mock_response
         mock_create_session.return_value = mock_session
 
         client = RestNodeClient(url="http://localhost:8000")
@@ -179,7 +179,7 @@ class TestLocationArgumentSerialization:
         client._create_action(action_request)
 
         # Verify the call
-        call_args = mock_session.post.call_args
+        call_args = mock_session.request.call_args
         json_payload = call_args[1]["json"]
 
         # Check var_args serialization

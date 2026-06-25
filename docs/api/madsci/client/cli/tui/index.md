@@ -9,6 +9,7 @@ Sub-modules
 -----------
 * madsci.client.cli.tui.app
 * madsci.client.cli.tui.constants
+* madsci.client.cli.tui.mixins
 * madsci.client.cli.tui.screens
 * madsci.client.cli.tui.styles
 * madsci.client.cli.tui.widgets

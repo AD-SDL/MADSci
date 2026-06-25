@@ -1,0 +1,7 @@
+- id: madsci-node-try-catch
+  name: MADSci try catch standards
+  entry: python scripts/precommit_check_try_catch_blocks.py
+  language: system
+  types: [python]
+  files: ^src/.*\.py$
+  exclude: ^(tests/|src/.*/tests/).*$

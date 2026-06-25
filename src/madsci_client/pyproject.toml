@@ -1,6 +1,6 @@
 [project]
 name = "madsci.client"
-version = "0.7.1"
+version = "0.8.0"
 description = "The Modular Autonomous Discovery for Science (MADSci) Python Clients."
 authors = [
     {name = "Tobias Ginsburg", email = "tginsburg@anl.gov"},
@@ -31,6 +31,9 @@ otel-exporters = [
 ]
 tui = [
   "textual>=0.50.0",
+]
+sila = [
+  "sila2>=0.10.0",
 ]
 
 [project.urls]

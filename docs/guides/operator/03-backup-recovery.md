@@ -12,12 +12,12 @@ MADSci stores critical data across multiple databases. Regular backups protect a
 
 | Database | Used By | Data Stored |
 |----------|---------|-------------|
-| MongoDB | Event, Experiment, Data, Workcell, Location Managers | Events, experiments, datapoints, workflows, locations |
+| FerretDB (document database) | Event, Experiment, Data, Workcell, Location Managers | Events, experiments, datapoints, workflows, locations |
 | PostgreSQL | Resource Manager | Resources, resource history, templates |
-| MinIO | Data Manager | File datapoints (CSVs, images, etc.) |
-| Redis | Workcell Manager | Workflow queue, node locks (ephemeral) |
+| SeaweedFS (object storage) | Data Manager | File datapoints (CSVs, images, etc.) |
+| Valkey | Workcell Manager | Workflow queue, node locks (ephemeral) |
 
-**Note**: Redis data is ephemeral (workflow queue state). It does not require backup; the workcell recovers from MongoDB on restart.
+**Note**: Valkey data is ephemeral (workflow queue state). It does not require backup; the workcell recovers from the document database on restart.
 
 ## Backup Tools
 
@@ -55,21 +55,21 @@ print(f"Backup valid: {is_valid}")
 backup_tool.restore_from_backup(backup_path)
 ```
 
-### MongoDB Backups
+### Document Database Backups
 
 ```python
-from madsci.common.backup_tools import MongoDBBackupTool
-from madsci.common.types.backup_types import MongoDBBackupSettings
+from madsci.common.backup_tools import DocumentDBBackupTool
+from madsci.common.types.backup_types import DocumentDBBackupSettings
 from pydantic import AnyUrl
 
-settings = MongoDBBackupSettings(
-    mongo_db_url=AnyUrl("mongodb://localhost:27017/"),
+settings = DocumentDBBackupSettings(
+    document_db_url=AnyUrl("mongodb://localhost:27017/"),
     database="events",
-    backup_dir=Path("./backups/mongodb"),
+    backup_dir=Path("./backups/document_db"),
     max_backups=10,
 )
 
-backup_tool = MongoDBBackupTool(settings)
+backup_tool = DocumentDBBackupTool(settings)
 
 # Create a backup
 backup_path = backup_tool.create_backup("daily")
@@ -89,11 +89,11 @@ madsci-postgres-backup create \
   --db-url postgresql://postgres:postgres@localhost:5432/resources \
   --backup-dir ./backups/postgres
 
-# MongoDB backup
-madsci-mongodb-backup create \
+# Document database backup
+madsci-document-db-backup create \
   --mongo-url mongodb://localhost:27017 \
   --database events \
-  --backup-dir ./backups/mongodb
+  --backup-dir ./backups/document_db
 
 # Unified CLI (auto-detects database type)
 madsci-backup create --db-url postgresql://localhost:5432/resources
@@ -115,12 +115,12 @@ madsci-backup restore \
 | Database | Frequency | Retention | Notes |
 |----------|-----------|-----------|-------|
 | PostgreSQL (Resources) | Every 6 hours | 30 days | Critical - contains resource state |
-| MongoDB (Events) | Daily | 90 days | Large volume, archivable |
-| MongoDB (Experiments) | Every 6 hours | 90 days | Contains experiment results |
-| MongoDB (Data) | Daily | 90 days | Metadata only; files in MinIO |
-| MongoDB (Workcell) | Daily | 30 days | Workflow history |
-| MongoDB (Locations) | Daily | 30 days | Location configuration |
-| MinIO (Files) | Daily | 90 days | Use MinIO's built-in replication |
+| FerretDB (Events) | Daily | 90 days | Large volume, archivable |
+| FerretDB (Experiments) | Every 6 hours | 90 days | Contains experiment results |
+| FerretDB (Data) | Daily | 90 days | Metadata only; files in SeaweedFS |
+| FerretDB (Workcell) | Daily | 30 days | Workflow history |
+| FerretDB (Locations) | Daily | 30 days | Location configuration |
+| SeaweedFS (Files) | Daily | 90 days | Use SeaweedFS's built-in replication |
 
 ### Automated Backups with Cron
 
@@ -133,18 +133,18 @@ madsci-backup restore \
   --backup-dir /data/backups/postgres \
   --max-backups 120
 
-# MongoDB events - daily at 2 AM
-0 2 * * * madsci-mongodb-backup create \
+# Document database events - daily at 2 AM
+0 2 * * * madsci-document-db-backup create \
   --mongo-url mongodb://localhost:27017 \
   --database events \
-  --backup-dir /data/backups/mongodb/events \
+  --backup-dir /data/backups/document_db/events \
   --max-backups 90
 
-# MongoDB experiments - every 6 hours
-0 */6 * * * madsci-mongodb-backup create \
+# Document database experiments - every 6 hours
+0 */6 * * * madsci-document-db-backup create \
   --mongo-url mongodb://localhost:27017 \
   --database experiments \
-  --backup-dir /data/backups/mongodb/experiments \
+  --backup-dir /data/backups/document_db/experiments \
   --max-backups 120
 ```
 
@@ -188,7 +188,7 @@ curl http://localhost:8003/health
 
 ```bash
 # 1. Start infrastructure only
-docker compose up -d mongodb postgres redis minio
+docker compose up -d madsci_ferretdb postgres madsci_valkey madsci_seaweedfs
 
 # 2. Wait for databases to be ready
 sleep 10
@@ -198,12 +198,12 @@ madsci-postgres-backup restore \
   --db-url postgresql://postgres:postgres@localhost:5432/resources \
   --backup-path /data/backups/postgres/latest.sql
 
-# 4. Restore MongoDB databases
+# 4. Restore document databases
 for db in events experiments data workcell locations; do
-  madsci-mongodb-backup restore \
+  madsci-document-db-backup restore \
     --mongo-url mongodb://localhost:27017 \
     --database $db \
-    --backup-path /data/backups/mongodb/$db/latest.bson
+    --backup-path /data/backups/document_db/$db/latest.bson
 done
 
 # 5. Start managers
@@ -225,19 +225,19 @@ python -m madsci.resource_manager.migration_tool \
 # If migration fails, it auto-restores from the backup
 ```
 
-## MinIO Backup
+## SeaweedFS Backup
 
-MinIO stores file datapoints (CSVs, images, raw instrument data). Use MinIO's built-in tools:
+SeaweedFS stores file datapoints (CSVs, images, raw instrument data). SeaweedFS provides an S3-compatible API, so you can use standard S3 tools:
 
 ```bash
-# Install MinIO client
-mc alias set myminio http://localhost:9000 minioadmin minioadmin
+# Using the MinIO client (mc) for S3-compatible access
+mc alias set myseaweedfs http://localhost:8333 madsci madsci
 
 # Mirror to backup location
-mc mirror myminio/madsci-data /data/backups/minio/
+mc mirror myseaweedfs/madsci-data /data/backups/seaweedfs/
 
 # Or use mc cp for specific buckets
-mc cp --recursive myminio/madsci-data/ /data/backups/minio/madsci-data/
+mc cp --recursive myseaweedfs/madsci-data/ /data/backups/seaweedfs/madsci-data/
 ```
 
 ## Docker Volume Backups
@@ -250,15 +250,15 @@ docker volume ls | grep madsci
 
 # Backup a volume
 docker run --rm \
-  -v madsci_mongodb_data:/data \
+  -v madsci_ferretdb_data:/data \
   -v $(pwd)/backups:/backup \
-  alpine tar czf /backup/mongodb_data.tar.gz /data
+  alpine tar czf /backup/ferretdb_data.tar.gz /data
 
 # Restore a volume
 docker run --rm \
-  -v madsci_mongodb_data:/data \
+  -v madsci_ferretdb_data:/data \
   -v $(pwd)/backups:/backup \
-  alpine tar xzf /backup/mongodb_data.tar.gz -C /
+  alpine tar xzf /backup/ferretdb_data.tar.gz -C /
 ```
 
 ## Backup Checklist

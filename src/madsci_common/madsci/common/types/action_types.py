@@ -1041,9 +1041,10 @@ def create_dynamic_model(
 
     # Always override json_result field for proper OpenAPI documentation
     if json_result_type is not None:
-        # Specific type for json_result
+        # Specific type for json_result, wrapped in Optional to allow None
+        # for failed/in-progress actions (fixes 500 errors on typed endpoints)
         fields["json_result"] = (
-            json_result_type,
+            Optional[json_result_type],
             Field(
                 description=f"JSON result data for {action_name} action", default=None
             ),

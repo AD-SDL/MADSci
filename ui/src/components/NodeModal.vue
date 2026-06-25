@@ -55,116 +55,37 @@
       </v-card-title>
 
       <v-card-text class="subheading grey--text">
-        <div>
-          <v-container fluid>
-            <v-row dense wrap justify-content="space-evenly">
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>Status</h3>
-                <vue-json-pretty :data="wc_state.nodes[modal_title].status"></vue-json-pretty>
-              </v-col>
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>State</h3>
-                <vue-json-pretty :data="wc_state.nodes[modal_title].state"></vue-json-pretty>
-              </v-col>
-              <v-col cols="12" md="6" lg="4" xl="3">
-                <h3>Info</h3>
-                <vue-json-pretty :data="modal_text" :deep="1"></vue-json-pretty>
-              </v-col>
-            </v-row>
-          </v-container>
-          <h3>Actions</h3>
-          <v-expansion-panels>
-            <v-expansion-panel v-for="action in actions" :key="action.name">
-              <v-expansion-panel-title @click="set_text(action)">
-                <h4>{{ action.name }}</h4>
-              </v-expansion-panel-title>
-              <v-expansion-panel-text>
-                <h5>Description</h5>
-                <p class="py-1 my-1">{{ action.description }}</p>
-                <h5 v-if="Object.keys(action.args).length > 0">Arguments</h5>
-                <v-data-table v-if="Object.keys(action.args).length > 0" :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
-    return action.args[key];})" hover items-per-page="-1"
-                  no-data-text="No Arguments" density="compact">
-                  <!-- eslint-disable vue/no-parsing-error-->
-                  <template v-slot:item="{ item }: { item: any }">
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>{{ item.argument_type }}</td>
-                      <td>{{ item.required }}</td>
-                      <td>{{ item.default }}</td>
-                      <td>{{ item.description }}</td>
-                      <td>
-                        <template v-if="item.argument_type === 'bool'">
-                          <v-checkbox v-model="item.value" :true-value="true" :false-value="false" :value="item.value ?? false" hide-details density="compact"/>
-                        </template>
-                        <template v-else-if="['int', 'float'].includes(item.argument_type)">
-                          <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
-                        </template>
-                        <template v-else>
-                          <v-text-field @vue:updated="set_text(action)" height="20px" v-model="item.value"/>
-                        </template>
-                      </td>
-                    </tr>
-                  </template>
-                  <template #bottom></template>
-                </v-data-table>
-                <h5 v-if="Object.keys(action.files).length > 0">Files</h5>
-                <v-data-table v-if="Object.keys(action.files).length > 0" :headers="file_headers" :items="Object.keys(action.files).map(function(key){
-    return action.files[key];})" hover
-                  items-per-page="-1" no-data-text="No Files" density="compact">
-                  <template v-slot:item="{ item }: { item: any }">
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>{{ item.required }}</td>
-                      <td>{{ item.description }}</td>
-                      <td><v-file-input v-model="item.value" label="File input"></v-file-input></td>
-                    </tr>
-                  </template>
-                </v-data-table>
-                <h5 v-if="Object.keys(action.locations).length > 0">Locations</h5>
-                <v-data-table v-if="Object.keys(action.locations).length > 0" :headers="locations_headers" :items="Object.keys(action.locations).map(function(key){
-    return action.locations[key];})" hover
-                  items-per-page="-1" no-data-text="No Locations" density="compact">
-                  <template v-slot:item="{ item }: { item: any }">
-                    <tr>
-                      <td>{{ item.name }}</td>
-                      <td>{{ item.required }}</td>
-                      <td>{{ item.description }}</td>
-                      <td>
-                        <v-text-field @vue:updated="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
-                        <datalist id="locations">
-                        <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
-                        </datalist>
-                        </td>
-                    </tr>
-                  </template>
-                </v-data-table>
-                <h5 v-if="Object.keys(action.results).length > 0">Results</h5>
-                <v-data-table v-if="Object.keys(action.results).length > 0" :headers="result_headers" :items="Object.values(action.results)" hover
-                  items-per-page="-1" no-data-text="No Results" density="compact">
-                  <template v-slot:item="{ item }: { item: any }">
-                    <tr>
-                      <td>{{ item.result_label }}</td>
-                      <td>{{ item.result_type }}</td>
-                      <td>{{ item.data_type }}</td>
-                    </tr>
-                  </template>
-                </v-data-table>
-                <v-btn @click="send_wf(action); isActive.value = false">Send Action</v-btn>
-                <v-btn @click="copy = !copy; set_text(action)">
-                  <p v-if="(copy == false) ">Show Copyable Workflow Step</p>
-                  <p v-else>Hide copyable workflow step</p>
-                </v-btn>
-                <div v-if="copy">
-                  <vue-json-pretty :data="json_text" />
-                  Copy YAML Step to Clipboard: <v-icon hover @click=copyAction(text)>
-                    mdi-clipboard-plus-outline
-                  </v-icon>
-                </div>
-              </v-expansion-panel-text>
-            </v-expansion-panel>
-          </v-expansion-panels>
-        </div>
+        <v-tabs v-model="tab" align-tabs="center" color="deep-purple-accent-4">
+          <v-tab :value="1">Overview</v-tab>
+          <v-tab :value="2">Info</v-tab>
+          <v-tab :value="3">Actions</v-tab>
+        </v-tabs>
+        <v-window v-model="tab">
+          <v-window-item :key="1" :value="1">
+            <div class="pa-4">
+              <NodeOverviewTab
+                :node_status="wc_state.nodes[modal_title].status"
+                :node_state="wc_state.nodes[modal_title].state"
+              />
+            </div>
+          </v-window-item>
+          <v-window-item :key="2" :value="2">
+            <div class="pa-4">
+              <NodeInfoTab :node_info="modal_text" />
+            </div>
+          </v-window-item>
+          <v-window-item :key="3" :value="3">
+            <div class="pa-4">
+              <NodeActionsTab
+                :modal_title="modal_title"
+                :modal_text="modal_text"
+                :wc_state="wc_state"
+                :locations="locations"
+                @action-sent="isActive.value = false"
+              />
+            </div>
+          </v-window-item>
+        </v-window>
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
@@ -177,16 +98,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { get_status } from '../store';
-import { urls } from "@/store";
-declare function require(name: string): any;
-import * as yaml from 'js-yaml';
-import VueJsonPretty from 'vue-json-pretty';
-import 'vue-json-pretty/lib/styles.css';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
 import HomeButton from './AdminButtons/HomeButton.vue';
-import { json } from 'stream/consumers';
+
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
+const tab = ref(1)
 const arg_headers = [
   { title: 'Name', key: 'name' },
   { title: 'Type', key: 'argument_type' },
@@ -398,8 +315,8 @@ function copyAction(test: any) {
 }
 </script>
 
-<style>
-  .title {
-    margin-right: 30px;
-  }
+<style scoped>
+.title {
+  margin-right: 30px;
+}
 </style>

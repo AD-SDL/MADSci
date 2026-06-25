@@ -55,16 +55,13 @@ def mock_scheduler() -> Generator[Scheduler, None, None]:
 
     # Mock the LocationClient
     scheduler.location_client = MagicMock()
-    scheduler.location_client.get_locations.return_value = [
-        Location(
-            name="loc1",
-            resource_id=None,
-        ),
-        Location(
-            name="loc2",
-            resource_id=None,
-        ),
-    ]
+    loc1 = Location(name="loc1", resource_id=None)
+    loc2 = Location(name="loc2", resource_id=None)
+    scheduler.location_client.get_locations.return_value = [loc1, loc2]
+    scheduler.location_client.get_location_by_name.side_effect = {
+        "loc1": loc1,
+        "loc2": loc2,
+    }.get
     yield scheduler
 
 

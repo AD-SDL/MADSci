@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import requests
     from madsci.common.types.base_types import MadsciBaseModel, PathLike
-    from madsci.common.types.client_types import MadsciClientConfig
+    from madsci.common.types.client_types import MadsciHttpClientConfig
 
 
 def utcnow() -> datetime:
@@ -714,7 +714,7 @@ class RateLimitHTTPAdapter:
 
 
 def create_http_session(
-    config: Optional["MadsciClientConfig"] = None,
+    config: Optional["MadsciHttpClientConfig"] = None,
     retry_enabled: Optional[bool] = None,
 ) -> "requests.Session":
     """
@@ -730,21 +730,21 @@ def create_http_session(
     the session.rate_limit_tracker attribute.
 
     Args:
-        config: Client configuration object. If None, uses default MadsciClientConfig.
+        config: Client configuration object. If None, uses default MadsciHttpClientConfig.
         retry_enabled: Override for retry_enabled from config. If None, uses config value.
 
     Returns:
         Configured requests.Session object with optional rate_limit_tracker attribute
 
     Example:
-        >>> from madsci.common.types.client_types import MadsciClientConfig
+        >>> from madsci.common.types.client_types import MadsciHttpClientConfig
         >>> from madsci.common.utils import create_http_session
         >>>
         >>> # Use default configuration
         >>> session = create_http_session()
         >>>
         >>> # Use custom configuration
-        >>> config = MadsciClientConfig(retry_total=5, timeout_default=30.0)
+        >>> config = MadsciHttpClientConfig(retry_total=5, timeout_default=30.0)
         >>> session = create_http_session(config=config)
         >>>
         >>> # Disable retry for a specific session
@@ -757,13 +757,13 @@ def create_http_session(
     """
     # Import here to avoid circular dependencies
     import requests  # noqa: PLC0415
-    from madsci.common.types.client_types import MadsciClientConfig  # noqa: PLC0415
+    from madsci.common.types.client_types import MadsciHttpClientConfig  # noqa: PLC0415
     from requests.adapters import HTTPAdapter  # noqa: PLC0415
     from urllib3.util.retry import Retry  # noqa: PLC0415
 
     # Use default config if none provided
     if config is None:
-        config = MadsciClientConfig()
+        config = MadsciHttpClientConfig()
 
     # Determine if retry should be enabled
     enable_retry = retry_enabled if retry_enabled is not None else config.retry_enabled
@@ -772,7 +772,7 @@ def create_http_session(
     session = requests.Session()
 
     # Create rate limit tracker if enabled
-    # Check if config has rate limit fields (only MadsciClientConfig has them)
+    # Check if config has rate limit fields (only MadsciHttpClientConfig has them)
     rate_limit_tracker = None
     if getattr(config, "rate_limit_tracking_enabled", False):
         rate_limit_tracker = RateLimitTracker(

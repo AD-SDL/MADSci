@@ -1,14 +1,18 @@
 """A fake robot arm module for testing."""
 
 import time
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any, ClassVar, Optional
 
 from madsci.client.event_client import EventClient
 from madsci.common.types.action_types import ActionFailed
 from madsci.common.types.admin_command_types import AdminCommandResponse
 from madsci.common.types.base_types import Error
 from madsci.common.types.location_types import LocationArgument
-from madsci.common.types.node_types import RestNodeConfig
+from madsci.common.types.node_types import (
+    NodeRepresentationTemplateDefinition,
+    NodeResourceTemplateDefinition,
+    RestNodeConfig,
+)
 from madsci.common.types.resource_types import Slot
 from madsci.node_module.helpers import action
 from madsci.node_module.rest_node_module import RestNode
@@ -54,29 +58,104 @@ class RobotArmNode(RestNode):
     config: RobotArmConfig = RobotArmConfig()
     config_model = RobotArmConfig
 
-    def startup_handler(self) -> None:
-        """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
-        self.robot_arm = RobotArmInterface(logger=self.logger)
-
-        gripper_slot = Slot(
-            resource_name="robot_arm_gripper",
-            resource_class="RobotArmGripper",
-            capacity=1,
-            attributes={
-                "gripper_type": "robotic_gripper",
-                "description": "Robot arm gripper slot",
-            },
-        )
-
-        self.resource_client.init_template(
-            resource=gripper_slot,
+    # Declarative template definitions — registered automatically by template_handler()
+    resource_templates: ClassVar[list[NodeResourceTemplateDefinition]] = [
+        NodeResourceTemplateDefinition(
+            resource=Slot(
+                resource_name="robot_arm_gripper",
+                resource_class="RobotArmGripper",
+                capacity=1,
+                attributes={
+                    "gripper_type": "robotic_gripper",
+                    "description": "Robot arm gripper slot",
+                },
+            ),
             template_name="robot_arm_gripper_slot",
             description="Template for robot arm gripper slot. Used to track what the robot arm is currently holding.",
             required_overrides=["resource_name"],
             tags=["robot_arm", "gripper", "slot", "robot"],
-            created_by=self.node_info.node_id,
             version="1.0.0",
-        )
+        ),
+    ]
+
+    location_representation_templates: ClassVar[
+        list[NodeRepresentationTemplateDefinition]
+    ] = [
+        NodeRepresentationTemplateDefinition(
+            template_name="robotarm_deck_access",
+            default_values={"gripper_config": "standard", "max_payload": 2.0},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 4,
+                        "description": "Joint angles or XYZ(+rotation) for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "enum": ["standard", "wide", "vacuum"],
+                        "description": "Gripper configuration to use at this location",
+                    },
+                    "max_payload": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Maximum payload weight in kg",
+                    },
+                    "approach_height": {
+                        "type": "number",
+                        "description": "Height offset for approach/depart in mm",
+                    },
+                },
+                "required": ["position"],
+            },
+            required_overrides=["position"],
+            tags=["robot_arm", "deck"],
+            version="1.1.0",
+            description="Robot arm deck access representation with joint positions",
+        ),
+        NodeRepresentationTemplateDefinition(
+            template_name="robotarm_wide_access",
+            default_values={"gripper_config": "wide", "max_payload": 10.0},
+            schema_def={
+                "type": "object",
+                "properties": {
+                    "position": {
+                        "type": "array",
+                        "items": {"type": "number"},
+                        "minItems": 3,
+                        "maxItems": 4,
+                        "description": "Joint angles or XYZ(+rotation) for this location",
+                    },
+                    "gripper_config": {
+                        "type": "string",
+                        "enum": ["standard", "wide", "vacuum"],
+                        "description": "Gripper configuration for wide access points",
+                    },
+                    "max_payload": {
+                        "type": "number",
+                        "minimum": 0,
+                        "description": "Maximum payload weight in kg",
+                    },
+                    "approach_height": {
+                        "type": "number",
+                        "description": "Height offset for approach/depart in mm",
+                    },
+                },
+                "required": ["position"],
+            },
+            required_overrides=["position"],
+            tags=["robot_arm", "wide"],
+            version="1.1.0",
+            description="Robot arm wide gripper access representation with joint positions",
+        ),
+    ]
+
+    def startup_handler(self) -> None:
+        """Called to (re)initialize the node. Should be used to open connections to devices or initialize any other resources."""
+        self.robot_arm = RobotArmInterface(logger=self.logger)
 
         resource_name = "robot_arm_gripper_" + str(self.node_info.node_name)
         self.gripper = self.resource_client.create_resource_from_template(

@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from madsci.client.data_client import DataClient
-from madsci.common.db_handlers import InMemoryRedisHandler
+from madsci.common.db_handlers import InMemoryCacheHandler
 from madsci.common.types.action_types import (
     ActionDefinition,
     ActionFailed,
@@ -63,13 +63,13 @@ test_node = Node(
 
 @pytest.fixture
 def state_handler() -> WorkcellStateHandler:
-    """Fixture for creating a WorkcellStateHandler with in-memory Redis."""
+    """Fixture for creating a WorkcellStateHandler with in-memory cache."""
     workcell_settings = WorkcellManagerSettings(
         manager_name="Test Workcell",
         enable_registry_resolution=False,
     )
     return WorkcellStateHandler(
-        workcell_settings=workcell_settings, redis_handler=InMemoryRedisHandler()
+        workcell_settings=workcell_settings, cache_handler=InMemoryCacheHandler()
     )
 
 
@@ -831,7 +831,7 @@ def test_feed_data_forward_object_storage_by_label(engine: Engine) -> None:
     """Test feed forward with object storage datapoint matched by label."""
     object_storage_datapoint = ObjectStorageDataPoint(
         label="s3_output",
-        storage_endpoint="localhost:9000",
+        storage_endpoint="localhost:8333",
         path="/local/path/file.dat",
         bucket_name="test-bucket",
         object_name="data/file.dat",
