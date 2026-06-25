@@ -94,17 +94,10 @@
               <!-- Node circle: fill = resource quantity, stroke = management type -->
               <circle
                 :r="20"
-                :class="[
-                  'node-circle',
-                  node.type === 'madsci_node'
-                    ? node.homed
-                      ? 'madsci-node'
-                      : 'unhomed-node'
-                    : ''
-                ]"
-                :fill="node.type === 'location' ? getNodeFill(node) : undefined"
-                :stroke="getNodeStroke(node)" 
+                :fill="getNodeFill(node)"
+                :stroke="getNodeStroke(node)"
                 stroke-width="3"
+                class="node-circle"
               />
               <!-- Index label inside circle -->
               <text
@@ -208,10 +201,6 @@
           </v-col>
           <v-col cols="12" md="4">
             <div class="legend-item d-flex align-center mb-2">
-              <div class="legend-color unhomed-node mr-2"></div>
-              <span>Unhomed Node</span>
-            </div>
-            <div class="legend-item d-flex align-center mb-2">
               <svg width="30" height="24"><line x1="0" y1="12" x2="30" y2="12" stroke="#90A4AE" stroke-width="1" stroke-opacity="0.3" /></svg>
               <span class="ml-2">Transfer Connection</span>
             </div>
@@ -223,27 +212,6 @@
       <div v-if="selectedNode" class="mt-4 pa-3" style="background-color: #f0f0f0; border-radius: 4px;">
         <h4>{{ selectedNode.name }}</h4>
         <p><strong>ID:</strong> {{ selectedNode.id }}</p>
-        <p><strong>Type:</strong> {{ selectedNode.type === 'madsci_node' ? 'MADSci Node' : 'Location' }}</p>
-
-        <!-- Location-specific information -->
-        <div v-if="selectedNode.type === 'location'">
-          <p><strong>Status:</strong> {{ selectedNode.occupied || 'Unknown' }}</p>
-          <p><strong>Resource:</strong> {{ selectedNode.hasResource ? 'Present' : 'None' }}</p>
-        </div>
-
-        <!-- MADSci node-specific information -->
-        <div v-if="selectedNode.type === 'madsci_node'">
-          <p><strong>Homed:</strong> {{ selectedNode.homed }}</p>
-          <p><strong>Connected Locations:</strong> {{ getConnectedLocations(selectedNode).length }}</p>
-          <div v-if="getConnectedLocations(selectedNode).length > 0">
-            <p><strong>Accessible Locations:</strong></p>
-            <ul class="ml-4">
-              <li v-for="location in getConnectedLocations(selectedNode)" :key="location.id">
-                {{ location.name }}
-              </li>
-            </ul>
-          </div>
-        </div>
         <p><strong>Managed By:</strong> {{ (selectedNode.managedBy || 'lab').toUpperCase() }}</p>
         <p><strong>Owner:</strong> {{ selectedNode.ownerNodeName || selectedNode.ownerNodeId || 'N/A' }}</p>
         <p><strong>Status:</strong> {{ selectedNode.occupied || 'Unknown' }}</p>
@@ -260,8 +228,6 @@ import { ref, computed, onMounted } from 'vue';
 const props = defineProps<{
   locations: Record<string, any>;
   resources: any[];
-  nodes?: Record<string, any>;
-  transfers?: any[]; // Future: transfer events/history
   transferEdges?: Array<{
     source_location_id: string;
     target_location_id: string;
@@ -398,24 +364,6 @@ const groups = computed(() => {
       },
     };
   });
-  // Add MADSci node vertices
-  madsciNodeArray.forEach((nodeId) => {
-    allNodes.push({
-      id: `node_${nodeId}`,
-      name: nodeId,
-      x: margin + seededRandom() * (svgWidth.value - 2 * margin),
-      y: margin + seededRandom() * (svgHeight.value - 2 * margin),
-      vx: 0,
-      vy: 0,
-      radius: 15,
-      type: 'madsci_node',
-      nodeId: nodeId,
-      homed: props.nodes?.[nodeId]?.status.homed ?? true,
-    });
-  });
-
-  // Apply force-directed layout
-  return applyForceDirectedLayout(allNodes);
 });
 
 // Build edges from transferEdges prop
@@ -686,86 +634,6 @@ onMounted(() => {
   user-select: none;
   font-family: 'Roboto', sans-serif;
   text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-}
-
-.hover-tooltip {
-  transition: opacity 0.2s ease-in-out;
-  filter: drop-shadow(2px 2px 4px rgba(0, 0, 0, 0.3));
-}
-
-.madsci-node {
-  fill: #2196F3;
-}
-
-.unhomed-node {
-  animation: pulse-homed 1.5s infinite alternate;
-}
-
-@keyframes pulse-homed {
-  from {
-    fill: #2196F3;
-    background-color: #2196F3;
-  }
-  to {
-    fill: #e24c4c;
-    background-color: #e24c4c
-  }
-}
-
-.unhomed-node-warning {
-  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
-  animation: pulse 1s infinite;
-}
-
-.resource-indicator {
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-.legend-color {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 2px solid #333;
-}
-
-.legend-color.occupied {
-  background-color: #4CAF50;
-}
-
-.legend-color.empty {
-  background-color: #FFC107;
-}
-
-.legend-color.unknown {
-  background-color: #9E9E9E;
-}
-
-.legend-color.madsci-node {
-  background-color: #2196F3;
-}
-
-.legend-color.unhomed-node {
-  background-color: #2196F3;
-  animation: pulse-homed 1.5s infinite alternate;
-}
-
-.transfer-line {
-  width: 30px;
-  height: 3px;
-  background-color: #2196F3;
-  opacity: 0.6;
 }
 
 .legend-item {
