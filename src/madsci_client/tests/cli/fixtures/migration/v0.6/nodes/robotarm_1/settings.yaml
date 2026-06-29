@@ -1,0 +1,5 @@
+# Migrated from robot.node.yaml
+# Migration date: 2026-06-29T17:30:20.284983+00:00
+node_name: robotarm_1
+node_description: A test robot arm
+node_module_name: robotarm

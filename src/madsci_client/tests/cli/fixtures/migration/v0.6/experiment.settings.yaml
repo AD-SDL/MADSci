@@ -1,0 +1,4 @@
+# Migrated from experiment.manager.yaml
+# Migration date: 2026-06-29T17:30:20.271514+00:00
+experiment_manager_name: Test Experiment Manager
+experiment_manager_description: A test experiment manager

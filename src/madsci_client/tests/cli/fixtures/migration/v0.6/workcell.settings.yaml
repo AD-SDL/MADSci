@@ -1,0 +1,4 @@
+# Migrated from workcell.manager.yaml
+# Migration date: 2026-06-29T17:30:20.264964+00:00
+workcell_manager_name: Test Workcell Manager
+workcell_manager_description: A test workcell manager

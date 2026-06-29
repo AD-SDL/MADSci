@@ -1,0 +1,5 @@
+# Migrated from liquid_handler.node.yaml
+# Migration date: 2026-06-29T17:30:20.281019+00:00
+node_name: liquidhandler_1
+node_description: A test liquid handler
+node_module_name: liquidhandler

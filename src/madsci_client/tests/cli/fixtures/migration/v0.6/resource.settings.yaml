@@ -1,0 +1,4 @@
+# Migrated from resource.manager.yaml
+# Migration date: 2026-06-29T17:30:20.268261+00:00
+resource_manager_name: Test Resource Manager
+resource_manager_description: A test resource manager
