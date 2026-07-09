@@ -22,6 +22,7 @@ dependencies = [
     "pymongo>=4.10.1",
     "psycopg2-binary>=2.9.0",
     "fastapi>=0.115.4",
+    "filelock>=3.12",
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.17",
     "pydantic-extra-types>=2.10.2",
