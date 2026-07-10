@@ -645,6 +645,7 @@ class EventClient(DualModeClientMixin):
     alert = log_alert
 
     # ==================== Event Server Communication ====================
+
     @staticmethod
     def _serialize_for_json(value: Any) -> Any:
         """Convert non-JSON-serializable metadata into JSON-friendly values."""
@@ -657,7 +658,7 @@ class EventClient(DualModeClientMixin):
         if isinstance(value, tuple):
             return (EventClient._serialize_for_json(v) for v in value)
         return value
-    
+
     def _maybe_send_to_server(
         self,
         message: str,
@@ -695,11 +696,13 @@ class EventClient(DualModeClientMixin):
                 event_type = EventType.LOG_CRITICAL
 
             # Combine bound context with event context
-            event_data = self._serialize_for_json({
-                "message": message,
-                **self._bound_context,
-                **context,
-            })
+            event_data = self._serialize_for_json(
+                {
+                    "message": message,
+                    **self._bound_context,
+                    **context,
+                }
+            )
 
             if self._otel_runtime and self._otel_runtime.enabled:
                 trace_ctx = current_trace_context()
@@ -720,6 +723,7 @@ class EventClient(DualModeClientMixin):
             self._send_event_to_event_server_task(event)
         except Exception as e:
             self._handle_error(e, "Failed to send event to server")
+
     # ==================== Legacy Log Method ====================
 
     def get_log(self) -> dict[str, Event]:
