@@ -224,12 +224,12 @@ class TestEventClientLogging:
         with patch.object(client, "_send_event_to_event_server_task") as mock_send:
             client.warning(
                 "Test warning",
-                warning_category = UserWarning,
-                exceptions = [
+                warning_category=UserWarning,
+                exceptions=[
                     RuntimeError,
                     ValueError,
                 ],
-                nested = {
+                nested={
                     "warning": DeprecationWarning,
                 },
             )
@@ -248,7 +248,6 @@ class TestEventClientLogging:
             assert dumped["event_data"]["nested"] == {
                 "warning": "builtins.DeprecationWarning"
             }
-
 
     def test_log_error(self, config_without_server):
         """Test log_error method."""
