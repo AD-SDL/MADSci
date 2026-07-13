@@ -656,7 +656,7 @@ class EventClient(DualModeClientMixin):
         if isinstance(value, list):
             return [EventClient._serialize_for_json(v) for v in value]
         if isinstance(value, tuple):
-            return (EventClient._serialize_for_json(v) for v in value)
+            return tuple(EventClient._serialize_for_json(v) for v in value)
         return value
 
     def _maybe_send_to_server(
