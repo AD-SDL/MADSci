@@ -309,7 +309,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = self._request(
             "GET",
             f"{self.url}/action/{action_name}/{action_id}/status",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
@@ -451,7 +451,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = self._request(
             "GET",
             f"{self.url}/action/{action_name}/{action_id}/result",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         try:
             rest_response.raise_for_status()
@@ -518,7 +518,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             "GET",
             f"{self.url}/action",
             params={"action_id": action_id},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -536,7 +536,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = self._request(
             "GET",
             f"{self.url}/action/{action_id}/status",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         rest_response.raise_for_status()
         return ActionStatus(rest_response.json())
@@ -557,7 +557,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = self._request(
             "GET",
             f"{self.url}/action/{action_id}/result",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         rest_response.raise_for_status()
 
@@ -645,7 +645,9 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         response = self._request(
-            "GET", f"{self.url}/status", timeout=timeout or self.config.timeout_default
+            "GET",
+            f"{self.url}/status",
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return NodeStatus.model_validate(response.json())
@@ -658,7 +660,9 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         response = self._request(
-            "GET", f"{self.url}/state", timeout=timeout or self.config.timeout_default
+            "GET",
+            f"{self.url}/state",
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -671,7 +675,9 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         response = self._request(
-            "GET", f"{self.url}/info", timeout=timeout or self.config.timeout_default
+            "GET",
+            f"{self.url}/info",
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return NodeInfo.model_validate(response.json())
@@ -708,7 +714,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = self._request(
             "POST",
             f"{self.url}/admin/{admin_command}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return AdminCommandResponse.model_validate(response.json())
@@ -728,7 +734,9 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
         """
         response = self._request(
-            "GET", f"{self.url}/log", timeout=timeout or self.config.timeout_default
+            "GET",
+            f"{self.url}/log",
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -742,7 +750,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = await self._async_request(
             "GET",
             f"{self.url}/status",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return NodeStatus.model_validate(response.json())
@@ -752,7 +760,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = await self._async_request(
             "GET",
             f"{self.url}/state",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -762,7 +770,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = await self._async_request(
             "GET",
             f"{self.url}/info",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return NodeInfo.model_validate(response.json())
@@ -787,7 +795,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = await self._async_request(
             "POST",
             f"{self.url}/admin/{admin_command}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return AdminCommandResponse.model_validate(response.json())
@@ -800,7 +808,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
             "GET",
             f"{self.url}/action",
             params={"action_id": action_id},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -810,7 +818,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         response = await self._async_request(
             "GET",
             f"{self.url}/log",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -940,7 +948,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = await self._async_request(
             "GET",
             f"{self.url}/action/{action_name}/{action_id}/result",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         try:
             rest_response.raise_for_status()
@@ -983,7 +991,7 @@ class RestNodeClient(DualModeClientMixin, AbstractNodeClient):
         rest_response = await self._async_request(
             "GET",
             f"{self.url}/action/{action_id}/result",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         rest_response.raise_for_status()
 

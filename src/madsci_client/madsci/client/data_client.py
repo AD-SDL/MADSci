@@ -110,7 +110,7 @@ class DataClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.data_server_url}datapoint/{datapoint_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
@@ -250,7 +250,7 @@ class DataClient(DualModeClientMixin):
             "GET",
             f"{self.data_server_url}datapoints",
             params={"number": number},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [
@@ -276,7 +276,7 @@ class DataClient(DualModeClientMixin):
             "POST",
             f"{self.data_server_url}datapoints/query",
             json=selector,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return {
@@ -582,7 +582,7 @@ class DataClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.data_server_url}datapoint/{datapoint_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return DataPoint.discriminate(response.json())
@@ -606,7 +606,7 @@ class DataClient(DualModeClientMixin):
             "GET",
             f"{self.data_server_url}datapoints",
             params={"number": number},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [
@@ -632,7 +632,7 @@ class DataClient(DualModeClientMixin):
             "POST",
             f"{self.data_server_url}datapoints/query",
             json=selector,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return {

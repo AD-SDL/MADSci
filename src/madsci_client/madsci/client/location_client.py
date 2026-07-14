@@ -192,7 +192,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}locations",
             params=params or None,
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json()]
@@ -222,7 +222,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             params={"location_id": location_id},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -252,7 +252,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             params={"name": location_name},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -282,7 +282,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             json=location.model_dump(),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -352,7 +352,7 @@ class LocationClient(DualModeClientMixin):
                 f"{self.location_server_url}location/init",
                 json=location.model_dump(mode="json"),
                 headers=self._get_headers(),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             return Location.model_validate(response.json())
@@ -416,7 +416,7 @@ class LocationClient(DualModeClientMixin):
             json=[loc.model_dump() for loc in locations],
             params={"overwrite": overwrite},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationImportResult.model_validate(response.json())
@@ -441,7 +441,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}locations/export",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json()]
@@ -457,7 +457,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}representation_templates",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [
@@ -473,7 +473,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationRepresentationTemplate.model_validate(response.json())
@@ -490,7 +490,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}representation_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationRepresentationTemplate.model_validate(response.json())
@@ -535,7 +535,7 @@ class LocationClient(DualModeClientMixin):
                 f"{self.location_server_url}representation_template/init",
                 json=template.model_dump(mode="json"),
                 headers=self._get_headers(),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             return LocationRepresentationTemplate.model_validate(response.json())
@@ -553,7 +553,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -569,7 +569,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location_templates",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [LocationTemplate.model_validate(t) for t in response.json()]
@@ -583,7 +583,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationTemplate.model_validate(response.json())
@@ -600,7 +600,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationTemplate.model_validate(response.json())
@@ -642,7 +642,7 @@ class LocationClient(DualModeClientMixin):
                 f"{self.location_server_url}location_template/init",
                 json=template.model_dump(mode="json"),
                 headers=self._get_headers(),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             return LocationTemplate.model_validate(response.json())
@@ -660,7 +660,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -694,7 +694,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/from_template",
             json=request.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -723,7 +723,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -761,7 +761,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/{location_name}/set_representation/{node_name}",
             json=representation,
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -795,7 +795,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}/remove_representation/{node_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -827,7 +827,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/{location_name}/attach_resource",
             params={"resource_id": resource_id},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -856,7 +856,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}/detach_resource",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -884,7 +884,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}transfer/graph",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -914,7 +914,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}transfer/graph/detailed",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return TransferGraphDetailedResponse.model_validate(response.json())
@@ -959,7 +959,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}transfer/plan",
             params=params,
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return WorkflowDefinition.model_validate(response.json())
@@ -988,7 +988,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location/{location_name}/resources",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ResourceHierarchy.model_validate(response.json())
@@ -1006,7 +1006,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}locations",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json()]
@@ -1021,7 +1021,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             params={"location_id": location_id},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1036,7 +1036,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             params={"name": location_name},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1051,7 +1051,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location",
             json=location.model_dump(),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1065,7 +1065,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}locations/export",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Location.model_validate(loc) for loc in response.json()]
@@ -1079,7 +1079,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -1098,7 +1098,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/{location_name}/set_representation/{node_name}",
             json=representation,
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1115,7 +1115,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}/remove_representation/{node_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1130,7 +1130,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/{location_name}/attach_resource",
             params={"resource_id": resource_id},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1144,7 +1144,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location/{location_name}/detach_resource",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1158,7 +1158,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}transfer/graph",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -1183,7 +1183,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}transfer/plan",
             params=params,
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return WorkflowDefinition.model_validate(response.json())
@@ -1197,7 +1197,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location/{location_name}/resources",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ResourceHierarchy.model_validate(response.json())
@@ -1213,7 +1213,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}representation_templates",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [
@@ -1229,7 +1229,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationRepresentationTemplate.model_validate(response.json())
@@ -1246,7 +1246,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}representation_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationRepresentationTemplate.model_validate(response.json())
@@ -1260,7 +1260,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}representation_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -1276,7 +1276,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location_templates",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [LocationTemplate.model_validate(t) for t in response.json()]
@@ -1290,7 +1290,7 @@ class LocationClient(DualModeClientMixin):
             "GET",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationTemplate.model_validate(response.json())
@@ -1307,7 +1307,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location_template",
             json=template.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationTemplate.model_validate(response.json())
@@ -1321,7 +1321,7 @@ class LocationClient(DualModeClientMixin):
             "DELETE",
             f"{self.location_server_url}location_template/{template_name}",
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -1355,7 +1355,7 @@ class LocationClient(DualModeClientMixin):
             f"{self.location_server_url}location/from_template",
             json=request.model_dump(mode="json"),
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Location.model_validate(response.json())
@@ -1414,7 +1414,7 @@ class LocationClient(DualModeClientMixin):
             json=[loc.model_dump() for loc in locations],
             params={"overwrite": overwrite},
             headers=self._get_headers(),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LocationImportResult.model_validate(response.json())
