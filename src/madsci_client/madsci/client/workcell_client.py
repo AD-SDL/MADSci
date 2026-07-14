@@ -119,7 +119,9 @@ class WorkcellClient(DualModeClientMixin):
         """
         url = f"{self.workcell_server_url}workflow/{workflow_id}"
         response = self._request(
-            "GET", url, timeout=timeout or self.config.timeout_default
+            "GET",
+            url,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
 
         if not response.is_success and response.content:
@@ -152,7 +154,9 @@ class WorkcellClient(DualModeClientMixin):
         """
         url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
         response = self._request(
-            "GET", url, timeout=timeout or self.config.timeout_default
+            "GET",
+            url,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         if not response.is_success and response.content:
             self.logger.error(
@@ -196,7 +200,7 @@ class WorkcellClient(DualModeClientMixin):
             "POST",
             url,
             json=workflow_definition.model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
 
         if not response.is_success and response.content:
@@ -443,7 +447,7 @@ class WorkcellClient(DualModeClientMixin):
                 "workflow_id": workflow_id,
                 "index": index,
             },
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         if await_completion:
@@ -492,7 +496,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "POST",
             url,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         new_workflow = Workflow.model_validate(response.json())
@@ -656,7 +660,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.workcell_server_url}nodes",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return {
@@ -682,7 +686,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.workcell_server_url}node/{node_name}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Node.model_validate(response.json())
@@ -725,7 +729,7 @@ class WorkcellClient(DualModeClientMixin):
                 "node_description": node_description,
                 "permanent": permanent,
             },
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Node.model_validate(response.json())
@@ -812,7 +816,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.workcell_server_url}workflows/queue",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Workflow.model_validate(wf) for wf in response.json()]
@@ -834,7 +838,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.workcell_server_url}state",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return WorkcellState.model_validate(response.json())
@@ -860,7 +864,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/pause",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -886,7 +890,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/resume",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -912,7 +916,7 @@ class WorkcellClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/cancel",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -927,7 +931,9 @@ class WorkcellClient(DualModeClientMixin):
         """Check the status of a workflow using its ID asynchronously."""
         url = f"{self.workcell_server_url}workflow/{workflow_id}"
         response = await self._async_request(
-            "GET", url, timeout=timeout or self.config.timeout_default
+            "GET",
+            url,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         if not response.is_success and response.content:
             self.logger.error(
@@ -944,7 +950,9 @@ class WorkcellClient(DualModeClientMixin):
         """Get the definition of a workflow asynchronously."""
         url = f"{self.workcell_server_url}workflow_definition/{workflow_definition_id}"
         response = await self._async_request(
-            "GET", url, timeout=timeout or self.config.timeout_default
+            "GET",
+            url,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         if not response.is_success and response.content:
             self.logger.error(
@@ -960,7 +968,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.workcell_server_url}nodes",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return {
@@ -974,7 +982,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.workcell_server_url}node/{node_name}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Node.model_validate(response.json())
@@ -1025,7 +1033,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.workcell_server_url}workflows/queue",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Workflow.model_validate(wf) for wf in response.json()]
@@ -1037,7 +1045,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.workcell_server_url}state",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return WorkcellState.model_validate(response.json())
@@ -1049,7 +1057,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/pause",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -1061,7 +1069,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/resume",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -1073,7 +1081,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.workcell_server_url}workflow/{workflow_id}/cancel",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -1107,7 +1115,7 @@ class WorkcellClient(DualModeClientMixin):
             "POST",
             url,
             params=params,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
@@ -1136,7 +1144,7 @@ class WorkcellClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             url,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Workflow.model_validate(response.json())
