@@ -64,7 +64,7 @@
 | src/madsci\_client/madsci/client/cli/utils/\_\_init\_\_.py                                             |        2 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/cli/utils/cli\_decorators.py                                          |       82 |        0 |    100% |           |
 | src/madsci\_client/madsci/client/cli/utils/formatting.py                                               |       58 |        1 |     98% |       167 |
-| src/madsci\_client/madsci/client/cli/utils/output.py                                                   |      102 |       10 |     90% |101, 173, 243-245, 256-258, 285, 297 |
+| src/madsci\_client/madsci/client/cli/utils/output.py                                                   |      104 |       10 |     90% |101, 175, 245-247, 258-260, 287, 299 |
 | src/madsci\_client/madsci/client/cli/utils/service\_health.py                                          |       65 |        4 |     94% |167, 193-195 |
 | src/madsci\_client/madsci/client/client\_mixin.py                                                      |      203 |       27 |     87% |285, 331, 368, 375, 411, 425, 440-478, 512, 530 |
 | src/madsci\_client/madsci/client/data\_client.py                                                       |      226 |       78 |     65% |84, 108, 133-141, 152-153, 164-176, 270, 320-321, 342-343, 407, 430, 446-454, 482-484, 536-546, 577-588, 611-612, 625-638, 656-723 |
@@ -221,7 +221,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                             |      303 |       87 |     71% |81, 87, 145-204, 231-232, 274, 283-287, 293-297, 321-322, 333, 343-346, 354-365, 397-401, 419-424, 441-445, 461, 463, 469, 481, 490-491, 545-546, 550-559, 584-585, 622-623, 638, 649, 686-696, 703-704 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                              |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                              |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                              | **30772** | **9159** | **70%** |           |
+| **TOTAL**                                                                                              | **30774** | **9159** | **70%** |           |
 
 
 ## Setup coverage badge
