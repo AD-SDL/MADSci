@@ -20,6 +20,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "requests>=2.32.3",
     "pymongo>=4.10.1",
+    "psycopg2-binary>=2.9.0",
     "fastapi>=0.115.4",
     "filelock>=3.12",
     "uvicorn[standard]>=0.32.0",
