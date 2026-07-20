@@ -951,6 +951,10 @@ def test_get_datapoint_id_single_datapoint_with_label() -> None:
     result_id = workflow.get_datapoint_id(step_key="step1", label="output_file")
     assert result_id == datapoint_id
 
+    # Should raise a KeyError for single datapoint steps with nonexistent label provided.
+    with pytest.raises(KeyError):
+        workflow.get_datapoint_id(step_key="step1", label="nonexistent_label")
+
 
 def test_get_datapoint_id_multiple_datapoints_with_label() -> None:
     """Test get_datapoint_id with multiple datapoints and specific label."""
