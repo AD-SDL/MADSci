@@ -119,3 +119,16 @@ See the full list of everyone who has contributed on the
 [contributors graph](https://github.com/AD-SDL/MADSci/graphs/contributors).
 Contributions are welcome — see the [Contributing Guide](CONTRIBUTING.md) to get
 involved.
+
+---
+
+:::{image} assets/logos/argonne.svg
+:alt: Argonne National Laboratory
+:height: 52px
+:align: center
+:::
+
+<p style="text-align:center; font-size:0.9em; opacity:0.75;">
+Developed by the Rapid Prototyping Lab at <strong>Argonne National Laboratory</strong>.<br/>
+Argonne is a U.S. Department of Energy laboratory managed by UChicago Argonne, LLC.
+</p>
