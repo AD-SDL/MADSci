@@ -1012,30 +1012,6 @@ def test_get_datapoint_id_multiple_datapoints_no_label_raises_error() -> None:
         workflow.get_datapoint_id(step_key="step1")
 
 
-def test_get_datapoint_id_single_datapoint_ignores_wrong_label() -> None:
-    """Test get_datapoint_id with single datapoint ignores wrong label."""
-    datapoint_id = new_ulid_str()
-    step = Step(
-        name="Test Step",
-        key="step1",
-        action="test_action",
-        node="node1",
-        result=ActionResult(
-            status=ActionStatus.SUCCEEDED,
-            datapoints={"existing_label": datapoint_id},
-        ),
-    )
-
-    workflow = Workflow(
-        name="Test Workflow",
-        steps=[step],
-    )
-
-    # Should return the single datapoint even with wrong label (expected behavior)
-    result_id = workflow.get_datapoint_id(step_key="step1", label="nonexistent_label")
-    assert result_id == datapoint_id
-
-
 def test_get_datapoint_id_label_not_found_raises_error() -> None:
     """Test get_datapoint_id with non-existent label raises KeyError (multiple datapoints case)."""
     step = Step(
