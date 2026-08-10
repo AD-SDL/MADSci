@@ -36,12 +36,6 @@ import Resource from "./ResourceComponents/Resource.vue";
 import Consumable from "./ResourceComponents/Consumable.vue";
 const props = defineProps(['modal_title', 'modal_text'])
 const flowdef = ref(false)
-import { urls } from "@/store";
+import { urls, delete_resource } from "@/store";
 
-const delete_resource = (resource_id: string) => {
-  fetch(urls.value.resource_server_url.concat('resource/').concat(resource_id), {
-    method: "DELETE",
-  });
-
-}
 </script>

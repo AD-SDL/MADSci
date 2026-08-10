@@ -8,6 +8,10 @@
       no-data-text="No Resources" density="compact" :sort-by="sortBy" :hide-default-footer="resources.length <= 10"  :hide-default-header="hide_header" show-expand>
       <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
         <tr @click="set_modal(item.resource_name, item)">
+          <td><v-checkbox-btn
+          :update:modelValue="(val: any) => modify_to_delete(val, item.resource_id)"
+          class="pe-2"
+        ></v-checkbox-btn></td>
           <td>{{ item.resource_name }}</td>
           <td>{{ item.base_type }}</td>
           <td>{{ item.created_at }}</td>
@@ -33,10 +37,12 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { VDataTable } from 'vuetify/components';
+import { to_delete_list } from "@/store";
 const props = defineProps(['resources', 'parent_id',  'hide_header'])
 const modal = ref(false)
 const modal_text = ref()
 const modal_title = ref()
+const pruned_resources = ref()
 const expanded = ref<string[]>([]);
 const sortBy: VDataTable['sortBy'] = [{ key: 'created_at', order: 'desc' }];
 const arg_headers = [
@@ -65,6 +71,17 @@ function prune_tree(input_resources: any): any[] {
   });
   return return_resources
 
+}
+
+function modify_to_delete(val: any, resource_id: string) {
+  if (val) {
+    to_delete_list.value.push(resource_id)
+  } else {
+    const index = to_delete_list.value.indexOf(resource_id);
+    if (index > -1) {
+      to_delete_list.value.splice(index, 1);
+    }
+  }
 }
 
 
