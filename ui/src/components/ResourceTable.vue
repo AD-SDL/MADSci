@@ -8,8 +8,10 @@
       no-data-text="No Resources" density="compact" :sort-by="sortBy" :hide-default-footer="resources.length <= 10"  :hide-default-header="hide_header" show-expand>
       <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
         <tr @click="set_modal(item.resource_name, item)">
-          <td><v-checkbox-btn
-          :update:modelValue="(val: any) => modify_to_delete(val, item.resource_id)"
+          <td ><v-checkbox-btn
+          :v-model="delete_list"
+          @update:modelValue="function(val: any) {modify_to_delete(val, item) }"
+          @click.stop
           class="pe-2"
         ></v-checkbox-btn></td>
           <td>{{ item.resource_name }}</td>
@@ -40,12 +42,14 @@ import { VDataTable } from 'vuetify/components';
 import { to_delete_list } from "@/store";
 const props = defineProps(['resources', 'parent_id',  'hide_header'])
 const modal = ref(false)
+const delete_list = ref([])
 const modal_text = ref()
 const modal_title = ref()
 const pruned_resources = ref()
 const expanded = ref<string[]>([]);
 const sortBy: VDataTable['sortBy'] = [{ key: 'created_at', order: 'desc' }];
 const arg_headers = [
+  { title: 'Select', key: 'select', sortable: false },
   { title: 'Name', key: 'resource_name' },
   { title: 'Base Type', key: 'base_type' },
   { title: 'Created At', key: 'created_at' },
@@ -66,18 +70,21 @@ watch(() => props.resources, (newResources: any) => {
 );
 function prune_tree(input_resources: any): any[] {
   var return_resources: any = []
-  input_resources.forEach((element: any) => { if((element.parent_id == null) || element.parent_id == props.parent_id) { return_resources.push(element)}
+  input_resources.forEach((element: any) => { if((element.parent_id == null) || element.parent_id == props.parent_id) { element.selected = false; return_resources.push(element)}
 
   });
   return return_resources
 
 }
 
-function modify_to_delete(val: any, resource_id: string) {
+//"(val: any) => modify_to_delete(val, item.resource_id)"
+
+function modify_to_delete(val: boolean, item: any) {
+  console.log("Modifying to_delete_list: ", item.resource_id)
   if (val) {
-    to_delete_list.value.push(resource_id)
+    to_delete_list.value.push(item.resource_id)
   } else {
-    const index = to_delete_list.value.indexOf(resource_id);
+    const index = to_delete_list.value.indexOf(item.resource_id);
     if (index > -1) {
       to_delete_list.value.splice(index, 1);
     }
