@@ -209,4 +209,4 @@ services:
       sila_example_server:
         condition: service_healthy
 volumes:
-  test_volume:
+  test_madsci:
