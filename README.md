@@ -160,7 +160,7 @@
 | src/madsci\_common/madsci/common/types/location\_types.py                                              |      179 |        7 |     96% |245, 250, 355-358, 692 |
 | src/madsci\_common/madsci/common/types/manager\_types.py                                               |       55 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/migration\_types.py                                             |       59 |        1 |     98% |       143 |
-| src/madsci\_common/madsci/common/types/node\_types.py                                                  |      210 |        8 |     96% |461, 540, 548, 554, 563, 571, 575, 605 |
+| src/madsci\_common/madsci/common/types/node\_types.py                                                  |      210 |        6 |     97% |461, 540, 554, 563, 575, 605 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                             |       37 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/registry\_types.py                                              |       41 |        1 |     98% |        86 |
 | src/madsci\_common/madsci/common/types/resource\_types/\_\_init\_\_.py                                 |      296 |       46 |     84% |119, 163, 240, 250, 271, 276, 280, 284, 325, 338, 344, 366, 370, 404, 426, 430, 478-482, 512, 555, 560-561, 572-588, 591-600, 607-609, 640, 655, 684-687, 724-727, 764, 769, 779, 783 |
@@ -221,7 +221,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                             |      303 |       87 |     71% |81, 87, 145-204, 231-232, 274, 283-287, 293-297, 321-322, 333, 343-346, 354-365, 397-401, 419-424, 441-445, 461, 463, 469, 481, 490-491, 545-546, 550-559, 584-585, 622-623, 638, 649, 686-696, 703-704 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                              |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                              |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                              | **30784** | **9158** | **70%** |           |
+| **TOTAL**                                                                                              | **30784** | **9156** | **70%** |           |
 
 
 ## Setup coverage badge
