@@ -24,7 +24,7 @@ x-madsci-service: &madsci-service
   volumes:
     - .:/home/madsci/example_lab
     - ../notebooks:/home/madsci/notebooks
-    - ../../.madsci:/home/madsci/.madsci
+    - test_madsci:/home/madsci/.madsci
     - ../../src:/home/madsci/MADSci/src
   restart: unless-stopped
   working_dir: /home/madsci/example_lab
@@ -208,3 +208,5 @@ services:
         condition: service_started
       sila_example_server:
         condition: service_healthy
+volumes:
+  test_volume:
