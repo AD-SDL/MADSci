@@ -510,12 +510,12 @@ class Workflow(WorkflowDefinition):
                         f"No datapoints found in step {step_key} of workflow run {self.workflow_id}"
                     )
                 datapoint_ids = step.result.datapoints.model_dump()
-                if len(datapoint_ids) == 1:
-                    return next(iter(datapoint_ids.values()))
                 if label is None:
-                    raise ValueError(
-                        f"Step {step_key} has multiple datapoints, label must be specified"
-                    )
+                    if len(datapoint_ids) != 1:
+                        raise ValueError(
+                            f"Step {step_key} has multiple datapoints, label must be specified"
+                        )
+                    return next(iter(datapoint_ids.values()))
                 if label in datapoint_ids:
                     return datapoint_ids[label]
                 raise KeyError(
