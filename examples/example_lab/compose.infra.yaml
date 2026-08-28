@@ -20,7 +20,7 @@ services:
     ports:
       - ${CACHE_PORT:-6379}:6379
     volumes:
-      - test_madsci_infra:/data
+      - test_madsci_valkey:/data
     command: valkey-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
 
   # PostgreSQL with DocumentDB extension — used exclusively by FerretDB.
@@ -35,7 +35,7 @@ services:
     ports:
       - ${POSTGRES_PORT:-5432}:5432
     volumes:
-      - test_madsci_infra:/var/lib/postgresql/data
+      - test_madsci_postgres:/var/lib/postgresql/data
 
   # Standard PostgreSQL — used by the Resource Manager for relational data.
   madsci_postgres_resources:
@@ -49,7 +49,7 @@ services:
     ports:
       - ${RESOURCE_POSTGRES_PORT:-5434}:5432
     volumes:
-      - test_madsci_infra:/var/lib/postgresql/data
+      - test_madsci_postgres_resources:/var/lib/postgresql/data
 
   madsci_seaweedfs:
     container_name: madsci_seaweedfs
@@ -63,7 +63,10 @@ services:
       - AWS_ACCESS_KEY_ID=${OBJECT_STORAGE_ACCESS_KEY:-madsci}
       - AWS_SECRET_ACCESS_KEY=${OBJECT_STORAGE_SECRET_KEY:-madsci}
     volumes:
-      - test_madsci_infra:/data
+      - test_madsci_seaweedfs:/data
     command: "server -s3 -dir=/data -s3.port=8333"
 volumes:
-  test_madsci_infra:
+  test_madsci_postgres:
+  test_madsci_postgres_resources:
+  test_madsci_seaweedfs:
+  test_madsci_valkey:
