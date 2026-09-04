@@ -1,11 +1,12 @@
 # Agent Skills Reference
 
-MADSci includes four domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
+MADSci includes five domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
 
 ## Available Skills
 
 | Skill | Trigger | What It Teaches |
 |-------|---------|-----------------|
+| `madsci-install` | Installing or bootstrapping the stack | Interactive install flow: pip/Docker/PDM/devbox choice, prereq checks, error-recovery prompts, end-to-end verification |
 | `madsci-nodes` | Node module code | AbstractNode, RestNode, `@action` decorator, file parameters, lifecycle, testing |
 | `madsci-experiments` | Experiment code | 4 modalities (Script, Notebook, TUI, Node), lifecycle, `manage_experiment()` |
 | `madsci-managers` | Manager services | AbstractManagerBase, settings, DB handlers, clients, health checks |
@@ -27,6 +28,7 @@ Skills are **model-invocable** — the agent automatically loads the relevant sk
 You can explicitly invoke a skill in Claude Code with a slash command:
 
 ```
+/madsci-install
 /madsci-nodes
 /madsci-experiments
 /madsci-managers
@@ -36,6 +38,17 @@ You can explicitly invoke a skill in Claude Code with a slash command:
 This is useful when you want to preload context before asking a question.
 
 ## Skill Summaries
+
+### madsci-install
+
+Covers the interactive install and bootstrap workflow — choosing the right install path, checking prereqs, recovering from common errors, and verifying the running stack.
+
+**Key topics:**
+- Four install goals: try the example lab, start a new lab, install specific packages, contribute to MADSci itself
+- Prereq matrix (Python 3.10+, Docker, PDM, `just`, `uv`, `git`, `yarn`) with pre-flight checks per goal
+- Interactive fallbacks via `AskUserQuestion` when Docker is missing, the PDM/uv resolver conflicts, ports are bound, `.madsci/` resolves to the wrong directory, or compose stalls on healthchecks
+- End-to-end verification via [`install-check.sh`](../../.agents/skills/madsci-install/install-check.sh) — Python + import sanity, `/health` on ports 8001–8006, dashboard on 8000, `madsci status` / `madsci doctor`, example-lab seed data
+- Bundled [`troubleshooting.md`](../../.agents/skills/madsci-install/troubleshooting.md) keyed by error signature
 
 ### madsci-nodes
 
