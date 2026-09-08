@@ -1,174 +1,245 @@
 ---
 name: madsci-install
-description: Install or bootstrap the MADSci stack. Use when the user asks to install MADSci, spin up the example lab, set up a new lab, run the services locally, prepare a dev environment for contributing, choose between pip / Docker / PDM / devbox, or debug install/startup failures (missing Docker, PDM/uv resolver errors, `ModuleNotFoundError`, port conflicts, `.madsci/` discovery). This skill is *interactive*: it asks the user before making non-reversible choices, resolves errors by offering the available fallbacks, and finishes by inspecting the running stack to confirm success.
+description: Install, bootstrap, or uninstall a MADSci stack (a lab). Use when the user asks to install MADSci, start a lab, choose an install method (Docker vs. native/pure-Python `--mode local`), point a fresh install at existing MADSci data, OR uninstall / tear down / remove / clean up a MADSci install (stop the stack, `docker compose down`, `pip uninstall`, wipe `.madsci/` data), or debug install/startup failures (missing Docker, `ModuleNotFoundError`, port conflicts, `.madsci/` discovery). This skill is *interactive*: it asks the user before making non-reversible or data-destroying choices, resolves errors by offering the available fallbacks, and finishes by inspecting the host to confirm success. Out of scope: the shipped example lab in the MADSci repo (a user who wants that just runs `docker compose up` at the repo root), and seeding a fresh lab with resources/nodes/locations (a separate skill).
 ---
 
 # MADSci Install & Bootstrap
 
-Getting MADSci running is a *branching* task, not a linear script. There are four legitimate install paths (pip client, Docker Compose, PDM dev setup, devbox shell), each with its own prerequisites and gotchas, and the right choice depends on what the user is trying to do. **Never guess for the user** — the cost of picking wrong is a wasted `pdm install`, a mangled venv, or a Docker daemon left running for something they didn't need.
+Getting MADSci running is a branching task with one primary axis: **method** — **Docker** (full persistent stack in containers) or **local** (pure-Python, in-memory, via `madsci start --mode local`). This skill installs MADSci on the host and stands up a lab; if the user has existing MADSci data, it points the new stack at it; if not, it starts fresh.
 
-This skill is interactive. Every decision that can't be inferred from the conversation MUST be resolved with the **AskUserQuestion tool** before you run a command. Every recoverable error MUST offer the user the available fallbacks rather than being retried silently.
+Covers both install (Steps 1–5) and uninstall (Step 6 → [uninstall.md](uninstall.md)).
 
-## Bundled Reference Files
+## Rules of engagement
 
-- **[install-check.sh](install-check.sh)** — the verification recipe you run at the end. Pings each manager's `/health`, checks the dashboard, prints a pass/fail matrix.
-- **[troubleshooting.md](troubleshooting.md)** — install-time failure modes and their fixes, keyed by error signature. Read this the moment a command fails.
+- **Never guess for the user.** Every decision that can't be inferred from the conversation MUST be resolved with the **AskUserQuestion tool** before you run a command.
+- **Every recoverable error offers fallbacks** — never a silent retry.
+- **Announce every locked-in decision** (method, existing data, UI) in a one-liner *before* running any install command in Step 3.
+- **Read [troubleshooting.md](troubleshooting.md) before writing your own diagnosis** — the common failures are catalogued.
 
-Read `troubleshooting.md` before writing your own diagnosis of a failed install command — the common ones are already catalogued.
+## Bundled reference files
 
-## Step 1 — Determine the install goal
+- [install-check.sh](install-check.sh) — install verification (`--method docker|local`, `--with-ui`/`--no-ui`).
+- [uninstall.md](uninstall.md) — teardown workflow (scope selection, per-method removal, data wipe).
+- [uninstall-check.sh](uninstall-check.sh) — teardown verification (`--method docker|local` `--scope stop|remove|wipe`).
+- [troubleshooting.md](troubleshooting.md) — failure modes keyed by error signature.
 
-Before running anything, resolve *what the user actually wants*. If the conversation doesn't already make this obvious, ask via **AskUserQuestion**:
+## Scope
 
-> **Question:** "What are you trying to do with MADSci?"
-> **Header:** `Install goal`
+**In scope:**
+- Install `madsci-client` (and manager packages when `--method local` needs them) on the host.
+- Run `madsci init <lab-name>` to scaffold a lab directory if the user doesn't already have one.
+- Point the new stack at existing MADSci data (Docker method only — bind-mounts an existing `.madsci/` from a user-specified path).
+- Start the stack via `madsci start` or `madsci start --mode local`.
+- Verify the install with `install-check.sh`.
+
+**Out of scope (handoff, don't attempt here):**
+- The shipped example lab at the repo root — a user who wants that runs `git clone && docker compose up` from the repo (no skill needed).
+- Seeding a fresh lab with resources/nodes/locations — handled by a separate skill.
+- Contributing / dev environment setup (`just init`, `pdm install`, pre-commit hooks) — handled by a contributor skill.
+- Per-package library installs (`pip install madsci.<pkg>` for use as a dependency) — the user's own project owns that.
+
+## Step 1 — Choose the install method
+
+The one branching decision at the top of the install:
+
+- **`docker`** — full stack (7 managers + dashboard + real databases: FerretDB, PostgreSQL, Valkey, SeaweedFS) in containers via Docker Compose. Persistent data. Matches production/CI.
+- **`local`** — pure-Python install run with `madsci start --mode local`: all managers in-process with in-memory backends. No Docker, no external databases. ⚠ **Data is ephemeral and lost on restart** (mode is foreground-only, no persistence).
+
+> **Question:** "How do you want to run MADSci — in Docker, or natively (pure Python)?"
+> **Header:** `Install method`
 > **Options:**
-> 1. **Try the example lab** — clone the repo and `docker compose up` the shipped example. Fastest way to see MADSci running. *(Recommended for first-time users.)*
-> 2. **Start a new lab** — `pip install madsci-client`, `madsci init <name>`, then `madsci start`. Right when the user has their own lab in mind.
-> 3. **Install specific packages** — `pip install madsci.<pkg>` into an existing project (e.g. only the client, only the resource manager). Right when MADSci is a dependency of something else the user already has.
-> 4. **Contribute to MADSci itself** — clone the repo, `just init` (PDM) or `devbox shell`, run tests. Right when the user wants to edit MADSci source.
+> 1. **Docker (Compose)** — full persistent stack with real databases. Needs a running Docker daemon. *(Recommended for anything beyond a quick trial.)*
+> 2. **Native (`--mode local`, in-memory)** — pure Python, no Docker, no databases to install. Fast to start, but **data is ephemeral and lost on restart**. Good for a quick look or offline/unit-style work.
 
-The four goals map to four workflows below. **Announce the chosen goal back to the user in one line before proceeding** ("Installing for goal: *Try the example lab*").
+Native is not a lock-in — the same lab directory works with `madsci start` (Docker mode) later.
 
-## Step 2 — Check prerequisites for the chosen path
+## Step 2 — Ask about existing MADSci data
 
-Do this *before* the first install command so you fail fast with a real question, not a cryptic tool error. Run these checks in parallel:
+Before running any install commands, ask whether the user has existing MADSci data to load into the new stack:
+
+> **Question:** "Do you have existing MADSci data you want the new stack to use? (a `.madsci/` directory from a prior install, or a backup path)"
+> **Header:** `Existing data?`
+> **Options:**
+> 1. **No — fresh install** — start with an empty stack, no prior data. *(Default if you're setting up MADSci for the first time on this machine.)*
+> 2. **Yes — I'll give you the path** — you'll provide the absolute path to an existing `.madsci/` directory. I'll wire the new stack to it.
+
+**If the user answers "Yes":**
+
+- Ask for the path (a normal follow-up message, not an AskUserQuestion — the path is free-form).
+- Verify the path exists and looks like a `.madsci/` directory (`ls -la <path>` — expect `postgresql/`, `mongodb/`, `valkey/`, `seaweedfs/`, `logs/`, or at minimum a `registry.json`).
+- **Method-specific behavior:**
+  - `--method docker`: the new lab's compose file will bind-mount this path. Practical implementation: copy or symlink the existing `.madsci/` into the new lab directory *before* `madsci start`. Symlink is reversible; copy is safer but slower.
+  - `--method local`: **in-memory backends CANNOT load persisted data.** Warn the user explicitly:
+
+    > **Question:** "You chose method `local`, but Native mode uses in-memory backends and cannot load persisted data from `.madsci/`. What do you want to do?"
+    > **Header:** `Local can't load data`
+    > **Options:**
+    > 1. **Switch to method `docker`** — Docker can bind-mount your existing `.madsci/`. Recommended if data preservation matters.
+    > 2. **Proceed with method `local`, ignore existing data** — fresh in-memory stack; existing data stays on disk untouched but won't be used.
+    > 3. **Abort** — stop here so I can back up or migrate the data first.
+
+- **Schema-version check** (Docker method only, after mounting): the Resource Manager's `DatabaseVersionChecker` will validate the schema on startup. If mismatched, `madsci start` fails with a "Database version mismatch" error. Ask:
+
+    > **Question:** "The existing data was created by a different MADSci version. How do you want to proceed?"
+    > **Header:** `Version mismatch`
+    > **Options:**
+    > 1. **Migrate the data to the current version** — I'll run `python -m madsci.resource_manager.migration_tool --db_url <url>` (auto-detected from the mounted data). Backups are created automatically. *(Recommended.)*
+    > 2. **Load anyway, ignore the mismatch** — proceed and hope the schema is forward-compatible. Risk: manager crashes at startup.
+    > 3. **Discard and start fresh** — abandon the existing data (it stays on disk, but the new stack ignores it).
+
+## Step 3 — Include the dashboard UI?
+
+Lab Manager on port 8000 has two personalities: **API-only** (FastAPI + `/docs` + `/health`; `GET /` returns 404 JSON), or **API + dashboard** (Vue 3 SPA mounted at `/`).
+
+**Why the split exists:** the dashboard is a separate Vue project ([ui/](../../ui/) — `squid_dashboard`) built with Vite; `src/madsci_squid/pyproject.toml` deliberately excludes it from the wheel, so `pip install madsci.squid` gives you API-only. The Docker `madsci_dashboard` image bakes the built bundle in ([docker/Dockerfile.dashboard](../../docker/Dockerfile.dashboard)); Lab Manager mounts `dashboard_files_path` (default `~/MADSci/ui/dist`) at `/` only if the directory exists ([lab_server.py:48-55](../../src/madsci_squid/madsci/squid/lab_server.py#L48-L55)).
+
+| Method | Default UI status | Ask? |
+|---|---|---|
+| `docker` | ✅ Included (compose typically uses `madsci_dashboard` image) | No |
+| `local` | ❌ Missing by default (pip-installed `madsci.squid` doesn't bundle it) | **Yes** |
+
+For `--method local`, ask:
+
+> **Question:** "Include the dashboard UI on port 8000? Without it, port 8000 serves only the FastAPI JSON API (`/docs`, `/health`, endpoints); `GET /` returns 404. Building the UI requires Node.js 18+ and yarn."
+> **Header:** `Include UI?`
+> **Options:**
+> 1. **Yes — build the UI locally** — `cd ui && yarn install && yarn build` produces `ui/dist/`, then set `LAB_DASHBOARD_FILES_PATH=<repo>/ui/dist` before `madsci start`. Requires Node 18+ and yarn. *(Recommended if you want the dashboard.)*
+> 2. **Yes — extract the UI from the `madsci_dashboard` Docker image** — `docker create` a scratch container from `ghcr.io/ad-sdl/madsci_dashboard:latest` and `docker cp /home/madsci/MADSci/ui/dist` out to a local path, then set `LAB_DASHBOARD_FILES_PATH` to that path. No Node install needed on the host, but you need Docker running just for this extraction step.
+> 3. **No — API-only is fine** — `GET /` returns 404; use `/docs` for the Swagger UI. Fastest install. You can add the UI later without reinstalling.
+
+The answer drives Step 4 prereqs (node/yarn), Step 5 subrecipe, and Step 6's `--with-ui`/`--no-ui` flag.
+
+## Step 4 — Check prerequisites
+
+Run in parallel *before* the first install command:
 
 | Prereq | Check | Needed for |
 |---|---|---|
-| Python 3.10+ | `python3 --version` | all paths |
-| Docker daemon | `docker info` (exit 0) | goals 1, 2 (Docker mode), 4 (integration tests) |
-| `pdm` | `pdm --version` | goal 4 |
-| `just` | `just --version` | goal 4 (optional — commands can be run from `.justfile` manually) |
-| `uv` | `uv --version` | goal 4, only relevant if `pdm.lock` resolver mismatch appears |
-| `git` | `git --version` | goals 1, 4 |
-| `yarn` | `yarn --version` | goal 4, only for dashboard work in `ui/` |
+| Python 3.10+ | `python3 --version` | all paths (hard block if <3.10) |
+| Docker daemon | `docker info` (exit 0) | `--method docker` |
+| `node` (>=18), `yarn` | `node --version && yarn --version` | UI answer = "build locally" |
+| `docker` (for UI extract only) | `docker --version` | UI answer = "extract from image" (even with `--method local`) |
+| Package manager (`pip` / `uv` / `pipx`) | `pip --version` etc. | needed for the host install; user picks below |
 
-If Python is < 3.10, stop and tell the user — this is a hard block, no workaround is offered by MADSci.
-
-**Every missing prereq → AskUserQuestion.** Do not silently install system packages or invoke a package manager on the user's machine. Example when Docker is missing on a system targeting goal 1 or 2:
+When Docker is missing and the chosen method needs it:
 
 > **Question:** "Docker isn't installed (or the daemon isn't running). How do you want to proceed?"
 > **Header:** `No Docker`
 > **Options:**
 > 1. **Install Docker Desktop / Engine now** — I'll open the official install docs; you install it, I'll retry. *(Recommended if you plan to run MADSci long-term.)*
-> 2. **Switch to local mode (`madsci start --mode=local`)** — pure Python, no Docker. Only works for goal 2 (new lab), and needs FerretDB/PostgreSQL running elsewhere or a local sqlite fallback where supported.
+> 2. **Switch to `--method local`** — pure Python, in-memory backends, no Docker; **data is ephemeral**. Not viable if Step 2 said "yes, load existing data" (in-memory cannot load).
 > 3. **Use Rancher Desktop or Podman instead** — I'll retry against a compatible daemon.
-> 4. **Abort** — stop the install.
+> 4. **Abort**.
 
-Do the same shape of prompt for any other missing prereq you hit. Never assume the user prefers to install a system dependency.
+If the user takes option 2, record the method as `local` and re-run Step 3 (UI ask changes).
 
-## Step 3 — Run the install for the chosen goal
+When Node/yarn are missing and the user chose "build the UI locally":
 
-Follow only the section for the goal picked in Step 1.
+> **Question:** "Node.js and/or yarn are not installed, but you asked to build the dashboard UI locally. How do you want to install them?"
+> **Header:** `No Node/yarn`
+> **Options:**
+> 1. **NodeSource + yarn via apt (system-wide, needs sudo)** — `curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash - && sudo apt install nodejs && sudo npm install -g yarn`. Correct Node version (20 LTS). System-wide, requires sudo.
+> 2. **nvm (per-user, no sudo)** — `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/master/install.sh | bash`, then `nvm install 20 && npm install -g yarn`. User-scoped. *(Recommended if you don't want a system-wide Node install.)*
+> 3. **Extract the UI from the `madsci_dashboard` Docker image instead** — switches Step 3's UI answer to option 2 (no Node needed). Only viable if Docker is available.
+> 4. **Downgrade the UI answer to "No — API-only"** — skip the UI build entirely.
+> 5. **Install Node/yarn yourself** — you handle it; I'll retry.
 
-### Goal 1: Try the example lab
+## Step 5 — Run the install
+
+Before running any command in this step, announce the locked-in decisions in one line, e.g.:
+
+> Installing MADSci with method *local*, existing data *none*, UI *enabled via local build*.
+
+**Common setup (both methods):**
 
 ```bash
-git clone https://github.com/AD-SDL/MADSci.git
-cd MADSci
-docker compose up            # foreground; add -d to detach
-```
-
-- Uses host network mode → the manager ports (8001–8006) and the dashboard (8000) must all be free on the host. If `lsof -i :8000` shows a conflict, **AskUserQuestion**: stop the conflicting process, remap the port in `compose.yaml`, or abort.
-- The example lab config lives at [examples/example_lab/](../../examples/example_lab/); do not modify [compose.yaml](../../compose.yaml) at the repo root without telling the user — that's the file `docker compose up` at the root uses.
-
-### Goal 2: Start a new lab
-
-```bash
-pip install madsci-client
-madsci init <lab-name>       # interactive wizard; asks for lab name, template, etc.
+pip install madsci-client                    # or `uv pip install madsci-client` in a venv
+madsci init <lab-name>                       # scaffolds ~/<lab-name>/ with settings.yaml, .env, .madsci/
 cd <lab-name>
-madsci start                 # Docker mode (default)
-# OR
-madsci start --mode=local    # pure Python mode
 ```
 
-- If you already ran Step 2 and Docker is available, default to Docker mode. Otherwise, if the user picked local mode in the Step 2 fallback, honor that here.
-- `madsci init` may prompt for a template. Do not answer for the user — let the wizard interact, or if they want it non-interactive, use `madsci new lab --template standard <name>` and note the choice.
-- See the [madsci-cli](../madsci-cli/SKILL.md) skill for the full flag reference on `init` / `start` / `stop` / `status`.
+`madsci init` is interactive. If the user prefers non-interactive, use `madsci init --no-interactive --name <lab-name>` and mention the choice.
 
-### Goal 3: Install specific packages
+**If Step 2 said "yes, load existing data" (only viable with `--method docker`):**
 
-Package matrix (from [README.md:65-82](../../README.md#L65-L82)):
+Before `madsci start`, put the existing `.madsci/` in place inside the new lab directory. Two options — offer both:
 
-| Package | Purpose |
-|---|---|
-| `madsci.common` | Shared types and utilities |
-| `madsci.client` | Client libraries |
-| `madsci.experiment_application` | Experiment logic |
-| `madsci.event_manager` | Event logging and querying (port 8001) |
-| `madsci.experiment_manager` | Experiment management (port 8002) |
-| `madsci.resource_manager` | Resource tracking (port 8003) |
-| `madsci.data_manager` | Data capture and storage (port 8004) |
-| `madsci.workcell_manager` | Workflow coordination (port 8005) |
-| `madsci.location_manager` | Location management (port 8006) |
-| `madsci.squid` | Lab manager with dashboard (port 8000) |
-| `madsci.node_module` | Node development framework |
+> **Question:** "How do you want to attach the existing data to the new lab directory?"
+> **Header:** `Attach data`
+> **Options:**
+> 1. **Symlink** — `rm -rf ~/<lab-name>/.madsci && ln -s <existing-path> ~/<lab-name>/.madsci`. Reversible, no data copy. Reflects future changes back to the original path.
+> 2. **Copy** — `rm -rf ~/<lab-name>/.madsci && cp -a <existing-path> ~/<lab-name>/.madsci`. Independent copy; safer if the original data source shouldn't be modified. Slower for large databases.
 
-Confirm the exact set with the user via **AskUserQuestion** (multiSelect) before running `pip install`, unless they already listed packages by name. Always install into a venv the user names — never into system Python.
+Then start the stack based on method:
 
-### Goal 4: Contribute to MADSci itself
-
-Preferred path (matches [CONTRIBUTING.md](../../CONTRIBUTING.md)):
+**Method = docker:**
 
 ```bash
-git clone https://github.com/AD-SDL/MADSci.git
-cd MADSci
-just init                   # installs deps + sets up pre-commit
+madsci start                                 # foreground; add -d to detach
 ```
 
-Alternative if the user has [devbox](https://www.jetify.com/devbox) installed — offer this with **AskUserQuestion** only when `devbox --version` succeeds:
+**Method = local:**
 
 ```bash
-devbox shell                # reproducible dev shell with pinned toolchain
-# then inside:
-pdm install -G:all
+# In-memory managers, foreground only (Ctrl+C to stop; all data is lost)
+madsci start --mode local
 ```
 
-**Do not silently retry `pdm install` after a resolver failure.** See the resolver branch below.
+*Native mode + UI:* if Step 3's UI answer was **yes**, run the matching subrecipe *before* `madsci start --mode local`:
 
-## Step 4 — Handle install-time errors
+*UI option 1 — build locally from the repo* (requires Node 18+ and yarn):
 
-Every failure surfaces as an AskUserQuestion, not as a silent retry. The five most common failures and the questions they map to:
+```bash
+git clone https://github.com/AD-SDL/MADSci.git /tmp/madsci-ui-build   # or use an existing checkout
+cd /tmp/madsci-ui-build/ui
+yarn install                                                          # ~2–5 min, ~500MB node_modules
+yarn build                                                            # produces ui/dist/
+export LAB_DASHBOARD_FILES_PATH=/tmp/madsci-ui-build/ui/dist
+```
 
-### 4.1 PDM resolver error (`pdm.lock` was generated by uv)
+*UI option 2 — extract prebuilt bundle from the `madsci_dashboard` Docker image* (requires Docker):
 
-Symptom: `pdm install` (or `just init`) errors during dependency resolution, usually with a message about incompatible versions or "conflicts detected".
+```bash
+docker pull ghcr.io/ad-sdl/madsci_dashboard:latest
+CID=$(docker create ghcr.io/ad-sdl/madsci_dashboard:latest)
+mkdir -p ~/madsci-ui-bundle
+docker cp "$CID":/home/madsci/MADSci/ui/dist/. ~/madsci-ui-bundle/
+docker rm "$CID"
+export LAB_DASHBOARD_FILES_PATH=~/madsci-ui-bundle
+```
 
-> **Question:** "The lockfile was generated by uv. How should I resolve this?"
-> **Header:** `PDM resolver`
+Persist `LAB_DASHBOARD_FILES_PATH=<path>` in `~/<lab-name>/.env` so it survives shell restarts. If Step 3's UI answer was **no**, just run `madsci start --mode local`; `/` returns 404 JSON, `/docs` still works.
+
+## Step 6 — Handle install-time errors
+
+The most common failures and the questions they map to:
+
+### 6.1 `ModuleNotFoundError` after install
+
+Almost always means the wrong virtualenv is active, or `--method local` is missing manager packages (`pip install madsci-client` alone is not enough for `madsci start --mode local` — it needs every manager package too: `madsci.event_manager`, `madsci.experiment_manager`, `madsci.resource_manager`, `madsci.data_manager`, `madsci.workcell_manager`, `madsci.location_manager`, `madsci.squid`).
+
+> **Question:** "`ModuleNotFoundError` for a MADSci module. What's the situation?"
+> **Header:** `Missing module`
 > **Options:**
-> 1. **Install uv and switch PDM to it** — `pip install uv && pdm config use_uv true`, then retry. *(Recommended — matches the committed lockfile.)*
-> 2. **Delete `pdm.lock` and regenerate** — `rm pdm.lock`, then retry. Fine locally, but do not commit the regenerated lockfile without asking.
-> 3. **Abort** — stop and let me look at the raw error.
+> 1. **Missing manager package (--method local)** — install every manager: `pip install madsci.event_manager madsci.experiment_manager madsci.resource_manager madsci.data_manager madsci.workcell_manager madsci.location_manager madsci.squid madsci.node_module madsci.experiment_application`. *(Recommended if the error names a manager module.)*
+> 2. **Wrong venv active** — I'll show `which python` and `pip list | grep madsci`; you activate the right one.
+> 3. **Reinstall into the current venv** — I'll rerun `pip install ...` after confirming `which python`.
 
-### 4.2 `ModuleNotFoundError` after install
+### 6.2 Port already in use
 
-Almost always means the wrong virtualenv is active.
-
-> **Question:** "`ModuleNotFoundError` for a MADSci module. What's the venv situation?"
-> **Header:** `Wrong venv`
-> **Options:**
-> 1. **Activate PDM's venv** — `eval $(pdm venv activate)` (or use `pdm run <cmd>`). *(Recommended for goal 4.)*
-> 2. **Reinstall into the current venv** — I'll rerun `pip install ...` after confirming `which python`.
-> 3. **Show me `which python` and `pip list | grep madsci`** — diagnose first, then decide.
-
-### 4.3 Port already in use
-
-Manager ports are 8001–8006, dashboard 8000, and the example lab uses host network mode so remapping requires editing `compose.yaml`.
+Manager ports are 8001–8006, dashboard 8000.
 
 > **Question:** "Port <N> is already in use. How do you want to resolve it?"
 > **Header:** `Port conflict`
 > **Options:**
 > 1. **Show me what's on that port** — I'll run `lsof -i :<N>` and report; you decide.
 > 2. **Stop the conflicting process** — only if you tell me exactly which one.
-> 3. **Remap the port** — edit `compose.yaml` (I'll show the diff first) and retry.
+> 3. **Remap the port** — edit the lab's `settings.yaml` (I'll show the diff first) and retry.
 > 4. **Abort**.
 
-### 4.4 `.madsci/` sentinel not found where expected
+### 6.3 `.madsci/` sentinel not found where expected
 
-PIDs, logs, and backups are resolved by walking up for a `.madsci/` directory, then `.git/`, then falling back to `~/.madsci/` (see [sentry.py](../../src/madsci_common/madsci/common/sentry.py) and the *Settings Directory* section of [CLAUDE.md](../../CLAUDE.md)). If `madsci status` or `madsci start` behaves like it can't find state, the CWD is probably wrong.
+PIDs, logs, and backups are resolved by walking up for a `.madsci/` directory, then `.git/`, then falling back to `~/.madsci/` ([sentry.py](../../src/madsci_common/madsci/common/sentry.py)). If `madsci status` or `madsci start` behaves like it can't find state, the CWD is probably wrong.
 
 > **Question:** "MADSci is resolving `.madsci/` in an unexpected location (`<path>`). What do you want?"
 > **Header:** `Settings dir`
@@ -177,9 +248,9 @@ PIDs, logs, and backups are resolved by walking up for a `.madsci/` directory, t
 > 2. **Point MADSci at a different directory** — set `MADSCI_SETTINGS_DIR` or pass `--settings-dir`; you tell me the path.
 > 3. **`cd` into the intended lab directory and retry** — you tell me which one.
 
-### 4.5 Docker daemon reachable but `docker compose up` hangs on healthchecks
+### 6.4 Docker daemon reachable but `docker compose up` hangs on healthchecks
 
-Usually means a manager container can reach its port but the database (FerretDB/Postgres) inside the compose network isn't up yet, or a volume from a previous run has incompatible data.
+A manager container can reach its port but the database (FerretDB/Postgres) inside the compose network isn't up yet, or a volume from a previous run has incompatible data.
 
 > **Question:** "Compose is stuck on healthchecks. What's the history of this stack?"
 > **Header:** `Compose stuck`
@@ -189,46 +260,63 @@ Usually means a manager container can reach its port but the database (FerretDB/
 > 3. **Give it more time** — some images pull large layers on first run; wait 60s and re-check.
 > 4. **Abort**.
 
-For anything not covered by these five, read [troubleshooting.md](troubleshooting.md) before improvising a fix.
+### 6.5 Schema version mismatch on Resource Manager startup
 
-## Step 5 — Verify the install succeeded
+`ResourceManager` runs a `DatabaseVersionChecker` on init that compares the installed MADSci version against `madsci_schema_version` in the mounted database. Mismatch → the manager refuses to start and the whole stack aborts.
 
-Do this *always*, at the end of every path. A successful install is not "the command exited 0" — it is "the stack answers correctly."
+> **Question:** "Resource Manager reports 'Database schema version mismatch detected'. How do you want to proceed?"
+> **Header:** `Schema mismatch`
+> **Options:**
+> 1. **Run the migration tool** — `python -m madsci.resource_manager.migration_tool --db_url <url>` (backups automatic). *(Recommended.)*
+> 2. **Discard mounted data and start fresh** — remove the schema-version row (or the whole DB dir) and let the manager initialize a new schema. DATA LOSS in the resource DB.
+> 3. **Abort** — you'll handle the migration manually.
 
-Run [install-check.sh](install-check.sh) with the goal name so it knows what to check:
+For anything else, read [troubleshooting.md](troubleshooting.md) before improvising.
+
+## Step 7 — Verify the install succeeded
+
+Always run at the end — "command exited 0" ≠ "stack answers correctly."
 
 ```bash
-bash .agents/skills/madsci-install/install-check.sh --goal <1|2|3|4>
+bash .agents/skills/madsci-install/install-check.sh --method <docker|local> [--with-ui | --no-ui]
 ```
 
-The script checks (as appropriate for the goal):
+If `--with-ui`/`--no-ui` is omitted, the script infers from method (`docker → --with-ui`, `local → --no-ui`). Override when your install differs from the default (e.g. Native install with a local UI build → `--with-ui`).
 
-1. **Python + venv sanity** — `python --version`, `which python`, `python -c "import madsci"` for each installed package.
-2. **Manager health** — `curl -fsS http://localhost:<port>/health` for each manager expected to be up (8001–8006). Every `AbstractManagerBase` subclass exposes `/health` — see [manager_base.py:430](../../src/madsci_common/madsci/common/manager_base.py#L430).
-3. **Dashboard** — `curl -fsS http://localhost:8000/health` (Squid / Lab Manager).
-4. **CLI wiring** — `madsci status` and `madsci doctor`. `doctor` runs its own diagnostics; treat any non-green line as a real finding, not noise.
-5. **Example lab only (goal 1)** — check that the seeded resources/locations appear via `madsci resource list` and `madsci location list`.
+The script checks:
 
-**Report the pass/fail matrix to the user verbatim, one line per check.** Do not summarize to "everything looks good" — list the actual endpoints and their statuses. If any check fails, drop back to Step 4 with the specific failure signature; do not proceed to "install complete."
+1. **Python + venv sanity** — version, `which python`, `import madsci.*` for `common`, `client`, `squid`.
+2. **Docker daemon** — required for `--method docker`; skip cleanly for `--method local`.
+3. **Manager health** — `curl` `http://localhost:<port>/health` for each manager (8001–8006).
+4. **Dashboard health** — `curl http://localhost:8000/health`.
+5. **Dashboard UI** — `curl http://localhost:8000/` and inspect content-type; `--with-ui` expects HTML, `--no-ui` expects JSON 404.
+6. **CLI wiring** — `madsci status` and `madsci doctor`.
 
-Announce completion only when every requested check passes:
+**Report the pass/fail matrix verbatim, one line per check.** Do not summarize. If any check fails, drop back to Step 6 with the failure signature; do not announce completion.
 
-> ✅ MADSci install verified for goal *<goal name>*. Managers up on 8001–8006, dashboard on 8000, `madsci status` and `madsci doctor` clean.
+Announce completion only when every check passes:
+
+> ✅ MADSci install verified with method *<docker|local>* and dashboard UI *<enabled | API-only>*. Managers up on 8001–8006, dashboard on 8000 (HTML at `/` | JSON API only), `madsci status` and `madsci doctor` clean.
+
+## Step 8 — Uninstall / tear down
+
+If the user wants to **remove** MADSci, load [uninstall.md](uninstall.md) and follow it — full teardown workflow with scope selection (`stop` / `remove` / `wipe`), per-method removal, data wipe, and verification via `uninstall-check.sh`.
 
 ## What this skill does NOT do
 
-- **Does not install system dependencies** (Docker, Python, Homebrew packages, apt packages) without an explicit AskUserQuestion approval per package.
-- **Does not modify `pyproject.toml`, `pdm.lock`, `.env`, or `settings.yaml`** without showing a diff and getting approval.
-- **Does not run `docker compose down -v`** (destroys volumes) without a confirming AskUserQuestion.
-- **Does not silence errors** with `|| true`, `2>/dev/null`, retries in a loop, or by editing linter/CI config.
-- **Does not extend into node/manager/experiment implementation** — hand off to [madsci-nodes](../madsci-nodes/SKILL.md), [madsci-managers](../madsci-managers/SKILL.md), or [madsci-experiments](../madsci-experiments/SKILL.md) once the stack is up.
+Beyond the Rules of engagement above:
 
-## Cross-references
+- **Does not install system dependencies** (Docker, Node, Python, apt/brew packages) without an explicit per-package AskUserQuestion.
+- **Does not modify version-controlled files** without showing a diff and getting approval.
+- **Does not `pip uninstall` from an unconfirmed environment** — always checks `which python` / `pip show` first; never system Python.
+- **Does not silence errors** with `|| true`, `2>/dev/null`, retry loops, or by editing linter/CI config.
+- **Does not seed resources, nodes, or locations** into a fresh lab — a separate skill handles that.
+- **Does not set up the shipped example lab** — a user who wants that runs `docker compose up` at the MADSci repo root; no skill needed.
+- **Does not set up a contributor dev environment** (`just init`, `pdm install`, pre-commit hooks) — a separate contributor skill handles that.
+- **Does not extend into implementation** — hand off to [madsci-nodes](../madsci-nodes/SKILL.md), [madsci-managers](../madsci-managers/SKILL.md), or [madsci-experiments](../madsci-experiments/SKILL.md) once the stack is up.
 
-- Repo overview and package matrix: [README.md](../../README.md)
-- Contributor prereqs and `just` targets: [CONTRIBUTING.md](../../CONTRIBUTING.md)
-- Devbox pinned toolchain: [devbox.json](../../devbox.json)
-- Settings-directory walk-up and precedence: [CLAUDE.md](../../CLAUDE.md) (*Settings Directory (Walk-Up Discovery)*)
-- Sentry (`.madsci/` resolution): [src/madsci_common/madsci/common/sentry.py](../../src/madsci_common/madsci/common/sentry.py)
-- Manager health endpoint: [src/madsci_common/madsci/common/manager_base.py:430](../../src/madsci_common/madsci/common/manager_base.py#L430)
+## Cross-references (not linked inline above)
+
+- Backup & recovery (before a Full wipe): [docs/guides/operator/03-backup-recovery.md](../../docs/guides/operator/03-backup-recovery.md)
+- Updates & maintenance (stop services, upgrade/downgrade): [docs/guides/operator/05-updates-maintenance.md](../../docs/guides/operator/05-updates-maintenance.md)
 - CLI details for `init` / `start` / `stop` / `status` / `doctor`: [madsci-cli](../madsci-cli/SKILL.md)
