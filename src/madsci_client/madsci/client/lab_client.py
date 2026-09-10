@@ -70,7 +70,7 @@ class LabClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.lab_server_url}context",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return MadsciContext.model_validate(response.json())
@@ -85,7 +85,7 @@ class LabClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.lab_server_url}health",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ManagerHealth.model_validate(response.json())
@@ -100,7 +100,7 @@ class LabClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.lab_server_url}lab_health",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LabHealth.model_validate(response.json())
@@ -121,7 +121,7 @@ class LabClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.lab_server_url}context",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return MadsciContext.model_validate(response.json())
@@ -138,7 +138,7 @@ class LabClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.lab_server_url}health",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ManagerHealth.model_validate(response.json())
@@ -153,7 +153,7 @@ class LabClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.lab_server_url}lab_health",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return LabHealth.model_validate(response.json())

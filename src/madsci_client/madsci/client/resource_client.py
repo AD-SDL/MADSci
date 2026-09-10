@@ -318,7 +318,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/add",
                 json=resource.model_dump(mode="json"),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -351,7 +351,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/init",
                 json=resource_definition.model_dump(mode="json"),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
 
@@ -388,7 +388,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/add_or_update",
                 json=resource.model_dump(mode="json"),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -419,7 +419,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/update",
                 json=resource.model_dump(mode="json"),
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -454,7 +454,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}resource/{resource_id}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -516,7 +516,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/query",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             response_json = response.json()
@@ -559,7 +559,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "DELETE",
                 f"{self.resource_server_url}resource/{resource}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -614,7 +614,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}history/query",
                 json=query,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
         else:
@@ -643,7 +643,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "POST",
                 f"{self.resource_server_url}history/{resource_id}/restore",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -692,7 +692,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/push",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -728,7 +728,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/pop",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             result = response.json()
@@ -778,7 +778,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/child/set",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -819,7 +819,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/child/remove",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -857,7 +857,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity",
                 params={"quantity": quantity},
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -894,7 +894,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/change_by",
                 params={"amount": amount},
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -932,7 +932,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/increase",
                 params={"amount": amount},
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -970,7 +970,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/quantity/decrease",
                 params={"amount": amount},
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1008,7 +1008,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/capacity",
                 params={"capacity": capacity},
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1041,7 +1041,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "DELETE",
                 f"{self.resource_server_url}resource/{resource_id}/capacity",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1074,7 +1074,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/empty",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1111,7 +1111,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "POST",
                 f"{self.resource_server_url}resource/{resource_id}/fill",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1266,7 +1266,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}template/create",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
@@ -1306,7 +1306,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}template/{template_name}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             if response.status_code == 404:
                 return None
@@ -1352,14 +1352,14 @@ class ResourceClient(DualModeClientMixin):
                     "POST",
                     f"{self.resource_server_url}templates/query",
                     json=payload,
-                    timeout=timeout or self.config.timeout_default,
+                    timeout=self.config.timeout_default if timeout is None else timeout,
                 )
             else:
                 # Use query_all endpoint for no filtering
                 response = self._request(
                     "GET",
                     f"{self.resource_server_url}templates/query_all",
-                    timeout=timeout or self.config.timeout_default,
+                    timeout=self.config.timeout_default if timeout is None else timeout,
                 )
 
             response.raise_for_status()
@@ -1401,7 +1401,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}template/{template_name}/info",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             if response.status_code == 404:
                 return None
@@ -1443,7 +1443,7 @@ class ResourceClient(DualModeClientMixin):
                 "PUT",
                 f"{self.resource_server_url}template/{template_name}",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             template = Resource.discriminate(response.json())
@@ -1477,7 +1477,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "DELETE",
                 f"{self.resource_server_url}template/{template_name}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             if response.status_code == 404:
                 return False
@@ -1530,7 +1530,7 @@ class ResourceClient(DualModeClientMixin):
                 "POST",
                 f"{self.resource_server_url}template/{template_name}/create_resource",
                 json=payload,
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             resource = Resource.discriminate(response.json())
@@ -1581,7 +1581,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}templates/categories",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             return response.json()
@@ -1627,7 +1627,7 @@ class ResourceClient(DualModeClientMixin):
                     "lock_duration": lock_duration,
                     "client_id": self._client_id,
                 },
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             if response.status_code == 200 and response.json():
@@ -1719,7 +1719,7 @@ class ResourceClient(DualModeClientMixin):
                     "DELETE",
                     f"{self.resource_server_url}resource/{resource_id}/unlock",
                     params={"client_id": self._client_id} if self._client_id else {},
-                    timeout=timeout or self.config.timeout_default,
+                    timeout=self.config.timeout_default if timeout is None else timeout,
                 )
                 response.raise_for_status()
                 if response.status_code == 200 and response.json():
@@ -1820,7 +1820,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}resource/{resource_id}/check_lock",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             result = response.json()
@@ -2053,7 +2053,7 @@ class ResourceClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.resource_server_url}resource/{resource_id}/hierarchy",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             response.raise_for_status()
             return ResourceHierarchy.model_validate(response.json())
@@ -2128,7 +2128,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.resource_server_url}resource/{resource_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2180,7 +2180,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}resource/query",
             json=payload,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         response_json = response.json()
@@ -2210,7 +2210,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}resource/add",
             json=resource.model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2235,7 +2235,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}resource/update",
             json=resource.model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2260,7 +2260,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "DELETE",
             f"{self.resource_server_url}resource/{resource}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2282,7 +2282,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.resource_server_url}templates/query_all",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         templates = [Resource.discriminate(template) for template in response.json()]
@@ -2308,7 +2308,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.resource_server_url}template/{template_name}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         if response.status_code == 404:
             return None
@@ -2353,7 +2353,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}template/{template_name}/create_resource",
             json=payload,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2376,7 +2376,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.resource_server_url}resource/{resource_id}/hierarchy",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ResourceHierarchy.model_validate(response.json())
@@ -2406,7 +2406,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}resource/{resource_id}/quantity",
             params={"quantity": quantity},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2438,7 +2438,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}resource/{resource_id}/quantity/change_by",
             params={"amount": amount},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())
@@ -2467,7 +2467,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.resource_server_url}resource/{resource_id}/check_lock",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = response.json()
@@ -2505,7 +2505,7 @@ class ResourceClient(DualModeClientMixin):
                 "lock_duration": lock_duration,
                 "client_id": self._client_id,
             },
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         if response.status_code == 200 and response.json():
@@ -2543,7 +2543,7 @@ class ResourceClient(DualModeClientMixin):
             "DELETE",
             f"{self.resource_server_url}resource/{resource_id}/unlock",
             params={"client_id": self._client_id} if self._client_id else {},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         if response.status_code == 200 and response.json():
@@ -2595,7 +2595,7 @@ class ResourceClient(DualModeClientMixin):
             "POST",
             f"{self.resource_server_url}history/query",
             json=query,
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return response.json()
@@ -2619,7 +2619,7 @@ class ResourceClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.resource_server_url}history/{resource_id}/restore",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         result = Resource.discriminate(response.json())

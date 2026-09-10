@@ -74,7 +74,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.experiment_server_url}experiment/{experiment_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -93,7 +93,7 @@ class ExperimentClient(DualModeClientMixin):
             "GET",
             f"{self.experiment_server_url}experiments",
             params={"number": number},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Experiment.model_validate(experiment) for experiment in response.json()]
@@ -122,7 +122,7 @@ class ExperimentClient(DualModeClientMixin):
                 run_name=run_name,
                 run_description=run_description,
             ).model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -145,7 +145,7 @@ class ExperimentClient(DualModeClientMixin):
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/end",
             params={"status": status},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -163,7 +163,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/continue",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -181,7 +181,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/pause",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -199,7 +199,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/cancel",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -218,7 +218,7 @@ class ExperimentClient(DualModeClientMixin):
             "POST",
             f"{self.experiment_server_url}campaign",
             json=campaign.model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ExperimentalCampaign.model_validate(response.json())
@@ -236,7 +236,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.experiment_server_url}campaign/{campaign_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ExperimentalCampaign.model_validate(response.json())
@@ -253,7 +253,7 @@ class ExperimentClient(DualModeClientMixin):
         response = self._request(
             "GET",
             f"{self.experiment_server_url}campaigns",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [ExperimentalCampaign.model_validate(c) for c in response.json()]
@@ -275,7 +275,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.experiment_server_url}experiment/{experiment_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -294,7 +294,7 @@ class ExperimentClient(DualModeClientMixin):
             "GET",
             f"{self.experiment_server_url}experiments",
             params={"number": number},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [Experiment.model_validate(experiment) for experiment in response.json()]
@@ -323,7 +323,7 @@ class ExperimentClient(DualModeClientMixin):
                 run_name=run_name,
                 run_description=run_description,
             ).model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -346,7 +346,7 @@ class ExperimentClient(DualModeClientMixin):
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/end",
             params={"status": status},
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -364,7 +364,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/continue",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -382,7 +382,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/pause",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -400,7 +400,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "POST",
             f"{self.experiment_server_url}experiment/{experiment_id}/cancel",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return Experiment.model_validate(response.json())
@@ -419,7 +419,7 @@ class ExperimentClient(DualModeClientMixin):
             "POST",
             f"{self.experiment_server_url}campaign",
             json=campaign.model_dump(mode="json"),
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ExperimentalCampaign.model_validate(response.json())
@@ -437,7 +437,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.experiment_server_url}campaign/{campaign_id}",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return ExperimentalCampaign.model_validate(response.json())
@@ -454,7 +454,7 @@ class ExperimentClient(DualModeClientMixin):
         response = await self._async_request(
             "GET",
             f"{self.experiment_server_url}campaigns",
-            timeout=timeout or self.config.timeout_default,
+            timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
         return [ExperimentalCampaign.model_validate(c) for c in response.json()]

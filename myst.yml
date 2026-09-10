@@ -35,7 +35,9 @@ project:
     - 'docs/api-specs/*.json'
 
   toc:
+    - file: index.md
     - file: README.md
+      title: Overview & Installation
     - file: docs/CHANGELOG.md
     - file: docs/Configuration.md
 
