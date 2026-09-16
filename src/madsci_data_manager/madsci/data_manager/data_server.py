@@ -11,6 +11,7 @@ from classy_fastapi import get, post
 from fastapi import Form, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
+from starlette.background import BackgroundTask
 from madsci.common.db_handlers.document_storage_handler import (
     DocumentStorageHandler,
     PyDocumentStorageHandler,
@@ -331,6 +332,16 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
             datapoint = DataPoint.discriminate(datapoint)
             if datapoint.data_type == "file":
                 return FileResponse(datapoint.path)
+            if datapoint.data_type == "object_storage":
+                with tempfile.NamedTemporaryFile(
+                                            delete=False, suffix=f"_{datapoint.object_name}"
+                                        ) as temp_file:
+                    contents = self._object_storage_handler.get_object_data(datapoint.bucket_name, datapoint.object_name)
+                    temp_file.write(contents)
+                    temp_file.flush()
+                    temp_path = Path(temp_file.name)
+                    return FileResponse(temp_path, background=BackgroundTask(self._cleanup_temp_file, temp_path))
+                
             return JSONResponse(datapoint.value)
 
     @get("/datapoints")

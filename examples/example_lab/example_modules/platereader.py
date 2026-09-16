@@ -164,11 +164,11 @@ class PlateReaderNode(RestNode):
     ) -> Path:
         """Read a plate on the plate reader."""
 
-        with (Path.home() / "test.txt").open("w") as f:
+        with (Path.home() / "test.tiff").open("w") as f:
             self.logger.log_info(f.write("test"))
             time.sleep(self.config.wait_time)
 
-        return Path.home() / "test.txt"
+        return Path.home() / "test.tiff"
 
     @action
     def read_plates(
