@@ -9,12 +9,7 @@
           <h5>Description</h5>
           <p class="py-1 my-1">{{ action.description }}</p>
           <h5 v-if="Object.keys(action.args).length > 0">Arguments</h5>
-          <v-data-table v-if="Object.keys(action.args).length > 0" :headers="arg_headers" :items="Object.keys(action.args).map(function(key){
-    const arg = action.args[key];
-    if (arg.value === undefined && arg.default !== undefined && arg.default !== null) {
-      arg.value = arg.default;
-    }
-    return arg;})" hover items-per-page="-1"
+          <v-data-table v-if="Object.keys(action.args).length > 0" :headers="arg_headers" :items="Object.values(action.args)" hover items-per-page="-1"
               no-data-text="No Arguments" density="compact">
               <!-- eslint-disable vue/no-parsing-error-->
               <template v-slot:item="{ item }: { item: any }">
@@ -26,13 +21,16 @@
                   <td>{{ item.description }}</td>
                   <td>
                     <template v-if="item.argument_type === 'bool'">
-                      <v-checkbox v-model="item.value" :true-value="true" :false-value="false" hide-details density="compact"/>
+                      <v-checkbox :model-value="get_value(arg_values, action.name, item.name) ?? false" :true-value="true" :false-value="false" hide-details density="compact"
+                        @update:modelValue="set_value(arg_values, action.name, item.name, $event)"/>
                     </template>
                     <template v-else-if="['int', 'float'].includes(item.argument_type)">
-                      <v-text-field v-model.number="item.value" type="number" density="compact" hide-details/>
+                      <v-text-field :model-value="get_value(arg_values, action.name, item.name)" type="number" density="compact" hide-details
+                        @update:modelValue="set_value(arg_values, action.name, item.name, to_number($event))"/>
                     </template>
                     <template v-else>
-                      <v-text-field @update:modelValue="set_text(action)" height="20px" v-model="item.value"/>
+                      <v-text-field height="20px" :model-value="get_value(arg_values, action.name, item.name)"
+                        @update:modelValue="set_value(arg_values, action.name, item.name, $event); set_text(action)"/>
                     </template>
                   </td>
                 </tr>
@@ -40,21 +38,20 @@
               <template #bottom></template>
             </v-data-table>
           <h5 v-if="Object.keys(action.files).length > 0">Files</h5>
-          <v-data-table v-if="Object.keys(action.files).length > 0" :headers="file_headers" :items="Object.keys(action.files).map(function(key){
-    return action.files[key];})" hover
+          <v-data-table v-if="Object.keys(action.files).length > 0" :headers="file_headers" :items="Object.values(action.files)" hover
               items-per-page="-1" no-data-text="No Files" density="compact">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
                   <td>{{ item.name }}</td>
                   <td>{{ item.required }}</td>
                   <td>{{ item.description }}</td>
-                  <td><v-file-input v-model="item.value" label="File input"></v-file-input></td>
+                  <td><v-file-input :model-value="get_value(file_values, action.name, item.name)" label="File input"
+                    @update:modelValue="set_value(file_values, action.name, item.name, $event)"></v-file-input></td>
                 </tr>
               </template>
             </v-data-table>
           <h5 v-if="Object.keys(action.locations).length > 0">Locations</h5>
-          <v-data-table v-if="Object.keys(action.locations).length > 0" :headers="locations_headers" :items="Object.keys(action.locations).map(function(key){
-    return action.locations[key];})" hover
+          <v-data-table v-if="Object.keys(action.locations).length > 0" :headers="locations_headers" :items="Object.values(action.locations)" hover
               items-per-page="-1" no-data-text="No Locations" density="compact">
               <template v-slot:item="{ item }: { item: any }">
                 <tr>
@@ -62,7 +59,8 @@
                   <td>{{ item.required }}</td>
                   <td>{{ item.description }}</td>
                   <td>
-                    <v-text-field @update:modelValue="set_text(action)" v-model=item.value list="locations" id="locations_id" name="locations_name" />
+                    <v-text-field :model-value="get_value(location_values, action.name, item.name)" list="locations" id="locations_id" name="locations_name"
+                      @update:modelValue="set_value(location_values, action.name, item.name, $event); set_text(action)" />
                     <datalist id="locations">
                     <option v-for="option in locations.map(function(location: any){return location.location_name;})" :value="option">{{option}}</option>
                     </datalist>
@@ -99,13 +97,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch, type Ref } from 'vue';
 import { urls } from '@/store';
 import * as yaml from 'js-yaml';
 import VueJsonPretty from 'vue-json-pretty';
 import 'vue-json-pretty/lib/styles.css';
 
-const props = defineProps(['modal_title', 'modal_text', 'wc_state', 'locations'])
+const props = defineProps(['modal_title', 'modal_text', 'locations'])
 const emit = defineEmits(['action-sent'])
 
 const arg_headers = [
@@ -139,51 +137,95 @@ const text = ref()
 const json_text = ref()
 const copyVisible = ref<Record<string, boolean>>({})
 
-function set_text(action: any) {
-  var input_args = Object.keys(action.args).map(function(key){
-    return action.args[key];});
+type ValueStore = Record<string, Record<string, any>>
+const arg_values: Ref<ValueStore> = ref({})
+const location_values: Ref<ValueStore> = ref({})
+const file_values: Ref<ValueStore> = ref({})
 
+function get_value(store: ValueStore, action_name: string, key: string) {
+  return store[action_name]?.[key]
+}
+
+function set_value(store: ValueStore, action_name: string, key: string, value: any) {
+  if (!store[action_name]) {
+    store[action_name] = {}
+  }
+  store[action_name][key] = value
+}
+
+function to_number(value: any) {
+  return value === '' || value === null || value === undefined ? undefined : Number(value)
+}
+
+function seed_defaults() {
+  const actions = props.modal_text?.actions
+  if (!actions) {
+    return
+  }
+  Object.values(actions).forEach(function (action: any) {
+    const args = arg_values.value[action.name] ?? (arg_values.value[action.name] = {})
+    Object.values(action.args ?? {}).forEach(function (arg: any) {
+      if (!(arg.name in args) && arg.default !== undefined && arg.default !== null) {
+        args[arg.name] = arg.default
+      }
+    })
+    if (!location_values.value[action.name]) {
+      location_values.value[action.name] = {}
+    }
+    if (!file_values.value[action.name]) {
+      file_values.value[action.name] = {}
+    }
+  })
+}
+
+watch(() => props.modal_text, seed_defaults, { immediate: true })
+
+function collect_args(action: any) {
   var args: { [k: string]: any } = {};
+  Object.values(action.args).forEach(function (arg: any) {
+    const value = get_value(arg_values.value, action.name, arg.name)
 
-  input_args.forEach(function (arg: any) {
-
-    if (arg.value === undefined) {
+    if (value === undefined) {
       args[arg.name] = arg.default
-    } else if (typeof arg.value === "boolean") {
-      args[arg.name] = arg.value
+    } else if (typeof value === "boolean") {
+      args[arg.name] = value
     } else {
       try {
-        args[arg.name] = JSON.parse(arg.value)
+        args[arg.name] = JSON.parse(value)
       } catch (e) {
-        args[arg.name] = arg.value
+        args[arg.name] = value
       }
     }
-  }
-  )
-  var locations: { [k: string]: any } = {};
-  var input_locations = Object.keys(action.locations).map(function(key){
-    return action.locations[key];});
-  input_locations.forEach(function (location: any) {
+  })
+  return args
+}
 
-    if (location.value === undefined) {
+function collect_locations(action: any) {
+  var locations: { [k: string]: any } = {};
+  Object.values(action.locations).forEach(function (location: any) {
+    const value = get_value(location_values.value, action.name, location.name)
+
+    if (value === undefined) {
       locations[location.name] = location.default
     }
     else {
       try {
-        locations[location.name] = JSON.parse(location.value)
+        locations[location.name] = JSON.parse(value)
       } catch (e) {
-        locations[location.name] = location.value
+        locations[location.name] = value
       }
     }
-
   })
+  return locations
+}
 
+function set_text(action: any) {
   json_text.value = {
     "name": action.name,
     "node": props.modal_title,
     "action": action.name,
-    "args": args,
-    "locations": locations,
+    "args": collect_args(action),
+    "locations": collect_locations(action),
     "checks": null,
     "comment": "Test"
   }
@@ -201,55 +243,21 @@ async function send_wf(action: any) {
   }
   wf.nodes = [props.modal_title]
   const formData = new FormData();
-  var args: { [k: string]: any } = {};
-  var input_args = Object.keys(action.args).map(function(key){
-    return action.args[key];});
-  input_args.forEach(function (arg: any) {
-
-    if (arg.value === undefined) {
-      args[arg.name] = arg.default
-    }
-    else {
-      try {
-        args[arg.name] = JSON.parse(arg.value)
-      } catch (e) {
-        args[arg.name] = arg.value
-      }
-    }
-
-  })
-
-  var locations: { [k: string]: any } = {};
-  var input_locations = Object.keys(action.locations).map(function(key){
-    return action.locations[key];});
-  input_locations.forEach(function (location: any) {
-
-    if (location.value === undefined) {
-      locations[location.name] = location.default
-    }
-    else {
-      try {
-        locations[location.name] = JSON.parse(location.value)
-      } catch (e) {
-        locations[location.name] = location.value
-      }
-    }
-
-  })
+  var args = collect_args(action)
+  var locations = collect_locations(action)
   var files: { [k: string]: any } = {};
   var file_inputs = Object.values(action.files)
-  let i = 0;
   let file_input_params: any[] = []
   let file_input_values: any = {}
   file_inputs.forEach(function (file: any) {
-    if (file.value === undefined) {
+    const value = get_value(file_values.value, action.name, file.name)
+    if (value === undefined || value === null) {
       files[file.name] = ""
     }
     else {
-      i = i +  1
-      files[file.name] = file.value.name
-      file_input_params = file_input_params.concat([{"key": file.value.name}])
-      file_input_values[file.value.name] = file.value.name
+      files[file.name] = value.name
+      file_input_params = file_input_params.concat([{"key": value.name}])
+      file_input_values[value.name] = value.name
     }
 
   })
@@ -278,8 +286,9 @@ async function send_wf(action: any) {
   formData.append("workflow_definition_id", workflow_definition_id)
   formData.append("file_input_paths", JSON.stringify(file_input_values))
   file_inputs.forEach(function (file: any) {
-    if (file.value) {
-      formData.append("files", file.value)
+    const value = get_value(file_values.value, action.name, file.name)
+    if (value) {
+      formData.append("files", value)
     }
   })
 
