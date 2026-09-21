@@ -1,16 +1,17 @@
 # Agent Skills Reference
 
-MADSci includes five domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
+MADSci includes six domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
 
 ## Available Skills
 
 | Skill | Trigger | What It Teaches |
 |-------|---------|-----------------|
-| `madsci-install` | Installing or bootstrapping the stack | Interactive install flow: pip/Docker/PDM/devbox choice, prereq checks, error-recovery prompts, end-to-end verification |
+| `madsci-install` | Installing, bootstrapping, or tearing down a lab | Interactive install flow: Docker vs. native (`--mode local`), prereq checks, error-recovery prompts, end-to-end verification, uninstall |
 | `madsci-nodes` | Node module code | AbstractNode, RestNode, `@action` decorator, file parameters, lifecycle, testing |
 | `madsci-experiments` | Experiment code | 4 modalities (Script, Notebook, TUI, Node), lifecycle, `manage_experiment()` |
 | `madsci-managers` | Manager services | AbstractManagerBase, settings, DB handlers, clients, health checks |
 | `madsci-cli` | CLI commands | Click commands, lazy loading, templates, start/stop, output helpers, TUI |
+| `madsci-release-audit` | Preparing a PR or release | CHANGELOG, docs, guides, example lab, notebooks, templates, and skills staleness checks |
 
 ## How Skills Work
 
@@ -33,6 +34,7 @@ You can explicitly invoke a skill in Claude Code with a slash command:
 /madsci-experiments
 /madsci-managers
 /madsci-cli
+/madsci-release-audit
 ```
 
 This is useful when you want to preload context before asking a question.
@@ -41,14 +43,18 @@ This is useful when you want to preload context before asking a question.
 
 ### madsci-install
 
-Covers the interactive install and bootstrap workflow — choosing the right install path, checking prereqs, recovering from common errors, and verifying the running stack.
+Covers the interactive install and bootstrap workflow — choosing an install method, checking prereqs, recovering from common errors, verifying the running stack, and tearing it back down.
 
 **Key topics:**
-- Four install goals: try the example lab, start a new lab, install specific packages, contribute to MADSci itself
-- Prereq matrix (Python 3.10+, Docker, PDM, `just`, `uv`, `git`, `yarn`) with pre-flight checks per goal
-- Interactive fallbacks via `AskUserQuestion` when Docker is missing, the PDM/uv resolver conflicts, ports are bound, `.madsci/` resolves to the wrong directory, or compose stalls on healthchecks
-- End-to-end verification via [`install-check.sh`](../../.agents/skills/madsci-install/install-check.sh) — Python + import sanity, `/health` on ports 8001–8006, dashboard on 8000, `madsci status` / `madsci doctor`, example-lab seed data
+- One branching axis: **Docker** (full persistent stack via Compose) vs. **native** (`madsci start --mode local`, in-memory, ephemeral)
+- Pointing a fresh install at existing `.madsci/` data, including the schema-version check
+- Prereq matrix (Python 3.10+, Docker daemon, `node`/`yarn` for the dashboard build, `pip`/`uv`/`pipx`)
+- Interactive fallbacks via `AskUserQuestion` when Docker is missing, manager packages are absent, ports are bound, `.madsci/` resolves to the wrong directory, or compose stalls on healthchecks
+- End-to-end verification via [`install-check.sh`](../../.agents/skills/madsci-install/install-check.sh) — Python + import sanity, `/health` on ports 8001–8006, dashboard on 8000, dashboard UI at `/`, `madsci status` / `madsci doctor`
+- Teardown via [`uninstall.md`](../../.agents/skills/madsci-install/uninstall.md) and [`uninstall-check.sh`](../../.agents/skills/madsci-install/uninstall-check.sh) with `stop` / `remove` / `wipe` scopes
 - Bundled [`troubleshooting.md`](../../.agents/skills/madsci-install/troubleshooting.md) keyed by error signature
+
+Seeding a lab with resources/nodes/locations and contributor dev-environment setup (`just init`, `pdm install`) are explicitly out of scope.
 
 ### madsci-nodes
 

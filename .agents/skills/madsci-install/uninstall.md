@@ -4,9 +4,7 @@ Companion to [SKILL.md](SKILL.md). Load this when the user's intent is to **remo
 
 Uninstalling has **irreversible, data-destroying** steps that installing never does. Treat with more caution, not less: **every destructive action is a separate AskUserQuestion with an explicit DATA LOSS warning, and never delete data the user didn't name.**
 
-**Scope, mirroring the install skill:**
-- **In scope:** teardown of a MADSci lab installed by this skill (`--method docker` or `--method local`). Uninstall the pip packages, stop the running stack, remove containers/images, wipe `.madsci/` data.
-- **Out of scope:** the shipped example lab at the repo root (a user tears that down with `docker compose down` from the repo). Contributor dev environment cleanup (`.venv/`, pre-commit hook, PDM/uv/devbox state) — handled by a contributor skill.
+**Scope, mirroring the install skill:** teardown of a MADSci lab (`--method docker` or `--method local`) — uninstall the pip packages, stop the running stack, remove containers/images, wipe `.madsci/` data. Contributor dev environment cleanup (`.venv/`, pre-commit hooks, PDM/uv state) is not covered here.
 
 ## Step U0 — Determine uninstall scope
 
@@ -24,7 +22,7 @@ If you don't know which method was used, infer:
 - `pgrep -f 'madsci start --mode local'` shows a running process → `--method local`.
 - Neither → ask the user directly.
 
-**Always recommend a backup before any Full wipe** — see [docs/guides/operator/03-backup-recovery.md](../../docs/guides/operator/03-backup-recovery.md) and the `madsci-backup` CLI. Offer it; don't force it.
+**Always recommend a backup before any Full wipe** — see [docs/guides/operator/03-backup-recovery.md](../../../docs/guides/operator/03-backup-recovery.md) and the `madsci-backup` CLI. Offer it; don't force it.
 
 ## Step U1 — Stop the stack
 

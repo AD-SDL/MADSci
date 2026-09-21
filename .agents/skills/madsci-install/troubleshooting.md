@@ -4,7 +4,7 @@ Failure modes seen during install / first-startup, keyed by the message the user
 
 For runtime troubleshooting (workflows failing mid-run, node action errors, resource lock issues, etc.) see [../../../docs/guides/troubleshooting.md](../../../docs/guides/troubleshooting.md) instead.
 
-Scope, mirroring the install skill: this covers install/uninstall of user labs (`--method docker` or `--method local`). Contributor-dev issues (`pdm install`, `just init`, pre-commit hooks, `.venv/` in the repo, `devbox shell`) are handled by a contributor skill and are not covered here.
+Scope, mirroring the install skill: this covers install/uninstall of user labs (`--method docker` or `--method local`). Contributor-dev issues (`pdm install`, `just init`, pre-commit hooks, `.venv/` in the repo) are not covered here.
 
 ---
 
@@ -36,21 +36,28 @@ The install went to a Python whose `bin/` isn't on `PATH`. Options:
 
 ### `docker: command not found` or `Cannot connect to the Docker daemon`
 
-Offer the four options from SKILL.md §Step 4 (No Docker prompt): install Docker, switch to `--method local`, use Rancher/Podman, or abort.
+Offer the three options from SKILL.md §Step 4 (No Docker prompt): install Docker, switch to `--method local`, or abort.
 
 ### `lab_manager` container shows `(unhealthy)` but `curl http://localhost:8000/health` returns 200
 
-**Known false alarm in some compose configurations** (including the example lab). The healthcheck may use exec-form `CMD` with shell operators:
+**False alarm caused by a malformed healthcheck.** Fixed in the example lab, but still possible in any compose file that uses exec-form `CMD` with shell operators:
 ```yaml
 test: ["CMD", "curl", "-f", "${LAB_SERVER_URL:-http://localhost:8000}/health", "||", "exit", "1"]
 ```
-In exec form the `||` and `exit 1` are passed as **literal curl arguments**, so curl fails with `Could not resolve host: ||` and the healthcheck records a non-zero exit even though the endpoint is fine. `docker inspect --format '{{json .State.Health}}' lab_manager` shows the real `/health` body (`"healthy":true`) buried in the output.
+Exec form has no shell, so `||`, `exit` and `1` are passed to curl as **three extra URLs**. The first two fail fast (`Could not resolve host`), but curl parses the bare `1` as a packed IP and hangs connecting to `http://0.0.0.1/` until Docker kills the probe (`Health check exceeded timeout`). Curl also returns the *last* error, so the probe exits non-zero even if given unlimited time — raising `timeout:` does not help.
 
 **Verify the manager is actually fine** (this is the source of truth, not Docker's health status):
 ```bash
 curl -fsS http://localhost:8000/health    # → {"healthy":true,...}
+docker inspect --format '{{json .State.Health}}' lab_manager   # real body is buried in the probe log
 ```
-`install-check.sh` curls `/health` directly, so it reports PASS regardless of the Docker health flag. Treat the `(unhealthy)` label as cosmetic. The proper fix (in the compose file) is to switch the healthcheck to `CMD-SHELL` so the `||` works.
+`install-check.sh` curls `/health` directly, so it reports PASS regardless of the Docker health flag — treat the `(unhealthy)` label as cosmetic until the compose file is fixed.
+
+**Fix** — drop the redundant `|| exit 1` (`curl -f` already exits non-zero on HTTP failure) and strip any trailing slash, since `LAB_SERVER_URL` conventionally ends in `/` and `//health` returns 404:
+```yaml
+test: ["CMD-SHELL", 'URL="${LAB_SERVER_URL:-http://localhost:8000}"; curl -f "$${URL%/}/health"']
+```
+Healthchecks are baked in at container creation — recreate with `docker compose up -d lab_manager` for the change to take effect.
 
 ### `docker compose up` starts but a service stays `unhealthy`
 
@@ -116,7 +123,7 @@ ss -tulpn | grep :<port>
 
 ### `madsci status` reports "no PID file" / behaves as if the lab isn't running, but `docker compose ps` shows it up
 
-Cause: the CWD is above or beside the `.madsci/` directory the service wrote its PID into. See [src/madsci_common/madsci/common/sentry.py](../../src/madsci_common/madsci/common/sentry.py) and the *Settings Directory (Walk-Up Discovery)* section of [CLAUDE.md](../../CLAUDE.md).
+Cause: the CWD is above or beside the `.madsci/` directory the service wrote its PID into. See [src/madsci_common/madsci/common/sentry.py](../../../src/madsci_common/madsci/common/sentry.py) and the *Settings Directory (Walk-Up Discovery)* section of [CLAUDE.md](../../../CLAUDE.md).
 
 **Diagnose:**
 ```bash
@@ -144,13 +151,13 @@ python3 -c "from madsci.common.sentry import ensure_madsci_dir; ensure_madsci_di
 
 ### FerretDB / Postgres container starts but the manager fails to connect
 
-- Check `settings.yaml` and `.env` for the DB URL (see [Configuration.md](../../docs/Configuration.md)). Common mistake: `localhost` in `.env` when the manager is inside a compose network that names the DB `ferretdb` or `postgres`.
+- Check `settings.yaml` and `.env` for the DB URL (see [Configuration.md](../../../docs/Configuration.md)). Common mistake: `localhost` in `.env` when the manager is inside a compose network that names the DB `ferretdb` or `postgres`.
 - Confirm the env var prefix matches the manager: `EVENT_`, `WORKCELL_`, `RESOURCE_`, etc.
-- URLs must be [`AnyUrl`](../../src/madsci_common/madsci/common/) — trailing slash is added automatically; do not fight it.
+- URLs must be [`AnyUrl`](../../../src/madsci_common/madsci/common/) — trailing slash is added automatically; do not fight it.
 
 ### `alembic` migration fails on Resource Manager startup
 
-Pre-migration backup runs automatically ([CLAUDE.md](../../CLAUDE.md) *Database Migrations* section) and auto-restores on failure. Ask the user:
+Pre-migration backup runs automatically ([CLAUDE.md](../../../CLAUDE.md) *Database Migrations* section) and auto-restores on failure. Ask the user:
 1. Look at the auto-created backup in the backup dir before retrying.
 2. Retry with `python -m madsci.resource_manager.migration_tool --db-url <url>` after fixing the schema issue.
 3. Restore from backup and roll back to the prior MADSci version.
@@ -168,7 +175,7 @@ Resource Manager runs a `DatabaseVersionChecker` on init that compares the insta
 
 ### `yarn build` in `ui/` fails with peer-dep errors
 
-Use `yarn`, not `npm` (per [CLAUDE.md](../../CLAUDE.md)). If a previous `npm install` created a `package-lock.json`, delete it and rerun `yarn install`.
+Use `yarn`, not `npm` (per [CLAUDE.md](../../../CLAUDE.md)). If a previous `npm install` created a `package-lock.json`, delete it and rerun `yarn install`.
 
 ### Dashboard at `http://localhost:8000/` returns 404 JSON instead of HTML
 
@@ -178,7 +185,7 @@ The Lab Manager API is up but no dashboard bundle is mounted. Two situations:
 
 ### Dashboard returns 502 / connection refused
 
-The Lab Manager (Squid) isn't running. `docker compose ps squid` (or `madsci status`) will show whether the container is up. If it's up but responds 502, tail its logs — usually a downstream manager crash cascading up.
+The Lab Manager (Squid) isn't running. `docker compose ps lab_manager` (or `madsci status`) will show whether the container is up — the compose service is named `lab_manager`, not `squid`. If it's up but responds 502, tail its logs — usually a downstream manager crash cascading up.
 
 ---
 

@@ -8,7 +8,8 @@ Covers both bundled scripts:
 Two layers of coverage each:
 
 1. **Script self-tests** (no Docker, always run): syntax, executable bit, ``--help``
-   exit code, usage errors on bad ``--goal`` / ``--scope``, and port-override behaviour.
+   exit code, usage errors on missing/bad ``--method`` and bad ``--scope``, the
+   removed-``--goal`` deprecation shim, and port-override behaviour.
 2. **Live-stack integration** (marked ``docker``, skipped unless ``--docker-enabled``):
    runs the scripts against a running example lab and asserts the expected verdict.
    Bring the stack up first with ``just up`` / ``docker compose up -d``.
@@ -18,11 +19,15 @@ The scripts live in the skill directory and are referenced from
 ``.agents/skills``, so both paths resolve to the same file.
 """
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+# Absolute interpreter path — a bare "bash" is a partial executable path (ruff S607).
+BASH = shutil.which("bash") or "/bin/bash"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SKILL_DIR = REPO_ROOT / ".agents" / "skills" / "madsci-install"
@@ -38,7 +43,7 @@ DASHBOARD_PORT = "8000"
 def _run(script: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess:
     """Run a skill check script from the repo root with ``--no-color`` for stable parsing."""
     return subprocess.run(  # noqa: S603
-        ["bash", str(script), "--no-color", *args],
+        [BASH, str(script), "--no-color", *args],
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -59,15 +64,13 @@ class TestInstallCheckScriptStructure:
         assert INSTALL_CHECK.exists(), f"{INSTALL_CHECK} not found"
 
     def test_script_is_executable(self) -> None:
-        import os
-
         assert os.access(INSTALL_CHECK, os.X_OK), (
             f"{INSTALL_CHECK} is not executable (chmod +x it)"
         )
 
     def test_valid_bash_syntax(self) -> None:
         result = subprocess.run(  # noqa: S603
-            ["bash", "-n", str(INSTALL_CHECK)],
+            [BASH, "-n", str(INSTALL_CHECK)],
             capture_output=True,
             text=True,
             timeout=30,
@@ -82,12 +85,47 @@ class TestInstallCheckScriptStructure:
         )
         assert "install-check.sh" in result.stdout
 
-    @pytest.mark.parametrize("bad_goal", ["0", "5", "9", "abc"])
-    def test_invalid_goal_is_usage_error(self, bad_goal: str) -> None:
-        result = _run_script("--goal", bad_goal)
+    def test_missing_method_is_usage_error(self) -> None:
+        """--method is required; omitting it must be a usage error, not a default."""
+        result = _run_script()
         assert result.returncode == 2, (
-            f"--goal {bad_goal} should be a usage error (exit 2), "
+            f"omitting --method should be a usage error (exit 2), "
             f"got {result.returncode}:\nstderr: {result.stderr}"
+        )
+
+    @pytest.mark.parametrize("bad_method", ["podman", "pip", "1", "abc"])
+    def test_invalid_method_is_usage_error(self, bad_method: str) -> None:
+        result = _run_script("--method", bad_method)
+        assert result.returncode == 2, (
+            f"--method {bad_method} should be a usage error (exit 2), "
+            f"got {result.returncode}:\nstderr: {result.stderr}"
+        )
+
+    # NOTE: explicit ids — a bare "docker" param id lands in item.keywords and
+    # would be swept up by conftest's docker-marker skip (see tests/e2e/conftest.py).
+    @pytest.mark.parametrize(
+        "method",
+        [
+            pytest.param("docker", id="method-docker"),
+            pytest.param("local", id="method-local"),
+        ],
+    )
+    def test_valid_methods_accepted(self, method: str) -> None:
+        """A valid method must never be a usage error (exit 0 or 1, never 2)."""
+        result = _run_script("--method", method, timeout=120)
+        assert result.returncode in (0, 1), (
+            f"--method {method} should be accepted (exit 0/1), got {result.returncode}:\n"
+            f"{result.stderr}"
+        )
+
+    def test_removed_goal_flag_is_usage_error(self) -> None:
+        """--goal was replaced by --method; the shim must reject it with guidance."""
+        result = _run_script("--goal", "1")
+        assert result.returncode == 2, (
+            f"--goal should be rejected (exit 2), got {result.returncode}"
+        )
+        assert "--method" in result.stderr, (
+            f"the --goal error should point at --method:\nstderr: {result.stderr}"
         )
 
     def test_unknown_arg_is_usage_error(self) -> None:
@@ -112,8 +150,17 @@ class TestInstallCheckAgainstAbsentStack:
     def test_health_checks_fail_when_nothing_listening(self) -> None:
         if not shutil.which("curl"):
             pytest.skip("curl not available")
-        # Use a high port unlikely to be bound by anything.
-        result = _run_script("--goal", "1", "--managers", "59117", timeout=60)
+        # High ports unlikely to be bound by anything. --method local keeps this
+        # test independent of whether a Docker daemon is present on the host.
+        result = _run_script(
+            "--method",
+            "local",
+            "--managers",
+            "59117",
+            "--dashboard-port",
+            "59118",
+            timeout=60,
+        )
         assert result.returncode == 1, (
             "install-check.sh should FAIL when the target manager port is closed:\n"
             f"stdout: {result.stdout}\nstderr: {result.stderr}"
@@ -123,16 +170,16 @@ class TestInstallCheckAgainstAbsentStack:
 
 @pytest.mark.docker
 class TestInstallCheckLiveStack:
-    """Integration: verify install-check.sh --goal 1 against a running example lab.
+    """Integration: verify install-check.sh --method docker against a running example lab.
 
     Skipped unless ``--docker-enabled`` is passed (see tests/e2e/conftest.py).
     Requires the example lab to already be up (``just up`` / ``docker compose up -d``).
     """
 
-    def test_goal_1_passes_against_running_stack(self) -> None:
-        result = _run_script("--goal", "1", timeout=120)
+    def test_docker_method_passes_against_running_stack(self) -> None:
+        result = _run_script("--method", "docker", timeout=120)
         assert result.returncode == 0, (
-            "install-check.sh --goal 1 should PASS against a running example lab.\n"
+            "install-check.sh --method docker should PASS against a running example lab.\n"
             "Is the stack up (`just up`)?\n"
             f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
         )
@@ -151,15 +198,13 @@ class TestUninstallCheckScriptStructure:
         assert UNINSTALL_CHECK.exists(), f"{UNINSTALL_CHECK} not found"
 
     def test_script_is_executable(self) -> None:
-        import os
-
         assert os.access(UNINSTALL_CHECK, os.X_OK), (
             f"{UNINSTALL_CHECK} is not executable (chmod +x it)"
         )
 
     def test_valid_bash_syntax(self) -> None:
         result = subprocess.run(  # noqa: S603
-            ["bash", "-n", str(UNINSTALL_CHECK)],
+            [BASH, "-n", str(UNINSTALL_CHECK)],
             capture_output=True,
             text=True,
             timeout=30,
@@ -174,16 +219,35 @@ class TestUninstallCheckScriptStructure:
         )
         assert "uninstall-check.sh" in result.stdout
 
-    @pytest.mark.parametrize("bad_goal", ["0", "5", "abc"])
-    def test_invalid_goal_is_usage_error(self, bad_goal: str) -> None:
-        result = _run(UNINSTALL_CHECK, "--goal", bad_goal)
+    def test_missing_method_is_usage_error(self) -> None:
+        """--method is required; omitting it must be a usage error, not a default."""
+        result = _run(UNINSTALL_CHECK, "--scope", "stop")
         assert result.returncode == 2, (
-            f"--goal {bad_goal} should be a usage error (exit 2), got {result.returncode}"
+            f"omitting --method should be a usage error (exit 2), got {result.returncode}"
+        )
+
+    @pytest.mark.parametrize("bad_method", ["podman", "pip", "3", "abc"])
+    def test_invalid_method_is_usage_error(self, bad_method: str) -> None:
+        result = _run(UNINSTALL_CHECK, "--method", bad_method)
+        assert result.returncode == 2, (
+            f"--method {bad_method} should be a usage error (exit 2), got {result.returncode}"
+        )
+
+    def test_removed_goal_flag_is_usage_error(self) -> None:
+        """--goal was replaced by --method; the shim must reject it with guidance."""
+        result = _run(UNINSTALL_CHECK, "--goal", "1")
+        assert result.returncode == 2, (
+            f"--goal should be rejected (exit 2), got {result.returncode}"
+        )
+        assert "--method" in result.stderr, (
+            f"the --goal error should point at --method:\nstderr: {result.stderr}"
         )
 
     @pytest.mark.parametrize("bad_scope", ["all", "delete", "purge", ""])
     def test_invalid_scope_is_usage_error(self, bad_scope: str) -> None:
-        result = _run(UNINSTALL_CHECK, "--scope", bad_scope)
+        # --method must be valid, otherwise this would exit 2 on the method check
+        # and pass for the wrong reason.
+        result = _run(UNINSTALL_CHECK, "--method", "docker", "--scope", bad_scope)
         assert result.returncode == 2, (
             f"--scope {bad_scope!r} should be a usage error (exit 2), got {result.returncode}"
         )
@@ -191,7 +255,7 @@ class TestUninstallCheckScriptStructure:
     @pytest.mark.parametrize("scope", ["stop", "remove", "wipe"])
     def test_valid_scopes_accepted(self, scope: str) -> None:
         """A valid scope must not be a usage error (exit 0 or 1, never 2)."""
-        result = _run(UNINSTALL_CHECK, "--goal", "3", "--scope", scope)
+        result = _run(UNINSTALL_CHECK, "--method", "docker", "--scope", scope)
         assert result.returncode in (0, 1), (
             f"--scope {scope} should be accepted (exit 0/1), got {result.returncode}:\n"
             f"{result.stderr}"
@@ -211,7 +275,9 @@ class TestUninstallCheckScriptStructure:
         assert "uninstall" in text
         # scope vocabulary shared by the script, SKILL.md pointer, and uninstall.md
         for scope in ("stop", "remove", "wipe"):
-            assert scope in text, f"expected uninstall scope '{scope}' documented in SKILL.md"
+            assert scope in text, (
+                f"expected uninstall scope '{scope}' documented in SKILL.md"
+            )
 
     def test_uninstall_md_exists_and_is_referenced(self) -> None:
         """The detailed teardown workflow lives in the bundled uninstall.md."""
@@ -245,10 +311,14 @@ class TestUninstallCheckAgainstFreeHost:
             pytest.skip("curl not available")
         result = _run(
             UNINSTALL_CHECK,
-            "--goal", "1",
-            "--scope", "stop",
-            "--managers", "59117",
-            "--dashboard-port", "59118",
+            "--method",
+            "docker",
+            "--scope",
+            "stop",
+            "--managers",
+            "59117",
+            "--dashboard-port",
+            "59118",
             timeout=60,
         )
         # No container check failures possible for these ports; the port checks
@@ -268,7 +338,9 @@ class TestUninstallCheckLiveStack:
     """
 
     def test_stop_scope_fails_against_running_stack(self) -> None:
-        result = _run(UNINSTALL_CHECK, "--goal", "1", "--scope", "stop", timeout=60)
+        result = _run(
+            UNINSTALL_CHECK, "--method", "docker", "--scope", "stop", timeout=60
+        )
         assert result.returncode == 1, (
             "uninstall-check.sh should FAIL while the example lab is still running.\n"
             "Is the stack actually up (`just up`)?\n"

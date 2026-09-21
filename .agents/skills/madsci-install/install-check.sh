@@ -18,9 +18,9 @@
 #                                 --with-ui if you built ui/dist and set LAB_DASHBOARD_FILES_PATH)
 #
 # Scope: this script certifies that a MADSci stack is up and answers correctly. It does
-# NOT check for seeded resources / nodes / locations — those belong to a separate skill.
-# It does NOT distinguish "which install goal" (example lab vs. user-created lab vs.
-# per-package pip install) — the only axis it cares about is HOW the stack is running.
+# NOT check whether the lab has resources / nodes / locations defined, and it does NOT
+# distinguish which kind of lab it is (example lab vs. user-created lab vs. per-package
+# pip install) — the only axis it cares about is HOW the stack is running.
 #
 # Exit codes:
 #   0 = all checks passed
@@ -339,7 +339,7 @@ printf "  %sPassed%s: %d    %sFailed%s: %d    %sSkipped%s: %d\n" \
   "$YELLOW" "$RESET" "$SKIP_COUNT"
 
 if (( FAIL_COUNT > 0 )); then
-  printf "\n%sInstall verification FAILED.%s Re-run the AskUserQuestion prompts in SKILL.md Step 4 for the specific failure(s) above.\n" "$RED" "$RESET"
+  printf "\n%sInstall verification FAILED.%s Re-run the AskUserQuestion prompts in SKILL.md Step 6 for the specific failure(s) above.\n" "$RED" "$RESET"
   exit 1
 fi
 
