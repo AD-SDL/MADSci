@@ -38,7 +38,7 @@ services:
     image: ghcr.io/ad-sdl/madsci_dashboard:latest
     command: python -m madsci.squid.lab_server
     healthcheck:
-      test: ["CMD", "curl", "-f", "${LAB_SERVER_URL:-http://localhost:8000}/health", "||", "exit", "1"]
+      test: ["CMD-SHELL", 'URL="${LAB_SERVER_URL:-http://localhost:8000}"; curl -f "$${URL%/}/health"']
       interval: 30s
       timeout: 3s
       retries: 3
