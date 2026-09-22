@@ -66,8 +66,6 @@ project:
         - file: docs/guides/troubleshooting.md
         - file: docs/guides/agent_skills.md
 
-    - file: docs/equipment.md
-
     - title: Equipment Integrator Guide
       children:
         - file: docs/guides/integrator/README.md

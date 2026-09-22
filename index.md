@@ -95,8 +95,8 @@ liquid handlers, Universal Robots and PreciseFlex arms, plate readers, an SEM, a
 battery cycler, humanoid platforms, a 3D printer and beamline temperature control.
 Each one is a reusable module you can pick up and run against your own hardware.
 
-See **[Integrated Equipment](docs/equipment.md)** for the full list, grouped by
-function and linked to every module, or the [Equipment Integrator
+See **[MADSci Node Modules](docs/madsci_powered/Modules.md)** for the full list,
+grouped by function and linked to every module, or the [Equipment Integrator
 Guide](docs/guides/integrator/README.md) to build a module for hardware that is not
 there yet.
 
