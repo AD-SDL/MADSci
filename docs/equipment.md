@@ -108,22 +108,3 @@ outside the count of 36.
 | Object detection | Vision based detection service | [`object_detection_module`](https://github.com/AD-SDL/object_detection_module) |
 | AprilTag localization | Fiducial marker tracking | [`rpl_tag_engine_module`](https://github.com/AD-SDL/rpl_tag_engine_module) |
 | FOM devices | Remote interfaces to facility owned instruments | [`fom_module`](https://github.com/AD-SDL/fom_module) |
-
-## How this page is maintained
-
-The list is derived from the AD-SDL organization, not hand-collected:
-
-- Every `*_module` repository is listed. As of 22 September 2026 that is 50.
-- Five are scaffolding rather than instruments and are excluded: `dummy`, `python_template`,
-  `sleep`, `transfer_meta` and `webcam`.
-- Framework status is read from `pyproject.toml` dependencies on **every branch**, not only
-  the default one. Several modules keep their MADSci port on an unmerged branch, so checking
-  `main` alone undercounts. A module declaring `madsci.node_modules` or `madsci-node-module`
-  is MADSci; one declaring `ad_sdl.wei` is WEI.
-- Nine have no MADSci dependency on any branch and are listed in their own section.
-- That leaves 36.
-
-Two repositories are private and have no link above, `n9_module` and `chemspeed_module`.
-
-A published module means the driver exists and has been used, not that it is certified for
-your hardware revision. Check the module's own README before relying on it.
