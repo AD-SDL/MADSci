@@ -95,9 +95,12 @@ export function useDatapoints() {
   async function trydownload(id: string, label: string) {
     try {
       const response = await fetch(`${urls.value["data_server_url"]}datapoint/${id}/value`)
-      if (response.ok) {
+      const label_response = await fetch(`${urls.value["data_server_url"]}datapoint/${id}`)
+      if (response.ok && label_response.ok) {
+        const datapoint_blob = await label_response.json()
         const val = await response.blob()
-        forceFileDownload(val, label || id)
+        const filename = datapoint_blob["path"].substring(datapoint_blob["path"].lastIndexOf('/') + 1);
+        forceFileDownload(val, filename)
       } else {
         console.error('Failed to download datapoint:', response.statusText)
       }

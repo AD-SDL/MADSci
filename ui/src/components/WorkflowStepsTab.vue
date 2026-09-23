@@ -81,7 +81,7 @@
                     <td>{{ item.label || item.key }}</td>
                     <td>{{ item.data_type || 'Loading...' }}</td>
                     <td>{{ item.timestamp || '' }}</td>
-                    <td v-if="item.data_type === 'file'">
+                    <td v-if="item.data_type === 'file' || item.data_type === 'object_storage'">
                       <v-btn size="small" @click="trydownload(item.datapoint_id, item.label || item.key)" :disabled="!item.datapoint_id">
                         Download
                       </v-btn>
