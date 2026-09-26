@@ -90,23 +90,15 @@ _Journal of Open Source Software_:
 
 ## Instruments & robots
 
-MADSci and its predecessor tooling have been used to integrate **40+ instruments
-and robots** as reusable modules across the Rapid Prototyping Lab's autonomous
-laboratories and collaborating sites. A representative sample:
+MADSci drives **36 instruments, robots and controllers** today: Opentrons and Hudson
+liquid handlers, Universal Robots and PreciseFlex arms, plate readers, an SEM, a
+battery cycler, humanoid platforms, a 3D printer and beamline temperature control.
+Each one is a reusable module you can pick up and run against your own hardware.
 
-- **Robotic arms & motion** — PF400, UR5e, PAL, Hudson PlateCrane & Sciclops, Vention linear rail
-- **Mobile robots** — MiR250
-- **Liquid handling** — Opentrons OT-2, Tecan, Hudson SOLO, Big Kahuna, Barty
-- **Sample handling & prep** — Azenta heat sealer, Brooks XPeel, BioStack, Liconic & Tekmatic incubators, Hig centrifuge, Biometra thermal cycler
-- **Detection & analysis** — BMG & Epoch2 plate readers, Hidex, PerkinElmer ICP, Metrohm, Phenom SEM
-- **Sensors, control & vision** — cameras, LabJack, Arduino, Zigbee, Eurotherm nanodac, object detection, AprilTag / RPL tags
-- **Emerging & embodied** — OpenArm, DexMate Vega, and SO-ARM101 humanoid/teleoperation platforms
-- **Human-in-the-loop** — a `person` node for capturing human input during a run
-
-Browse the full, up-to-date list of modules on the
-[AD-SDL GitHub organization](https://github.com/orgs/AD-SDL/repositories?q=module),
-and see the [Equipment Integrator Guide](docs/guides/integrator/README.md) to
-integrate your own.
+See **[MADSci Node Modules](docs/madsci_powered/Modules.md)** for the full list,
+grouped by function and linked to every module, or the [Equipment Integrator
+Guide](docs/guides/integrator/README.md) to build a module for hardware that is not
+there yet.
 
 ## Contributors
 
