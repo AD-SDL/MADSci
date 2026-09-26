@@ -1,5 +1,5 @@
 <template>
-  <v-dialog class="pa-3" v-slot:default="{ isActive }">
+  <v-dialog class="pa-3" v-model="isOpen">
     <v-card>
       <v-card-title>
         <div class="d-flex align-center w-100">
@@ -70,11 +70,11 @@
           <v-window-item :key="3" :value="3">
             <div class="pa-4">
               <NodeActionsTab
+                :key="`${modal_title}-${formSession}`"
                 :modal_title="modal_title"
                 :modal_text="current_node_info"
-                :wc_state="wc_state"
-                :locations="locations"
-                @action-sent="isActive.value = false"
+                :locations="current_locations"
+                @action-sent="isOpen = false"
               />
             </div>
           </v-window-item>
@@ -82,26 +82,36 @@
       </v-card-text>
       <v-card-actions>
         <v-spacer></v-spacer>
-        <v-btn flat @click="isActive.value = false" class="primary--text">close</v-btn>
+        <v-btn flat @click="isOpen = false" class="primary--text">close</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { get_status } from '../store';
+import { useStableValue } from '../composables/useStableValue';
 import LockUnlockButton from './AdminButtons/LockUnlockButton.vue';
 import ShutdownButton from './AdminButtons/ShutdownButton.vue';
 
 const props = defineProps(['modal_title', 'modal_text', 'main_url', 'wc_state', 'locations'])
+const isOpen = defineModel<boolean>({ default: false })
 const tab = ref(1)
 
-const current_node_info = computed(() => {
+const current_node_info = useStableValue(() => {
   if (!props.modal_title || !props.wc_state?.nodes) {
     return props.modal_text
   }
   return props.wc_state.nodes[props.modal_title]?.info ?? props.modal_text
+})
+const current_locations = useStableValue(() => props.locations)
+
+const formSession = ref(0)
+watch(isOpen, (open) => {
+  if (open) {
+    formSession.value++
+  }
 })
 </script>
 
