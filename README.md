@@ -160,7 +160,7 @@
 | src/madsci\_common/madsci/common/types/location\_types.py                                              |      179 |        7 |     96% |245, 250, 355-358, 692 |
 | src/madsci\_common/madsci/common/types/manager\_types.py                                               |       55 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/migration\_types.py                                             |       59 |        1 |     98% |       143 |
-| src/madsci\_common/madsci/common/types/node\_types.py                                                  |      210 |        8 |     96% |461, 540, 548, 554, 563, 571, 575, 605 |
+| src/madsci\_common/madsci/common/types/node\_types.py                                                  |      210 |        6 |     97% |461, 540, 554, 563, 575, 605 |
 | src/madsci\_common/madsci/common/types/parameter\_types.py                                             |       37 |        0 |    100% |           |
 | src/madsci\_common/madsci/common/types/registry\_types.py                                              |       41 |        1 |     98% |        86 |
 | src/madsci\_common/madsci/common/types/resource\_types/\_\_init\_\_.py                                 |      296 |       46 |     84% |119, 163, 240, 250, 271, 276, 280, 284, 325, 338, 344, 366, 370, 404, 426, 430, 478-482, 512, 555, 560-561, 572-588, 591-600, 607-609, 640, 655, 684-687, 724-727, 764, 769, 779, 783 |
@@ -176,7 +176,7 @@
 | src/madsci\_common/madsci/common/warnings.py                                                           |        4 |        2 |     50% |       4-7 |
 | src/madsci\_common/madsci/common/workflows.py                                                          |       28 |       15 |     46% |14-29, 39-48, 64, 68 |
 | src/madsci\_data\_manager/madsci/data\_manager/\_\_init\_\_.py                                         |        0 |        0 |    100% |           |
-| src/madsci\_data\_manager/madsci/data\_manager/data\_server.py                                         |      162 |       29 |     82% |55, 80-107, 112-117, 130, 152, 160-161, 166-170, 184, 287, 312, 320, 364-365 |
+| src/madsci\_data\_manager/madsci/data\_manager/data\_server.py                                         |      170 |       35 |     79% |56, 81-108, 113-118, 131, 153, 161-162, 167-171, 185, 288, 313, 321, 336-345, 380-381 |
 | src/madsci\_event\_manager/madsci/event\_manager/\_\_init\_\_.py                                       |        0 |        0 |    100% |           |
 | src/madsci\_event\_manager/madsci/event\_manager/event\_server.py                                      |      357 |      145 |     59% |48, 69, 122, 148-178, 190-197, 229-240, 257-258, 283-286, 313-329, 343-374, 453-470, 639-648, 717-725, 790-797, 814-827, 842-849, 867-911, 915-924, 930-938, 959-1017, 1031-1076, 1081-1082 |
 | src/madsci\_event\_manager/madsci/event\_manager/events\_csv\_exporter.py                              |      280 |      234 |     16% |32-74, 79-83, 88-89, 94-102, 107-128, 133-161, 166-197, 202-210, 217-250, 257-277, 282-284, 297-299, 314-352, 373-524, 542-655, 662-674, 691-727, 744-770, 787-813 |
@@ -200,7 +200,7 @@
 | src/madsci\_node\_module/madsci/node\_module/\_\_init\_\_.py                                           |        4 |        0 |    100% |           |
 | src/madsci\_node\_module/madsci/node\_module/abstract\_node\_module.py                                 |      577 |       96 |     83% |126, 360-362, 368, 386-387, 403, 434-442, 452-459, 487-499, 510-511, 522-532, 676-677, 690-694, 752, 843, 870, 895, 917, 954, 980, 983, 1030-1031, 1060-1061, 1073-1075, 1081-1082, 1191, 1203, 1207, 1217-1222, 1243, 1246-1258, 1324-1325, 1340, 1351-1352, 1358-1359, 1396, 1412-1416, 1430-1434, 1448-1449, 1463-1464, 1487-1490 |
 | src/madsci\_node\_module/madsci/node\_module/helpers.py                                                |      157 |       62 |     61% |43, 70-113, 118-135, 149, 168-173, 189-192, 242, 261 |
-| src/madsci\_node\_module/madsci/node\_module/rest\_node\_module.py                                     |      384 |       78 |     80% |82-96, 107-130, 165, 170-181, 220-224, 250, 261-263, 274-288, 303, 312, 316, 334-336, 370, 373, 396, 399, 463, 489, 502-507, 519-529, 559, 563, 566-568, 618, 645, 659, 675, 686-687, 785, 873 |
+| src/madsci\_node\_module/madsci/node\_module/rest\_node\_module.py                                     |      384 |       78 |     80% |82-96, 107-130, 165, 170-181, 220-224, 250, 261-263, 274-288, 303, 312, 316, 334-336, 370, 373, 396, 399, 463, 491, 504-509, 523-533, 563, 567, 570-572, 622, 649, 663, 679, 690-691, 789, 877 |
 | src/madsci\_node\_module/madsci/node\_module/type\_analyzer.py                                         |      153 |       14 |     91% |210, 263-264, 281-282, 298-299, 351-353, 361-363, 370-373 |
 | src/madsci\_resource\_manager/madsci/resource\_manager/\_\_init\_\_.py                                 |        1 |        0 |    100% |           |
 | src/madsci\_resource\_manager/madsci/resource\_manager/database\_version\_checker.py                   |      136 |       23 |     83% |37-43, 116-117, 148-157, 253-260, 292-299, 316-318, 336-343, 380-387 |
@@ -221,7 +221,7 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                             |      303 |       87 |     71% |81, 87, 145-204, 231-232, 274, 283-287, 293-297, 321-322, 333, 343-346, 354-365, 397-401, 419-424, 441-445, 461, 463, 469, 481, 490-491, 545-546, 550-559, 584-585, 622-623, 638, 649, 686-696, 703-704 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                              |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                              |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                              | **30784** | **9165** | **70%** |           |
+| **TOTAL**                                                                                              | **30792** | **9169** | **70%** |           |
 
 
 ## Setup coverage badge
