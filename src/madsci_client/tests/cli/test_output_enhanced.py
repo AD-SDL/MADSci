@@ -118,7 +118,7 @@ class SampleModel(BaseModel):
     """A minimal Pydantic model for testing."""
 
     name: str = "test"
-    value: int = 42
+    value: int | dict = 42
 
 
 class TestOutputResultEnhanced:
@@ -227,3 +227,23 @@ class TestOutputResultEnhanced:
         text = _get_output(console)
         # Should print the whole dict as string
         assert "a" in text
+
+    def test_json_mode_with_dict(self) -> None:
+        console = _capture_console()
+        output_result(
+            console, data={"model": SampleModel(name="dict", value=42)}, format="json"
+        )
+        text = _get_output(console)
+        assert '"dict"' in text
+        assert '"model"' in text
+        assert "42" in text
+
+    def test_yaml_mode_with_dict(self) -> None:
+        console = _capture_console()
+        output_result(
+            console, data={"model": SampleModel(name="dict", value=42)}, format="yaml"
+        )
+        text = _get_output(console)
+        assert "name: dict" in text
+        assert "model:" in text
+        assert "42" in text

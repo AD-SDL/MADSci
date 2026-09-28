@@ -216,6 +216,39 @@ class TestEventClientLogging:
         client.warning("Warning alias")
         client.warn("Warn alias")
 
+    def test_local_warning(self, config_with_server):
+        """Regression test: class-valued metadata should serialize to JSON."""
+
+        client = EventClient(config=config_with_server)
+
+        with patch.object(client, "_send_event_to_event_server_task") as mock_send:
+            client.warning(
+                "Test warning",
+                warning_category=UserWarning,
+                exceptions=[
+                    RuntimeError,
+                    ValueError,
+                ],
+                nested={
+                    "warning": DeprecationWarning,
+                },
+            )
+
+            mock_send.assert_called_once()
+
+            event = mock_send.call_args.args[0]
+
+            dumped = event.model_dump(mode="json")
+
+            assert dumped["event_data"]["warning_category"] == "builtins.UserWarning"
+            assert dumped["event_data"]["exceptions"] == [
+                "builtins.RuntimeError",
+                "builtins.ValueError",
+            ]
+            assert dumped["event_data"]["nested"] == {
+                "warning": "builtins.DeprecationWarning"
+            }
+
     def test_log_error(self, config_without_server):
         """Test log_error method."""
         client = EventClient(config=config_without_server)

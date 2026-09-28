@@ -110,6 +110,8 @@ def _serialize(data: Any) -> Any:
         return data.model_dump(mode="json")
     if isinstance(data, list):
         return [_serialize(item) for item in data]
+    if isinstance(data, dict):
+        return {k: _serialize(v) for k, v in data.items()}
     return data
 
 

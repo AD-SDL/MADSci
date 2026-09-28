@@ -266,7 +266,7 @@ class WorkcellManagerSettings(
         description="The interval (in seconds) at which the workcell retries connecting to disconnected nodes. A non-disruptive retry: if the node responds, its status is restored naturally; if not, it remains disconnected until the next attempt.",
     )
     node_info_update_interval: float = Field(
-        default=60.0,
+        default=30.0,
         title="Node Info Update Interval",
         description="The interval at which the workcell queries its node's info, in seconds. Node info changes infrequently, so this can be much larger than node_update_interval to reduce network overhead.",
     )

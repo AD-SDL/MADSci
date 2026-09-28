@@ -646,6 +646,19 @@ class EventClient(DualModeClientMixin):
 
     # ==================== Event Server Communication ====================
 
+    @staticmethod
+    def _serialize_for_json(value: Any) -> Any:
+        """Convert non-JSON-serializable metadata into JSON-friendly values."""
+        if isinstance(value, type):
+            return f"{value.__module__}.{value.__qualname__}"
+        if isinstance(value, dict):
+            return {k: EventClient._serialize_for_json(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [EventClient._serialize_for_json(v) for v in value]
+        if isinstance(value, tuple):
+            return tuple(EventClient._serialize_for_json(v) for v in value)
+        return value
+
     def _maybe_send_to_server(
         self,
         message: str,
@@ -683,11 +696,13 @@ class EventClient(DualModeClientMixin):
                 event_type = EventType.LOG_CRITICAL
 
             # Combine bound context with event context
-            event_data = {
-                "message": message,
-                **self._bound_context,
-                **context,
-            }
+            event_data = self._serialize_for_json(
+                {
+                    "message": message,
+                    **self._bound_context,
+                    **context,
+                }
+            )
 
             if self._otel_runtime and self._otel_runtime.enabled:
                 trace_ctx = current_trace_context()
@@ -737,7 +752,7 @@ class EventClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.event_server}event/{event_id}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             if not response.is_success:
                 response.raise_for_status()
@@ -765,7 +780,7 @@ class EventClient(DualModeClientMixin):
             response = self._request(
                 "GET",
                 f"{self.event_server}events",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
                 params={"number": number, "level": level},
             )
             if not response.is_success:
@@ -883,7 +898,7 @@ class EventClient(DualModeClientMixin):
             response = self._request(
                 "POST",
                 f"{self.event_server}events/query",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
                 params={"selector": selector},
             )
             if not response.is_success:
@@ -1211,8 +1226,7 @@ class EventClient(DualModeClientMixin):
             )
             self.logger.error(
                 "Failed to send event to event server; event persisted locally only",
-                event_type=str(event.event_type),
-                event_id=event.event_id,
+                extra={"event_type": str(event.event_type), "event_id": event.event_id},
                 exc_info=True,
             )
 
@@ -1265,7 +1279,7 @@ class EventClient(DualModeClientMixin):
             response = await self._async_request(
                 "GET",
                 f"{self.event_server}event/{event_id}",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
             )
             if not response.is_success:
                 response.raise_for_status()
@@ -1291,7 +1305,7 @@ class EventClient(DualModeClientMixin):
             response = await self._async_request(
                 "GET",
                 f"{self.event_server}events",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
                 params={"number": number, "level": level},
             )
             if not response.is_success:
@@ -1322,7 +1336,7 @@ class EventClient(DualModeClientMixin):
             response = await self._async_request(
                 "POST",
                 f"{self.event_server}events/query",
-                timeout=timeout or self.config.timeout_default,
+                timeout=self.config.timeout_default if timeout is None else timeout,
                 params={"selector": selector},
             )
             if not response.is_success:

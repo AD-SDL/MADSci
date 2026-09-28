@@ -163,7 +163,7 @@ def test_rate_limit_headers_values(rate_limited_client: TestClient) -> None:
     assert remaining == 3
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_race_condition_concurrent_access(
     test_manager_with_rate_limiting: TestManager,
 ) -> None:
@@ -316,7 +316,7 @@ def test_dual_rate_limiting_headers(dual_rate_limited_client: TestClient) -> Non
     assert "X-RateLimit-Reset" in response.headers
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_dual_rate_limiting_concurrent_burst(
     test_manager_with_dual_rate_limiting: TestManager,
 ) -> None:

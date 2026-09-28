@@ -122,7 +122,7 @@ async def make_async_request(app, endpoint: str = "/health") -> dict:
         }
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_concurrent_requests(stress_test_manager: TestManager) -> None:
     """Test server handles concurrent async requests without crashing."""
     num_requests = 50
@@ -196,7 +196,7 @@ def test_sustained_load(stress_test_client: TestClient) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_burst_traffic(stress_test_manager: TestManager) -> None:
     """Test server handles sudden traffic bursts with concurrent async requests."""
     # Send a burst of requests
@@ -243,7 +243,7 @@ async def test_burst_traffic(stress_test_manager: TestManager) -> None:
     )
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_multiple_endpoints_under_load(stress_test_manager: TestManager) -> None:
     """Test that multiple endpoints handle concurrent async load simultaneously."""
     endpoints = ["/health", "/settings"]

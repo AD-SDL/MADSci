@@ -496,6 +496,34 @@ class TestRateLimitTracker:
         assert tracker.burst_limit == 10
         assert tracker.burst_remaining == 5
 
+    def test_update_from_headers_ignores_malformed_values(self):
+        """Malformed rate limit headers must not raise ValueError."""
+        tracker = RateLimitTracker()
+        # First seed valid values so we can confirm bad values do not clobber them.
+        tracker.update_from_headers(
+            {
+                "X-RateLimit-Limit": "100",
+                "X-RateLimit-Remaining": "75",
+                "X-RateLimit-Reset": str(int(time.time()) + 60),
+            }
+        )
+
+        malformed = {
+            "X-RateLimit-Limit": "unknown",
+            "X-RateLimit-Remaining": "",
+            "X-RateLimit-Reset": "not-a-number",
+            "X-RateLimit-Burst-Limit": "nope",
+            "X-RateLimit-Burst-Remaining": "",
+        }
+        # Should not raise; previous valid state must be preserved.
+        tracker.update_from_headers(malformed)
+
+        assert tracker.limit == 100
+        assert tracker.remaining == 75
+        assert tracker.reset is not None
+        assert tracker.burst_limit is None
+        assert tracker.burst_remaining is None
+
     def test_get_status(self):
         """Test getting rate limit status."""
         tracker = RateLimitTracker()
