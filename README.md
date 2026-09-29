@@ -217,11 +217,11 @@
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/schedulers/scheduler.py                         |       16 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/state\_handler.py                               |      199 |       54 |     73% |50, 56, 70-73, 83, 102-103, 124, 203, 211-217, 245, 257, 275-289, 302, 310-311, 319-322, 335-336, 356, 372, 379-384, 388-390, 396-397, 409, 427-428, 438, 446-447, 455, 459-460 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_actions.py                            |      100 |       10 |     90% |105-106, 139-142, 236-237, 258, 291-292 |
-| src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_engine.py                             |      356 |       94 |     74% |102-179, 198-211, 229, 267, 288, 333, 355, 369-383, 387-390, 413-422, 455, 513-520, 522-528, 530, 543-553, 581, 618-621, 665-666, 748-758, 827, 859-881 |
+| src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_engine.py                             |      357 |       94 |     74% |102-179, 198-211, 229, 267, 288, 333, 355, 369-383, 387-390, 413-422, 455, 521-528, 530-536, 538, 551-561, 589, 626-629, 673-674, 756-766, 835, 867-889 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_server.py                             |      303 |       87 |     71% |81, 87, 145-204, 231-232, 274, 283-287, 293-297, 321-322, 333, 343-346, 354-365, 397-401, 419-424, 441-445, 461, 463, 469, 481, 490-491, 545-546, 550-559, 584-585, 622-623, 638, 649, 686-696, 703-704 |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workcell\_utils.py                              |       12 |        0 |    100% |           |
 | src/madsci\_workcell\_manager/madsci/workcell\_manager/workflow\_utils.py                              |      223 |       74 |     67% |42-43, 50-60, 74-79, 97, 115, 133, 146, 162, 167-178, 246, 253-254, 270, 291, 312, 317, 325, 342-354, 370-392, 408, 431-438, 445, 461-463, 481-487, 497-499 |
-| **TOTAL**                                                                                              | **30792** | **9169** | **70%** |           |
+| **TOTAL**                                                                                              | **30793** | **9169** | **70%** |           |
 
 
 ## Setup coverage badge
