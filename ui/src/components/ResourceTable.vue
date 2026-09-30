@@ -9,7 +9,8 @@
       <template v-slot:item="{ item, internalItem, isExpanded, toggleExpand}: { item: any, internalItem: any, isExpanded: any, toggleExpand: any}">
         <tr @click="set_modal(item.resource_name, item)">
           <td ><v-checkbox-btn
-          :v-model="delete_list"
+          v-if="show_checkboxes"
+          :model-value="to_delete_list.includes(item.resource_id)"
           @update:modelValue="function(val: any) {modify_to_delete(val, item) }"
           @click.stop
           class="pe-2"
@@ -27,7 +28,7 @@
       </template>
       <template v-slot:expanded-row="{ columns, item}: {columns: any, item: any}">
           <tr>
-            <td :colspan="columns.length"><ResourceTable :resources=get_all(item.children) :parent_id=item.resource_id :hide_header="true" /></td>
+            <td :colspan="columns.length"><ResourceTable :resources=get_all(item.children) :parent_id=item.resource_id :hide_header="true" :show_checkboxes="true" /></td>
           </tr>
         </template>
     </v-data-table>
@@ -40,7 +41,7 @@
 import { ref, watch } from 'vue';
 import { VDataTable } from 'vuetify/components';
 import { to_delete_list } from "@/store";
-const props = defineProps(['resources', 'parent_id',  'hide_header'])
+const props = defineProps(['resources', 'parent_id',  'hide_header', 'show_checkboxes', 'show_children'])
 const modal = ref(false)
 const delete_list = ref([])
 const modal_text = ref()
@@ -70,7 +71,7 @@ watch(() => props.resources, (newResources: any) => {
 );
 function prune_tree(input_resources: any): any[] {
   var return_resources: any = []
-  input_resources.forEach((element: any) => { if((element.parent_id == null) || element.parent_id == props.parent_id) { element.selected = false; return_resources.push(element)}
+  input_resources.forEach((element: any) => { if((element.parent_id == null) || element.parent_id == props.parent_id || props.show_children) { element.selected = false; return_resources.push(element)}
 
   });
   return return_resources
@@ -80,7 +81,6 @@ function prune_tree(input_resources: any): any[] {
 //"(val: any) => modify_to_delete(val, item.resource_id)"
 
 function modify_to_delete(val: boolean, item: any) {
-  console.log("Modifying to_delete_list: ", item.resource_id)
   if (val) {
     to_delete_list.value.push(item.resource_id)
   } else {
