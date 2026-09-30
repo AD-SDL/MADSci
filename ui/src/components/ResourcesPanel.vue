@@ -24,7 +24,7 @@ function active_add() {
 
 function delete_selected() {
   delete_modal.value=true
-  
+
 
 }
 

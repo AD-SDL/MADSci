@@ -31,7 +31,7 @@ function get_resources() {
     }
     }
   );
-  
+
   return show_resources.value;
 }
 
