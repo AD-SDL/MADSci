@@ -39,6 +39,7 @@ const representation_templates = ref<any[]>([])
 const location_templates = ref<any[]>([])
 const resource_templates = ref<any[]>([])
 const transfer_edges = ref<any[]>([])
+const to_delete_list = ref<any[]>([])
 main_url.value = "http://".concat(window.location.host)
 interface ExperimentInfo {
     experiment_id?: string;
@@ -242,11 +243,19 @@ function get_status(value: any) {
     }
 }
 
+
+function delete_resource(resource_id: string) {
+  fetch(urls.value.resource_server_url.concat('resource/').concat(resource_id), {
+    method: "DELETE",
+});
+}
+
 export {
   active_workflows,
   archived_workflows,
   campaigns,
   campaigns_url,
+  delete_resource,
   events,
   experiment_keys,
   experiment_objects,
@@ -271,4 +280,5 @@ export {
   workcell_info,
   workcell_info_url,
   workcell_state,
+  to_delete_list
 };
