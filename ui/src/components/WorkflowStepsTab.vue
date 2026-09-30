@@ -3,7 +3,7 @@
     <v-expansion-panels>
       <v-expansion-panel
         v-for="(step, index) in steps"
-        :key="step.step_id || index"
+        :key="step.step_id || Number(index)"
         :class="'step-border-' + getStepStatusKey(step)"
       >
         <v-expansion-panel-title>
@@ -16,7 +16,7 @@
               size="24"
             />
             <div class="flex-grow-1">
-              <span class="font-weight-bold">{{ index + 1 }}. {{ step.name }}</span>
+              <span class="font-weight-bold">{{ Number(index) + 1 }}. {{ step.name }}</span>
               <span class="text-grey-lighten-1 ml-2 text-body-2">
                 {{ step.node }} &bull; {{ step.action }}
                 <template v-if="step.duration"> &bull; {{ step.duration }}</template>
@@ -36,7 +36,7 @@
               variant="text"
               color="primary"
               class="ml-2"
-              @click.stop="retryFromStep(index)"
+              @click.stop="retryFromStep(Number(index))"
             >
               Retry from here
             </v-btn>
