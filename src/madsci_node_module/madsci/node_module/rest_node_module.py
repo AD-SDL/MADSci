@@ -475,7 +475,9 @@ class RestNode(AbstractNode):
                 if isinstance(action_response.files, Path):
                     # Single file - add to ZIP with appropriate name
                     if action_response.files.exists():
-                        zip_file.write(action_response.files, "file")
+                        zip_file.write(
+                            action_response.files, action_response.files.name
+                        )
                 elif isinstance(action_response.files, ActionFiles):
                     # Multiple files - add all to ZIP with their labels as names
                     files_dict = action_response.files.model_dump()
@@ -515,7 +517,9 @@ class RestNode(AbstractNode):
                 if isinstance(action_response.files, Path):
                     # Single file - add to ZIP with appropriate name
                     if action_response.files.exists():
-                        zip_file.write(action_response.files, "file")
+                        zip_file.write(
+                            action_response.files, action_response.files.name
+                        )
                 elif isinstance(action_response.files, ActionFiles):
                     # Multiple files - add all to ZIP with their labels as names
                     files_dict = action_response.files.model_dump()

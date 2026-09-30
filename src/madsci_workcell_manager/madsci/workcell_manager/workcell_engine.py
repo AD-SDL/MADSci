@@ -509,6 +509,14 @@ class Engine:
             elif step.status == ActionStatus.FAILED:
                 wf.status.failed = True
                 wf.end_time = datetime.now()
+                self.logger.error(
+                    "Workflow step failed, see error in step result",
+                    event_type=EventType.WORKFLOW_STEP_FAILED,
+                    workflow_id=workflow_id,
+                    step_id=step.step_id,
+                    step_action=step.action,
+                    step_node=step.node,
+                )
             elif step.status == ActionStatus.CANCELLED:
                 self.logger.debug(
                     "Step cancelled, setting workflow status to cancelled",
