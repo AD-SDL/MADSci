@@ -154,6 +154,7 @@ class Engine:
                     if self.state_handler.get_workcell_status().ok:
                         self.run_next_step()
                         scheduler_tick = time.time()
+                time.sleep(self.workcell_settings.scheduler_update_interval/10)
             except Exception as e:
                 self.logger.error(
                     "Unhandled exception in engine loop",
