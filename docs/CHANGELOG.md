@@ -14,13 +14,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Node Status Update**: Node status within the modal now updates regulary
-- **Liscence**: Liscence updated
+- **License**: Liscence updated
 
 ### Fixes
 
 - **Arg Reset**: input args no longer disappear when node state is updated
 - **File path**: File path and extension is now preserved from the node update
 - **Dependencies**: Addressed vulnerabilities in yarn dependencies
+- **Enabled downloads from Object storage**: Object storage datapoints can now be retrieved
 
 
 ## [0.8.0] - 2026-05-13
