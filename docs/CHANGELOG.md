@@ -5,7 +5,23 @@ All notable changes to the MADSci framework are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.1] - 2026-10-01
+
+### Added
+- **Resource multi-delete**: Selecting multiple resources for deletion added on the dashboard resource table
+- **Docs**: Added docs pages and native web page
+
+### Changed
+
+- **Node Status Update**: Node status within the modal now updates regulary
+- **Liscence**: Liscence updated
+
+### Fixes
+
+- **Arg Reset**: input args no longer disappear when node state is updated
+- **File path**: File path and extension is now preserved from the node update
+- **Dependencies**: Addressed vulnerabilities in yarn dependencies
+
 
 ## [0.8.0] - 2026-05-13
 
