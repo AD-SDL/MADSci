@@ -128,6 +128,9 @@ class LocalRunner:
         from madsci.location_manager.location_server import (  # noqa: PLC0415
             LocationManager,
         )
+        from madsci.resource_manager.resource_interface import (  # noqa: PLC0415
+            ResourceInterface,
+        )
         from madsci.resource_manager.resource_server import (  # noqa: PLC0415
             ResourceManager,
         )
@@ -151,9 +154,15 @@ class LocalRunner:
             document_handler=self._experiment_document_handler,
         )
 
-        # Resource Manager (8003) — SQLite via PostgresHandler abstraction
-        managers["resource"] = ResourceManager(
+        # Resource Manager (8003) — SQLite via PostgresHandler abstraction.
+        # Build the ResourceInterface explicitly and pass it in so the manager
+        # skips DB schema-version validation (fresh SQLite has no version row
+        # and Native mode has nothing to migrate from).
+        resource_interface = ResourceInterface(
             postgres_handler=self._postgres_handler,
+        )
+        managers["resource"] = ResourceManager(
+            resource_interface=resource_interface,
         )
 
         # Data Manager (8004) — in-memory document storage + object storage handlers
