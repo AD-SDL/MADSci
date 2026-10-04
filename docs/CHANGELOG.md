@@ -4,8 +4,83 @@ All notable changes to the MADSci framework are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
+## [0.8.1] - 2026-10-01
+
+### Added
+#### Resource Multi-Delete (PR #378)
+- Checkboxes for selecting multiple resources for deletion added on the dashboard resource table
+- Confirm delete modal added that displays selected resources for deletion
+
+#### Documentation for all Integrated Devices (PR #375, Issue #374):
+- `docs/madsci_powered/Modules.md` already existed and already listed integrated devices, so this expands it rather than adding a competing page. It had 22 unique modules and described itself as "an incomplete list".
+- **`docs/madsci_powered/Modules.md`** — now 45 entries: the **36 on MADSci** grouped into seven functional sections, plus a separate section for the **9 still on WEI**. Opens with a note that a module is a driver and not a machine, since that is what people get wrong reading a count like this.
+- Fixes a **duplicate `sciclops_module` row** (it was listed twice).
+- Drops the redundant third column. The module name is now the link, instead of being repeated as link text beside itself.
+- **`index.md`** — the landing page carried its own hand-picked partial list from #359. It now points at this page rather than maintaining a second copy, which also fixes a stale "40+".
+
+#### New Documentation Page (PR #359, Issue #358)
+- MADSci already has a published MyST docs site at https://ad-sdl.github.io/MADSci/, but the landing page is the rendered `README.md`, which opens directly into dense overview/concepts and has no clear "how to cite" pointer.
+This PR adds a dedicated, simpler **landing page** (`index.md`) as the site home:
+- Short **what-is-MADSci / self-driving-labs** intro + capability overview
+- **How to Cite** section — formatted JOSS reference + copy-paste BibTeX (sourced from `CITATION.cff`; DOI `10.21105/joss.09416`)
+- **Instruments & robots** — categorized inventory overview, linking to the AD-SDL org for the full, current list
+- **Contributors** — paper authors + link to the contributors graph
+- Quick-start **navigation cards** into tutorials / guides / example lab / API
+- Beta callout recommending version pinning
+`README.md` is unchanged as the repo readme and stays in the site nav, retitled **"Overview & Installation"**.
+
+### Changed
+#### Version Bump (PR #380)
+- Bumps version to 0.8.1
+- Rebuilt pdm.lock, which updated 122 other dependenceis
+- Added a wait equal to 1/10 of the `scheduler_update_interval` between engine loops to address CPU overuse as noted in Issue #379
+#### Error Logging (PR #365, Issue #363)
+- Previously, the Workflow Engine did not log an error event when a step failed, only if handling it failed
+- New change will always send an error event on step failure, possibly redundant to a message sent by a node, but no longer reliant on the error being registered by the node.
+#### Node Modal Refresh (PR #361, Issue #250)
+- Dashboard `NodeModal` was slow to update changes in node information or actions. Page was stale and needed to be manually refreshed or opened and closed, and the refresh time default was 01:00 minutes.
+- **Reduced node_info_update_interval default from 60.0 to 30.0.**: By decreasing the default value of node_info_update_interval, the workcell will more frequently query node information, therefore detecting any changes made and updating the dashboard.
+- **Fix the UI by having NodeModal use computed property over modal_text.**: Currently, `NodeModal` uses `props.modal_text` to feed into `NodeInfoTab` and `NodeActionsTab`, which is a snapshot that is only captured once when the modal is opened. Thus, even if `wc_state` updates later with new node information, `modal_text` will not change. Instead, we now use a computed property `current_node_info` that reads directly from `wc_state.nodes[modal_title].info`. Because `wc_state` is reactive, `current_node_info` will automatically update when the workcell manager pushes new node information into the workcell state.
+
+#### License Update (PR #355)
+- **License**: MIT License updated
+
+### Fixed
+#### Yarn Dependencies Fix (PR #376)
+- **Yarn Lock Update**: Addressed vulnerabilities in yarn dependencies by updating dependency versions
+#### File Changes (PR #372)
+- **File path update**: File path and extension is now preserved from the node update.
+- **Enabled downloads from Object storage**: Object storage datapoints can now be retrieved properly
+#### Arg Reset (PR #369, Issue #368)
+- Fix for Issue #368 Bug: Node tab refresh automatically clears action argument fields during user input.
+- Fixed by moving user input off the polled server data and into component-local form state
+- **`useStableValue.ts`** (new): follows a polled source but only updates when the value's contents actually change, so new object identities from polling stop propagating as if they were really changed.
+- **`NodeModal.vue`**: node info and locations go through `useStableValue`, so the tabs stop re-rendering every poll (header status stays live). The dialog owns its open state via `defineModel`, and a session counter in the Actions tab's `:key` gives a fresh form on each open. Dropped the unused `wc_state` prop, which changed on every poll.
+- **`NodeActionsTab.vue`**: typed values live in local stores keyed by action and field name; a `seed_defaults` watcher fills in defaults only for fields it hasn't seen, replacing the `arg.value = arg.default` mutation that ran during render. The duplicated argument/location logic in `set_text` and `send_wf` is now shared.
+
+#### Pre-commit Fix (PR #360)
+- **Extra New line**: The Argonne logo SVG added in PR #359 shipped without a trailing newline, which fails the end-of-file-fixer pre-commit hook on main. This adds the newline.
+#### Nonexistent Datapoint Labels (PR #357, Issue #211)
+- **Previous Behaviour**: Previously, if a step had only one datapoint, there was no check against nonexistent labels.
+- **Fix**: Moved logic around to check label existence for single and multiple datapoint steps at the same time, and throw a ValueError if nonexistent.
+- **Unit tests**: Added to unit tests to ensure an error is thrown for nonexistent labels on single datapoint steps.
+#### Timeout Default (PR #354, Issue #277)
+- **Remove old default**: Removes about ~150+ instances of timeout=self.config.timeout_default if timeout is None else timeout with timeout=timeout or self.config.timeout_default across client files.
+- **New default**: 0.0 now correctly sets the wait time to 0 seconds instead of False (Default config wait time)
+#### CLI Nested Dictionaries (PR #353, Issue #284)
+- **CLI Update**: CLI output can now correctly serialize nested Pydantic models contained as dict values in JSON and YAML formats.
+- **Unit Tests**: Relevant unit tests added to confirm correct serialization for both formats.
+#### Warning Category Crashes (PR #352, Issue #344)
+- **Event type fix**: Warning category for local warnings logged by the event client no longer crashes.
+- **JSON serialization**: Class-valued metadata now JSON serializable. Covers primitive metadata as well as nested structures.
+- **Unit tests**: Related unit test added to confirm no crashing and correct formatting of metadata.
+#### Rate Limit Headers (PR #351, Issue #289)
+- **Addressing Malformed Headers**: Previously, RateLimitTracker.update_from_headers() called int() on X-RateLimit-* values without error handling. Servers occasionally send non-numeric values (e.g. 'unknown', empty strings), which raised ValueError and bubbled all the way up, failing an otherwise successful HTTP request.
+- **Fix**: Convert each header through a try/except (ValueError, TypeError) and log at debug level when a value is unparseable, preserving any previously-recorded valid state.
+#### Psycopg2 (PR #350, Issue #343)
+- **Remove Dependency**: Removes the psycopg2-binary dependency in madsci.common as not directly referenced in manager. 32-bit Python installs no longer blocked by dependency.
+
 
 ## [0.8.0] - 2026-05-13
 
