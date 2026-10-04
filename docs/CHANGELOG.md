@@ -37,10 +37,10 @@ This PR adds a dedicated, simpler **landing page** (`index.md`) as the site home
 - Added a wait equal to 1/10 of the `scheduler_update_interval` between engine loops to address CPU overuse as noted in Issue #379
 #### Error Logging (PR #365, Issue #363)
 - Previously, the Workflow Engine did not log an error event when a step failed, only if handling it failed
-- New change will always send an error event on step failure, possibly redundant to a message sent by a node, but no longer reliant on the error being registered by the node. 
+- New change will always send an error event on step failure, possibly redundant to a message sent by a node, but no longer reliant on the error being registered by the node.
 #### Node Modal Refresh (PR #361, Issue #250)
 - Dashboard `NodeModal` was slow to update changes in node information or actions. Page was stale and needed to be manually refreshed or opened and closed, and the refresh time default was 01:00 minutes.
-- **Reduced node_info_update_interval default from 60.0 to 30.0.**: By decreasing the default value of node_info_update_interval, the workcell will more frequently query node information, therefore detecting any changes made and updating the dashboard. 
+- **Reduced node_info_update_interval default from 60.0 to 30.0.**: By decreasing the default value of node_info_update_interval, the workcell will more frequently query node information, therefore detecting any changes made and updating the dashboard.
 - **Fix the UI by having NodeModal use computed property over modal_text.**: Currently, `NodeModal` uses `props.modal_text` to feed into `NodeInfoTab` and `NodeActionsTab`, which is a snapshot that is only captured once when the modal is opened. Thus, even if `wc_state` updates later with new node information, `modal_text` will not change. Instead, we now use a computed property `current_node_info` that reads directly from `wc_state.nodes[modal_title].info`. Because `wc_state` is reactive, `current_node_info` will automatically update when the workcell manager pushes new node information into the workcell state.
 
 #### License Update (PR #355)
@@ -58,7 +58,7 @@ This PR adds a dedicated, simpler **landing page** (`index.md`) as the site home
 - **`useStableValue.ts`** (new): follows a polled source but only updates when the value's contents actually change, so new object identities from polling stop propagating as if they were really changed.
 - **`NodeModal.vue`**: node info and locations go through `useStableValue`, so the tabs stop re-rendering every poll (header status stays live). The dialog owns its open state via `defineModel`, and a session counter in the Actions tab's `:key` gives a fresh form on each open. Dropped the unused `wc_state` prop, which changed on every poll.
 - **`NodeActionsTab.vue`**: typed values live in local stores keyed by action and field name; a `seed_defaults` watcher fills in defaults only for fields it hasn't seen, replacing the `arg.value = arg.default` mutation that ran during render. The duplicated argument/location logic in `set_text` and `send_wf` is now shared.
-  
+
 #### Pre-commit Fix (PR #360)
 - **Extra New line**: The Argonne logo SVG added in PR #359 shipped without a trailing newline, which fails the end-of-file-fixer pre-commit hook on main. This adds the newline.
 #### Nonexistent Datapoint Labels (PR #357, Issue #211)
