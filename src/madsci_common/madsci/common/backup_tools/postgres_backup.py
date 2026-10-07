@@ -186,15 +186,17 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 compression=bool(self.settings.compression),
             )
             # Using subprocess with PostgreSQL tools - command is constructed safely
-            result = subprocess.run(  # noqa: S603
-                cmd,
-                env=env,
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=3600,  # 1 hour timeout
-            )
-
+            try: 
+                result = subprocess.run(  # noqa: S603
+                    cmd,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=3600,  # 1 hour timeout
+                )
+            except Exception as e:
+                raise RuntimeError(f"pg_dump execution failed: {e.stderr}") from e
             if result.returncode == 0:
                 self.logger.info(
                     "Database backup completed successfully",

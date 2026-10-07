@@ -96,8 +96,8 @@ def _display_results(
 @click.option(
     "--template",
     "template_name",
-    type=click.Choice(["minimal"]),
-    default="minimal",
+    type=click.Choice(["minimal", "standard", "distributed"]),
+    default="standard",
     help="Lab template to use.",
 )
 @click.option("--name", "lab_name", help="Lab name (lowercase, underscores/hyphens).")
