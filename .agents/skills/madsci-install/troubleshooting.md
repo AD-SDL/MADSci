@@ -206,18 +206,23 @@ Failure modes seen while **removing** MADSci. See [uninstall.md](uninstall.md) f
 - `docker compose down -v` and `madsci stop --volumes` remove named volumes — **of which there are none** — so they delete *no* database data.
 - The real data lives in `./.madsci/postgresql`, `./.madsci/postgresql_resources`, `./.madsci/mongodb`, `./.madsci/valkey`, `./.madsci/seaweedfs`.
 
-To actually wipe data you must delete those directories on the host (uninstall.md §U3). Confirm with the user first — this is irreversible.
+To actually delete the data, those directories have to be removed on the host — which is **the operator's command to run, not yours**. Resolve and print the path, offer a backup, and hand over the `sudo rm -rf` per uninstall.md §U3.
 
 ### `rm: cannot remove '.madsci/postgresql/...': Permission denied`
 
-The DB data dirs were created **by the containers as root**, so your user can't delete them. Fix (after confirming the paths with the user):
+The DB data dirs were created **by the containers as root**, so a non-root user can't delete them — this is the operator hitting the §U3 hand-off, not a failure on your side.
+
+Run the read-only half yourself to prepare the hand-off:
 ```bash
-docker compose down                      # release the dirs first
-ls -la ./.madsci                         # show the user what's root-owned
-sudo rm -rf ./.madsci/postgresql ./.madsci/postgresql_resources \
-            ./.madsci/mongodb ./.madsci/valkey ./.madsci/seaweedfs
+docker compose down                      # release the dirs first — safe, reversible
+ls -la "$MADSCI_DIR"                     # show which entries are root-owned
 ```
-Never `sudo rm -rf` a path you haven't printed back to the user first.
+Then give them the `sudo` command to run, with `$MADSCI_DIR` expanded to the literal resolved path:
+```bash
+sudo rm -rf "$MADSCI_DIR/postgresql" "$MADSCI_DIR/postgresql_resources" \
+            "$MADSCI_DIR/mongodb" "$MADSCI_DIR/valkey" "$MADSCI_DIR/seaweedfs"
+```
+Do not run it on their behalf, and never put a path in front of `sudo rm -rf` that you haven't printed back to them first.
 
 ### `madsci` still resolves after the venv was deleted
 
@@ -238,7 +243,9 @@ Containers must be removed before their images. Run `docker compose down` (remov
 
 ### `uninstall-check.sh` reports FAIL but the user says they removed everything
 
-Check the **scope** you passed. `--scope stop` only expects the stack halted + ports free; `--scope remove` also expects MADSci Docker images gone; `--scope wipe` also expects `.madsci/` deleted. A "FAIL" on images under `--scope remove` is correct if the user *chose to keep* images — re-run with `--scope stop`, or accept the image lines as intentional. Also pass `--madsci-dir <path>` if `.madsci/` isn't at `./.madsci`.
+Check the **scope** you passed. `--scope stop` only expects the stack halted + ports free; `--scope remove` also expects MADSci Docker images gone. A "FAIL" on images under `--scope remove` is correct if the user *chose to keep* images — re-run with `--scope stop`, or accept the image lines as intentional. Also pass `--madsci-dir <path>` if `.madsci/` isn't at `./.madsci`.
+
+`--scope wipe` additionally expects `.madsci/` to be gone. It is **verify-only** — the skill never deletes that directory (uninstall.md §U3 hands the command to the operator), so a FAIL here means their `rm` didn't land where you resolved the path, not that a step of yours failed. Re-check `--madsci-dir` against the path they actually deleted.
 
 ---
 

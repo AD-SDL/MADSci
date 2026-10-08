@@ -8,25 +8,27 @@
 # Usage:
 #   bash uninstall-check.sh --scope stop     # containers down, ports free
 #   bash uninstall-check.sh --scope remove   # + images removed
-#   bash uninstall-check.sh --scope wipe     # + .madsci/ deleted
+#   bash uninstall-check.sh --scope wipe     # + .madsci/ deleted (verify-only, see below)
 #   bash uninstall-check.sh --managers 8001,8002             # override which ports must be free
 #   bash uninstall-check.sh --dashboard-port 8000
-#   bash uninstall-check.sh --madsci-dir <path>              # IMPORTANT: path to .madsci/ (default ./.madsci)
+#   bash uninstall-check.sh --madsci-dir <path>              # path to .madsci/ (required for --scope wipe)
 #   bash uninstall-check.sh --compose-project madsci_example_lab  # Docker Compose project label to probe
 #   bash uninstall-check.sh --no-color
 #
 # Scopes (additive):
 #   stop   — running stack halted: no containers, ports free.
 #   remove — the above + MADSci Docker images removed.
-#   wipe   — the above + .madsci/ data directory deleted.
+#   wipe   — the above + .madsci/ data directory deleted. VERIFY-ONLY: the skill
+#            never deletes .madsci/ (uninstall.md §U3 hands that command to the
+#            operator). Use this scope to confirm a deletion they already ran.
 #
 # IMPORTANT: --madsci-dir
-#   The default ./.madsci assumes you run this from the directory that owns the
-#   stack. With the install skill's Options 1 / 2 the stack is started from
-#   $INSTALL_DIR (chosen at install Step 1.2) and .madsci/ lives at
-#   $INSTALL_DIR/.madsci — pass `--madsci-dir "$INSTALL_DIR/.madsci"` from any
-#   other CWD or the wipe check will PASS vacuously (empty-path PASS from the
-#   wrong directory).
+#   REQUIRED with --scope wipe (the script exits 2 without it). That scope
+#   asserts a directory is GONE, so a wrong path looks exactly like success.
+#   The default ./.madsci is relative to the CWD; with the install skill's
+#   Options 1 / 2 the data lives at $INSTALL_DIR/.madsci ($INSTALL_DIR is chosen
+#   at install Step 1.2), so pass --madsci-dir "$INSTALL_DIR/.madsci".
+#   Optional for stop/remove, where it only locates the stale-PID check.
 #
 # This script does NOT check for a dev-repo `.venv/` or pre-commit hook removal —
 # those are contributor-tooling concerns handled by a different skill.
@@ -43,6 +45,7 @@ SCOPE="stop"
 MANAGERS="8001,8002,8003,8004,8005,8006"
 DASHBOARD_PORT="8000"
 MADSCI_DIR="./.madsci"
+MADSCI_DIR_EXPLICIT=0
 COMPOSE_PROJECT="madsci_example_lab"
 USE_COLOR=1
 
@@ -60,11 +63,11 @@ while [[ $# -gt 0 ]]; do
     --scope)            need_value "$1" "$#"; SCOPE="$2"; shift 2 ;;
     --managers)         need_value "$1" "$#"; MANAGERS="$2"; shift 2 ;;
     --dashboard-port)   need_value "$1" "$#"; DASHBOARD_PORT="$2"; shift 2 ;;
-    --madsci-dir)       need_value "$1" "$#"; MADSCI_DIR="$2"; shift 2 ;;
+    --madsci-dir)       need_value "$1" "$#"; MADSCI_DIR="$2"; MADSCI_DIR_EXPLICIT=1; shift 2 ;;
     --compose-project)  need_value "$1" "$#"; COMPOSE_PROJECT="$2"; shift 2 ;;
     --no-color)         USE_COLOR=0; shift ;;
     -h|--help)
-      sed -n '2,37p' "$0"; exit 0 ;;
+      sed -n '2,40p' "$0"; exit 0 ;;
     *)
       echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -72,6 +75,25 @@ done
 
 if [[ ! "$SCOPE" =~ ^(stop|remove|wipe)$ ]]; then
   echo "--scope must be stop, remove, or wipe (got: $SCOPE)" >&2; exit 2
+fi
+
+# --scope wipe asserts a directory is GONE, so a wrong path is indistinguishable
+# from success: the default is relative, and from the wrong CWD this check
+# cheerfully certifies a deletion that never happened. Refuse to guess.
+if [[ "$SCOPE" == "wipe" && $MADSCI_DIR_EXPLICIT -eq 0 ]]; then
+  cat >&2 <<'EOF'
+Error: --scope wipe requires an explicit --madsci-dir.
+
+  The default (./.madsci) is relative to the current directory. Run from
+  anywhere else and the "removed" check PASSES against a path that was never
+  the lab's data directory — certifying a deletion that did not happen.
+
+  Pass the path resolved in uninstall.md §U3, e.g.:
+    --madsci-dir "$INSTALL_DIR/.madsci"
+
+  To check only the containers/ports/images, use --scope stop or --scope remove.
+EOF
+  exit 2
 fi
 
 # ---------- output helpers ----------
@@ -173,6 +195,31 @@ check_no_containers() {
   fi
 }
 
+# Deciding "this port is free" from a failed HTTP request is unsound: a slow host
+# tripping --max-time and a service that is listening but doesn't answer /health
+# are both indistinguishable from "nothing is listening" — and each one produced
+# a PASS. Ask the kernel for the listener instead.
+PORT_PROBE=""
+if command -v ss >/dev/null 2>&1; then
+  PORT_PROBE="ss"
+elif command -v lsof >/dev/null 2>&1; then
+  PORT_PROBE="lsof"
+fi
+
+# port_listening <port> -> 0 = listening, 1 = not listening
+port_listening() {
+  local port="$1"
+  case "$PORT_PROBE" in
+    ss)
+      # Local Address:Port column, e.g. 0.0.0.0:8001, *:8001, [::]:8001
+      ss -ltn 2>/dev/null | grep -qE "[:.]${port}[[:space:]]" ;;
+    lsof)
+      lsof -nP -iTCP:"${port}" -sTCP:LISTEN >/dev/null 2>&1 ;;
+    *)
+      return 1 ;;
+  esac
+}
+
 check_ports_free() {
   section "Manager & dashboard ports free"
   local ports=()
@@ -180,17 +227,21 @@ check_ports_free() {
   ports+=("${mports[@]}")
   ports+=("$DASHBOARD_PORT")
 
+  if [[ -z "$PORT_PROBE" ]]; then
+    # No probe = no evidence. Report that honestly instead of passing.
+    skip "port-free checks (${#ports[@]} ports)" \
+         "neither 'ss' nor 'lsof' on PATH — cannot prove a port is free; install iproute2 or lsof and re-run"
+    return
+  fi
+
   for port in "${ports[@]}"; do
     port="${port// /}"
     [[ -z "$port" ]] && continue
-    # A freed port must NOT answer /health.
-    local code
-    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "http://localhost:${port}/health" 2>/dev/null)"
-    code="${code:-000}"
-    if [[ "$code" == "200" ]]; then
-      fail "port $port still serving /health (HTTP 200)" "a manager/dashboard is still up"
+    if port_listening "$port"; then
+      fail "port $port still has a listener" \
+           "something is bound to it — 'sudo ss -ltnp sport = :$port' names the process"
     else
-      pass "port $port free (no /health response)"
+      pass "port $port free (no listener, via $PORT_PROBE)"
     fi
   done
 }

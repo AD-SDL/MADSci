@@ -22,8 +22,8 @@ Covers install (Steps 1–5), error recovery (Step 6), verification (Step 7), an
 ## Bundled reference files
 
 - [install-check.sh](install-check.sh) — install verification (`--install-dir <path>` to probe the stack venv; `--with-ui`/`--no-ui`).
-- [uninstall.md](uninstall.md) — teardown workflow (scope selection, Docker removal, data wipe).
-- [uninstall-check.sh](uninstall-check.sh) — teardown verification (`--scope stop|remove|wipe`).
+- [uninstall.md](uninstall.md) — teardown workflow (scope selection, Docker removal; `.madsci/` data deletion is handed to the operator, never run by the skill).
+- [uninstall-check.sh](uninstall-check.sh) — teardown verification (`--scope stop|remove`, plus verify-only `wipe`).
 - [troubleshooting.md](troubleshooting.md) — failure modes keyed by error signature.
 
 ## Scope
@@ -56,7 +56,7 @@ If option 2 or 3, stop with a one-line reason and don't touch anything else. If 
 
 One directory — `$INSTALL_DIR` — holds the repo clone, the venv (`.venv/`), and the `.madsci/` data the stack creates on first `docker compose up`. They live together because of the in-place compose constraint above. For **Step 2 Options 1 and 2** (fresh or data-only install), `$INSTALL_DIR` **is** the MADSci repo clone. Ask up front:
 
-> **Question:** "Where do you want to install MADSci? This directory will hold the MADSci repo clone (code), `.venv/` (the `madsci` CLI venv), and `.madsci/` (DB data). You can wipe the whole directory to uninstall. Default: `~/MADSci`."
+> **Question:** "Where do you want to install MADSci? This directory will hold the MADSci repo clone (code), `.venv/` (the `madsci` CLI venv), and `.madsci/` (DB data) — everything the install creates lives under it, nothing is written to system Python or outside it. Default: `~/MADSci`."
 > **Header:** `Install directory`
 > **Options:**
 > 1. **Use `~/MADSci` (recommended default)** — I'll `git clone https://github.com/AD-SDL/MADSci ~/MADSci`.
@@ -158,9 +158,11 @@ The answer drives Step 7's `--with-ui`/`--no-ui` flag.
 
 ## Step 4 — Check prerequisites
 
-Run these in parallel *before* the first install command. All four are **hard blocks**: `python3 --version` (3.10+, required by the `madsci` CLI), `docker info` (exit 0), `uv --version`, and `git --version` (only when Step 1.2 chose to clone).
+Run these in parallel *before* the first install command. All five are **hard blocks**: `python3 --version` (3.10+, required by the `madsci` CLI), `docker info` (exit 0), `uv --version`, `curl --version`, and `git --version` (only when Step 1.2 chose to clone).
 
 Step 1 should already have put Docker (1.1) and `uv` (1.4) in place, so this is a confirmation pass, not a prompting one. If something is still missing, stop and tell the user — do **not** re-prompt mid-step.
+
+`curl` is a hard block because every HTTP assertion in `install-check.sh` runs through it — without it the verification step can't tell a healthy stack from a dead one. Checking it here, next to `docker info`, is what lets the script assume it exists. Note that `uninstall-check.sh` needs `ss` (iproute2) or `lsof` for the same reason, and will SKIP its port checks rather than guess if neither is present; worth installing one now if you expect to tear the lab down later.
 
 `pip` is intentionally **not** a prereq: the install drives Python packaging through `uv`, which bundles its own resolver.
 
@@ -240,30 +242,44 @@ If Step 2 selected Option 2, attach the user's existing `.madsci/` at `$INSTALL_
 > 1. **Symlink** — reversible, no data copy. Reflects future changes back to the original path.
 > 2. **Copy** — independent copy; safer if the original data source shouldn't be modified. Slower for large databases.
 
-**Guards before running the destructive step** (both options start with `rm -rf "$INSTALL_DIR/.madsci"`):
+**Never delete `.madsci/` data to make room for the attach.** Both options need `$INSTALL_DIR/.madsci` to be free, but the way to free it is to *refuse and hand the decision back*, not to `rm -rf`. Run all three guards first:
 
 ```bash
-# 1. Resolve both paths and refuse if they're the same (prevents 'rm -rf' of the source).
+# 1. Resolve both paths and refuse if they're the same (an attach onto itself).
 TARGET_MADSCI="$(realpath -m "$INSTALL_DIR/.madsci")"
 EXISTING="$(realpath -m "<existing-path>")"
 if [[ "$TARGET_MADSCI" == "$EXISTING" ]]; then
   echo "Refusing: $INSTALL_DIR/.madsci/ and <existing-path> resolve to the same directory ($TARGET_MADSCI)." >&2
   exit 1
 fi
+
 # 2. Confirm $INSTALL_DIR is a MADSci repo (same shape check as 5.A — fast and cheap to re-check).
 [[ -f "$INSTALL_DIR/compose.yaml" && -d "$INSTALL_DIR/src" ]] \
   || { echo "$INSTALL_DIR is not a MADSci repo — refusing to touch its .madsci/." >&2; exit 1; }
+
+# 3. The target must be absent, or an empty directory. Anything else is somebody's data.
+if [[ -e "$TARGET_MADSCI" ]]; then
+  if [[ -d "$TARGET_MADSCI" && -z "$(ls -A "$TARGET_MADSCI" 2>/dev/null)" ]]; then
+    rmdir "$TARGET_MADSCI"               # empty by definition — nothing to lose
+  else
+    echo "Refusing: $TARGET_MADSCI already exists and is not empty." >&2
+    ls -la "$TARGET_MADSCI" >&2
+    exit 1
+  fi
+fi
 ```
 
-Then explicitly confirm the destructive operation with the user — print both paths back and get a final yes/no before running the symlink/copy. Only then:
+If guard 3 refuses, **stop and tell the user what's in the way** — print the listing above and ask them to move, rename, or delete `$TARGET_MADSCI` themselves, then re-run the attach. Do not offer to do it for them: a non-empty `.madsci/` holds databases, and the subdirectories are root-owned (created inside the containers), so removing it would need `sudo rm -rf` on a path that may not be the one they meant.
+
+With the target free, confirm the attach with the user — print both paths back and get a final yes/no — then:
 
 ```bash
-# After explicit confirmation
-rm -rf "$TARGET_MADSCI"
 ln -s "$EXISTING" "$TARGET_MADSCI"       # option 1: symlink
 # or
 cp -a "$EXISTING" "$TARGET_MADSCI"       # option 2: copy
 ```
+
+Neither command can clobber data: `ln -s` and `cp -a` both fail if the target already exists, so guard 3 is the only thing standing between them and a successful attach.
 
 ### 5.E — Start the stack from `$INSTALL_DIR` (Options 1 and 2)
 
@@ -325,7 +341,7 @@ A manager container can reach its port but the database (FerretDB/Postgres) insi
 > **Question:** "Compose is stuck on healthchecks. What's the history of this stack?"
 > **Header:** `Compose stuck`
 > **Options:**
-> 1. **Fresh start — wipe volumes** — `docker compose down -v` then `docker compose up`. *(DATA LOSS: deletes local DB volumes. Confirm before running.)*
+> 1. **Fresh start — recreate containers** — `docker compose down -v` then `docker compose up`. *(Removes named volumes. The example lab bind-mounts `.madsci/` instead of using named volumes, so DB data normally survives this — do not present it as a data reset. Confirm before running.)*
 > 2. **Tail logs first** — I'll run `docker compose logs --tail=100 <service>`; you decide.
 > 3. **Give it more time** — some images pull large layers on first run; wait 60s and re-check.
 > 4. **Abort**.
@@ -360,16 +376,20 @@ Announce completion only when every check passes:
 
 ## Step 8 — Uninstall / tear down
 
-If the user wants to **remove** MADSci, load [uninstall.md](uninstall.md) and follow it — scope selection (`stop` / `remove` / `wipe`), image removal, data wipe, and verification via `uninstall-check.sh`.
+If the user wants to **remove** MADSci, load [uninstall.md](uninstall.md) and follow it — scope selection (`stop` / `remove`), image removal, and verification via `uninstall-check.sh`.
+
+**Deleting `.madsci/` is not something this skill does.** Stopping the stack and removing images is reversible; dropping the databases under `.madsci/` is not, and the command is a root-owned `sudo rm -rf` against a path whose resolution depends on how the install was done. uninstall.md §U3 resolves and prints that path, offers a backup, and hands the command to the operator to run. Follow that hand-off even if the user asks you to run it directly.
 
 ## What this skill does NOT do
 
-Beyond the Rules of engagement above: it never installs Docker without the Step 1.1 consent, never modifies version-controlled files without showing a diff first, never removes Python packages from an unconfirmed environment (the venv at `$INSTALL_DIR/.venv/` is the only one it touches), and never silences errors with `|| true`, `2>/dev/null`, retry loops, or linter/CI config edits.
+**It never deletes `.madsci/` data.** Not on install (Step 5.D refuses a non-empty target instead of clearing it), not on uninstall (§U3 hands the `sudo rm -rf` to the operator), and not on request. Every other action this skill takes is reversible by re-running something; this one isn't.
+
+Beyond that and the Rules of engagement above: it never installs Docker without the Step 1.1 consent, never modifies version-controlled files without showing a diff first, never removes Python packages from an unconfirmed environment (the venv at `$INSTALL_DIR/.venv/` is the only one it touches), and never silences errors with `|| true`, `2>/dev/null`, retry loops, or linter/CI config edits.
 
 It also does not extend into implementation — hand off to [madsci-nodes](../madsci-nodes/SKILL.md), [madsci-managers](../madsci-managers/SKILL.md), or [madsci-experiments](../madsci-experiments/SKILL.md) once the stack is up.
 
 ## Cross-references (not linked inline above)
 
-- Backup & recovery (before a Full wipe): [docs/guides/operator/03-backup-recovery.md](../../../docs/guides/operator/03-backup-recovery.md)
+- Backup & recovery (offer this before the user deletes `.madsci/`): [docs/guides/operator/03-backup-recovery.md](../../../docs/guides/operator/03-backup-recovery.md)
 - Updates & maintenance (stop services, upgrade/downgrade): [docs/guides/operator/05-updates-maintenance.md](../../../docs/guides/operator/05-updates-maintenance.md)
 - CLI details for `init` / `start` / `stop` / `status` / `doctor`: [madsci-cli](../madsci-cli/SKILL.md)

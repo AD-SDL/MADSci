@@ -5,12 +5,15 @@ Covers both bundled scripts:
 * ``install-check.sh`` — verifies a *running* stack (checks PASS when things are present).
 * ``uninstall-check.sh`` — verifies a *teardown* (checks PASS when things are absent).
 
-Two layers of coverage each:
+Three layers of coverage:
 
 1. **Script self-tests** (no Docker, always run): syntax, executable bit, ``--help``
-   exit code, usage errors on missing/bad ``--method`` and bad ``--scope``, the
-   removed-``--goal`` deprecation shim, and port-override behaviour.
-2. **Live-stack integration** (marked ``docker``, skipped unless ``--docker-enabled``):
+   exit code, usage errors on unknown flags and bad ``--scope``, and the
+   value-taking-flag guards.
+2. **Degraded-host tests** (no Docker, always run): the scripts run with a
+   deliberately stripped ``PATH``. These encode the rule that a check which
+   *could not verify* must never report a pass — see ``TestDegradedHost``.
+3. **Live-stack integration** (marked ``docker``, skipped unless ``--docker-enabled``):
    runs the scripts against a running example lab and asserts the expected verdict.
    Bring the stack up first with ``just up`` / ``docker compose up -d``.
 
@@ -39,8 +42,48 @@ UNINSTALL_MD = SKILL_DIR / "uninstall.md"
 DEFAULT_MANAGER_PORTS = ("8001", "8002", "8003", "8004", "8005", "8006")
 DASHBOARD_PORT = "8000"
 
+# High ports that are almost certainly unbound, so the port-oriented tests are
+# safe to run whether or not the example lab is up on the default ports.
+FREE_MANAGER_PORT = "59117"
+FREE_DASHBOARD_PORT = "59118"
 
-def _run(script: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+# Tools the scripts may shell out to. TestDegradedHost builds a PATH from this
+# list minus whichever tools it wants to simulate as missing.
+_SANDBOX_TOOLS = (
+    "basename",
+    "cat",
+    "comm",
+    "curl",
+    "cut",
+    "dirname",
+    "docker",
+    "du",
+    "env",
+    "grep",
+    "head",
+    "jq",
+    "ls",
+    "lsof",
+    "mktemp",
+    "od",
+    "printf",
+    "python3",
+    "rm",
+    "sed",
+    "sort",
+    "ss",
+    "tail",
+    "tr",
+    "wc",
+)
+
+
+def _run(
+    script: Path,
+    *args: str,
+    timeout: int = 60,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
     """Run a skill check script from the repo root with ``--no-color`` for stable parsing."""
     return subprocess.run(  # noqa: S603
         [BASH, str(script), "--no-color", *args],
@@ -49,12 +92,32 @@ def _run(script: Path, *args: str, timeout: int = 60) -> subprocess.CompletedPro
         timeout=timeout,
         cwd=str(REPO_ROOT),
         check=False,
+        env=env,
     )
 
 
-def _run_script(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
+def _run_script(*args: str, **kwargs: object) -> subprocess.CompletedProcess:
     """Run install-check.sh (back-compat helper)."""
-    return _run(INSTALL_CHECK, *args, timeout=timeout)
+    return _run(INSTALL_CHECK, *args, **kwargs)  # type: ignore[arg-type]
+
+
+def _sandbox_path(tmp_path: Path, *, without: tuple[str, ...]) -> dict[str, str]:
+    """Build an env whose PATH holds only ``_SANDBOX_TOOLS`` minus ``without``.
+
+    Used to prove the scripts degrade to FAIL/SKIP — never to PASS — when a tool
+    they depend on for evidence is unavailable.
+    """
+    bindir = tmp_path / "limited-bin"
+    bindir.mkdir(exist_ok=True)
+    for tool in _SANDBOX_TOOLS:
+        if tool in without:
+            continue
+        resolved = shutil.which(tool)
+        if resolved:
+            link = bindir / tool
+            if not link.exists():
+                link.symlink_to(resolved)
+    return {"PATH": str(bindir), "HOME": str(tmp_path)}
 
 
 class TestInstallCheckScriptStructure:
@@ -85,80 +148,93 @@ class TestInstallCheckScriptStructure:
         )
         assert "install-check.sh" in result.stdout
 
-    def test_missing_method_is_usage_error(self) -> None:
-        """--method is required; omitting it must be a usage error, not a default."""
-        result = _run_script()
-        assert result.returncode == 2, (
-            f"omitting --method should be a usage error (exit 2), "
-            f"got {result.returncode}:\nstderr: {result.stderr}"
-        )
+    def test_help_is_not_truncated(self) -> None:
+        """The --help sed range must cover the whole header comment.
 
-    @pytest.mark.parametrize("bad_method", ["podman", "pip", "1", "abc"])
-    def test_invalid_method_is_usage_error(self, bad_method: str) -> None:
-        result = _run_script("--method", bad_method)
-        assert result.returncode == 2, (
-            f"--method {bad_method} should be a usage error (exit 2), "
-            f"got {result.returncode}:\nstderr: {result.stderr}"
-        )
-
-    # NOTE: explicit ids — a bare "docker" param id lands in item.keywords and
-    # would be swept up by conftest's docker-marker skip (see tests/e2e/conftest.py).
-    @pytest.mark.parametrize(
-        "method",
-        [
-            pytest.param("docker", id="method-docker"),
-            pytest.param("local", id="method-local"),
-        ],
-    )
-    def test_valid_methods_accepted(self, method: str) -> None:
-        """A valid method must never be a usage error (exit 0 or 1, never 2)."""
-        result = _run_script("--method", method, timeout=120)
-        assert result.returncode in (0, 1), (
-            f"--method {method} should be accepted (exit 0/1), got {result.returncode}:\n"
-            f"{result.stderr}"
-        )
-
-    def test_removed_goal_flag_is_usage_error(self) -> None:
-        """--goal was replaced by --method; the shim must reject it with guidance."""
-        result = _run_script("--goal", "1")
-        assert result.returncode == 2, (
-            f"--goal should be rejected (exit 2), got {result.returncode}"
-        )
-        assert "--method" in result.stderr, (
-            f"the --goal error should point at --method:\nstderr: {result.stderr}"
+        Condensing the header without widening the range silently cuts the
+        usage text off mid-section.
+        """
+        result = _run_script("--help")
+        assert "Exit codes:" in result.stdout, (
+            "--help output stops before the exit-code block — widen the sed "
+            f"range in install-check.sh:\n{result.stdout}"
         )
 
     def test_unknown_arg_is_usage_error(self) -> None:
         result = _run_script("--not-a-real-flag")
         assert result.returncode == 2
 
+    @pytest.mark.parametrize(
+        "flag", ["--managers", "--dashboard-port", "--install-dir"]
+    )
+    def test_value_flag_without_value_is_usage_error(self, flag: str) -> None:
+        """A value-taking flag in final position must exit 2, not spin forever.
+
+        ``shift 2`` with one argument left fails silently under ``set +e``, so
+        the arg loop never advances. The need_value guard is what prevents that.
+        """
+        result = _run_script(flag, timeout=10)
+        assert result.returncode == 2, (
+            f"{flag} with no value should be a usage error (exit 2), "
+            f"got {result.returncode}:\nstderr: {result.stderr}"
+        )
+
+    @pytest.mark.parametrize("flag", ["--with-ui", "--no-ui"])
+    def test_ui_mode_flags_accepted(self, flag: str) -> None:
+        """UI-mode flags must never be a usage error (exit 0 or 1, never 2)."""
+        result = _run_script(flag, timeout=120)
+        assert result.returncode in (0, 1), (
+            f"{flag} should be accepted (exit 0/1), got {result.returncode}:\n"
+            f"{result.stderr}"
+        )
+
+    def test_exec_targets_a_compose_service_not_a_container_name(self) -> None:
+        """``docker compose exec`` takes a SERVICE; matching the NAME column breaks.
+
+        NAME and SERVICE only coincide where the compose pins ``container_name:``.
+        Enumerating services is the portable form.
+        """
+        text = INSTALL_CHECK.read_text()
+        assert "ps --services --status running" in text, (
+            "install-check.sh must enumerate compose services directly; matching "
+            "the `docker compose ps` NAME column and passing that to "
+            "`docker compose exec` fails on auto-generated container names"
+        )
+
     def test_skill_md_references_script(self) -> None:
         """SKILL.md must document how to run the verification script."""
         text = SKILL_MD.read_text()
         assert "install-check.sh" in text
 
+    def test_skill_md_requires_curl_as_a_prereq(self) -> None:
+        """The script assumes curl exists; the skill is what guarantees it.
+
+        install-check.sh does every HTTP assertion through curl and carries no
+        fallback. That is only safe because Step 4 blocks on ``curl --version``
+        alongside ``docker info``. Drop the prereq and the verification step
+        silently loses its evidence.
+        """
+        text = SKILL_MD.read_text()
+        step4 = text.split("## Step 4 — Check prerequisites", 1)
+        assert len(step4) == 2, "Step 4 (prerequisites) not found in SKILL.md"
+        prereqs = step4[1].split("## Step 5", 1)[0]
+        assert "curl --version" in prereqs, (
+            "Step 4 must block on `curl --version` — install-check.sh has no "
+            f"curl fallback:\n{prereqs}"
+        )
+
 
 class TestInstallCheckAgainstAbsentStack:
-    """When no stack is running, health checks must FAIL (exit 1), not pass silently.
-
-    This guards against the script reporting success when nothing is up. It runs
-    with a manager-port set that is almost certainly closed, so it is safe on a
-    host that is NOT running the example lab. When the example lab *is* running on
-    the default ports, this test is skipped to avoid a false expectation.
-    """
+    """When no stack is running, health checks must FAIL (exit 1), not pass silently."""
 
     def test_health_checks_fail_when_nothing_listening(self) -> None:
         if not shutil.which("curl"):
             pytest.skip("curl not available")
-        # High ports unlikely to be bound by anything. --method local keeps this
-        # test independent of whether a Docker daemon is present on the host.
         result = _run_script(
-            "--method",
-            "local",
             "--managers",
-            "59117",
+            FREE_MANAGER_PORT,
             "--dashboard-port",
-            "59118",
+            FREE_DASHBOARD_PORT,
             timeout=60,
         )
         assert result.returncode == 1, (
@@ -168,27 +244,53 @@ class TestInstallCheckAgainstAbsentStack:
         assert "FAIL" in result.stdout
 
 
-@pytest.mark.docker
-class TestInstallCheckLiveStack:
-    """Integration: verify install-check.sh --method docker against a running example lab.
+class TestDegradedHost:
+    """A check that could not verify must FAIL or SKIP — never PASS.
 
-    Skipped unless ``--docker-enabled`` is passed (see tests/e2e/conftest.py).
-    Requires the example lab to already be up (``just up`` / ``docker compose up -d``).
+    These are the regression tests for the class of bug where a missing tool
+    made a command substitution come back empty and the empty result read as
+    success.
     """
 
-    def test_docker_method_passes_against_running_stack(self) -> None:
-        result = _run_script("--method", "docker", timeout=120)
-        assert result.returncode == 0, (
-            "install-check.sh --method docker should PASS against a running example lab.\n"
-            "Is the stack up (`just up`)?\n"
-            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    def test_port_check_skips_without_listener_probe(self, tmp_path: Path) -> None:
+        """With no ss and no lsof there is no evidence a port is free."""
+        env = _sandbox_path(tmp_path, without=("ss", "lsof"))
+        result = _run(
+            UNINSTALL_CHECK,
+            "--scope",
+            "stop",
+            "--managers",
+            FREE_MANAGER_PORT,
+            "--dashboard-port",
+            FREE_DASHBOARD_PORT,
+            timeout=60,
+            env=env,
         )
-        # Every default manager port and the dashboard should report a 200.
-        for port in (*DEFAULT_MANAGER_PORTS, DASHBOARD_PORT):
-            assert f"localhost:{port}/health → 200" in result.stdout, (
-                f"expected a 200 health line for port {port}:\n{result.stdout}"
-            )
-        assert "Failed: 0" in result.stdout
+        assert "SKIP  port-free checks" in result.stdout, (
+            f"without ss/lsof the port check must SKIP, not PASS:\n{result.stdout}"
+        )
+        assert f"port {FREE_MANAGER_PORT} free" not in result.stdout, (
+            "a port must never be reported free when nothing could probe it:\n"
+            f"{result.stdout}"
+        )
+
+    def test_port_check_does_not_infer_freedom_from_http(self) -> None:
+        """Port freedom must come from a listener probe, not a failed request.
+
+        A slow host tripping --max-time and a service that is listening but
+        does not serve /health are indistinguishable from 'nothing is there'.
+        """
+        code = [
+            line
+            for line in UNINSTALL_CHECK.read_text().splitlines()
+            if not line.lstrip().startswith("#")
+        ]
+        offenders = [line for line in code if "curl" in line]
+        assert not offenders, (
+            "uninstall-check.sh must not decide port freedom over HTTP; use "
+            "ss/lsof so 'no answer' is not mistaken for 'no listener'.\n"
+            + "\n".join(offenders)
+        )
 
 
 class TestUninstallCheckScriptStructure:
@@ -219,46 +321,83 @@ class TestUninstallCheckScriptStructure:
         )
         assert "uninstall-check.sh" in result.stdout
 
-    def test_missing_method_is_usage_error(self) -> None:
-        """--method is required; omitting it must be a usage error, not a default."""
-        result = _run(UNINSTALL_CHECK, "--scope", "stop")
-        assert result.returncode == 2, (
-            f"omitting --method should be a usage error (exit 2), got {result.returncode}"
-        )
-
-    @pytest.mark.parametrize("bad_method", ["podman", "pip", "3", "abc"])
-    def test_invalid_method_is_usage_error(self, bad_method: str) -> None:
-        result = _run(UNINSTALL_CHECK, "--method", bad_method)
-        assert result.returncode == 2, (
-            f"--method {bad_method} should be a usage error (exit 2), got {result.returncode}"
-        )
-
-    def test_removed_goal_flag_is_usage_error(self) -> None:
-        """--goal was replaced by --method; the shim must reject it with guidance."""
-        result = _run(UNINSTALL_CHECK, "--goal", "1")
-        assert result.returncode == 2, (
-            f"--goal should be rejected (exit 2), got {result.returncode}"
-        )
-        assert "--method" in result.stderr, (
-            f"the --goal error should point at --method:\nstderr: {result.stderr}"
+    def test_help_is_not_truncated(self) -> None:
+        result = _run(UNINSTALL_CHECK, "--help")
+        assert "Exit codes:" in result.stdout, (
+            "--help output stops before the exit-code block — widen the sed "
+            f"range in uninstall-check.sh:\n{result.stdout}"
         )
 
     @pytest.mark.parametrize("bad_scope", ["all", "delete", "purge", ""])
     def test_invalid_scope_is_usage_error(self, bad_scope: str) -> None:
-        # --method must be valid, otherwise this would exit 2 on the method check
-        # and pass for the wrong reason.
-        result = _run(UNINSTALL_CHECK, "--method", "docker", "--scope", bad_scope)
+        result = _run(UNINSTALL_CHECK, "--scope", bad_scope)
         assert result.returncode == 2, (
             f"--scope {bad_scope!r} should be a usage error (exit 2), got {result.returncode}"
         )
 
-    @pytest.mark.parametrize("scope", ["stop", "remove", "wipe"])
+    @pytest.mark.parametrize("scope", ["stop", "remove"])
     def test_valid_scopes_accepted(self, scope: str) -> None:
         """A valid scope must not be a usage error (exit 0 or 1, never 2)."""
-        result = _run(UNINSTALL_CHECK, "--method", "docker", "--scope", scope)
+        result = _run(UNINSTALL_CHECK, "--scope", scope)
         assert result.returncode in (0, 1), (
             f"--scope {scope} should be accepted (exit 0/1), got {result.returncode}:\n"
             f"{result.stderr}"
+        )
+
+    def test_wipe_scope_requires_explicit_madsci_dir(self) -> None:
+        """--scope wipe asserts a directory is GONE, so a defaulted path is unsafe.
+
+        ``./.madsci`` is relative to the CWD: from the wrong directory the check
+        passes against a path that was never the lab's data directory,
+        certifying a deletion that never happened.
+        """
+        result = _run(UNINSTALL_CHECK, "--scope", "wipe")
+        assert result.returncode == 2, (
+            "--scope wipe without --madsci-dir must be a usage error (exit 2), "
+            f"got {result.returncode}:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+        )
+        assert "--madsci-dir" in result.stderr, (
+            f"the error must name the missing flag:\nstderr: {result.stderr}"
+        )
+
+    def test_wipe_scope_accepted_with_explicit_madsci_dir(self, tmp_path: Path) -> None:
+        """An explicit path makes wipe a normal check again."""
+        target = tmp_path / "absent-madsci"
+        result = _run(
+            UNINSTALL_CHECK,
+            "--scope",
+            "wipe",
+            "--madsci-dir",
+            str(target),
+            "--managers",
+            FREE_MANAGER_PORT,
+            "--dashboard-port",
+            FREE_DASHBOARD_PORT,
+            timeout=60,
+        )
+        assert result.returncode in (0, 1), (
+            f"--scope wipe with --madsci-dir should run, got {result.returncode}:\n"
+            f"{result.stderr}"
+        )
+        assert str(target) in result.stdout, (
+            f"the wipe check must report against the path it was given:\n{result.stdout}"
+        )
+
+    @pytest.mark.parametrize(
+        "flag",
+        [
+            "--scope",
+            "--managers",
+            "--dashboard-port",
+            "--madsci-dir",
+            "--compose-project",
+        ],
+    )
+    def test_value_flag_without_value_is_usage_error(self, flag: str) -> None:
+        result = _run(UNINSTALL_CHECK, flag, timeout=10)
+        assert result.returncode == 2, (
+            f"{flag} with no value should be a usage error (exit 2), "
+            f"got {result.returncode}:\nstderr: {result.stderr}"
         )
 
     def test_unknown_arg_is_usage_error(self) -> None:
@@ -274,7 +413,7 @@ class TestUninstallCheckScriptStructure:
         text = SKILL_MD.read_text().lower()
         assert "uninstall" in text
         # scope vocabulary shared by the script, SKILL.md pointer, and uninstall.md
-        for scope in ("stop", "remove", "wipe"):
+        for scope in ("stop", "remove"):
             assert scope in text, (
                 f"expected uninstall scope '{scope}' documented in SKILL.md"
             )
@@ -290,42 +429,87 @@ class TestUninstallCheckScriptStructure:
         """uninstall.md must carry the detail moved out of SKILL.md."""
         text = UNINSTALL_MD.read_text()
         lower = text.lower()
-        for scope in ("stop", "remove", "wipe"):
+        for scope in ("stop", "remove"):
             assert scope in lower, f"expected scope '{scope}' in uninstall.md"
-        # the destructive specifics that must not get lost in the extraction
         assert "uninstall-check.sh" in text
-        assert "pip uninstall" in text
         assert ".madsci" in text
         assert "docker compose down" in text or "just down" in text
+        # The Python uninstall is deleting the project-local venv — there is no
+        # pip uninstall step, because nothing is installed outside it.
+        assert ".venv" in text, (
+            "uninstall.md must cover removing the project-local venv, which is "
+            "the whole Python-side uninstall"
+        )
+
+    def test_madsci_data_deletion_is_handed_to_the_operator(self) -> None:
+        """The skill resolves and prints the path; the operator runs the rm.
+
+        Stopping containers and removing images are undone by a re-install.
+        Dropping the bind-mounted databases is not, and the command runs as
+        root against a path the agent inferred.
+        """
+        text = UNINSTALL_MD.read_text().lower()
+        assert "operator-run" in text, (
+            "uninstall.md §U3 must be framed as a hand-off, not an action the "
+            "skill performs"
+        )
+        skill_text = SKILL_MD.read_text().lower()
+        assert "never deletes `.madsci/` data" in skill_text, (
+            "SKILL.md must state the no-delete rule where an agent will see it"
+        )
 
 
 class TestUninstallCheckAgainstFreeHost:
-    """On a host with nothing on the target ports, a 'stop' teardown must verify clean.
-
-    Uses a high port that is almost certainly free, so this is safe regardless of
-    whether the example lab is running on the default ports.
-    """
+    """On a host with nothing on the target ports, a 'stop' teardown must verify clean."""
 
     def test_stop_scope_passes_when_port_free(self) -> None:
-        if not shutil.which("curl"):
-            pytest.skip("curl not available")
+        if not (shutil.which("ss") or shutil.which("lsof")):
+            pytest.skip("no listener probe (ss/lsof) available")
         result = _run(
             UNINSTALL_CHECK,
-            "--method",
-            "docker",
             "--scope",
             "stop",
             "--managers",
-            "59117",
+            FREE_MANAGER_PORT,
             "--dashboard-port",
-            "59118",
+            FREE_DASHBOARD_PORT,
             timeout=60,
         )
-        # No container check failures possible for these ports; the port checks
-        # must PASS (nothing listening). Container check may still find real
-        # MADSci containers if the lab is up — so assert on the port lines only.
-        assert "port 59117 free" in result.stdout, result.stdout
-        assert "port 59118 free" in result.stdout, result.stdout
+        # Container check may still find real MADSci containers if the lab is
+        # up — so assert on the port lines only.
+        assert f"port {FREE_MANAGER_PORT} free" in result.stdout, result.stdout
+        assert f"port {FREE_DASHBOARD_PORT} free" in result.stdout, result.stdout
+
+
+@pytest.mark.docker
+class TestInstallCheckLiveStack:
+    """Integration: verify install-check.sh against a running example lab.
+
+    Skipped unless ``--docker-enabled`` (see tests/e2e/conftest.py).
+    Requires the example lab to already be up (``just up`` / ``docker compose up -d``).
+    """
+
+    def test_passes_against_running_stack(self) -> None:
+        result = _run_script(timeout=120)
+        assert result.returncode == 0, (
+            "install-check.sh should PASS against a running example lab.\n"
+            "Is the stack up (`just up`)?\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+        # Every default manager port and the dashboard should report a 200.
+        for port in (*DEFAULT_MANAGER_PORTS, DASHBOARD_PORT):
+            assert f"localhost:{port}/health → 200" in result.stdout, (
+                f"expected a 200 health line for port {port}:\n{result.stdout}"
+            )
+        assert "Failed: 0" in result.stdout
+
+    def test_container_import_names_a_service(self) -> None:
+        """The container import check must resolve a compose SERVICE name."""
+        result = _run_script(timeout=120)
+        assert "in service '" in result.stdout, (
+            "the container import check should report the compose service it "
+            f"used:\n{result.stdout}"
+        )
 
 
 @pytest.mark.docker
@@ -338,9 +522,7 @@ class TestUninstallCheckLiveStack:
     """
 
     def test_stop_scope_fails_against_running_stack(self) -> None:
-        result = _run(
-            UNINSTALL_CHECK, "--method", "docker", "--scope", "stop", timeout=60
-        )
+        result = _run(UNINSTALL_CHECK, "--scope", "stop", timeout=60)
         assert result.returncode == 1, (
             "uninstall-check.sh should FAIL while the example lab is still running.\n"
             "Is the stack actually up (`just up`)?\n"
@@ -348,4 +530,4 @@ class TestUninstallCheckLiveStack:
         )
         # It should name at least one still-running MADSci container and a live port.
         assert "still running" in result.stdout, result.stdout
-        assert "still serving /health" in result.stdout, result.stdout
+        assert "still has a listener" in result.stdout, result.stdout

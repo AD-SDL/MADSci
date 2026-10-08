@@ -188,26 +188,37 @@ check_madsci_importable() {
 
   # Authoritative: at least one manager container must import madsci.* —
   # proves the running Docker stack is MADSci, not just something on 8001.
-  local container=""
-  for candidate in event_manager madsci-event-manager madsci_event_manager lab_manager; do
-    if docker compose ps --status running 2>/dev/null | grep -q "^${candidate}\b\|[[:space:]]${candidate}[[:space:]]"; then
-      container="$candidate"
+  # `docker compose exec` addresses a SERVICE, not a container. Matching the NAME
+  # column only lines up when the compose pins `container_name:` (the example lab
+  # does); anywhere Docker auto-names `<project>-<service>-N` the grep matches a
+  # container name that `exec` then rejects, and the failure gets misreported as
+  # a broken import. Enumerate services directly instead.
+  local running_services service=""
+  running_services="$(docker compose ps --services --status running 2>/dev/null)"
+  for candidate in event_manager lab_manager experiment_manager resource_manager \
+                   data_manager workcell_manager location_manager; do
+    if grep -qx "$candidate" <<<"$running_services"; then
+      service="$candidate"
       break
     fi
   done
-  if [[ -z "$container" ]]; then
+  if [[ -z "$service" ]]; then
+    local detail="no running MADSci manager service found via 'docker compose ps --services --status running'"
+    if [[ -n "$running_services" ]]; then
+      detail="$detail (running services: $(tr '\n' ' ' <<<"$running_services"))"
+    fi
     if [[ $host_has_madsci -eq 0 ]]; then
-      fail "container MADSci import" "no running MADSci manager container found via 'docker compose ps'"
+      fail "container MADSci import" "$detail"
     else
-      skip "container MADSci import" "no MADSci manager container found; host imports covered above"
+      skip "container MADSci import" "$detail; host imports covered above"
     fi
     return
   fi
   for pkg in madsci.common madsci.client; do
-    if docker compose exec -T "$container" python3 -c "import ${pkg}" >/dev/null 2>&1; then
-      pass "import ${pkg} (in container '$container')"
+    if docker compose exec -T "$service" python3 -c "import ${pkg}" >/dev/null 2>&1; then
+      pass "import ${pkg} (in service '$service')"
     else
-      fail "import ${pkg}" "not importable inside container '$container'"
+      fail "import ${pkg}" "not importable inside service '$service'"
     fi
   done
 }
