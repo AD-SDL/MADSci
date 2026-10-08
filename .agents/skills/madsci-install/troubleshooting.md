@@ -4,31 +4,39 @@ Failure modes seen during install / first-startup, keyed by the message the user
 
 For runtime troubleshooting (workflows failing mid-run, node action errors, resource lock issues, etc.) see [../../../docs/guides/troubleshooting.md](../../../docs/guides/troubleshooting.md) instead.
 
-Scope, mirroring the install skill: this covers install/uninstall of user labs (`--method docker` or `--method local`). Contributor-dev issues (`pdm install`, `just init`, pre-commit hooks, `.venv/` in the repo) are not covered here.
+Scope, mirroring the install skill: this covers install/uninstall of user labs via Docker Compose. Contributor-dev issues (`pdm install`, `just init`, pre-commit hooks, `.venv/` in the repo) are not covered here.
 
 ---
 
-## 1. Wrong virtualenv
+## 1. CLI not on PATH
 
-### `ModuleNotFoundError: No module named 'madsci'` (or a submodule)
+### `madsci: command not found` after `uv pip install madsci-client`
 
-**Diagnose first:**
+The install creates a project-local venv at `$INSTALL_DIR/.venv/` and the CLI lives at `$INSTALL_DIR/.venv/bin/madsci`. `uv pip install` into that venv **does not** put it on your shell's PATH; you reach it in one of three ways:
+
 ```bash
-which python
-python -c "import sys; print(sys.executable, sys.prefix)"
-pip list | grep -i madsci
+# Preferred — `uv run` finds the project venv automatically:
+cd "$INSTALL_DIR" && uv run madsci --version
+
+# OR activate the venv explicitly (one shell only):
+source "$INSTALL_DIR/.venv/bin/activate" && madsci --version
+
+# OR invoke the binary directly:
+"$INSTALL_DIR/.venv/bin/madsci" --version
 ```
 
-**Common causes:**
-- The wrong venv is active. Activate the venv you installed MADSci into and retry.
-- `--method local` is missing manager packages. `pip install madsci-client` alone is not enough for `madsci start --mode local`; you also need every manager: `madsci.event_manager`, `madsci.experiment_manager`, `madsci.resource_manager`, `madsci.data_manager`, `madsci.workcell_manager`, `madsci.location_manager`, `madsci.squid`, `madsci.node_module`, `madsci.experiment_application`. See SKILL.md §6.1.
+If none work, diagnose which venv `uv` is actually touching:
+```bash
+cd "$INSTALL_DIR"
+uv run python -c "import sys; print(sys.executable, sys.prefix)"
+ls -la .venv/bin/madsci   # must exist and be executable
+uv pip list | grep -i madsci
+```
 
-### `madsci: command not found` after `pip install madsci-client`
-
-The install went to a Python whose `bin/` isn't on `PATH`. Options:
-1. Activate that venv.
-2. Reinstall into a venv that is on PATH.
-3. Run via `python -m madsci ...` where supported.
+Options:
+1. The venv is in a different directory than you think — `cd` to the actual `$INSTALL_DIR` from Step 5 and retry.
+2. The venv exists but doesn't contain `madsci.client` — re-run `uv pip install madsci-client` from inside `$INSTALL_DIR`.
+3. The venv was never created — re-run Step 5's `uv venv --python 3.10` + `uv pip install madsci-client`.
 
 ---
 
@@ -36,7 +44,7 @@ The install went to a Python whose `bin/` isn't on `PATH`. Options:
 
 ### `docker: command not found` or `Cannot connect to the Docker daemon`
 
-Offer the three options from SKILL.md §Step 4 (No Docker prompt): install Docker, switch to `--method local`, or abort.
+Offer the up-front SKILL.md §Step 1 options: install Docker (via the official convenience script under sudo) or abort.
 
 ### `lab_manager` container shows `(unhealthy)` but `curl http://localhost:8000/health` returns 200
 
@@ -44,16 +52,15 @@ Offer the three options from SKILL.md §Step 4 (No Docker prompt): install Docke
 ```yaml
 test: ["CMD", "curl", "-f", "${LAB_SERVER_URL:-http://localhost:8000}/health", "||", "exit", "1"]
 ```
-Exec form has no shell, so `||`, `exit` and `1` are passed to curl as **three extra URLs**. The first two fail fast (`Could not resolve host`), but curl parses the bare `1` as a packed IP and hangs connecting to `http://0.0.0.1/` until Docker kills the probe (`Health check exceeded timeout`). Curl also returns the *last* error, so the probe exits non-zero even if given unlimited time — raising `timeout:` does not help.
+Exec form has no shell, so `||`, `exit` and `1` become **three extra URLs** for curl. Curl parses the bare `1` as a packed IP and hangs on `http://0.0.0.1/` until Docker kills the probe, and it returns the *last* error either way — so raising `timeout:` never helps.
 
-**Verify the manager is actually fine** (this is the source of truth, not Docker's health status):
+**The manager itself is the source of truth, not Docker's health flag:**
 ```bash
 curl -fsS http://localhost:8000/health    # → {"healthy":true,...}
-docker inspect --format '{{json .State.Health}}' lab_manager   # real body is buried in the probe log
 ```
-`install-check.sh` curls `/health` directly, so it reports PASS regardless of the Docker health flag — treat the `(unhealthy)` label as cosmetic until the compose file is fixed.
+`install-check.sh` curls `/health` directly, so it reports PASS regardless of the Docker label — treat `(unhealthy)` as cosmetic until the compose file is fixed.
 
-**Fix** — drop the redundant `|| exit 1` (`curl -f` already exits non-zero on HTTP failure) and strip any trailing slash, since `LAB_SERVER_URL` conventionally ends in `/` and `//health` returns 404:
+**Fix** — drop the redundant `|| exit 1` (`curl -f` already exits non-zero on HTTP failure) and strip the trailing slash, since `LAB_SERVER_URL` conventionally ends in `/` and `//health` returns 404:
 ```yaml
 test: ["CMD-SHELL", 'URL="${LAB_SERVER_URL:-http://localhost:8000}"; curl -f "$${URL%/}/health"']
 ```
@@ -68,7 +75,7 @@ docker compose ps
 ```
 
 **Common causes:**
-- A previous run left an incompatible volume (schema mismatch after a migration). Fix: `docker compose down -v` — DATA LOSS, confirm first (SKILL.md §6.4).
+- A previous run left an incompatible volume (schema mismatch after a migration). Fix: `docker compose down -v` — DATA LOSS, confirm first (SKILL.md §6.3).
 - First-time image pull still in progress. Fix: wait 60s, re-check.
 - Host port already bound (see §3).
 
@@ -112,9 +119,9 @@ lsof -i :<port>
 ss -tulpn | grep :<port>
 ```
 
-**Fixes (SKILL.md §6.2 prompt):**
+**Fixes (SKILL.md §6.1 prompt):**
 - Stop the offending process (only if user identifies it).
-- Remap the port in the lab's `settings.yaml` (a `madsci init`-generated lab has one). Show the diff before applying.
+- Remap the port. For Install Options 1/2 (repo-in-place), edit `$INSTALL_DIR/.env` (e.g. `LAB_SERVER_PORT=...`); for Option 3, edit the user's own `settings.yaml` / `.env`. Show the diff before applying.
 - Abort and let the user free the port on their own.
 
 ---
@@ -130,7 +137,7 @@ Cause: the CWD is above or beside the `.madsci/` directory the service wrote its
 python3 -c "from madsci.common.sentry import find_madsci_dir; print(find_madsci_dir())"
 ```
 
-**Fixes (SKILL.md §6.3 prompt):**
+**Fixes (SKILL.md §6.2 prompt):**
 - `cd` into the lab directory (the one containing `.madsci/` or `.git/`).
 - Set `MADSCI_SETTINGS_DIR=/path/to/lab` in the environment.
 - Pass `--settings-dir /path/to/lab` on the `madsci` command (supported on `start`, `config export`, etc.).
@@ -141,8 +148,10 @@ python3 -c "from madsci.common.sentry import find_madsci_dir; print(find_madsci_
 The user probably ran `madsci start` from a directory with no `.madsci/` and no `.git/`, so it fell back to `~/.madsci/`. Give each lab its own sentinel:
 ```bash
 mkdir -p /path/to/lab/.madsci
-# or let ensure_madsci_dir() scaffold the standard subdirs:
-python3 -c "from madsci.common.sentry import ensure_madsci_dir; ensure_madsci_dir('/path/to/lab/.madsci')"
+# or let ensure_madsci_dir() scaffold the standard subdirs — pass the PARENT
+# directory; the helper appends `.madsci` itself (passing a path ending in
+# `.madsci` would nest it as `.madsci/.madsci/`):
+python3 -c "from madsci.common.sentry import ensure_madsci_dir; ensure_madsci_dir('/path/to/lab')"
 ```
 
 ---
@@ -159,12 +168,12 @@ python3 -c "from madsci.common.sentry import ensure_madsci_dir; ensure_madsci_di
 
 Pre-migration backup runs automatically ([CLAUDE.md](../../../CLAUDE.md) *Database Migrations* section) and auto-restores on failure. Ask the user:
 1. Look at the auto-created backup in the backup dir before retrying.
-2. Retry with `python -m madsci.resource_manager.migration_tool --db-url <url>` after fixing the schema issue.
+2. Retry with `python -m madsci.resource_manager.migration_tool --db_url <url>` after fixing the schema issue (snake_case — pydantic-settings' CLI parser silently drops the kebab-case `--db-url` because `cli_ignore_unknown_args=True`).
 3. Restore from backup and roll back to the prior MADSci version.
 
 ### `Database schema version mismatch detected; server startup aborted`
 
-Resource Manager runs a `DatabaseVersionChecker` on init that compares the installed MADSci version against `madsci_schema_version` in the mounted database. This fires when a fresh install is pointed at existing DB data (see SKILL.md §2 existing-data flow). Fix flow is SKILL.md §6.5:
+Resource Manager runs a `DatabaseVersionChecker` on init that compares the installed MADSci version against `madsci_schema_version` in the mounted database. This fires when a fresh install is pointed at existing DB data (see SKILL.md §2 existing-data flow). Fix flow is SKILL.md §6.4:
 1. Migrate the data (`python -m madsci.resource_manager.migration_tool --db_url <url>`).
 2. Discard mounted data and start fresh (DATA LOSS in resource DB).
 3. Abort for manual migration.
@@ -179,9 +188,7 @@ Use `yarn`, not `npm` (per [CLAUDE.md](../../../CLAUDE.md)). If a previous `npm 
 
 ### Dashboard at `http://localhost:8000/` returns 404 JSON instead of HTML
 
-The Lab Manager API is up but no dashboard bundle is mounted. Two situations:
-- **Expected for `--method local` without a UI build** — this is the design (SKILL.md §3). If the user wanted the UI, they need to build it (`yarn build` in `ui/`) or extract it from the `madsci_dashboard` image, and set `LAB_DASHBOARD_FILES_PATH` to the resulting `dist/`.
-- **Unexpected for `--method docker`** — the compose file should be using the `madsci_dashboard` image, which bakes in the UI. Check: `docker compose ps` should show `lab_manager` running from `ghcr.io/ad-sdl/madsci_dashboard:*`, not `ghcr.io/ad-sdl/madsci:*`. If it's the base image, either the compose file is wrong or the image tag was overridden.
+The Lab Manager API is up but no dashboard bundle is mounted. This is unexpected — the compose file should be using the `madsci_dashboard` image, which bakes in the UI. Check: `docker compose ps` should show `lab_manager` running from `ghcr.io/ad-sdl/madsci_dashboard:*`, not `ghcr.io/ad-sdl/madsci:*`. If it's the base image, either the compose file is wrong or the image tag was overridden.
 
 ### Dashboard returns 502 / connection refused
 
@@ -199,7 +206,7 @@ Failure modes seen while **removing** MADSci. See [uninstall.md](uninstall.md) f
 - `docker compose down -v` and `madsci stop --volumes` remove named volumes — **of which there are none** — so they delete *no* database data.
 - The real data lives in `./.madsci/postgresql`, `./.madsci/postgresql_resources`, `./.madsci/mongodb`, `./.madsci/valkey`, `./.madsci/seaweedfs`.
 
-To actually wipe data you must delete those directories on the host (uninstall.md §U4). Confirm with the user first — this is irreversible.
+To actually wipe data you must delete those directories on the host (uninstall.md §U3). Confirm with the user first — this is irreversible.
 
 ### `rm: cannot remove '.madsci/postgresql/...': Permission denied`
 
@@ -212,18 +219,9 @@ sudo rm -rf ./.madsci/postgresql ./.madsci/postgresql_resources \
 ```
 Never `sudo rm -rf` a path you haven't printed back to the user first.
 
-### `pip uninstall` says "not installed" / removes from the wrong place
+### `madsci` still resolves after the venv was deleted
 
-You're in a different environment than the one MADSci was installed into. Diagnose before uninstalling:
-```bash
-which python
-pip show madsci.client        # Location: tells you where it's installed
-```
-Then activate the correct venv (or `deactivate` a wrong one) and retry. Pip normalizes names: `madsci.client` == `madsci-client` == `madsci_client`. Uninstalling `madsci.client` removes the `madsci` CLI.
-
-### `madsci` command still works after `pip uninstall`
-
-Either a second install exists in another environment on `PATH`, or a shell hash cache is stale. Check `which -a madsci`, `hash -r`, and re-check.
+The install's only Python footprint is the project-local venv at `$INSTALL_DIR/.venv/`, removed with `rm -rf` (uninstall.md §U2) — there is no `pip uninstall` step. If `madsci` still runs afterwards, it came from somewhere else: a pre-existing system/user install, another lab's venv, or a stale shell hash. Check `which -a madsci` and `hash -r`, then re-check. Leave any install outside `$INSTALL_DIR` alone unless the user explicitly asks for it.
 
 ### `docker compose down` errors because a container "is in use" / won't stop
 
@@ -233,7 +231,6 @@ ls .madsci/pids/                          # *.pid files for detached managers/no
 madsci stop manager <name>                # SIGTERM→SIGKILL, removes the PID file
 madsci stop node <name>
 ```
-Native mode (`madsci start --mode local`) is a single **foreground** process with no PID file — stop it with **Ctrl+C** in its terminal, or `pkill -f 'madsci start --mode local'` if backgrounded.
 
 ### `docker rmi` fails: "image is being used by stopped container"
 
@@ -241,7 +238,7 @@ Containers must be removed before their images. Run `docker compose down` (remov
 
 ### `uninstall-check.sh` reports FAIL but the user says they removed everything
 
-Check the **scope** and **method** you passed. `--scope stop` only expects the stack halted + ports free; `--scope remove` also expects images gone (`--method docker`) / packages uninstalled (`--method local`); `--scope wipe` also expects `.madsci/` deleted. A "FAIL" on images under `--scope remove` is correct if the user *chose to keep* images — re-run with `--scope stop`, or accept the image lines as intentional. Also pass `--madsci-dir <path>` if `.madsci/` isn't at `./.madsci`.
+Check the **scope** you passed. `--scope stop` only expects the stack halted + ports free; `--scope remove` also expects MADSci Docker images gone; `--scope wipe` also expects `.madsci/` deleted. A "FAIL" on images under `--scope remove` is correct if the user *chose to keep* images — re-run with `--scope stop`, or accept the image lines as intentional. Also pass `--madsci-dir <path>` if `.madsci/` isn't at `./.madsci`.
 
 ---
 
@@ -251,4 +248,4 @@ Escalate to the user with:
 1. The exact command you ran.
 2. The full stderr (do not summarize).
 3. The output of `install-check.sh` (install) or `uninstall-check.sh` (teardown) if the operation partially completed.
-4. An AskUserQuestion offering: switch install method, change uninstall scope, roll back the last step, or hand off to a human.
+4. An AskUserQuestion offering: retry with a different `$INSTALL_DIR`, change the uninstall scope, roll back the last step, or hand off to a human.

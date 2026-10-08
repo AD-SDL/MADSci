@@ -1,26 +1,24 @@
 #!/usr/bin/env bash
-# install-check.sh — inspect a running MADSci stack and report pass/fail per check.
+# install-check.sh — inspect a running MADSci Docker stack and report pass/fail per check.
+#
+# Certifies only that the stack is up and answering correctly. It does NOT check
+# what the lab contains (resources / nodes / locations) or which kind of lab it is.
 #
 # Usage:
-#   bash install-check.sh --method docker         # stack running under Docker Compose
-#   bash install-check.sh --method local          # stack running via `madsci start --mode local`
-#   bash install-check.sh --method docker --with-ui   # explicitly expect the dashboard UI at /
-#   bash install-check.sh --method local --no-ui      # explicitly expect API-only at /
-#   bash install-check.sh --managers 8001,8002,8003   # override which manager ports to check
-#   bash install-check.sh --dashboard-port 8000       # override dashboard port
+#   bash install-check.sh                                 # stack running under Docker Compose
+#   bash install-check.sh --with-ui                       # explicitly expect the dashboard UI at /
+#   bash install-check.sh --no-ui                         # explicitly expect API-only at /
+#   bash install-check.sh --managers 8001,8002,8003       # override which manager ports to check
+#   bash install-check.sh --dashboard-port 8000           # override dashboard port
+#   bash install-check.sh --install-dir <path>            # probe the madsci CLI venv at <path>/.venv
 #   bash install-check.sh --no-color
 #
-# Method inference for the UI check when neither --with-ui nor --no-ui is passed:
-#   --method docker → --with-ui  (compose deployments typically use the madsci_dashboard image
-#                                 which bakes in the built UI; pass --no-ui if you're on a
-#                                 slim compose that only runs the base madsci image)
-#   --method local  → --no-ui    (pip install madsci.squid does not bundle the UI; pass
-#                                 --with-ui if you built ui/dist and set LAB_DASHBOARD_FILES_PATH)
+# --with-ui is the default (compose deployments typically use the madsci_dashboard
+# image, which bakes in the built UI); pass --no-ui for a slim base-image compose.
 #
-# Scope: this script certifies that a MADSci stack is up and answers correctly. It does
-# NOT check whether the lab has resources / nodes / locations defined, and it does NOT
-# distinguish which kind of lab it is (example lab vs. user-created lab vs. per-package
-# pip install) — the only axis it cares about is HOW the stack is running.
+# --install-dir points at the install directory whose .venv/ holds `madsci-client`,
+# so the CLI/import checks probe that venv rather than system python3/madsci —
+# both of which may be absent on a Docker-only install.
 #
 # Exit codes:
 #   0 = all checks passed
@@ -30,46 +28,51 @@
 set -u  # keep -e OFF: we want every check to run even if earlier ones fail.
 
 # ---------- args ----------
-METHOD=""
 MANAGERS="8001,8002,8003,8004,8005,8006"
 DASHBOARD_PORT="8000"
 USE_COLOR=1
-UI_MODE=""  # "with", "no", or "" (=infer from method)
+UI_MODE="with"      # "with" or "no" (default: expect UI mounted)
+INSTALL_DIR=""      # path to the stack install dir (holds .venv/ with madsci-client)
+
+# Guard against value-taking flags being the last argument: without this, an
+# empty "${2:-}" + failing `shift 2` under `set +e` would loop forever.
+need_value() {
+  # usage: need_value <flag-name> <remaining-arg-count>
+  [[ "$2" -ge 2 ]] && return 0
+  echo "Error: $1 requires a value" >&2
+  exit 2
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --method)          METHOD="${2:-}"; shift 2 ;;
-    --managers)        MANAGERS="${2:-}"; shift 2 ;;
-    --dashboard-port)  DASHBOARD_PORT="${2:-}"; shift 2 ;;
+    --managers)        need_value "$1" "$#"; MANAGERS="$2"; shift 2 ;;
+    --dashboard-port)  need_value "$1" "$#"; DASHBOARD_PORT="$2"; shift 2 ;;
+    --install-dir)     need_value "$1" "$#"; INSTALL_DIR="$2"; shift 2 ;;
     --with-ui)         UI_MODE="with"; shift ;;
     --no-ui)           UI_MODE="no"; shift ;;
     --no-color)        USE_COLOR=0; shift ;;
     -h|--help)
-      sed -n '2,29p' "$0"; exit 0 ;;
-    --goal)
-      echo "Error: --goal was removed. Use --method docker|local instead. See --help." >&2
-      exit 2 ;;
+      sed -n '2,26p' "$0"; exit 0 ;;
     *)
       echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
-if [[ -z "$METHOD" ]]; then
-  echo "Error: --method is required (docker|local). See --help." >&2
-  exit 2
+# Resolve the venv python & madsci binary once up-front. When --install-dir is
+# passed, prefer the venv's interpreter (which is where the host-side madsci
+# packages were installed). Otherwise fall back to system python3/madsci.
+VENV_PY=""
+VENV_MADSCI=""
+if [[ -n "$INSTALL_DIR" ]]; then
+  if [[ -x "$INSTALL_DIR/.venv/bin/python" ]]; then
+    VENV_PY="$INSTALL_DIR/.venv/bin/python"
+  fi
+  if [[ -x "$INSTALL_DIR/.venv/bin/madsci" ]]; then
+    VENV_MADSCI="$INSTALL_DIR/.venv/bin/madsci"
+  fi
 fi
-if [[ "$METHOD" != "docker" && "$METHOD" != "local" ]]; then
-  echo "--method must be 'docker' or 'local' (got: $METHOD)" >&2
-  exit 2
-fi
-
-# Infer UI expectation from method when --with-ui/--no-ui not given.
-if [[ -z "$UI_MODE" ]]; then
-  case "$METHOD" in
-    docker) UI_MODE="with" ;;
-    local)  UI_MODE="no" ;;
-  esac
-fi
+HOST_PY="${VENV_PY:-$(command -v python3 || true)}"
+HOST_MADSCI="${VENV_MADSCI:-$(command -v madsci || true)}"
 
 # ---------- output helpers ----------
 if [[ $USE_COLOR -eq 1 && -t 1 ]]; then
@@ -86,6 +89,28 @@ pass() { printf "  %sPASS%s  %s\n" "$GREEN" "$RESET" "$1"; PASS_COUNT=$((PASS_CO
 fail() { printf "  %sFAIL%s  %s%s%s\n" "$RED" "$RESET" "$1" "${2:+ — $2}" ""; FAIL_COUNT=$((FAIL_COUNT+1)); }
 skip() { printf "  %sSKIP%s  %s%s%s\n" "$YELLOW" "$RESET" "$1" "${2:+ — $2}" ""; SKIP_COUNT=$((SKIP_COUNT+1)); }
 section() { printf "\n%s== %s ==%s\n" "$DIM" "$1" "$RESET"; }
+
+# Returns 0 if the given JSON body reports {"healthy": true}, 1 otherwise.
+# Uses jq when available; falls back to python3 so the script works on bare hosts.
+is_healthy_json() {
+  local body="$1"
+  if command -v jq >/dev/null 2>&1; then
+    # Strict: boolean true, not the string "true".
+    [[ "$(jq -r 'if .healthy == true then "yes" else "no" end' <<<"$body" 2>/dev/null)" == "yes" ]]
+  elif command -v python3 >/dev/null 2>&1; then
+    printf '%s' "$body" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+sys.exit(0 if d.get("healthy") is True else 1)
+' 2>/dev/null
+  else
+    # Last resort — grep. Accepts "healthy": true (and "healthy":true).
+    grep -qE '"healthy"[[:space:]]*:[[:space:]]*true' <<<"$body"
+  fi
+}
 
 # ---------- individual checks ----------
 
@@ -119,57 +144,50 @@ check_python() {
   if [[ -n "${VIRTUAL_ENV:-}" ]]; then
     printf "         %sVIRTUAL_ENV=%s%s\n" "$DIM" "$VIRTUAL_ENV" "$RESET"
   else
-    printf "         %s(no VIRTUAL_ENV set — expected for --method docker; unusual for --method local)%s\n" "$DIM" "$RESET"
+    printf "         %s(no VIRTUAL_ENV set — expected for a Docker-only install)%s\n" "$DIM" "$RESET"
   fi
 }
 
 check_madsci_importable() {
+  # MADSci manager code lives inside containers. The host-side `madsci-client`
+  # was installed via `uv pip install` into $INSTALL_DIR/.venv/ — probe that
+  # venv (if --install-dir given) and a running manager container
+  # (authoritative).
   section "MADSci Python packages"
 
-  # --method local: MADSci is installed in a host venv; check imports there.
-  # --method docker: MADSci lives inside containers. Try host first (the caller may
-  #   have `pip install madsci-client` for the CLI); if not, fall back to probing
-  #   a running manager container. Never fail on host imports for docker method —
-  #   the host doesn't need MADSci to run a Docker stack.
   local pkgs=(madsci.common madsci.client madsci.squid)
 
-  if [[ "$METHOD" == "local" ]]; then
-    for pkg in "${pkgs[@]}"; do
-      if python3 -c "import ${pkg}" 2>/dev/null; then
-        pass "import ${pkg} (host)"
-      else
-        fail "import ${pkg}" "not installed in the active Python environment"
-      fi
-    done
-    return
+  local probe_label="host"
+  if [[ -n "$VENV_PY" ]]; then
+    probe_label="venv at $INSTALL_DIR/.venv"
   fi
 
-  # --method docker
+  # Host side — informational; don't fail the whole run on it.
   local host_has_madsci=0
-  if python3 -c "import madsci.common" 2>/dev/null; then
+  if [[ -n "$HOST_PY" ]] && "$HOST_PY" -c "import madsci.common" 2>/dev/null; then
     host_has_madsci=1
   fi
-
   if [[ $host_has_madsci -eq 1 ]]; then
     for pkg in "${pkgs[@]}"; do
-      if python3 -c "import ${pkg}" 2>/dev/null; then
-        pass "import ${pkg} (host)"
+      if "$HOST_PY" -c "import ${pkg}" 2>/dev/null; then
+        pass "import ${pkg} (${probe_label})"
       else
-        skip "import ${pkg} (host)" "not on host, but Docker method — checking containers"
+        skip "import ${pkg} (${probe_label})" "not in ${probe_label} — checking containers"
       fi
     done
+  elif [[ -n "$VENV_PY" ]]; then
+    skip "import madsci.* (${probe_label})" "venv exists but madsci.common not importable; re-run 'uv pip install madsci-client' from $INSTALL_DIR"
   fi
 
-  # Also verify at least one manager container can import madsci.* — proves
-  # the running Docker stack is actually MADSci, not just something on 8001.
   if ! command -v docker >/dev/null 2>&1; then
     if [[ $host_has_madsci -eq 0 ]]; then
       fail "MADSci packages" "not importable on host and docker CLI not on PATH — cannot verify"
     fi
     return
   fi
-  # Find any running MADSci-flavored container. event_manager is the canonical starter,
-  # but the check tolerates alternative service names too.
+
+  # Authoritative: at least one manager container must import madsci.* —
+  # proves the running Docker stack is MADSci, not just something on 8001.
   local container=""
   for candidate in event_manager madsci-event-manager madsci_event_manager lab_manager; do
     if docker compose ps --status running 2>/dev/null | grep -q "^${candidate}\b\|[[:space:]]${candidate}[[:space:]]"; then
@@ -195,14 +213,9 @@ check_madsci_importable() {
 }
 
 check_docker() {
-  # Docker daemon reachability is required for --method docker, optional for --method local.
   section "Docker daemon"
   if ! command -v docker >/dev/null 2>&1; then
-    if [[ "$METHOD" == "docker" ]]; then
-      fail "docker CLI" "not on PATH (required for --method docker)"
-    else
-      skip "docker CLI" "not on PATH (fine for --method local)"
-    fi
+    fail "docker CLI" "not on PATH (required for Docker install)"
     return
   fi
   if docker info >/dev/null 2>&1; then
@@ -219,13 +232,20 @@ check_manager_health() {
     port="${port// /}"
     [[ -z "$port" ]] && continue
     local url="http://localhost:${port}/health"
-    local code
-    code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null)"
+    local tmp body code
+    tmp="$(mktemp)"
+    code="$(curl -sS -o "$tmp" -w '%{http_code}' --max-time 3 "$url" 2>/dev/null)"
     code="${code:-000}"
-    if [[ "$code" == "200" ]]; then
-      pass "GET $url → 200"
-    else
+    body="$(cat "$tmp" 2>/dev/null)"
+    rm -f "$tmp"
+    if [[ "$code" != "200" ]]; then
       fail "GET $url" "HTTP $code (is that manager running?)"
+      continue
+    fi
+    if is_healthy_json "$body"; then
+      pass "GET $url → 200 {\"healthy\":true}"
+    else
+      fail "GET $url" "HTTP 200 but body does not report healthy=true: ${body:0:200}"
     fi
   done
 }
@@ -233,13 +253,20 @@ check_manager_health() {
 check_dashboard() {
   section "Dashboard (Squid / Lab Manager)"
   local url="http://localhost:${DASHBOARD_PORT}/health"
-  local code
-  code="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 "$url" 2>/dev/null)"
+  local tmp body code
+  tmp="$(mktemp)"
+  code="$(curl -sS -o "$tmp" -w '%{http_code}' --max-time 3 "$url" 2>/dev/null)"
   code="${code:-000}"
-  if [[ "$code" == "200" ]]; then
-    pass "GET $url → 200"
-  else
+  body="$(cat "$tmp" 2>/dev/null)"
+  rm -f "$tmp"
+  if [[ "$code" != "200" ]]; then
     fail "GET $url" "HTTP $code — dashboard not up on port ${DASHBOARD_PORT}"
+    return
+  fi
+  if is_healthy_json "$body"; then
+    pass "GET $url → 200 {\"healthy\":true}"
+  else
+    fail "GET $url" "HTTP 200 but body does not report healthy=true: ${body:0:200}"
   fi
 }
 
@@ -252,7 +279,6 @@ check_dashboard_ui() {
   local tmp
   tmp="$(mktemp)"
   local code ctype
-  # -L follows any redirect the SPA might issue; -o writes body for inspection.
   read -r code ctype < <(
     curl -sS -L -o "$tmp" -w '%{http_code} %{content_type}\n' --max-time 3 "$url" 2>/dev/null || echo "000 -"
   )
@@ -260,12 +286,10 @@ check_dashboard_ui() {
   ctype="${ctype:-unknown}"
 
   local is_html=0 is_json=0
-  # Content-type may be "text/html; charset=utf-8" — match prefix only.
   case "$ctype" in
     text/html*)         is_html=1 ;;
     application/json*)  is_json=1 ;;
   esac
-  # Fallback: sniff first bytes if content-type wasn't declared.
   if [[ $is_html -eq 0 && $is_json -eq 0 ]]; then
     if head -c 20 "$tmp" 2>/dev/null | grep -qiE '^\s*<!doctype html|^\s*<html'; then
       is_html=1
@@ -280,7 +304,7 @@ check_dashboard_ui() {
       pass "GET $url → 200 HTML (Vue dashboard mounted)"
     elif [[ "$code" == "404" && $is_json -eq 1 ]]; then
       fail "GET $url" "HTTP 404 JSON — Lab Manager did not mount the UI. \
-Set LAB_DASHBOARD_FILES_PATH to a built ui/dist and restart, \
+Confirm your compose uses ghcr.io/ad-sdl/madsci_dashboard:*, \
 or re-run with --no-ui if you meant to skip the dashboard."
     else
       fail "GET $url" "HTTP $code content-type=$ctype (expected HTML for a mounted dashboard)"
@@ -289,9 +313,7 @@ or re-run with --no-ui if you meant to skip the dashboard."
     if [[ "$code" == "404" && $is_json -eq 1 ]]; then
       pass "GET $url → 404 JSON (API-only, as expected — no dashboard bundle mounted)"
     elif [[ "$code" == "200" && $is_html -eq 1 ]]; then
-      # User said --no-ui but the UI is present. Not a failure per se, but worth surfacing.
-      skip "GET $url → 200 HTML" "UI is mounted despite --no-ui; \
-LAB_DASHBOARD_FILES_PATH is set to an existing dist/ — remove it or re-run with --with-ui"
+      skip "GET $url → 200 HTML" "UI is mounted despite --no-ui; re-run with --with-ui or switch to the slim madsci image"
     else
       fail "GET $url" "HTTP $code content-type=$ctype (expected 404 JSON for API-only)"
     fi
@@ -300,26 +322,34 @@ LAB_DASHBOARD_FILES_PATH is set to an existing dist/ — remove it or re-run wit
 
 check_madsci_cli() {
   section "madsci CLI"
-  if ! command -v madsci >/dev/null 2>&1; then
-    skip "madsci on PATH" "install madsci-client to get the CLI"
+  if [[ -z "$HOST_MADSCI" ]]; then
+    if [[ -n "$INSTALL_DIR" ]]; then
+      skip "madsci CLI" "not found at $INSTALL_DIR/.venv/bin/madsci — re-run 'uv venv' + 'uv pip install madsci-client' in $INSTALL_DIR"
+    else
+      skip "madsci CLI" "not on PATH; pass --install-dir to probe the venv the install created"
+    fi
     return
   fi
+  printf "         %sCLI: %s%s\n" "$DIM" "$HOST_MADSCI" "$RESET"
 
-  # `madsci status` and `madsci doctor` exit non-zero when something is off;
-  # capture their output so the user sees it verbatim.
+  # `madsci status` and `madsci doctor` exit 0 whether a stack is up or not — the
+  # real pass/fail lives on the /health checks above. Keep these as INFORMATIONAL
+  # prints so the user sees the output, and only fail on the direct health curls.
+  printf "         %s(informational — real pass/fail is on /health above)%s\n" "$DIM" "$RESET"
+
   local status_out doctor_out
-  status_out="$(madsci status 2>&1)" && pass "madsci status" || fail "madsci status" "see output below"
-  printf "%s%s%s\n" "$DIM" "$status_out" "$RESET"
+  status_out="$("$HOST_MADSCI" status 2>&1 || true)"
+  printf "%s--- madsci status ---\n%s%s\n" "$DIM" "$status_out" "$RESET"
 
-  doctor_out="$(madsci doctor 2>&1)" && pass "madsci doctor" || fail "madsci doctor" "see output below"
-  printf "%s%s%s\n" "$DIM" "$doctor_out" "$RESET"
+  doctor_out="$("$HOST_MADSCI" doctor 2>&1 || true)"
+  printf "%s--- madsci doctor ---\n%s%s\n" "$DIM" "$doctor_out" "$RESET"
 }
 
 # ---------- run ----------
-printf "MADSci install verification (method=%s" "$METHOD"
+printf "MADSci install verification ("
 case "$UI_MODE" in
-  with) printf ", expecting dashboard UI at /)" ;;
-  no)   printf ", expecting API-only, no UI at /)" ;;
+  with) printf "expecting dashboard UI at /)" ;;
+  no)   printf "expecting API-only, no UI at /)" ;;
 esac
 printf "\n"
 

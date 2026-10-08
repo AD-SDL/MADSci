@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
-# uninstall-check.sh — verify a MADSci teardown actually removed what the scope asked for.
+# uninstall-check.sh — verify a MADSci Docker teardown actually removed what the scope asked for.
 #
 # A clean uninstall is "nothing answers and nothing is left", not "the command exited 0".
 # Mirror image of install-check.sh: every check here PASSES when the thing is *absent*
-# (containers gone, ports free, images/.madsci/packages removed).
+# (containers gone, ports free, images / .madsci/ removed).
 #
 # Usage:
-#   bash uninstall-check.sh --method docker --scope stop     # containers down, ports free
-#   bash uninstall-check.sh --method docker --scope remove   # + images removed
-#   bash uninstall-check.sh --method docker --scope wipe     # + .madsci/ deleted
-#   bash uninstall-check.sh --method local  --scope remove   # pip packages uninstalled
-#   bash uninstall-check.sh --method local  --scope wipe     # + .madsci/ deleted
-#   bash uninstall-check.sh --managers 8001,8002      # override which ports must be free
+#   bash uninstall-check.sh --scope stop     # containers down, ports free
+#   bash uninstall-check.sh --scope remove   # + images removed
+#   bash uninstall-check.sh --scope wipe     # + .madsci/ deleted
+#   bash uninstall-check.sh --managers 8001,8002             # override which ports must be free
 #   bash uninstall-check.sh --dashboard-port 8000
-#   bash uninstall-check.sh --madsci-dir ./.madsci    # override where .madsci/ is expected
+#   bash uninstall-check.sh --madsci-dir <path>              # IMPORTANT: path to .madsci/ (default ./.madsci)
+#   bash uninstall-check.sh --compose-project madsci_example_lab  # Docker Compose project label to probe
 #   bash uninstall-check.sh --no-color
 #
 # Scopes (additive):
-#   stop   — running stack halted: no containers/processes, ports free.
-#   remove — the above + Docker images removed (method=docker) and/or pip packages
-#            uninstalled (method=local).
+#   stop   — running stack halted: no containers, ports free.
+#   remove — the above + MADSci Docker images removed.
 #   wipe   — the above + .madsci/ data directory deleted.
 #
-# Scope: this script certifies teardown of a MADSci stack. It does NOT check for a
-# dev-repo `.venv/` or pre-commit hook removal — those are contributor-tooling
-# concerns handled by a different skill.
+# IMPORTANT: --madsci-dir
+#   The default ./.madsci assumes you run this from the directory that owns the
+#   stack. With the install skill's Options 1 / 2 the stack is started from
+#   $INSTALL_DIR (chosen at install Step 1.2) and .madsci/ lives at
+#   $INSTALL_DIR/.madsci — pass `--madsci-dir "$INSTALL_DIR/.madsci"` from any
+#   other CWD or the wipe check will PASS vacuously (empty-path PASS from the
+#   wrong directory).
+#
+# This script does NOT check for a dev-repo `.venv/` or pre-commit hook removal —
+# those are contributor-tooling concerns handled by a different skill.
 #
 # Exit codes:
 #   0 = all checks passed (teardown clean for the requested scope)
@@ -34,39 +39,37 @@
 set -u  # keep -e OFF: run every check even if an earlier one fails.
 
 # ---------- args ----------
-METHOD=""
 SCOPE="stop"
 MANAGERS="8001,8002,8003,8004,8005,8006"
 DASHBOARD_PORT="8000"
 MADSCI_DIR="./.madsci"
+COMPOSE_PROJECT="madsci_example_lab"
 USE_COLOR=1
+
+# Guard against value-taking flags being the last argument: without this, an
+# empty "${2:-}" + failing `shift 2` under `set +e` would loop forever.
+need_value() {
+  # usage: need_value <flag-name> <remaining-arg-count>
+  [[ "$2" -ge 2 ]] && return 0
+  echo "Error: $1 requires a value" >&2
+  exit 2
+}
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --method)          METHOD="${2:-}"; shift 2 ;;
-    --scope)           SCOPE="${2:-}"; shift 2 ;;
-    --managers)        MANAGERS="${2:-}"; shift 2 ;;
-    --dashboard-port)  DASHBOARD_PORT="${2:-}"; shift 2 ;;
-    --madsci-dir)      MADSCI_DIR="${2:-}"; shift 2 ;;
-    --no-color)        USE_COLOR=0; shift ;;
+    --scope)            need_value "$1" "$#"; SCOPE="$2"; shift 2 ;;
+    --managers)         need_value "$1" "$#"; MANAGERS="$2"; shift 2 ;;
+    --dashboard-port)   need_value "$1" "$#"; DASHBOARD_PORT="$2"; shift 2 ;;
+    --madsci-dir)       need_value "$1" "$#"; MADSCI_DIR="$2"; shift 2 ;;
+    --compose-project)  need_value "$1" "$#"; COMPOSE_PROJECT="$2"; shift 2 ;;
+    --no-color)         USE_COLOR=0; shift ;;
     -h|--help)
-      sed -n '2,34p' "$0"; exit 0 ;;
-    --goal)
-      echo "Error: --goal was removed. Use --method docker|local instead. See --help." >&2
-      exit 2 ;;
+      sed -n '2,37p' "$0"; exit 0 ;;
     *)
       echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
-if [[ -z "$METHOD" ]]; then
-  echo "Error: --method is required (docker|local). See --help." >&2
-  exit 2
-fi
-if [[ "$METHOD" != "docker" && "$METHOD" != "local" ]]; then
-  echo "--method must be 'docker' or 'local' (got: $METHOD)" >&2
-  exit 2
-fi
 if [[ ! "$SCOPE" =~ ^(stop|remove|wipe)$ ]]; then
   echo "--scope must be stop, remove, or wipe (got: $SCOPE)" >&2; exit 2
 fi
@@ -88,6 +91,8 @@ skip() { printf "  %sSKIP%s  %s%s%s\n" "$YELLOW" "$RESET" "$1" "${2:+ — $2}" "
 section() { printf "\n%s== %s ==%s\n" "$DIM" "$1" "$RESET"; }
 
 # MADSci container names created by the example lab compose (fixed via container_name:).
+# Used only as a fallback when the compose-project label filter returns nothing — a user
+# running a non-example lab should pass --compose-project to get a correct check.
 MADSCI_CONTAINERS=(
   lab_manager event_manager experiment_manager resource_manager data_manager
   location_manager workcell_manager liquidhandler_1 liquidhandler_2 robotarm_1
@@ -103,16 +108,9 @@ MADSCI_IMAGES=(
 # ---------- individual checks ----------
 
 check_no_containers() {
-  # For --method local, there should be no MADSci containers; but the user may
-  # still have some laying around from a prior Docker install — probe anyway so
-  # the check surfaces them.
-  section "MADSci containers stopped/removed"
+  section "MADSci containers stopped/removed (compose project: $COMPOSE_PROJECT)"
   if ! command -v docker >/dev/null 2>&1; then
-    if [[ "$METHOD" == "docker" ]]; then
-      fail "docker CLI on PATH" "required to verify --method docker teardown"
-    else
-      skip "docker container check" "docker CLI not on PATH (fine for --method local)"
-    fi
+    fail "docker CLI on PATH" "required to verify Docker teardown"
     return
   fi
   if ! docker info >/dev/null 2>&1; then
@@ -120,29 +118,58 @@ check_no_containers() {
     return
   fi
 
-  local running
-  running="$(docker ps --format '{{.Names}}' 2>/dev/null)"
-  local found=0
-  for name in "${MADSCI_CONTAINERS[@]}"; do
-    if grep -qx "$name" <<<"$running"; then
-      fail "container '$name' still running"
-      found=1
-    fi
-  done
-  [[ $found -eq 0 ]] && pass "no MADSci containers running"
+  # Prefer the Compose project label — it accurately targets the stack the user
+  # started, regardless of container naming. Fall back to the hard-coded names
+  # (and SKIP vacuously-passing checks) only if the label query returns nothing
+  # AND no legacy container names match either.
+  local label_running label_all
+  label_running="$(docker ps        --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" --format '{{.Names}}' 2>/dev/null)"
+  label_all="$(docker ps -a         --filter "label=com.docker.compose.project=${COMPOSE_PROJECT}" --format '{{.Names}}' 2>/dev/null)"
 
-  # For remove/wipe, containers should also be fully removed (not just stopped).
+  if [[ -n "$label_running" ]]; then
+    while read -r name; do
+      [[ -z "$name" ]] && continue
+      fail "container '$name' still running (project=$COMPOSE_PROJECT)"
+    done <<<"$label_running"
+  elif [[ "$SCOPE" == "stop" ]]; then
+    pass "no containers running under project '$COMPOSE_PROJECT'"
+  fi
+
   if [[ "$SCOPE" != "stop" ]]; then
-    local all_containers
-    all_containers="$(docker ps -a --format '{{.Names}}' 2>/dev/null)"
-    local leftover=0
+    local leftover
+    leftover="$(comm -23 <(printf '%s\n' "$label_all" | sort -u) <(printf '%s\n' "$label_running" | sort -u))"
+    if [[ -n "$leftover" && "$leftover" != $'\n' ]]; then
+      while read -r name; do
+        [[ -z "$name" ]] && continue
+        fail "container '$name' still exists (stopped under project=$COMPOSE_PROJECT)" "run 'docker compose down'"
+      done <<<"$leftover"
+    elif [[ -z "$label_all" ]]; then
+      :  # fall through to the legacy name check below
+    else
+      pass "all containers removed under project '$COMPOSE_PROJECT'"
+    fi
+  fi
+
+  # Legacy name fallback — informational if we found NO label matches at all.
+  if [[ -z "$label_all" ]]; then
+    local running all
+    running="$(docker ps --format '{{.Names}}' 2>/dev/null)"
+    all="$(docker ps -a --format '{{.Names}}' 2>/dev/null)"
+    local any=0
     for name in "${MADSCI_CONTAINERS[@]}"; do
-      if grep -qx "$name" <<<"$all_containers"; then
-        fail "container '$name' still exists (stopped)" "run 'docker compose down'"
-        leftover=1
+      if grep -qx "$name" <<<"$all"; then
+        any=1
+        if grep -qx "$name" <<<"$running"; then
+          fail "container '$name' still running (matched by legacy name)"
+        elif [[ "$SCOPE" != "stop" ]]; then
+          fail "container '$name' still exists (stopped, matched by legacy name)" "run 'docker rm $name'"
+        fi
       fi
     done
-    [[ $leftover -eq 0 ]] && pass "no MADSci containers exist (removed)"
+    if (( any == 0 )); then
+      skip "container check (compose project '$COMPOSE_PROJECT' not found and no legacy MADSci container names present)" \
+        "nothing to verify — pass --compose-project if you used a different name"
+    fi
   fi
 }
 
@@ -169,9 +196,7 @@ check_ports_free() {
 }
 
 check_images_removed() {
-  # Only relevant for remove/wipe with method=docker.
   case "$SCOPE" in stop) return ;; esac
-  [[ "$METHOD" != "docker" ]] && return
   section "MADSci Docker images removed"
   if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
     skip "image removal check" "docker not available"
@@ -179,40 +204,31 @@ check_images_removed() {
   fi
   local imgs
   imgs="$(docker images --format '{{.Repository}}' 2>/dev/null)"
-  local found=0
+  local checked=0 found=0
   for img in "${MADSCI_IMAGES[@]}"; do
     if grep -qx "$img" <<<"$imgs"; then
       fail "image '$img' still present" "docker rmi it (or user chose to keep images)"
       found=1
+      checked=1
     fi
   done
-  [[ $found -eq 0 ]] && pass "MADSci app images removed (madsci, madsci_dashboard)"
+  if (( checked == 0 )); then
+    # Can't tell "removed" apart from "never pulled" — surface the ambiguity.
+    skip "MADSci image removal" "no MADSci images present (removed or never pulled on this host)"
+  elif (( found == 0 )); then
+    pass "MADSci app images removed (madsci, madsci_dashboard)"
+  fi
 }
 
 check_madsci_dir_gone() {
-  # Only meaningful for a full wipe.
   [[ "$SCOPE" != "wipe" ]] && return
   section ".madsci/ data directory removed"
   if [[ -e "$MADSCI_DIR" ]]; then
-    # Report what's left so the user can see root-owned leftovers.
     local leftover
     leftover="$(ls -A "$MADSCI_DIR" 2>/dev/null | tr '\n' ' ')"
     fail ".madsci/ still exists at $MADSCI_DIR" "remaining: ${leftover:-<empty>} (root-owned dirs need sudo rm)"
   else
     pass ".madsci/ removed ($MADSCI_DIR absent)"
-  fi
-}
-
-check_no_local_process() {
-  # For --method local: the `madsci start --mode local` process should be gone.
-  [[ "$METHOD" != "local" ]] && return
-  section "Native (--mode local) process stopped"
-  local pids
-  pids="$(pgrep -f 'madsci start --mode local' 2>/dev/null | tr '\n' ' ' | sed 's/ *$//')"
-  if [[ -z "$pids" ]]; then
-    pass "no 'madsci start --mode local' process running"
-  else
-    fail "PID(s) still running: $pids" "kill them with 'pkill -f \"madsci start --mode local\"' or 'kill <pid>'"
   fi
 }
 
@@ -233,39 +249,15 @@ check_no_stale_pids() {
   fi
 }
 
-check_packages_uninstalled() {
-  # Only relevant for method=local (host pip install). --method docker doesn't
-  # touch host pip packages (except optionally madsci-client for the CLI, which
-  # a user may want to keep independent of tearing down the Docker stack).
-  [[ "$METHOD" != "local" ]] && return
-  [[ "$SCOPE" == "stop" ]] && return
-  section "MADSci Python packages uninstalled"
-
-  if command -v madsci >/dev/null 2>&1; then
-    fail "madsci CLI still on PATH" "provided by madsci.client — pip uninstall it or deactivate the venv"
-  else
-    pass "madsci CLI not on PATH"
-  fi
-
-  for pkg in madsci.common madsci.client; do
-    if python3 -c "import ${pkg}" 2>/dev/null; then
-      fail "import ${pkg} still succeeds" "still installed in the active environment"
-    else
-      pass "import ${pkg} fails (uninstalled)"
-    fi
-  done
-}
-
 # ---------- run ----------
-printf "MADSci uninstall verification (method=%s, scope=%s)\n" "$METHOD" "$SCOPE"
+printf "MADSci uninstall verification (scope=%s, compose-project=%s)\n" \
+  "$SCOPE" "$COMPOSE_PROJECT"
 
 check_no_containers
-check_no_local_process
 check_ports_free
 check_images_removed
 check_madsci_dir_gone
 check_no_stale_pids
-check_packages_uninstalled
 
 # ---------- summary ----------
 section "Summary"
