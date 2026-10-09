@@ -343,9 +343,10 @@ check_madsci_cli() {
   fi
   printf "         %sCLI: %s%s\n" "$DIM" "$HOST_MADSCI" "$RESET"
 
-  # `madsci status` and `madsci doctor` exit 0 whether a stack is up or not — the
-  # real pass/fail lives on the /health checks above. Keep these as INFORMATIONAL
-  # prints so the user sees the output, and only fail on the direct health curls.
+  # `madsci status` always exits 0. `madsci doctor` exits 1 when one of its own
+  # checks fails, but that exit code is deliberately ignored below (`|| true`) —
+  # the /health checks above are this script's authoritative pass/fail signal,
+  # and doctor's output is kept only for the human-readable diagnostics it prints.
   printf "         %s(informational — real pass/fail is on /health above)%s\n" "$DIM" "$RESET"
 
   local status_out doctor_out

@@ -173,10 +173,7 @@ Pre-migration backup runs automatically ([CLAUDE.md](../../../CLAUDE.md) *Databa
 
 ### `Database schema version mismatch detected; server startup aborted`
 
-Resource Manager runs a `DatabaseVersionChecker` on init that compares the installed MADSci version against `madsci_schema_version` in the mounted database. This fires when a fresh install is pointed at existing DB data (see SKILL.md §2 existing-data flow). Fix flow is SKILL.md §6.4:
-1. Migrate the data (`python -m madsci.resource_manager.migration_tool --db_url <url>`).
-2. Discard mounted data and start fresh (DATA LOSS in resource DB).
-3. Abort for manual migration.
+Resource Manager runs a `DatabaseVersionChecker` on init that compares the installed MADSci version against `madsci_schema_version` in the mounted database. This fires when a fresh install is pointed at existing DB data (see SKILL.md §2 existing-data flow). **Don't improvise a fix here** — ask the exact "Version mismatch" question from SKILL.md §2 (migrate / load anyway, ignore / discard and start fresh) and apply the chosen branch; SKILL.md §6.4 is the pointer back to it from a startup failure. The migration command, if chosen, is `python -m madsci.resource_manager.migration_tool --db_url <url>` (snake_case — the kebab-case form is silently discarded by pydantic-settings).
 
 ---
 

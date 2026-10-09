@@ -5,7 +5,7 @@ description: Install, bootstrap, verify, or uninstall a MADSci lab (Docker Compo
 
 # MADSci Install & Bootstrap
 
-Getting MADSci running on a host via Docker Compose: a full persistent stack with 7 managers + dashboard + real databases (FerretDB, PostgreSQL, Valkey, SeaweedFS). If the user has existing MADSci data, attach it; if not, start fresh.
+Getting MADSci running on a host via Docker Compose: a full persistent stack with 7 managers + dashboard + real databases (FerretDB with its own PostgreSQL backend, a second standalone PostgreSQL for the Resource Manager, Valkey, and SeaweedFS). If the user has existing MADSci data, attach it; if not, start fresh.
 
 **The one architectural constraint everything else follows from:** `examples/example_lab/compose.yaml` has relative bind-mounts (`../../src`, `../../.madsci`) that resolve from the *compose file's own directory*, so they only work when it sits inside a MADSci repo clone. The install therefore clones the repo and runs the compose **in place**. Never copy, fetch, or edit that compose file into a separate directory, and never rewrite it to use absolute paths — doing so mounts an empty host directory over the installed MADSci source and nothing works.
 
@@ -28,7 +28,7 @@ Covers install (Steps 1–5), error recovery (Step 6), verification (Step 7), an
 
 ## Scope
 
-- Install Docker and `uv` if missing, with up-front consent (Step 1.1, 1.4).
+- Install `curl`, Docker, and `uv` if missing, with up-front consent (Step 1.0, 1.1, 1.4).
 - Ask for `$INSTALL_DIR` (default `~/MADSci`) — the single directory holding the repo clone, the `.venv/`, and the stack-created `.madsci/` data (Step 1.2).
 - Create a project-local venv at `$INSTALL_DIR/.venv/` with `uv` and install `madsci-client` into it — host CLI only; manager code runs in the containers (Step 5.B).
 - Start the stack from `$INSTALL_DIR`, scoped to either **core stack only** (7 managers + databases) or the **full example lab** (adds demo nodes), per Step 1.3.
@@ -39,9 +39,34 @@ Covers install (Steps 1–5), error recovery (Step 6), verification (Step 7), an
 
 Ask every "needs sudo / needs network / may surprise the user" question **now**, before any state changes. Once the user answers, the install runs autonomously.
 
+### 1.0 — Confirm `curl` is available (needed by the installers below)
+
+The Docker option in 1.1 and the `uv` option in 1.4 both work by piping `curl` into `sh`, so a missing `curl` has to be caught *before* either question is asked — otherwise a user who consents to "install Docker now" hits `curl: command not found` mid-install, after they already said yes. Run this first:
+
+```bash
+command -v curl >/dev/null 2>&1 && echo "curl: present" || echo "curl: MISSING"
+```
+
+If present, skip the question below. If missing:
+
+> **Question:** "`curl` isn't installed. The Docker and `uv` installers below both need it. How do you want to proceed?"
+> **Header:** `Install curl?`
+> **Options:**
+> 1. **Yes — install curl now (requires sudo)** — I'll run `sudo apt-get update && sudo apt-get install -y curl` (Debian/Ubuntu) or the equivalent for your distro. *(Recommended.)*
+> 2. **No — I'll install it myself and come back** — stop here with instructions; re-invoke once `curl --version` works.
+> 3. **Abort**.
+
+Record the consent and continue — do **not** re-prompt in Step 4.
+
 ### 1.1 — Confirm Docker install
 
-Check Docker reachability (`docker info` exits 0). If it's already up, skip the question. If it's missing or the daemon isn't running:
+Run this first — do not skip straight to the question below without executing it:
+
+```bash
+docker info >/dev/null 2>&1 && echo "docker: reachable" || echo "docker: NOT reachable"
+```
+
+If it's already up, skip the question. If it's missing or the daemon isn't running:
 
 > **Question:** "Docker isn't installed (or the daemon isn't running). To make this install unattended, I can install Docker now via the official convenience script. This needs `sudo` and will add your user to the `docker` group. Proceed?"
 > **Header:** `Install Docker?`
@@ -98,7 +123,13 @@ This is an **install-time** choice only — `docker compose up -d <service>` / `
 
 ### 1.4 — Confirm `uv` is available (venv tool)
 
-The install uses [`uv`](https://docs.astral.sh/uv/) to create the venv at `$INSTALL_DIR/.venv/` (see 5.B). Check `uv --version`. If it's already on PATH, skip the question. If not:
+The install uses [`uv`](https://docs.astral.sh/uv/) to create the venv at `$INSTALL_DIR/.venv/` (see 5.B). Run this first — do not skip straight to the question below without executing it:
+
+```bash
+uv --version >/dev/null 2>&1 && echo "uv: present" || echo "uv: MISSING"
+```
+
+If it's already on PATH, skip the question. If not:
 
 > **Question:** "`uv` isn't installed. The install needs it to create a dedicated venv for the `madsci` CLI inside the stack directory. How do you want to proceed?"
 > **Header:** `Install uv?`
@@ -160,7 +191,7 @@ The answer drives Step 7's `--with-ui`/`--no-ui` flag.
 
 Run these in parallel *before* the first install command. All five are **hard blocks**: `python3 --version` (3.10+, required by the `madsci` CLI), `docker info` (exit 0), `uv --version`, `curl --version`, and `git --version` (only when Step 1.2 chose to clone).
 
-Step 1 should already have put Docker (1.1) and `uv` (1.4) in place, so this is a confirmation pass, not a prompting one. If something is still missing, stop and tell the user — do **not** re-prompt mid-step.
+Step 1 should already have put `curl` (1.0), Docker (1.1), and `uv` (1.4) in place, so this is a confirmation pass, not a prompting one. If something is still missing, stop and tell the user — do **not** re-prompt mid-step.
 
 `curl` is a hard block because every HTTP assertion in `install-check.sh` runs through it — without it the verification step can't tell a healthy stack from a dead one. Checking it here, next to `docker info`, is what lets the script assume it exists. Note that `uninstall-check.sh` needs `ss` (iproute2) or `lsof` for the same reason, and will SKIP its port checks rather than guess if neither is present; worth installing one now if you expect to tear the lab down later.
 
@@ -287,15 +318,16 @@ Neither command can clobber data: `ln -s` and `cp -a` both fail if the target al
 
 **Branch on the Step 1.3 install profile:**
 
-- **Core stack only** — start just the 7 managers; `depends_on` cascades pull in the databases automatically, and the example-node containers stay down. `madsci start` doesn't take a service list, so call `docker compose up -d` directly (no venv needed for the raw `docker` CLI):
+- **Core stack only** — start just the 7 managers; `depends_on` cascades pull in the databases automatically (including `madsci_seaweedfs`, which the Data Manager needs for object storage), and the example-node containers stay down. Use the CLI's repeatable `--services` flag rather than a bare `docker compose up -d`, so the service list is explicit:
 
   ```bash
-  docker compose up -d \
-    lab_manager event_manager experiment_manager resource_manager \
-    data_manager location_manager workcell_manager
+  uv run madsci start \
+    --services lab_manager --services event_manager --services experiment_manager \
+    --services resource_manager --services data_manager --services location_manager \
+    --services workcell_manager                      # foreground; add -d to detach
   ```
 
-  All subsequent `madsci stop` / `uv run madsci start` without a service list operate on everything that's currently up, so this choice sticks across restarts unless the user explicitly brings up a demo node.
+  **This choice does not persist on its own.** A bare `uv run madsci start` / `docker compose up -d` with no `--services` list always starts *every* service the compose files define (see the Full example lab bullet below) — including the demo nodes. To restart later without the demo nodes, repeat the same `--services` list.
 
 - **Full example lab** — bring up everything the top-level compose defines (managers + databases + all demo nodes). Use the CLI from the project venv:
 
@@ -366,7 +398,7 @@ bash <SKILL_DIR>/install-check.sh --install-dir "$INSTALL_DIR" [--with-ui | --no
 
 If `--with-ui`/`--no-ui` is omitted, the script defaults to `--with-ui` (Docker compose typically mounts the dashboard image). Pass `--no-ui` if Step 3 said "slim API-only compose."
 
-The script checks Python 3.10+, MADSci imports (host venv informationally, a manager container authoritatively), `docker info`, every manager's `/health` on 8001–8006 and the dashboard's on 8000 — asserting the body reports `{"healthy": true}`, since HTTP 200 alone isn't enough — and the content-type at `/` (HTML for `--with-ui`, JSON 404 for `--no-ui`). `madsci status` / `madsci doctor` are dumped informationally only; both exit 0 regardless of state, so they never gate pass/fail.
+The script checks Python 3.10+, MADSci imports (host venv informationally, a manager container authoritatively), `docker info`, every manager's `/health` on 8001–8006 and the dashboard's on 8000 — asserting the body reports `{"healthy": true}`, since HTTP 200 alone isn't enough — and the content-type at `/` (HTML for `--with-ui`, JSON 404 for `--no-ui`). `madsci status` / `madsci doctor` are dumped informationally only and never gate pass/fail here — `madsci status` always exits 0, and while `madsci doctor` exits 1 on its own failed checks, this script deliberately ignores that exit code since the `/health` curls above are the authoritative signal.
 
 **Report the pass/fail matrix verbatim, one line per check.** Do not summarize. If any check fails, drop back to Step 6 with the failure signature; do not announce completion.
 

@@ -76,6 +76,7 @@ services:
     depends_on:
       - madsci_ferretdb
       - event_manager
+      - madsci_seaweedfs
 
   location_manager:
     <<: *madsci-service
