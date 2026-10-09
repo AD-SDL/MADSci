@@ -61,13 +61,14 @@ class DatabaseVersionChecker:
                 result = session.exec(statement).first()
                 return result.version if result else None
 
-        except Exception:
+        except Exception as e:
             self.logger.error(
-                "Error getting database version",
-                event_type=EventType.MANAGER_ERROR,
-                exc_info=True,
-            )
-            return None
+                            "Error getting database version",
+                            event_type=EventType.MANAGER_ERROR,
+                            error=str(e),
+                            exc_info=True,
+                )
+            raise e
 
     def _build_migration_base_args(self) -> list[str]:
         # Do NOT include --backup-dir; let tool use its default
@@ -113,8 +114,14 @@ class DatabaseVersionChecker:
                 result = session.exec(statement).first()
                 return result is not None
 
-        except Exception:
-            return False
+        except Exception as e:
+            self.logger.error(
+                "Error checking version tracking",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
+            raise e
 
     def versions_match(self, version1: str, version2: str) -> bool:
         """
