@@ -1,15 +1,17 @@
 # Agent Skills Reference
 
-MADSci includes four domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
+MADSci includes six domain-specific **skills** for AI coding agents (Claude Code, etc.). These skills auto-load contextual knowledge about MADSci's architecture, patterns, and conventions when working on relevant code, reducing errors and improving code quality.
 
 ## Available Skills
 
 | Skill | Trigger | What It Teaches |
 |-------|---------|-----------------|
+| `madsci-install` | Installing, bootstrapping, or tearing down a lab | Interactive Docker Compose install flow: repo clone + project-local venv, prereq checks, error-recovery prompts, end-to-end verification, uninstall |
 | `madsci-nodes` | Node module code | AbstractNode, RestNode, `@action` decorator, file parameters, lifecycle, testing |
 | `madsci-experiments` | Experiment code | 4 modalities (Script, Notebook, TUI, Node), lifecycle, `manage_experiment()` |
 | `madsci-managers` | Manager services | AbstractManagerBase, settings, DB handlers, clients, health checks |
 | `madsci-cli` | CLI commands | Click commands, lazy loading, templates, start/stop, output helpers, TUI |
+| `madsci-release-audit` | Preparing a PR or release | CHANGELOG, docs, guides, example lab, notebooks, templates, and skills staleness checks |
 
 ## How Skills Work
 
@@ -27,15 +29,35 @@ Skills are **model-invocable** — the agent automatically loads the relevant sk
 You can explicitly invoke a skill in Claude Code with a slash command:
 
 ```
+/madsci-install
 /madsci-nodes
 /madsci-experiments
 /madsci-managers
 /madsci-cli
+/madsci-release-audit
 ```
 
 This is useful when you want to preload context before asking a question.
 
 ## Skill Summaries
+
+### madsci-install
+
+Covers the interactive install and bootstrap workflow — cloning the repo, standing up the Compose stack, recovering from common errors, verifying the running stack, and tearing it back down.
+
+**Key topics:**
+- **Docker Compose only.** `examples/example_lab/compose.yaml` has relative bind-mounts (`../../src`, `../../.madsci`) that resolve from the compose file's own directory, so the install clones the MADSci repo and runs the compose **in place**. `madsci init` is deliberately not used — a scaffolded lab directory can't satisfy those mounts.
+- A project-local CLI venv at `$INSTALL_DIR/.venv/` (`uv venv` + `uv pip install madsci-client`), so nothing is written to system Python and `rm -rf` of that directory is the complete Python-side uninstall
+- Three entry points: fresh install, fresh install attached to existing `.madsci/` data (including the schema-version check), and bringing up a user's own pre-existing lab directory
+- Prereq matrix (Python 3.10+, `uv`, Docker daemon + Compose v2, `curl`, `git`) — `curl` is a hard block because the verification script does every HTTP assertion through it and carries no fallback
+- Interactive fallbacks via `AskUserQuestion` when Docker is missing, ports are bound, `.madsci/` resolves to the wrong directory, or compose stalls on healthchecks
+- End-to-end verification via [`install-check.sh`](../../.agents/skills/madsci-install/install-check.sh) — Python + import sanity (authoritatively inside a manager container), `docker info`, `/health` on ports 8001–8006 and the dashboard on 8000 asserting the body reports `{"healthy": true}`, and the content type at `/`
+- Teardown via [`uninstall.md`](../../.agents/skills/madsci-install/uninstall.md) and [`uninstall-check.sh`](../../.agents/skills/madsci-install/uninstall-check.sh) with `stop` / `remove` scopes, plus a verify-only `wipe` scope
+- Bundled [`troubleshooting.md`](../../.agents/skills/madsci-install/troubleshooting.md) keyed by error signature
+
+**The skill never deletes `.madsci/` data.** Stopping containers and removing images are undone by a re-install; dropping the bind-mounted Postgres/FerretDB directories is not, and it needs `sudo` against a path the agent inferred. The skill resolves and prints the path, offers a backup, and hands the `rm` to the operator.
+
+Seeding a lab with resources/nodes/locations, native (`--mode local`) operation, and contributor dev-environment setup (`just init`, `pdm install`) are explicitly out of scope.
 
 ### madsci-nodes
 
@@ -99,7 +121,7 @@ The skills included depend on the template category:
 | Module, Node, Interface, Comm | `madsci-nodes` |
 | Experiment | `madsci-experiments` |
 | Workflow, Workcell | `madsci-nodes`, `madsci-managers`, `madsci-cli` |
-| Lab | All 4 skills |
+| Lab | All 6 skills |
 
 The skill files are output to `.agents/skills/{skill-name}/SKILL.md` in the generated project directory. No additional configuration is needed.
 
