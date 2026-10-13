@@ -94,7 +94,7 @@ For users new to docker, we recommend checking out our [Docker Guide](https://gi
 
 ```bash
 pip install madsci-client
-madsci new lab --name=my_lab          # Interactive lab setup wizard
+madsci new lab          # Interactive lab setup wizard
 cd my_lab
 madsci start                # Start with Docker
 ```
