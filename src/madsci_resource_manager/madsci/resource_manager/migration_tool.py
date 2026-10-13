@@ -164,13 +164,13 @@ class DatabaseMigrator:
             )
             return package_root
 
-        except Exception:
+        except Exception as e:
             self.logger.warning(
                 "Could not determine package root",
                 event_type="resources.migration.package_root_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError("Could not determine package root") from e
 
     def _setup_alembic_config(self) -> Config:
         """Setup Alembic configuration with proper paths."""
@@ -275,7 +275,7 @@ class DatabaseMigrator:
                     event_type="resources.migration.lock_release_error",
                     exc_info=True,
                 )
-                raise e
+                raise Exception(f"Failed to release migration lock: {e}") from e
             finally:
                 self.lock_fd = None
 
@@ -293,7 +293,7 @@ class DatabaseMigrator:
                     event_type="resources.migration.lock_file_remove_error",
                     exc_info=True,
                 )
-                raise e 
+                raise Exception(f"Failed to remove lock file: {e}") from e
             finally:
                 self.lock_file = None
 
@@ -373,7 +373,7 @@ class DatabaseMigrator:
                 when=when,
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Failed to log Alembic state: {e}") from e
 
     def apply_schema_migrations(self) -> None:
         """Apply schema migrations using Alembic with automatic migration generation."""
@@ -438,7 +438,7 @@ class DatabaseMigrator:
                         event_type="resources.migration.upgrade_failed",
                         exc_info=True,
                     )
-                    raise e
+                    raise RuntimeError(f"Upgrade failed: {e}") from e
                 self.logger.info(
                     "Alembic migrations applied successfully",
                     event_type="resources.migration.apply_schema_migrations_done",
@@ -531,7 +531,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.post_process_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Failed to post-process migration file: {e}") from e
 
     def _has_pending_model_changes(self) -> bool:
         """Check if there are pending model changes by comparing current schema with models."""
@@ -573,7 +573,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.model_changes_check_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Failed to check for model changes: {e}") from e
 
     def _ensure_alembic_initialized(self) -> None:
         """Ensure Alembic is properly initialized."""
@@ -595,7 +595,7 @@ class DatabaseMigrator:
                 exc_info=True,
             )
             # This might be the first migration, which is OK
-            raise e
+            raise ValueError("Failed to initialize Alembic") from e
 
     def generate_migration(self, message: str) -> None:
         """Generate a new Alembic migration based on model changes."""
@@ -626,7 +626,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.generate_migration_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Migration generation failed: {e}") from e
 
     def run_migration(self, target_version: Optional[str] = None) -> None:
         """Run the complete migration process using Alembic."""
@@ -725,7 +725,9 @@ class DatabaseMigrator:
                         "Manual intervention required",
                         event_type="resources.migration.manual_intervention_required",
                     )
-                    raise e
+                    raise RuntimeError(
+                        "Migration failed and backup restore also failed. Manual intervention required."
+                    ) from e
 
                 raise migration_error
 
@@ -735,7 +737,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.process_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Migration process failed: {e}") from e
         finally:
             # Always release the migration lock
             self._release_migration_lock()
@@ -755,7 +757,9 @@ class DatabaseMigrator:
                 event_type="resources.migration.version_record_check_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(
+                f"Failed to check for existing version record: {e}"
+            ) from e
 
     def _mark_version_as_current(self, version: str) -> None:
         """Update the version record to mark it as the current version."""
@@ -799,7 +803,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.mark_version_current_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Failed to mark version as current: {e}") from e
 
     def _is_fresh_database(self) -> bool:
         """Check if this is a fresh database with no existing tables."""
@@ -833,7 +837,7 @@ class DatabaseMigrator:
                 event_type="resources.migration.db_tables_check_error",
                 exc_info=True,
             )
-            raise e
+            raise RuntimeError(f"Failed to check if database is fresh: {e}") from e
 
 
 def main() -> None:

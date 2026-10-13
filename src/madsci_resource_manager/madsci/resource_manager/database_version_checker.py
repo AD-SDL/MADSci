@@ -63,11 +63,11 @@ class DatabaseVersionChecker:
 
         except Exception as e:
             self.logger.error(
-                            "Error getting database version",
-                            event_type=EventType.MANAGER_ERROR,
-                            error=str(e),
-                            exc_info=True,
-                )
+                "Error getting database version",
+                event_type=EventType.MANAGER_ERROR,
+                error=str(e),
+                exc_info=True,
+            )
             raise e
 
     def _build_migration_base_args(self) -> list[str]:

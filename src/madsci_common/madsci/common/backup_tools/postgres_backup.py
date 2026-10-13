@@ -186,7 +186,7 @@ class PostgreSQLBackupTool(AbstractBackupTool):
                 compression=bool(self.settings.compression),
             )
             # Using subprocess with PostgreSQL tools - command is constructed safely
-            try: 
+            try:
                 result = subprocess.run(  # noqa: S603
                     cmd,
                     env=env,
