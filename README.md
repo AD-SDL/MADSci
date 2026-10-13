@@ -94,14 +94,14 @@ For users new to docker, we recommend checking out our [Docker Guide](https://gi
 
 ```bash
 pip install madsci-client
-madsci init my_lab          # Interactive lab setup wizard
+madsci new lab --name=my_lab          # Interactive lab setup wizard
 cd my_lab
 madsci start                # Start with Docker
-# or
-madsci start --mode=local   # Start without Docker (pure Python)
 ```
 
 Access the dashboard at `http://localhost:8000` to monitor your lab.
+
+you can add nodes to your workcell using  `madsci node add`.
 
 To try the complete example lab instead:
 
