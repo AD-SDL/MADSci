@@ -80,6 +80,10 @@ This PR adds a dedicated, simpler **landing page** (`index.md`) as the site home
 - **Fix**: Convert each header through a try/except (ValueError, TypeError) and log at debug level when a value is unparseable, preserving any previously-recorded valid state.
 #### Psycopg2 (PR #350, Issue #343)
 - **Remove Dependency**: Removes the psycopg2-binary dependency in madsci.common as not directly referenced in manager. 32-bit Python installs no longer blocked by dependency.
+#### filelock (PR #347, Issue #345)
+- Add `filelock>=3.12` to `madsci.common` runtime dependencies because `madsci.common.registry.local_registry` imports `FileLock` and `Timeout` at module import time.
+- Keep `pdm.lock` in sync for the editable `madsci-common` package entry.
+
 
 
 ## [0.8.0] - 2026-05-13
