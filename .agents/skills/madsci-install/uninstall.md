@@ -1,25 +1,26 @@
 # MADSci Uninstall / Tear Down
 
-Companion to [SKILL.md](SKILL.md). Load this when the user's intent is to **remove** a MADSci lab — stop the stack, `docker compose down`, remove pulled images, and hand off the `.madsci/` data deletion.
+Companion to [SKILL.md](SKILL.md). Load this when the user's intent is to **remove** a MADSci lab — stop the stack, `docker compose down`, remove pulled images, and hand off every file deletion (`.madsci/` data, the host venv, the repo clone) as a printed `rm` command for the operator to run.
 
 Uninstalling touches **irreversible, data-destroying** territory that installing never does. Treat it with more caution, not less:
 
-- **Never delete `.madsci/` yourself.** Stopping containers and removing images is reversible — a re-install re-pulls and re-starts. Deleting the databases under `.madsci/` is not. You resolve the path, print the exact command, and hand it to the operator to run (§U3). This is a hard rule, not a default you can talk yourself out of, and it holds no matter how explicitly the user asks.
-- Every other destructive action is a separate AskUserQuestion with an explicit warning, and you never remove anything the user didn't name.
+- **Never delete files on disk yourself** — not `.madsci/` data, not the repo clone at `$INSTALL_DIR`, not the venv at `$INSTALL_DIR/.venv/`, not anything else. Stopping containers and removing Docker images is reversible and is yours to run; every `rm` is the operator's. You resolve the path, print the exact `rm` command, and hand it over. This is a hard rule, not a default you can talk yourself out of, and it holds no matter how explicitly the user asks — even "just run it for me" gets re-printed, not executed. The sections below are structured around this: §U1 and §U2.a (containers, images) you run; §U2.b (venv), §U3 (data), and the repo-clone removal in §U3 you hand off.
+- Every destructive action the agent *does* run (image removal) is a separate AskUserQuestion with an explicit warning, and you never remove anything the user didn't name.
 
-Contributor dev environment cleanup (`.venv/`, pre-commit hooks, PDM/uv state) is not covered here.
+Contributor dev environment cleanup (pre-commit hooks, PDM/uv state outside `$INSTALL_DIR`) is not covered here.
 
 ## Step U0 — Determine uninstall scope
 
-Uninstall is layered — each layer is additive. Both scopes you can carry out are **reversible**:
+Uninstall is layered — each layer is additive. Scopes 1 and 2 are **reversible and run by the agent**; scope 3 adds a **hand-off of `rm` commands** for the operator to execute.
 
 > **Question:** "How much of MADSci do you want to remove?"
 > **Header:** `Uninstall scope`
 > **Options:**
-> 1. **Stop only** — halt the running stack but keep containers, images, and all data. The fastest way back to running. *(Recommended default.)*
-> 2. **Stop + remove** — also remove MADSci Docker images, but **keep data** in `.madsci/`. A re-install re-pulls them.
+> 1. **Stop only** — halt the running stack but keep containers, images, and all files. The fastest way back to running. *(Recommended default.)*
+> 2. **Stop + remove images** — also remove MADSci Docker images, but keep all files on disk (`.madsci/`, the repo clone, the venv). A re-install re-pulls them.
+> 3. **Full teardown (file deletions are handed off)** — scope 2, plus I resolve and print the exact `rm` commands for `$INSTALL_DIR/.venv/` (§U2.b), `.madsci/` (§U3), and the repo clone itself (§U3) **for you to run**. I never execute them. Choose this when you want MADSci entirely gone from this host.
 
-**Deleting `.madsci/` data is deliberately not a scope here.** If the user wants a full wipe, run scope 2 first, then go to §U3 — you resolve and print the path and the exact `rm` command, and *they* run it. Say so up front when the user asks for a full teardown, so the hand-off isn't a surprise at the end.
+**The agent never deletes files on disk — not under any scope, not on request.** Scope 3 is the hand-off scope: you resolve paths, offer backups, print commands, and the operator runs them. If the user asks "just run it for me," decline and re-print the command; the point of the hand-off is that a second pair of eyes sees the resolved path. Say this up front when the user picks scope 3, so the hand-off isn't a surprise at the end.
 
 **Always recommend a backup before they delete anything** — see [docs/guides/operator/03-backup-recovery.md](../../../docs/guides/operator/03-backup-recovery.md) and the `madsci-backup` CLI. Offer it; don't force it.
 
@@ -37,15 +38,18 @@ For **detached** managers/nodes started with `-d`: `uv run madsci stop manager <
 
 **Trap:** `madsci stop --volumes` (or `docker compose down -v`) removes *named* volumes only. MADSci compose configurations typically use **bind mounts to `./.madsci/`**, so `-v` deletes *nothing* of the DB data. §U3 covers the real data deletion — which the operator runs, not you.
 
-For scope `stop`, U1 is enough. Continue to U2 only for scope `remove`.
+For scope `stop`, U1 is enough. Continue to U2 for scopes `remove` and full teardown.
 
-## Step U2 — Remove the reproducible artifacts (scope: remove)
+## Step U2 — Remove the reproducible artifacts (scopes: remove, full teardown)
 
-Two things get removed here, both rebuildable from scratch by re-running the install: the Docker images and the host CLI venv. Do **both** for scope `remove` — the venv is not an optional extra.
+Two things come down here, both rebuildable from scratch by re-running the install: the Docker images (U2.a — **agent runs this**) and the host CLI venv (U2.b — **handed off; agent prints the `rm` command**).
+
+- Scope `remove` → do U2.a only. The venv stays.
+- Scope full teardown → do U2.a, then hand off U2.b alongside §U3.
 
 Only start after the containers are gone (U1).
 
-### U2.a — Docker images
+### U2.a — Docker images (agent runs this)
 
 Frees several GB. Confirm with the user — a re-install re-pulls them.
 
@@ -58,29 +62,33 @@ docker rmi ghcr.io/ferretdb/ferretdb:2 valkey/valkey:8 \
 
 Do **not** run `docker system prune` / `docker volume prune` on the user's behalf — it can delete unrelated resources. Offer it as an option they run themselves.
 
-### U2.b — The host `madsci` CLI venv
+### U2.b — The host `madsci` CLI venv (handed off — operator runs the `rm`)
 
 **This is the entire Python uninstall.** There is no `pip uninstall` step anywhere in this skill, because the install never installs into a shared environment: Step 5.B creates a project-local venv at `$INSTALL_DIR/.venv/` and puts `madsci-client` and its dependencies there and nowhere else. (`$INSTALL_DIR` is the directory chosen at install Step 1.2 — the MADSci repo clone for Options 1/2, the user's own lab directory for Option 3.) All manager code runs inside the containers; the host CLI is a thin `docker compose` wrapper.
 
-Because the venv is strictly local to `$INSTALL_DIR`, deleting the directory *is* the uninstall — no reasoning about system Python, no risk of hitting an unrelated environment, nothing left behind to check for:
+Because the venv is strictly local to `$INSTALL_DIR`, deleting the directory *is* the uninstall — but **you still do not run the `rm`**. The venv path depends on `$INSTALL_DIR`, which depends on how the install was done; a wrong resolution puts `rm -rf` on a path the user never intended. Resolve, show, and hand off:
 
 ```bash
-# Confirm the target first:
-"$INSTALL_DIR/.venv/bin/python" -c "import sys; print(sys.prefix)"
-ls -la "$INSTALL_DIR/.venv/bin/madsci"
+# Read-only — the agent runs these to show the operator what they're about to delete:
+"$INSTALL_DIR/.venv/bin/python" -c "import sys; print(sys.prefix)"   # confirm it's the right venv
+ls -la "$INSTALL_DIR/.venv/bin/madsci"                                # confirm the CLI is there
+```
 
+Then print this block back to the user with `$INSTALL_DIR` expanded to the literal resolved path, and let **them** run it:
+
+```bash
 rm -rf "$INSTALL_DIR/.venv"
 ```
 
-Skip this only if the user says they want to keep the CLI — e.g. they're removing the containers but plan to re-start the stack later. Rebuilding it is `uv venv --python 3.10 && uv pip install madsci-client`.
+Skip this entirely if the user wants to keep the CLI — e.g. they're removing the containers but plan to re-start the stack later. Rebuilding it is `uv venv --python 3.10 && uv pip install madsci-client`.
 
-### What U2 deliberately leaves alone
+### What U2 deliberately leaves alone (handed off separately in §U3)
 
-**The repo clone at `$INSTALL_DIR`.** It's a git checkout the user may have edited, and `$INSTALL_DIR/.env` is where per-manager overrides and secrets live — the install told them to edit it directly. More importantly, `$INSTALL_DIR` *contains* `.madsci/`, so removing the directory wholesale would delete the databases through the back door, which §U3 exists to prevent.
+**The repo clone at `$INSTALL_DIR` itself.** It's a git checkout the user may have edited, and `$INSTALL_DIR/.env` is where per-manager overrides and secrets live — the install told them to edit it directly. More importantly, `$INSTALL_DIR` *contains* `.madsci/`, so removing the directory wholesale would delete the databases through the back door — the same irreversible step §U3 exists to protect.
 
-If the user wants the clone gone too, that's the same hand-off as §U3: tell them the path, note that `.madsci/` and `.env` are inside it, and let them run the removal.
+If the user picked scope 3 (full teardown), the clone removal is covered by the same hand-off: §U3 resolves `$INSTALL_DIR`, lists what's inside, and prints the `rm` command for the operator. The agent never removes the clone itself.
 
-## Step U3 — Hand off the `.madsci/` data deletion (operator-run — IRREVERSIBLE)
+## Step U3 — Hand off the `.madsci/` data (and, for full teardown, the repo clone) deletion (operator-run — IRREVERSIBLE)
 
 **You do not run the deletion in this step.** You resolve the path, show the operator what's in it, offer a backup, and print the exact command for them to run. Three reasons this is a hard rule rather than a cautious default:
 
@@ -136,7 +144,35 @@ sudo rm -rf "$MADSCI_DIR"
 
 Expand `$MADSCI_DIR` to the literal resolved path when you print it — the operator should be reading the actual directory they're about to delete, not a variable they have to trust you set correctly.
 
-**Do not run these, and do not offer to.** If the user asks you to run it anyway, decline and re-print the command: the point of the hand-off is that a second pair of eyes sees the resolved path, and running it for them removes exactly the check that makes this safe. Once they confirm they've run it, continue to U4 to verify.
+**Do not run these, and do not offer to.** If the user asks you to run it anyway, decline and re-print the command: the point of the hand-off is that a second pair of eyes sees the resolved path, and running it for them removes exactly the check that makes this safe.
+
+### U3.b — The repo clone itself (full teardown only — also handed off)
+
+Only for scope 3 (full teardown). The clone at `$INSTALL_DIR` isn't data, but removing it is still a wrong-path risk: `$INSTALL_DIR` was chosen by the user at install Step 1.2, often to a non-default location (`/opt/...`, `~/labs/alpha`), and under Install Option 3 the directory may be a lab the user set up themselves and still intends to keep. Resolve, list, and hand off:
+
+```bash
+# Read-only — the agent runs these to confirm the target before handing over the rm:
+[[ -d "$INSTALL_DIR" ]] || { echo "No clone at $INSTALL_DIR — nothing there. Did you mean another path?" >&2; exit 1; }
+ls -la "$INSTALL_DIR"                           # show what's inside (user may have edits, extra files)
+du -sh "$INSTALL_DIR" 2>/dev/null               # size at stake
+```
+
+**Before printing the removal command, confirm two things with the user:**
+
+1. The U3 `.madsci/` deletion has already happened (or they've chosen to abandon the data). `$INSTALL_DIR` *contains* `.madsci/`, so removing the clone deletes the data too — a `rm -rf "$INSTALL_DIR"` on an un-wiped install is a silent `.madsci/` delete.
+2. They don't want `$INSTALL_DIR/.env` or any of their edits to the clone preserved — this is a git checkout they may have changed.
+
+Then print this block with `$INSTALL_DIR` expanded to the literal path, and let **them** run it:
+
+```bash
+# Full teardown — removes the repo clone, the venv inside it, and any user edits.
+# .madsci/ should already be gone (U3 hand-off above) or you accept losing it here.
+sudo rm -rf "$INSTALL_DIR"
+```
+
+`sudo` is listed because `.madsci/` subdirectories inside the clone are root-owned if the stack ever ran; if the user already removed `.madsci/`, a plain `rm -rf` suffices.
+
+**Same rule as U3 proper:** do not run this, and do not offer to. Once they confirm they've run the deletions, continue to U4 to verify.
 
 ## Step U4 — Verify the teardown
 
@@ -153,7 +189,7 @@ bash <SKILL_DIR>/uninstall-check.sh --scope <stop|remove> \
 
 Scoped to what was asked, the script verifies that no containers run or remain under the compose project (default `madsci_example_lab`; pass `--compose-project` for any other name), that ports 8000–8006 are free, that the MADSci images are gone (scope `remove` — reported as SKIP, not a vacuous PASS, when none were ever present), and that no stale `*.pid` files remain under `<madsci-dir>/pids/`.
 
-**`--scope wipe` is verification-only.** It additionally asserts that `.madsci/` is gone at `--madsci-dir`. Use it *after* the operator tells you they ran the §U3 deletion themselves — it confirms their `rm` landed on the directory you resolved. It is not a scope you tear down to; nothing in this document deletes `.madsci/` on the user's behalf.
+**`--scope wipe` is verification-only.** It additionally asserts that `.madsci/` is gone at `--madsci-dir`. Use it *after* the operator tells you they ran the §U3 deletion themselves — it confirms their `rm` landed on the directory you resolved. It is not a scope you tear down to; nothing in this document deletes `.madsci/` on the user's behalf. For full teardown (scope 3), also confirm the venv (`$INSTALL_DIR/.venv/`) and, if they chose to remove it, the repo clone (`$INSTALL_DIR`) are gone — these are hand-offs too, verified by a plain `[[ ! -e "$INSTALL_DIR/.venv" ]]` / `[[ ! -e "$INSTALL_DIR" ]]` check you run after the operator confirms.
 
 **Report its pass/fail matrix verbatim**, same as install. If a check unexpectedly fails, consult [troubleshooting.md](troubleshooting.md) §Uninstall before improvising.
 
@@ -161,4 +197,4 @@ Announce completion only when the requested scope is fully torn down:
 
 > ✅ MADSci uninstall verified for scope *<scope>*. No containers running under project *<name>*, ports 8000–8006 free, images removed.
 
-If the user also deleted `.madsci/` and you verified it with `--scope wipe`, say so as a separate line — it was their action, not yours.
+If the user also deleted `.madsci/`, the venv, or the repo clone (full teardown), say so as a separate line — those were their actions, not yours. Example: *"Operator-run (verified): `.madsci/` removed at `<path>`, venv removed at `<path>/.venv`, repo clone removed at `<path>`."*

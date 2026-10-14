@@ -22,7 +22,7 @@ Covers install (Steps 1–5), error recovery (Step 6), verification (Step 7), an
 ## Bundled reference files
 
 - [install-check.sh](install-check.sh) — install verification (`--install-dir <path>` to probe the stack venv; `--with-ui`/`--no-ui`).
-- [uninstall.md](uninstall.md) — teardown workflow (scope selection, Docker removal; `.madsci/` data deletion is handed to the operator, never run by the skill).
+- [uninstall.md](uninstall.md) — teardown workflow (scope selection, Docker container/image removal). **All file deletions — `.madsci/` data, the host venv, and the repo clone — are handed to the operator as printed `rm` commands and never run by the skill.**
 - [uninstall-check.sh](uninstall-check.sh) — teardown verification (`--scope stop|remove`, plus verify-only `wipe`).
 - [troubleshooting.md](troubleshooting.md) — failure modes keyed by error signature.
 
@@ -408,15 +408,15 @@ Announce completion only when every check passes:
 
 ## Step 8 — Uninstall / tear down
 
-If the user wants to **remove** MADSci, load [uninstall.md](uninstall.md) and follow it — scope selection (`stop` / `remove`), image removal, and verification via `uninstall-check.sh`.
+If the user wants to **remove** MADSci, load [uninstall.md](uninstall.md) and follow it — scope selection (`stop` / `remove` / full teardown), image removal, and verification via `uninstall-check.sh`.
 
-**Deleting `.madsci/` is not something this skill does.** Stopping the stack and removing images is reversible; dropping the databases under `.madsci/` is not, and the command is a root-owned `sudo rm -rf` against a path whose resolution depends on how the install was done. uninstall.md §U3 resolves and prints that path, offers a backup, and hands the command to the operator to run. Follow that hand-off even if the user asks you to run it directly.
+**Stopping containers and removing Docker images is yours to run. Every `rm` is the operator's.** That rule covers `.madsci/` data (§U3), the host venv at `$INSTALL_DIR/.venv/` (§U2.b), and the repo clone itself (§U3.b) when the user picks full teardown. For each, you resolve the path, offer a backup where it applies, print the exact command, and hand it over. Follow that hand-off even if the user asks you to run it directly — "just do it for me" gets re-printed, not executed.
 
 ## What this skill does NOT do
 
-**It never deletes `.madsci/` data.** Not on install (Step 5.D refuses a non-empty target instead of clearing it), not on uninstall (§U3 hands the `sudo rm -rf` to the operator), and not on request. Every other action this skill takes is reversible by re-running something; this one isn't.
+**It never deletes files on disk.** Not `.madsci/` data (Step 5.D refuses a non-empty target instead of clearing it; §U3 hands the `sudo rm -rf` to the operator), not the venv at `$INSTALL_DIR/.venv/` (§U2.b hands over the `rm`), not the repo clone at `$INSTALL_DIR` (§U3.b hands over the `rm`), and not on request. Every other action this skill takes is reversible by re-running something; file deletions aren't, and the agent's CWD / path resolution is the single most common thing to be wrong about.
 
-Beyond that and the Rules of engagement above: it never installs Docker without the Step 1.1 consent, never modifies version-controlled files without showing a diff first, never removes Python packages from an unconfirmed environment (the venv at `$INSTALL_DIR/.venv/` is the only one it touches), and never silences errors with `|| true`, `2>/dev/null`, retry loops, or linter/CI config edits.
+Beyond that and the Rules of engagement above: it never installs Docker without the Step 1.1 consent, never modifies version-controlled files without showing a diff first, never removes Python packages from an unconfirmed environment (the venv at `$INSTALL_DIR/.venv/` is the only one the install writes to, and even that venv is handed to the operator to remove), and never silences errors with `|| true`, `2>/dev/null`, retry loops, or linter/CI config edits.
 
 It also does not extend into implementation — hand off to [madsci-nodes](../madsci-nodes/SKILL.md), [madsci-managers](../madsci-managers/SKILL.md), or [madsci-experiments](../madsci-experiments/SKILL.md) once the stack is up.
 
