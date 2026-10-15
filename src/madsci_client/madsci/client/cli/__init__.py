@@ -30,7 +30,6 @@ _LAZY_COMMANDS: dict[str, tuple[str, str]] = {
     "add": ("madsci.client.cli.commands.add", "add"),
     "start": ("madsci.client.cli.commands.start", "start"),
     "stop": ("madsci.client.cli.commands.stop", "stop"),
-    "init": ("madsci.client.cli.commands.init", "init"),
     "validate": ("madsci.client.cli.commands.validate", "validate"),
     "run": ("madsci.client.cli.commands.run", "run"),
     "completion": ("madsci.client.cli.commands.completion", "completion"),
@@ -229,7 +228,7 @@ def madsci(
 
     \b
     Quick start:
-        madsci init           Initialize a new lab
+        madsci new lab        Initialize a new lab
         madsci start          Start all services
         madsci status         Check service status
         madsci tui            Launch interactive interface

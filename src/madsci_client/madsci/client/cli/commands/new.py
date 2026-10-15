@@ -759,7 +759,7 @@ def workflow(
     "--template",
     "-t",
     type=click.Choice(["minimal", "standard", "distributed"]),
-    default="minimal",
+    default="standard",
     help="Lab template.",
 )
 @click.option(
