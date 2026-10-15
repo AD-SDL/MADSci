@@ -7,9 +7,6 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview"
   },
-  "engines": {
-    "node": ">=26.0.0"
-  },
   "dependencies": {
     "@mdi/font": "7.0.96",
     "@wdns/vuetify-drilldown-table": "^1.1.5",
