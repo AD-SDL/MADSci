@@ -272,11 +272,11 @@ FROM ghcr.io/ad-sdl/madsci_dashboard:latest
 #### Node Version Conflicts
 ```bash
 # Check your Node.js version
-node --version  # Should be 16.0+
+node --version  # Should be >=20.19.0
 
 # Use nvm to switch versions if needed
-nvm install 16
-nvm use 16
+nvm install 26 #26 is an example, anything >= 20.19.0 will work
+nvm use 26
 ```
 
 #### Yarn vs NPM Issues
