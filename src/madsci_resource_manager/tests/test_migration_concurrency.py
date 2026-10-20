@@ -367,17 +367,22 @@ class TestErrorRecoveryScenarios:
         self.test_db_url = "postgresql://test:test@localhost:5432/test_migration"
 
     def test_connection_error_properly_thrown(self):
-            """Test that an error thrown due to a connection error properly shows as a connection"""
-            settings = DatabaseMigrationSettings(db_url="postgresql://test:test@localhost:5432/test_migration")
-    
-            with (
-                mock.patch("sqlmodel.create_engine"),
+        """Test that an error thrown due to a connection error properly shows as a connection"""
+        settings = DatabaseMigrationSettings(
+            db_url="postgresql://test:test@localhost:5432/test_migration"
+        )
+
+        with (
+            mock.patch("sqlmodel.create_engine"),
+        ):
+            migrator = DatabaseMigrator(settings)
+            with pytest.raises(
+                Exception,
+                match=re.escape(
+                    'Migration process failed: (psycopg2.OperationalError) connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "test"\n\n(Background on this error at: https://sqlalche.me/e/20/e3q8)'
+                ),
             ):
-                    
-                    migrator = DatabaseMigrator(settings)                    
-                    with pytest.raises(Exception, match=re.escape('Migration process failed: (psycopg2.OperationalError) connection to server at "localhost" (127.0.0.1), port 5432 failed: FATAL:  password authentication failed for user "test"\n\n(Background on this error at: https://sqlalche.me/e/20/e3q8)')):
-                        migrator.run_migration("1.0.0")
-    
+                migrator.run_migration("1.0.0")
 
     def test_migration_failure_recovery(self):
         """Test complete migration failure and recovery process."""

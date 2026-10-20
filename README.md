@@ -105,11 +105,11 @@ madsci start                # Start with Docker
 
 Access the dashboard at `http://localhost:8000` to monitor your lab.
 
-you can add nodes to your workcell using  `madsci node add`. 
+you can add nodes to your workcell using  `madsci node add`.
 
-If using Rancher Desktop, you will need to use "host.docker.internal" as the hostname for any nodes not running in a docker container e.g. `http://host.docker.internal:2000'. 
+If using Rancher Desktop, you will need to use "host.docker.internal" as the hostname for any nodes not running in a docker container e.g. `http://host.docker.internal:2000'.
 
-If setting up your lab in WSL2 (Windows Subsytem for Linux 2), You will need to create a `.wslconfig` file in your `C:\Users\<Your Username>` directory and add the lines 
+If setting up your lab in WSL2 (Windows Subsytem for Linux 2), You will need to create a `.wslconfig` file in your `C:\Users\<Your Username>` directory and add the lines
 
 ```
 [wsl2]

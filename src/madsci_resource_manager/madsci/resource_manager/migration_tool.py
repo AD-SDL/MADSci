@@ -269,7 +269,7 @@ class DatabaseMigrator:
                     "Released migration lock",
                     event_type="resources.migration.lock_released",
                 )
-            except Exception as e:
+            except Exception:
                 self.logger.warning(
                     "Error releasing lock",
                     event_type="resources.migration.lock_release_error",
@@ -286,7 +286,7 @@ class DatabaseMigrator:
                     event_type="resources.migration.lock_file_removed",
                     lock_file=str(self.lock_file),
                 )
-            except Exception as e:
+            except Exception:
                 self.logger.warning(
                     "Error removing lock file",
                     event_type="resources.migration.lock_file_remove_error",
