@@ -34,16 +34,24 @@ class DatabaseVersionChecker:
         """Get the current MADSci version from the package."""
         try:
             return importlib.metadata.version("madsci")
-        except importlib.metadata.PackageNotFoundError as e:
-            self.logger.error(
-                "MADSci package not found in the current environment",
-                event_type=EventType.MANAGER_ERROR,
-                exc_info=True,
-            )
-            raise RuntimeError(
-                "Cannot determine MADSci version: package not found. "
-                "Please ensure MADSci is properly installed in the current environment."
-            ) from e
+        except importlib.metadata.PackageNotFoundError:
+            # No umbrella `madsci` distribution exists; MADSci ships as
+            # separate packages (`madsci-common`, `madsci-client`, ...).
+            # Fall back to the foundational `madsci-common` version, which
+            # every valid install has.
+            try:
+                return importlib.metadata.version("madsci-common")
+            except importlib.metadata.PackageNotFoundError as e:
+                self.logger.error(
+                    "MADSci package not found in the current environment",
+                    event_type=EventType.MANAGER_ERROR,
+                    exc_info=True,
+                )
+                raise RuntimeError(
+                    "Cannot determine MADSci version: neither `madsci` nor "
+                    "`madsci-common` package metadata was found. Please ensure "
+                    "MADSci is properly installed in the current environment."
+                ) from e
 
     def get_database_version(self) -> Optional[str]:
         """Get the current database schema version."""
