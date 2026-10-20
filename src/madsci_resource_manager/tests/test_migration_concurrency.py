@@ -1,7 +1,6 @@
 """Test cases for migration concurrency control and race condition prevention."""
 
 import contextlib
-import re
 import shutil
 import tempfile
 import threading
@@ -378,9 +377,7 @@ class TestErrorRecoveryScenarios:
             migrator = DatabaseMigrator(settings)
             with pytest.raises(
                 Exception,
-                match=
-                    'Migration process failed: *'
-                ,
+                match=r"Migration process failed: *",
             ):
                 migrator.run_migration("1.0.0")
 
