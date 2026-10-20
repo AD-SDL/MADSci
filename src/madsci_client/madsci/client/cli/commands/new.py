@@ -781,8 +781,8 @@ def lab(
 
     \b
     Templates:
-        minimal     - Single node, no Docker required (default)
-        standard    - All managers with Docker Compose
+        minimal     - Single node, no Docker required
+        standard    - All managers with Docker Compose (default)
         distributed - Multi-host deployment configuration
 
     \b

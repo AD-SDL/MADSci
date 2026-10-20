@@ -17,8 +17,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-madsci}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-madsci}
       POSTGRES_DB: ${POSTGRES_DB:-postgres}
-    ports:
-      - "5432:5432"
     network_mode: host
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -30,8 +28,6 @@ services:
 
   ferretdb:
     image: ghcr.io/ferretdb/ferretdb:2
-    ports:
-      - "27017:27017"
     network_mode: host
     environment:
       - FERRETDB_POSTGRESQL_URL=postgres://madsci:madsci@localhost:5432/postgres
@@ -41,23 +37,25 @@ services:
 
   valkey:
     image: valkey/valkey:8
-    ports:
-      - "6379:6379"
     network_mode: host
     healthcheck:
       test: ["CMD", "valkey-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+    volumes:
+      - valkey_data:/data
 
   # --- MADSci Managers ---
 
   lab_manager:
     image: ghcr.io/ad-sdl/madsci_dashboard:latest
-    ports:
-      - "8000:8000"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.squid.lab_server
     depends_on:
       ferretdb:
@@ -65,10 +63,12 @@ services:
 
   event_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8001:8001"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.event_manager.event_server
     depends_on:
       ferretdb:
@@ -76,10 +76,12 @@ services:
 
   experiment_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8002:8002"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.experiment_manager.experiment_server
     depends_on:
       ferretdb:
@@ -87,10 +89,12 @@ services:
 
   resource_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8003:8003"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.resource_manager.resource_server
     depends_on:
       postgres:
@@ -98,10 +102,12 @@ services:
 
   data_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8004:8004"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.data_manager.data_server
     depends_on:
       ferretdb:
@@ -109,10 +115,12 @@ services:
 
   workcell_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8005:8005"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.workcell_manager.workcell_server
     depends_on:
       ferretdb:
@@ -122,10 +130,12 @@ services:
 
   location_manager:
     image: ghcr.io/ad-sdl/madsci:latest
-    ports:
-      - "8006:8006"
     network_mode: host
     env_file: .env
+    volumes:
+     - type: bind
+       source: ./settings.yaml
+       target: /home/madsci/settings.yaml
     command: python -m madsci.location_manager.location_server
     depends_on:
       ferretdb:
@@ -133,3 +143,4 @@ services:
 
 volumes:
   postgres_data:
+  valkey_data:

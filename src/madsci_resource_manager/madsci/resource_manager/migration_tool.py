@@ -275,7 +275,6 @@ class DatabaseMigrator:
                     event_type="resources.migration.lock_release_error",
                     exc_info=True,
                 )
-                raise Exception(f"Failed to release migration lock: {e}") from e
             finally:
                 self.lock_fd = None
 
@@ -293,7 +292,6 @@ class DatabaseMigrator:
                     event_type="resources.migration.lock_file_remove_error",
                     exc_info=True,
                 )
-                raise Exception(f"Failed to remove lock file: {e}") from e
             finally:
                 self.lock_file = None
 

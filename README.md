@@ -92,6 +92,10 @@ For users new to docker, we recommend checking out our [Docker Guide](https://gi
 
 ### Quick Start
 
+Both these methods require installing docker following the instructions in the [Docker Guide](https://github.com/AD-SDL/MADSci/wiki/Docker-Guide), including the appropriate settings adjustments.
+
+#### Method 1, creating a new lab folder
+
 ```bash
 pip install madsci-client
 madsci new lab          # Interactive lab setup wizard
@@ -101,9 +105,17 @@ madsci start                # Start with Docker
 
 Access the dashboard at `http://localhost:8000` to monitor your lab.
 
-you can add nodes to your workcell using  `madsci node add`.
+you can add nodes to your workcell using  `madsci node add`. 
 
-To try the complete example lab instead:
+If using Rancher Desktop, you will need to use "host.docker.internal" as the hostname for any nodes not running in a docker container e.g. `http://host.docker.internal:2000'. 
+
+If setting up your lab in WSL2 (Windows Subsytem for Linux 2), You will need to create a `.wslconfig` file in your `C:\Users\<Your Username>` directory and add the lines 
+
+```
+[wsl2]
+networkingMode=mirrored
+```
+#### Method 2, running the example lab
 
 ```bash
 git clone https://github.com/AD-SDL/MADSci.git
