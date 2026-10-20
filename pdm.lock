@@ -2389,6 +2389,10 @@ dependencies = [
     "madsci-client==0.8.1",
     "sila2>=0.10.0",
 ]
+files = [
+    {file = "madsci_client-0.8.1-py3-none-any.whl", hash = "sha256:76094bc68a60ea7a0f4b765a091503ba9a2d30beb8c33f4a1bc0d6c566faf992"},
+    {file = "madsci_client-0.8.1.tar.gz", hash = "sha256:83bb5bcc9db58e4594aac4198d1a6534eaa9948833fb732ec17db3e37a4cd85c"},
+]
 
 [[package]]
 name = "madsci-common"

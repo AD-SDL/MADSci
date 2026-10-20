@@ -759,7 +759,7 @@ def workflow(
     "--template",
     "-t",
     type=click.Choice(["minimal", "standard", "distributed"]),
-    default="minimal",
+    default="standard",
     help="Lab template.",
 )
 @click.option(
@@ -781,8 +781,8 @@ def lab(
 
     \b
     Templates:
-        minimal     - Single node, no Docker required (default)
-        standard    - All managers with Docker Compose
+        minimal     - Single node, no Docker required
+        standard    - All managers with Docker Compose (default)
         distributed - Multi-host deployment configuration
 
     \b

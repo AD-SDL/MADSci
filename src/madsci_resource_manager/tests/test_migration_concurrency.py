@@ -172,6 +172,11 @@ class TestAtomicMigrationOperations:
                 mock.patch.object(
                     migrator.version_checker, "record_version"
                 ) as mock_version,
+                mock.patch.object(
+                    migrator.version_checker,
+                    "get_database_version",
+                    return_value="0.9.0",
+                ),
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
                 mock.patch.object(
                     migrator.backup_tool,
@@ -209,6 +214,11 @@ class TestAtomicMigrationOperations:
                 mock.patch.object(
                     migrator.backup_tool, "restore_from_backup"
                 ) as mock_restore,
+                mock.patch.object(
+                    migrator.version_checker,
+                    "get_database_version",
+                    return_value="0.9.0",
+                ),
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
             ):
                 backup_path = Path(tempfile.mkdtemp()) / "test_backup"
@@ -355,6 +365,22 @@ class TestErrorRecoveryScenarios:
         """Set up test environment for each test."""
         self.test_db_url = "postgresql://test:test@localhost:5432/test_migration"
 
+    def test_connection_error_properly_thrown(self):
+        """Test that an error thrown due to a connection error properly shows as a connection"""
+        settings = DatabaseMigrationSettings(
+            db_url="postgresql://test:test@localhost:5432/test_migration"
+        )
+
+        with (
+            mock.patch("sqlmodel.create_engine"),
+        ):
+            migrator = DatabaseMigrator(settings)
+            with pytest.raises(
+                Exception,
+                match=r"Migration process failed: *",
+            ):
+                migrator.run_migration("1.0.0")
+
     def test_migration_failure_recovery(self):
         """Test complete migration failure and recovery process."""
         settings = DatabaseMigrationSettings(db_url=self.test_db_url)
@@ -370,6 +396,11 @@ class TestErrorRecoveryScenarios:
             with (
                 mock.patch.object(migrator.backup_tool, "create_backup") as mock_backup,
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
+                mock.patch.object(
+                    migrator.version_checker,
+                    "get_database_version",
+                    return_value="0.9.0",
+                ),
                 mock.patch.object(
                     migrator.backup_tool, "restore_from_backup"
                 ) as mock_restore,
@@ -403,6 +434,11 @@ class TestErrorRecoveryScenarios:
                 mock.patch.object(migrator.backup_tool, "create_backup") as mock_backup,
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
                 mock.patch.object(
+                    migrator.version_checker,
+                    "get_database_version",
+                    return_value="0.9.0",
+                ),
+                mock.patch.object(
                     migrator.backup_tool, "restore_from_backup"
                 ) as mock_restore,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
@@ -412,7 +448,10 @@ class TestErrorRecoveryScenarios:
                 mock_migrate.side_effect = Exception("Schema migration failed")
                 mock_restore.side_effect = Exception("Restore failed")
 
-                with pytest.raises(Exception, match="Schema migration failed"):
+                with pytest.raises(
+                    Exception,
+                    match=r"Migration process failed: Migration failed and backup restore also failed. Manual intervention required.",
+                ):
                     migrator.run_migration("1.0.0")
 
                 # Should attempt both operations
@@ -435,6 +474,11 @@ class TestErrorRecoveryScenarios:
             with (
                 mock.patch.object(migrator, "apply_schema_migrations") as mock_migrate,
                 mock.patch.object(migrator, "_is_fresh_database", return_value=False),
+                mock.patch.object(
+                    migrator.version_checker,
+                    "get_database_version",
+                    return_value="0.9.0",
+                ),
                 mock.patch.object(
                     migrator.backup_tool,
                     "create_backup",
