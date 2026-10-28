@@ -15,7 +15,8 @@ license = {text = "MIT"}
 dependencies = [
   "madsci.common",
   "madsci.client",
-  "regex"
+  "regex",
+  "cryptography>=50.0.2"
 ]
 
 [project.urls]
