@@ -65,7 +65,7 @@
             <a id="nextFileLink" class="nav" href="z_911350d7147c0b5c_node_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-10-28 17:37 +0000
+            created at 2026-10-29 16:39 +0000
         </p>
         <aside class="hidden">
             <button type="button" class="button_next_chunk" data-shortcut="j"></button>
@@ -841,7 +841,7 @@
     <p class="run run2"><span class="n"><a id="t759" href="#t759">759</a></span><span class="t">    <span class="str">&quot;--template&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t760" href="#t760">760</a></span><span class="t">    <span class="str">&quot;-t&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t761" href="#t761">761</a></span><span class="t">    <span class="nam">type</span><span class="op">=</span><span class="nam">click</span><span class="op">.</span><span class="nam">Choice</span><span class="op">(</span><span class="op">[</span><span class="str">&quot;minimal&quot;</span><span class="op">,</span> <span class="str">&quot;standard&quot;</span><span class="op">,</span> <span class="str">&quot;distributed&quot;</span><span class="op">]</span><span class="op">)</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run run2"><span class="n"><a id="t762" href="#t762">762</a></span><span class="t">    <span class="nam">default</span><span class="op">=</span><span class="str">&quot;minimal&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run run2"><span class="n"><a id="t762" href="#t762">762</a></span><span class="t">    <span class="nam">default</span><span class="op">=</span><span class="str">&quot;standard&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t763" href="#t763">763</a></span><span class="t">    <span class="nam">help</span><span class="op">=</span><span class="str">&quot;Lab template.&quot;</span><span class="op">,</span>&nbsp;</span><span class="r"></span></p>
     <p class="run run2"><span class="n"><a id="t764" href="#t764">764</a></span><span class="t"><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t765" href="#t765">765</a></span><span class="t"><span class="op">@</span><span class="nam">click</span><span class="op">.</span><span class="nam">option</span><span class="op">(</span>&nbsp;</span><span class="r"></span></p>
@@ -863,8 +863,8 @@
     <p class="pln"><span class="n"><a id="t781" href="#t781">781</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t782" href="#t782">782</a></span><span class="t"><span class="str">    \b</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t783" href="#t783">783</a></span><span class="t"><span class="str">    Templates:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t784" href="#t784">784</a></span><span class="t"><span class="str">        minimal     - Single node, no Docker required (default)</span>&nbsp;</span><span class="r"></span></p>
-    <p class="pln"><span class="n"><a id="t785" href="#t785">785</a></span><span class="t"><span class="str">        standard    - All managers with Docker Compose</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t784" href="#t784">784</a></span><span class="t"><span class="str">        minimal     - Single node, no Docker required</span>&nbsp;</span><span class="r"></span></p>
+    <p class="pln"><span class="n"><a id="t785" href="#t785">785</a></span><span class="t"><span class="str">        standard    - All managers with Docker Compose (default)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t786" href="#t786">786</a></span><span class="t"><span class="str">        distributed - Multi-host deployment configuration</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t787" href="#t787">787</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t788" href="#t788">788</a></span><span class="t"><span class="str">    \b</span>&nbsp;</span><span class="r"></span></p>
@@ -893,9 +893,9 @@
     <p class="run"><span class="n"><a id="t811" href="#t811">811</a></span><span class="t">    <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;\n[bold]Next steps:[/bold]&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t812" href="#t812">812</a></span><span class="t">    <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="fst">f&quot;</span><span class="fst">  1. cd </span><span class="op">{</span><span class="nam">lab_name</span><span class="op">}</span><span class="fst">&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t813" href="#t813">813</a></span><span class="t">    <span class="key">if</span> <span class="nam">template</span> <span class="op">==</span> <span class="str">&quot;minimal&quot;</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="run"><span class="n"><a id="t814" href="#t814">814</a></span><span class="t">        <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;  2. python -m madsci.squid&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="mis show_mis"><span class="n"><a id="t814" href="#t814">814</a></span><span class="t">        <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;  2. python -m madsci.squid&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t815" href="#t815">815</a></span><span class="t">    <span class="key">else</span><span class="op">:</span>&nbsp;</span><span class="r"></span></p>
-    <p class="mis show_mis"><span class="n"><a id="t816" href="#t816">816</a></span><span class="t">        <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;  2. madsci start lab&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
+    <p class="run"><span class="n"><a id="t816" href="#t816">816</a></span><span class="t">        <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;  2. madsci start lab&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t817" href="#t817">817</a></span><span class="t">    <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;  3. Open http://localhost:8000 in your browser&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="run"><span class="n"><a id="t818" href="#t818">818</a></span><span class="t">    <span class="nam">console</span><span class="op">.</span><span class="nam">print</span><span class="op">(</span><span class="str">&quot;\n  Documentation: https://ad-sdl.github.io/MADSci/&quot;</span><span class="op">)</span>&nbsp;</span><span class="r"></span></p>
     <p class="pln"><span class="n"><a id="t819" href="#t819">819</a></span><span class="t">&nbsp;</span><span class="r"></span></p>
@@ -975,7 +975,7 @@
             <a class="nav" href="z_911350d7147c0b5c_node_py.html">&#xbb; next</a>
             &nbsp; &nbsp; &nbsp;
             <a class="nav" href="https://coverage.readthedocs.io/en/7.17.0">coverage.py v7.17.0</a>,
-            created at 2026-10-28 17:37 +0000
+            created at 2026-10-29 16:39 +0000
         </p>
     </div>
 </footer>
