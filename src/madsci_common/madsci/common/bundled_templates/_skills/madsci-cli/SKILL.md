@@ -34,7 +34,7 @@ madsci (AliasedGroup)
   └── Commands (lazy-loaded via _LAZY_COMMANDS):
       ├── version, doctor (doc), status (s), logs (l)
       ├── tui (ui), registry, migrate, new (n)
-      ├── start, stop, init, validate (val)
+      ├── start, stop, validate (val)
       ├── run, completion, backup, add
       ├── commands (cmd), config (cfg)
       └── [aliases resolve via AliasedGroup]
@@ -57,7 +57,6 @@ _LAZY_COMMANDS = {
     "new": ("madsci.client.cli.commands.new", "new"),
     "start": ("madsci.client.cli.commands.start", "start"),
     "stop": ("madsci.client.cli.commands.stop", "stop"),
-    "init": ("madsci.client.cli.commands.init", "init"),
     "validate": ("madsci.client.cli.commands.validate", "validate"),
     "run": ("madsci.client.cli.commands.run", "run"),
     "completion": ("madsci.client.cli.commands.completion", "completion"),
