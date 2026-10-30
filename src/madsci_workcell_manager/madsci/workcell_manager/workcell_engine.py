@@ -3,7 +3,6 @@ Engine Class and associated helpers and data
 """
 
 import concurrent
-import importlib
 import time
 from datetime import datetime
 from typing import Optional, Union
@@ -68,8 +67,7 @@ class Engine:
         self.workcell_info = state_handler.get_workcell_info()
         self.logger = EventClient(name=f"workcell.{self.workcell_info.name}")
         cancel_active_workflows(state_handler)
-        scheduler_module = importlib.import_module(self.workcell_settings.scheduler)
-        self.scheduler = scheduler_module.Scheduler(
+        self.scheduler = self.workcell_settings.scheduler(
             self.workcell_info, self.state_handler
         )
         self.data_client = data_client
