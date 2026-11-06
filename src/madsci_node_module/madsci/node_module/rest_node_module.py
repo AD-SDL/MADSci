@@ -256,6 +256,9 @@ class RestNode(AbstractNode):
             new_handler = generator(action)
             cleaned = re.sub(r'[^A-Za-z0-9]', '', action_name)
             keywords["MADSCI" + cleaned] = new_handler
+        def wrapped_state(self, *args, **kwargs):
+            return json.dumps(outer_self.node_state)
+        keywords["get_MADSCI" + "GetState"] = wrapped_state
         # # keywords["__init__"] = lambda self, server: super().__init__(self, server)
         # keywords["__init_subclass__"] = lambda self, server: super().__init__(self, server)
         SilaClass = types.new_class("SilaClass", (FeatureImplementationBase,), exec_body=lambda ns: ns.update(keywords))
@@ -1002,6 +1005,18 @@ class RestNode(AbstractNode):
             name.text = self.node_info.node_name
             description = ET.SubElement(root, "Description")
             description.text = self.node_info.node_description
+            property_elem = ET.SubElement(root, "Property")
+            property_id = ET.SubElement(property_elem, "Identifier")
+            property_id.text = "MADSCIGetState"
+            property_name = ET.SubElement(property_elem, "DisplayName")
+            property_name.text = "MADSCIGetState"
+            property_description = ET.SubElement(property_elem, "Description")
+            property_description.text = "The MADSci defined state of the node"
+            property_observable = ET.SubElement(property_elem, "Observable")
+            property_observable.text = "No"
+            property_type = ET.SubElement(property_elem, "DataType")
+            property_basic = ET.SubElement(property_type, "Basic")
+            property_basic.text = "String"
             for action_name, action in self.node_info.actions.items():
                 command_elem = ET.SubElement(root, "Command")
                 command_id = ET.SubElement(command_elem, "Identifier")
