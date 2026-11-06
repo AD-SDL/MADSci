@@ -4,6 +4,7 @@ import warnings
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
+import inspect
 
 from madsci.common.types.action_types import ActionDefinition
 from madsci.common.types.admin_command_types import AdminCommands
@@ -160,6 +161,12 @@ class RestNodeConfig(NodeConfig):
         default=300,
         ge=1,
     )
+    sila_mode: bool = Field(
+            title="Sila Mode",
+            description="Run as a Sila Connector",
+            default=False
+        )
+
 
 
 class NodeClientCapabilities(MadsciBaseModel):

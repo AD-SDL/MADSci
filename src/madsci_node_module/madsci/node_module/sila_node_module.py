@@ -1,13 +1,16 @@
 """REST-based Node Module helper classes."""
 
 
+import json
+from pathlib import Path
+
 from sila2.server import SilaServer, FeatureImplementationBase
 from sila2.framework import Feature
 import inspect
 import tempfile
 import re
 import types
-from typing import Callable, Any
+from typing import Callable, Any, get_type_hints
 from madsci.node_module.helpers import action
 from madsci.node_module.abstract_node_module import AbstractNode
 import xml.etree.ElementTree as ET
@@ -18,6 +21,7 @@ sila_basic_datatypes = {
     "int": "Integer",
     "float": "Real",
     "bool": "Boolean",
+    "Path": "Binary",
     "datetime.time": "Time",
     "datetime.date": "Date",
     "datetime.datetime": "Timestamp"
@@ -48,9 +52,7 @@ class SilaNode(AbstractNode):
         super().__init__(*args, **kwargs)
         self.node_info.node_url = getattr(self.config, "node_url", None)
         path = self.generate_feature_xml()
-        print(path)
         feature = Feature(path)
-        self.val = "sfasdf"
         
 
         keywords = {}
@@ -60,7 +62,15 @@ class SilaNode(AbstractNode):
                 if "metadata" in kwargs:
                     del kwargs["metadata"]
                 args = (outer_self,) + args
-                return action(*args, **kwargs)
+                result =  action(*args, **kwargs)
+                if get_type_hints(action).get("return") == Path:
+                    with open(result, "rb") as f:
+                        data = f.read()
+                    return data
+                if get_type_hints(action).get("return").__name__ in sila_basic_datatypes:
+                    return result
+                else:
+                    return json.dumps(result)
             cleaned = re.sub(r'[^A-Za-z0-9]', '', action_name)
             keywords["MADSCI" + cleaned] = new_function
         # # keywords["__init__"] = lambda self, server: super().__init__(self, server)
@@ -118,7 +128,7 @@ class SilaNode(AbstractNode):
                     parameter_basic.text = sila_basic_datatypes[parameter.argument_type]
                 elif parameter.argument_type in sila_derived_datatypes:
                     parameter_complex = ET.SubElement(parameter_type, "Derived")
-                    parameter_basic.text = sila_derived_datatypes[parameter.argument_type]
+                    parameter_complex.text = sila_derived_datatypes[parameter.argument_type]
                 else: 
                     parameter_basic = ET.SubElement(parameter_type, "Basic")
                     parameter_basic.text = "String"
@@ -131,20 +141,25 @@ class SilaNode(AbstractNode):
                 result_description = ET.SubElement(command_results, "Description")
                 result_description.text = parameter.description
                 result_type = ET.SubElement(command_results, "DataType")
-                result_basic = ET.SubElement(result_type, "Basic")
-                result_basic.text = "String"
+                result_hint = get_type_hints(self.action_handlers[action_name]).get("return")
+                print(f"Result hint: {result_hint.__name__}")
+                if result_hint.__name__ in sila_basic_datatypes:
+                    result_basic = ET.SubElement(result_type, "Basic")
+                    result_basic.text = sila_basic_datatypes[result_hint.__name__]
+                else:
+                    result_basic = ET.SubElement(result_type, "Basic")
+                    result_basic.text = "String"
         with tempfile.NamedTemporaryFile(delete=False) as temp_file:
             tree = ET.ElementTree(root)
             tree.write(temp_file.name, encoding="utf-8", xml_declaration=True)
             temp_file_path = temp_file.name
         return temp_file_path
     @action
-    def get_node_info(self, test: "str") -> str:
+    def get_node_info(self, test: str) -> int:
         """Return the node information."""
-        print(self.val)
-        return self.val
-                
-            
+        
+        return 5
+
 if __name__ == "__main__":
     node = SilaNode()
     node.start()
