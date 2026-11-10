@@ -7,9 +7,10 @@ import re
 import signal
 import tempfile
 import time
+import types
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from pathlib import Path
-import types
 from typing import (
     Annotated,
     Any,
@@ -20,9 +21,8 @@ from typing import (
     get_origin,
     get_type_hints,
 )
+from uuid import uuid4
 from zipfile import ZipFile
-import xml.etree.ElementTree as ET
-from madsci.common.types.base_types import MadsciBaseModel
 
 from fastapi import HTTPException, Request, Response
 from fastapi.applications import FastAPI
@@ -44,8 +44,9 @@ from madsci.common.types.action_types import (
     extract_file_result_definitions,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error
+from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.types.event_types import Event
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -58,11 +59,10 @@ from madsci.common.utils import new_ulid_str
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from pydantic import AnyUrl
-from starlette.responses import FileResponse
-from sila2.server import SilaServer, FeatureImplementationBase
+from pydantic import AnyUrl, ValidationError
 from sila2.framework import Feature
-from uuid import uuid4
+from sila2.server import FeatureImplementationBase, SilaServer
+from starlette.responses import FileResponse
 
 sila_basic_datatypes = {
     "string": "String",
@@ -72,27 +72,23 @@ sila_basic_datatypes = {
     "Path": "Binary",
     "datetime.time": "Time",
     "datetime.date": "Date",
-    "datetime.datetime": "Timestamp"
+    "datetime.datetime": "Timestamp",
 }
 
-sila_derived_datatypes = {
-    "list": "List",
-}
 
 class SubServer(SilaServer):
-    def __init__(self, name: str, description: str, type: str):
-        super().__init__(
-                    server_name=name,
-                    server_description=description,
-                    server_type=type,
-                    server_version="0.1.0",
-                    server_vendor_url="https://github.com/AD-SDL/MADSci",
-                    server_uuid=uuid4(),
-                )
+    """Sila Server to run in Sila mode"""
 
-def constructor(cls, server: SubServer, *args: Any, **kwargs: Any) -> None:
-    """Constructor for the dynamically created class."""
-    cls.super().__init__(server, *args, **kwargs)
+    def __init__(self, name: str, description: str, type: str) -> None:
+        """create a Sila Server with MADSci info"""
+        super().__init__(
+            server_name=name,
+            server_description=description,
+            server_type=type,
+            server_version="0.1.0",
+            server_vendor_url="https://github.com/AD-SDL/MADSci",
+            server_uuid=uuid4(),
+        )
 
 
 class RestNode(AbstractNode):
@@ -116,9 +112,14 @@ class RestNode(AbstractNode):
         self._action_result_models = {}  # Cache for dynamic result models
         if self.node_info.node_description is None:
             self.node_info.node_description = f"A node for {self.node_info.node_name} of type {self.node_info.node_type}"
-        self.construct_sila_class(self.node_info.node_name, self.node_info.node_description, "MADSCI" + self.node_info.node_type)
+        self.construct_sila_class(
+            self.node_info.node_name,
+            self.node_info.node_description,
+            "MADSCI" + self.node_info.node_type,
+        )
+
     async def _get_request_files(self, request: Request) -> list[UploadFile]:
-        """Extract uplo`aded files from a request."""
+        """Extract uploaded files from a request."""
         form = await request.form()
 
         # Get all uploaded files
@@ -148,7 +149,7 @@ class RestNode(AbstractNode):
                 host = url.host
                 port = url.port
                 super().start_node()
-                self.server.start_insecure(host, port)   
+                self.server.start_insecure(host, port)
                 self.server.grpc_server.wait_for_termination()
                 self.server.stop()
 
@@ -198,72 +199,87 @@ class RestNode(AbstractNode):
 
             self._configure_routes()
 
-    def construct_sila_class(self, name: str, description: str, type: str) -> None:
-        path = self.generate_feature_xml()
-        feature = Feature(path)
-        keywords = {}
-        outer_self = self
-        def generator(action):
-            def new_function(self, *args, **kwargs):
-                if "metadata" in kwargs:
-                    del kwargs["metadata"]
-                new_args = ()
-                for i in range(len(args)):
-                    if isinstance(args[i], bytes):
-                        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                                                    temp_file.write(args[i])
-                                                    temp_file.flush()
-                                                    new_args += (Path(temp_file.name),)
-                    else:
-                        new_args += (args[i],)
+    def process_sila_arguments(self, argument: Any) -> Any:
+        """Process an incoming arguments from the sila client"""
+        if isinstance(argument, bytes):
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_file.write(argument)
+                temp_file.flush()
+                final_arg = Path(temp_file.name)
+        elif isinstance(argument, str):
+            try:
+                possible_location = json.loads(argument)
+                loc_arg = LocationArgument.model_validate(possible_location)
+                final_arg = loc_arg
+            except json.JSONDecodeError:
+                final_arg = argument
+            except ValidationError:
+                final_arg = argument
+        else:
+            final_arg = argument
+        return final_arg
 
-                for arg_name in kwargs.keys():
-                    print(arg_name)
-                    print(get_type_hints(action).get(arg_name))
-                    if get_type_hints(action).get(arg_name) == Path:
-                        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                            temp_file.write(kwargs[arg_name]())
-                            temp_file.flush()
-                            kwargs[arg_name] = Path(temp_file.name)
-                new_args = (outer_self,) + new_args
-                result =  action(*new_args, **kwargs)
-                if get_type_hints(action).get("return") == Path:
-                    with open(result, "rb") as f:
-                        data = f.read()
-                    return data
-                if get_type_hints(action).get("return").__name__ in sila_basic_datatypes:
-                    return result
-                else:
-                    if isinstance(result, ActionFiles):
-                        # Multiple files - add all to ZIP with their labels as names
-                        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_zip_file:
-                            with ZipFile(temp_zip_file.name, "w") as zip_file:
-                                    for file_label, file_path in result.model_dump().items():
-                                        if Path(file_path).exists():
-                                            # Use the file label as the filename in the ZIP
-                                            file_extension = Path(file_path).suffix
-                                            zip_filename = f"{file_label}{file_extension}"
-                                            zip_file.write(file_path, zip_filename)
-                        with open(temp_zip_file.name, "rb") as f:
-                            data = f.read()
-                        return data
-                    elif isinstance(result, MadsciBaseModel):
-                        return json.dumps(result.model_dump(mode="json"))
-                    else:
-                        return json.dumps(result)
-            return new_function
+    def generator(self, action: Callable) -> Callable:
+        """generates handler functions from MADSci actions"""
+        outer_self = self
+
+        def new_function(self, *args: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ARG001, ANN001
+            """Wraps the action function to process arguments and handle return types."""
+            kwargs.pop("metadata", None)
+            new_args = ()
+            for i in range(len(args)):
+                new_args += (outer_self.process_sila_arguments(args[i]),)
+            new_args = (outer_self, *new_args)
+            result = action(*new_args, **kwargs)
+            if get_type_hints(action).get("return") == Path:
+                with Path.open(result, "rb") as f:
+                    return f.read()
+            if get_type_hints(action).get("return").__name__ in sila_basic_datatypes:
+                return result
+            if isinstance(result, ActionFiles):
+                # Multiple files - add all to ZIP with their labels as names
+                with (
+                    tempfile.NamedTemporaryFile(
+                        suffix=".zip", delete=False
+                    ) as temp_zip_file,
+                    ZipFile(temp_zip_file.name, "w") as zip_file,
+                ):
+                    for file_label, file_path in result.model_dump().items():
+                        if Path(file_path).exists():
+                            # Use the file label as the filename in the ZIP
+                            file_extension = Path(file_path).suffix
+                            zip_filename = f"{file_label}{file_extension}"
+                            zip_file.write(file_path, zip_filename)
+                with Path.open(temp_zip_file.name, "rb") as f:
+                    return f.read()
+            if isinstance(result, MadsciBaseModel):
+                return json.dumps(result.model_dump(mode="json"))
+            return json.dumps(result)
+
+        return new_function
+
+    def construct_sila_class(self, name: str, description: str, type: str) -> None:
+        """Construct a dynamic SilaClass with action handlers."""
+        xml_str = self.generate_feature_xml()
+        feature = Feature(xml_str)
+        keywords = {}
         for action_name, action in self.action_handlers.items():
-            new_handler = generator(action)
-            cleaned = re.sub(r'[^A-Za-z0-9]', '', action_name)
+            new_handler = self.generator(action)
+            cleaned = re.sub(r"[^A-Za-z0-9]", "", action_name)
             keywords["MADSCI" + cleaned] = new_handler
-        def wrapped_state(self, *args, **kwargs):
+        outer_self = self
+
+        def wrapped_state(self, *args: Any, **kwargs: dict[str, Any]) -> str:  # noqa: ARG001, ANN001
             return json.dumps(outer_self.node_state)
+
         keywords["get_MADSCI" + "GetState"] = wrapped_state
-        # # keywords["__init__"] = lambda self, server: super().__init__(self, server)
-        # keywords["__init_subclass__"] = lambda self, server: super().__init__(self, server)
-        SilaClass = types.new_class("SilaClass", (FeatureImplementationBase,), exec_body=lambda ns: ns.update(keywords))
+        sila_class = types.new_class(
+            "SilaClass",
+            (FeatureImplementationBase,),
+            exec_body=lambda ns: ns.update(keywords),
+        )
         self.server = SubServer(name, description, type)
-        new_class = SilaClass(self.server)
+        new_class = sila_class(self.server)
         self.server.set_feature_implementation(feature, new_class)
 
     def get_action_status(self, action_id: str) -> ActionStatus:
@@ -988,8 +1004,75 @@ class RestNode(AbstractNode):
                 404: {"description": "Action has no file results"},
             },
         )
-    def generate_feature_xml(self):
-            root = ET.Element("Feature", attrib={
+
+    def add_actions_to_xml(self, root: ET.Element) -> ET.Element:
+        """Add actions to the XML representation of the node."""
+        for action_name, action in self.action_handlers.items():
+            command_elem = ET.SubElement(root, "Command")
+            command_id = ET.SubElement(command_elem, "Identifier")
+            command_id.text = "MADSCI" + re.sub(r"[^A-Za-z0-9]", "", action_name)
+            command_name = ET.SubElement(command_elem, "DisplayName")
+            command_name.text = action_name
+            command_description = ET.SubElement(command_elem, "Description")
+            command_description.text = self.node_info.actions[action_name].description
+            command_observable = ET.SubElement(command_elem, "Observable")
+            command_observable.text = "No"
+            for parameter_name in get_type_hints(action):
+                if parameter_name in self.node_info.actions[action_name].args:
+                    parameter = self.node_info.actions[action_name].args[parameter_name]
+                    if parameter.argument_type in sila_basic_datatypes:
+                        param_type = sila_basic_datatypes[parameter.argument_type]
+                    else:
+                        param_type = "String"
+                elif parameter_name in self.node_info.actions[action_name].files:
+                    parameter = self.node_info.actions[action_name].files[
+                        parameter_name
+                    ]
+                    param_type = "Binary"
+                elif parameter_name in self.node_info.actions[action_name].locations:
+                    parameter = self.node_info.actions[action_name].locations[
+                        parameter_name
+                    ]
+                    param_type = "String"
+
+                parameter_elem = ET.SubElement(command_elem, "Parameter")
+                parameter_id = ET.SubElement(parameter_elem, "Identifier")
+                parameter_id.text = "MADSCI" + re.sub(
+                    r"[^A-Za-z0-9]", "", parameter_name
+                )
+                parameter_name_elem = ET.SubElement(parameter_elem, "DisplayName")
+                parameter_name_elem.text = parameter_name
+                parameter_description = ET.SubElement(parameter_elem, "Description")
+                parameter_description.text = parameter.description
+                parameter_type = ET.SubElement(parameter_elem, "DataType")
+                parameter_basic = ET.SubElement(parameter_type, "Basic")
+                parameter_basic.text = param_type
+            if len(self.node_info.actions[action_name].results) > 0:
+                command_results = ET.SubElement(command_elem, "Response")
+                result_id = ET.SubElement(command_results, "Identifier")
+                result_id.text = "RESULT"
+                result_name = ET.SubElement(command_results, "DisplayName")
+                result_name.text = "result"
+                result_description = ET.SubElement(command_results, "Description")
+                result_description.text = "result of the action"
+                result_type = ET.SubElement(command_results, "DataType")
+                result_hint = get_type_hints(self.action_handlers[action_name]).get(
+                    "return"
+                )
+                result_basic = ET.SubElement(result_type, "Basic")
+                if result_hint.__name__ in sila_basic_datatypes:
+                    result_basic.text = sila_basic_datatypes[result_hint.__name__]
+                elif issubclass(result_hint, ActionFiles):
+                    result_basic.text = "Binary"
+                else:
+                    result_basic.text = "String"
+        return root
+
+    def generate_feature_xml(self) -> str:
+        """Generate the SiLA XML representation of the node"""
+        root = ET.Element(
+            "Feature",
+            attrib={
                 "xmlns": "http://www.sila-standard.org",
                 "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
                 "Category": "examples",
@@ -997,93 +1080,30 @@ class RestNode(AbstractNode):
                 "MaturityLevel": "Draft",
                 "Originator": "org.madsci",
                 "SiLA2Version": "1.0",
-                "xsi:schemaLocation": "http://www.sila-standard.org https://gitlab.com/SiLA2/sila_base/raw/master/schema/FeatureDefinition.xsd"
-            })
-            id = ET.SubElement(root, "Identifier")
-            id.text = "MADSCI" + self.node_info.node_id
-            name = ET.SubElement(root, "DisplayName")
-            name.text = self.node_info.node_name
-            description = ET.SubElement(root, "Description")
-            description.text = self.node_info.node_description
-            property_elem = ET.SubElement(root, "Property")
-            property_id = ET.SubElement(property_elem, "Identifier")
-            property_id.text = "MADSCIGetState"
-            property_name = ET.SubElement(property_elem, "DisplayName")
-            property_name.text = "MADSCIGetState"
-            property_description = ET.SubElement(property_elem, "Description")
-            property_description.text = "The MADSci defined state of the node"
-            property_observable = ET.SubElement(property_elem, "Observable")
-            property_observable.text = "No"
-            property_type = ET.SubElement(property_elem, "DataType")
-            property_basic = ET.SubElement(property_type, "Basic")
-            property_basic.text = "String"
-            for action_name, action in self.node_info.actions.items():
-                command_elem = ET.SubElement(root, "Command")
-                command_id = ET.SubElement(command_elem, "Identifier")
-                cleaned = re.sub(r'[^A-Za-z0-9]', '', action_name)
-                command_id.text = "MADSCI" + cleaned
-                command_name = ET.SubElement(command_elem, "DisplayName")
-                command_name.text = action_name
-                command_description = ET.SubElement(command_elem, "Description")
-                command_description.text = action.description
-                command_observable = ET.SubElement(command_elem, "Observable")
-                command_observable.text = "No"
-                for parameter_name, parameter in action.args.items():
-                    parameter_elem = ET.SubElement(command_elem, "Parameter")
-                    parameter_id = ET.SubElement(parameter_elem, "Identifier")
-                    cleaned = re.sub(r'[^A-Za-z0-9]', '', parameter_name)
-                    parameter_id.text = "MADSCI" + cleaned
-                    parameter_name_elem = ET.SubElement(parameter_elem, "DisplayName")
-                    parameter_name_elem.text = parameter_name
-                    parameter_description = ET.SubElement(parameter_elem, "Description")
-                    parameter_description.text = parameter.description
-                    parameter_type = ET.SubElement(parameter_elem, "DataType")
-                    if parameter.argument_type in sila_basic_datatypes:
-                        parameter_basic = ET.SubElement(parameter_type, "Basic")
-                        parameter_basic.text = sila_basic_datatypes[parameter.argument_type]
-                    elif parameter.argument_type in sila_derived_datatypes:
-                        parameter_complex = ET.SubElement(parameter_type, "Derived")
-                        parameter_complex.text = sila_derived_datatypes[parameter.argument_type]
-                    else: 
-                        parameter_basic = ET.SubElement(parameter_type, "Basic")
-                        parameter_basic.text = "String"
-                for file_name, file in action.files.items():
-                                    parameter_elem = ET.SubElement(command_elem, "Parameter")
-                                    parameter_id = ET.SubElement(parameter_elem, "Identifier")
-                                    cleaned = re.sub(r'[^A-Za-z0-9]', '', file_name)
-                                    parameter_id.text = "MADSCI" + cleaned
-                                    parameter_name_elem = ET.SubElement(parameter_elem, "DisplayName")
-                                    parameter_name_elem.text = file_name
-                                    parameter_description = ET.SubElement(parameter_elem, "Description")
-                                    parameter_description.text = file.description
-                                    parameter_type = ET.SubElement(parameter_elem, "DataType")
-                                    parameter_basic = ET.SubElement(parameter_type, "Basic")
-                                    parameter_basic.text = "Binary"
-                if len(action.results) > 0:
-                    command_results = ET.SubElement(command_elem, "Response")
-                    result_id = ET.SubElement(command_results, "Identifier")
-                    result_id.text = "RESULT"
-                    result_name = ET.SubElement(command_results, "DisplayName")
-                    result_name.text = "result"
-                    result_description = ET.SubElement(command_results, "Description")
-                    result_description.text = "result of the action"
-                    result_type = ET.SubElement(command_results, "DataType")
-                    result_hint = get_type_hints(self.action_handlers[action_name]).get("return")
-                    if result_hint.__name__ in sila_basic_datatypes:
-                        result_basic = ET.SubElement(result_type, "Basic")
-                        result_basic.text = sila_basic_datatypes[result_hint.__name__]
-                    elif issubclass(result_hint, ActionFiles):
-                        result_basic = ET.SubElement(result_type, "Basic")
-                        result_basic.text = "Binary"
-                        
-                    else:
-                        result_basic = ET.SubElement(result_type, "Basic")
-                        result_basic.text = "String"
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                tree = ET.ElementTree(root)
-                tree.write(temp_file.name, encoding="utf-8", xml_declaration=True)
-                temp_file_path = temp_file.name
-            return temp_file_path
+                "xsi:schemaLocation": "http://www.sila-standard.org https://gitlab.com/SiLA2/sila_base/raw/master/schema/FeatureDefinition.xsd",
+            },
+        )
+        id = ET.SubElement(root, "Identifier")
+        id.text = "MADSCI" + self.node_info.node_id
+        name = ET.SubElement(root, "DisplayName")
+        name.text = self.node_info.node_name
+        description = ET.SubElement(root, "Description")
+        description.text = self.node_info.node_description
+        property_elem = ET.SubElement(root, "Property")
+        property_id = ET.SubElement(property_elem, "Identifier")
+        property_id.text = "MADSCIGetState"
+        property_name = ET.SubElement(property_elem, "DisplayName")
+        property_name.text = "MADSCIGetState"
+        property_description = ET.SubElement(property_elem, "Description")
+        property_description.text = "The MADSci defined state of the node"
+        property_observable = ET.SubElement(property_elem, "Observable")
+        property_observable.text = "No"
+        property_type = ET.SubElement(property_elem, "DataType")
+        property_basic = ET.SubElement(property_type, "Basic")
+        property_basic.text = "String"
+        root = self.add_actions_to_xml(root)
+
+        return ET.tostring(root).decode("utf-8")
 
 
 if __name__ == "__main__":

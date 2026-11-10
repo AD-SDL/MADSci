@@ -714,6 +714,7 @@ Default Configuration for a MADSci Node that communicates over REST.
 | `NODE_RATE_LIMIT_SHORT_REQUESTS`   | `integer` \| `null`  | `50`                       | Maximum number of requests allowed per short time window for burst protection (only used if enable_rate_limiting is True). If None, short window limiting is disabled. | `50`                       |
 | `NODE_RATE_LIMIT_SHORT_WINDOW`     | `integer` \| `null`  | `1`                        | Short time window for burst protection in seconds (only used if enable_rate_limiting is True). If None, short window limiting is disabled.                             | `1`                        |
 | `NODE_RATE_LIMIT_CLEANUP_INTERVAL` | `integer`            | `300`                      | Interval in seconds between cleanup operations to prevent memory leaks (only used if enable_rate_limiting is True).                                                    | `300`                      |
+| `NODE_SILA_MODE`                   | `boolean`            | `false`                    | Run as a Sila Connector                                                                                                                                                | `false`                    |
 
 ## PostgreSQLBackupSettings
 
