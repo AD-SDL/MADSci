@@ -1017,7 +1017,9 @@ class RestNode(AbstractNode):
             command_description.text = self.node_info.actions[action_name].description
             command_observable = ET.SubElement(command_elem, "Observable")
             command_observable.text = "No"
-            for parameter_name in get_type_hints(action):
+            for parameter_name in [
+                param for param in get_type_hints(action) if param != "return"
+            ]:
                 if parameter_name in self.node_info.actions[action_name].args:
                     parameter = self.node_info.actions[action_name].args[parameter_name]
                     if parameter.argument_type in sila_basic_datatypes:
