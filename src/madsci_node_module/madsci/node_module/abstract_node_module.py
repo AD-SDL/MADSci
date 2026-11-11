@@ -151,6 +151,7 @@ class AbstractNode(MadsciClientMixin):
 
         # * Combine the config and class's capabilities
         self._populate_capabilities()
+        self.action_handlers = {}
 
         # * Add the action decorators to the node (and node info)
         for action_callable in self.__class__.__dict__.values():

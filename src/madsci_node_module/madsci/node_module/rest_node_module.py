@@ -1,10 +1,14 @@
 """REST-based Node Module helper classes."""
 
 import inspect
+import json
 import os
+import re
 import signal
 import tempfile
 import time
+import types
+import xml.etree.ElementTree as ET
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import (
@@ -17,6 +21,7 @@ from typing import (
     get_origin,
     get_type_hints,
 )
+from uuid import uuid4
 from zipfile import ZipFile
 
 from fastapi import HTTPException, Request, Response
@@ -39,8 +44,9 @@ from madsci.common.types.action_types import (
     extract_file_result_definitions,
 )
 from madsci.common.types.admin_command_types import AdminCommandResponse
-from madsci.common.types.base_types import Error
+from madsci.common.types.base_types import Error, MadsciBaseModel
 from madsci.common.types.event_types import Event
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.node_types import (
     AdminCommands,
     NodeClientCapabilities,
@@ -53,8 +59,36 @@ from madsci.common.utils import new_ulid_str
 from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
-from pydantic import AnyUrl
+from pydantic import AnyUrl, ValidationError
+from sila2.framework import Feature
+from sila2.server import FeatureImplementationBase, SilaServer
 from starlette.responses import FileResponse
+
+sila_basic_datatypes = {
+    "string": "String",
+    "int": "Integer",
+    "float": "Real",
+    "bool": "Boolean",
+    "Path": "Binary",
+    "datetime.time": "Time",
+    "datetime.date": "Date",
+    "datetime.datetime": "Timestamp",
+}
+
+
+class SubServer(SilaServer):
+    """Sila Server to run in Sila mode"""
+
+    def __init__(self, name: str, description: str, type: str) -> None:
+        """create a Sila Server with MADSci info"""
+        super().__init__(
+            server_name=name,
+            server_description=description,
+            server_type=type,
+            server_version="0.1.0",
+            server_vendor_url="https://github.com/AD-SDL/MADSci",
+            server_uuid=uuid4(),
+        )
 
 
 class RestNode(AbstractNode):
@@ -76,6 +110,13 @@ class RestNode(AbstractNode):
         super().__init__(*args, **kwargs)
         self.node_info.node_url = getattr(self.config, "node_url", None)
         self._action_result_models = {}  # Cache for dynamic result models
+        if self.node_info.node_description is None:
+            self.node_info.node_description = f"A node for {self.node_info.node_name} of type {self.node_info.node_type}"
+        self.construct_sila_class(
+            self.node_info.node_name,
+            self.node_info.node_description,
+            "MADSCI" + self.node_info.node_type,
+        )
 
     async def _get_request_files(self, request: Request) -> list[UploadFile]:
         """Extract uploaded files from a request."""
@@ -104,35 +145,44 @@ class RestNode(AbstractNode):
         app_metadata = self._create_fastapi_metadata()
 
         if not testing:
-            self.logger.debug("Running node in production mode")
-            import uvicorn  # noqa: PLC0415
+            if self.config.sila_mode:
+                host = url.host
+                port = url.port
+                super().start_node()
+                self.server.start_insecure(host, port)
+                self.server.grpc_server.wait_for_termination()
+                self.server.stop()
 
-            self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
+            else:
+                self.logger.debug("Running node in production mode")
+                import uvicorn  # noqa: PLC0415
 
-            # Add rate limiting middleware if enabled
-            if self.config.enable_rate_limiting:
-                self.rest_api.add_middleware(
-                    RateLimitMiddleware,
-                    requests_limit=self.config.rate_limit_requests,
-                    time_window=self.config.rate_limit_window,
-                    cleanup_interval=self.config.rate_limit_cleanup_interval,
+                self.rest_api = FastAPI(lifespan=self._lifespan, **app_metadata)
+
+                # Add rate limiting middleware if enabled
+                if self.config.enable_rate_limiting:
+                    self.rest_api.add_middleware(
+                        RateLimitMiddleware,
+                        requests_limit=self.config.rate_limit_requests,
+                        time_window=self.config.rate_limit_window,
+                        cleanup_interval=self.config.rate_limit_cleanup_interval,
+                    )
+
+                # Middleware to set ownership context for each request
+                @self.rest_api.middleware("http")
+                async def ownership_middleware(
+                    request: Request, call_next: Callable
+                ) -> Response:
+                    global_ownership_info.node_id = self.node_info.node_id
+                    return await call_next(request)
+
+                self._configure_routes()
+                uvicorn.run(
+                    self.rest_api,
+                    host=url.host or "127.0.0.1",
+                    port=url.port or 2000,
+                    **getattr(self.config, "uvicorn_kwargs", {}),
                 )
-
-            # Middleware to set ownership context for each request
-            @self.rest_api.middleware("http")
-            async def ownership_middleware(
-                request: Request, call_next: Callable
-            ) -> Response:
-                global_ownership_info.node_id = self.node_info.node_id
-                return await call_next(request)
-
-            self._configure_routes()
-            uvicorn.run(
-                self.rest_api,
-                host=url.host or "127.0.0.1",
-                port=url.port or 2000,
-                **getattr(self.config, "uvicorn_kwargs", {}),
-            )
         else:
             super().start_node()
             self.logger.debug("Running node in test mode")
@@ -148,6 +198,89 @@ class RestNode(AbstractNode):
                 )
 
             self._configure_routes()
+
+    def process_sila_arguments(self, argument: Any) -> Any:
+        """Process an incoming arguments from the sila client"""
+        if isinstance(argument, bytes):
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                temp_file.write(argument)
+                temp_file.flush()
+                final_arg = Path(temp_file.name)
+        elif isinstance(argument, str):
+            try:
+                possible_location = json.loads(argument)
+                loc_arg = LocationArgument.model_validate(possible_location)
+                final_arg = loc_arg
+            except json.JSONDecodeError:
+                final_arg = argument
+            except ValidationError:
+                final_arg = argument
+        else:
+            final_arg = argument
+        return final_arg
+
+    def generator(self, action: Callable) -> Callable:
+        """generates handler functions from MADSci actions"""
+        outer_self = self
+
+        def new_function(self, *args: Any, **kwargs: dict[str, Any]) -> Any:  # noqa: ARG001, ANN001
+            """Wraps the action function to process arguments and handle return types."""
+            kwargs.pop("metadata", None)
+            new_args = ()
+            for i in range(len(args)):
+                new_args += (outer_self.process_sila_arguments(args[i]),)
+            new_args = (outer_self, *new_args)
+            result = action(*new_args, **kwargs)
+            if get_type_hints(action).get("return") == Path:
+                with Path.open(result, "rb") as f:
+                    return f.read()
+            if get_type_hints(action).get("return").__name__ in sila_basic_datatypes:
+                return result
+            if isinstance(result, ActionFiles):
+                # Multiple files - add all to ZIP with their labels as names
+                with (
+                    tempfile.NamedTemporaryFile(
+                        suffix=".zip", delete=False
+                    ) as temp_zip_file,
+                    ZipFile(temp_zip_file.name, "w") as zip_file,
+                ):
+                    for file_label, file_path in result.model_dump().items():
+                        if Path(file_path).exists():
+                            # Use the file label as the filename in the ZIP
+                            file_extension = Path(file_path).suffix
+                            zip_filename = f"{file_label}{file_extension}"
+                            zip_file.write(file_path, zip_filename)
+                with Path.open(temp_zip_file.name, "rb") as f:
+                    return f.read()
+            if isinstance(result, MadsciBaseModel):
+                return json.dumps(result.model_dump(mode="json"))
+            return json.dumps(result)
+
+        return new_function
+
+    def construct_sila_class(self, name: str, description: str, type: str) -> None:
+        """Construct a dynamic SilaClass with action handlers."""
+        xml_str = self.generate_feature_xml()
+        feature = Feature(xml_str)
+        keywords = {}
+        for action_name, action in self.action_handlers.items():
+            new_handler = self.generator(action)
+            cleaned = re.sub(r"[^A-Za-z0-9]", "", action_name)
+            keywords["MADSCI" + cleaned] = new_handler
+        outer_self = self
+
+        def wrapped_state(self, *args: Any, **kwargs: dict[str, Any]) -> str:  # noqa: ARG001, ANN001
+            return json.dumps(outer_self.node_state)
+
+        keywords["get_MADSCI" + "GetState"] = wrapped_state
+        sila_class = types.new_class(
+            "SilaClass",
+            (FeatureImplementationBase,),
+            exec_body=lambda ns: ns.update(keywords),
+        )
+        self.server = SubServer(name, description, type)
+        new_class = sila_class(self.server)
+        self.server.set_feature_implementation(feature, new_class)
 
     def get_action_status(self, action_id: str) -> ActionStatus:
         """Get the status of an action on the node."""
@@ -871,6 +1004,108 @@ class RestNode(AbstractNode):
                 404: {"description": "Action has no file results"},
             },
         )
+
+    def add_actions_to_xml(self, root: ET.Element) -> ET.Element:
+        """Add actions to the XML representation of the node."""
+        for action_name, action in self.action_handlers.items():
+            command_elem = ET.SubElement(root, "Command")
+            command_id = ET.SubElement(command_elem, "Identifier")
+            command_id.text = "MADSCI" + re.sub(r"[^A-Za-z0-9]", "", action_name)
+            command_name = ET.SubElement(command_elem, "DisplayName")
+            command_name.text = action_name
+            command_description = ET.SubElement(command_elem, "Description")
+            command_description.text = self.node_info.actions[action_name].description
+            command_observable = ET.SubElement(command_elem, "Observable")
+            command_observable.text = "No"
+            for parameter_name in [
+                param for param in get_type_hints(action) if param != "return"
+            ]:
+                if parameter_name in self.node_info.actions[action_name].args:
+                    parameter = self.node_info.actions[action_name].args[parameter_name]
+                    if parameter.argument_type in sila_basic_datatypes:
+                        param_type = sila_basic_datatypes[parameter.argument_type]
+                    else:
+                        param_type = "String"
+                elif parameter_name in self.node_info.actions[action_name].files:
+                    parameter = self.node_info.actions[action_name].files[
+                        parameter_name
+                    ]
+                    param_type = "Binary"
+                elif parameter_name in self.node_info.actions[action_name].locations:
+                    parameter = self.node_info.actions[action_name].locations[
+                        parameter_name
+                    ]
+                    param_type = "String"
+
+                parameter_elem = ET.SubElement(command_elem, "Parameter")
+                parameter_id = ET.SubElement(parameter_elem, "Identifier")
+                parameter_id.text = "MADSCI" + re.sub(
+                    r"[^A-Za-z0-9]", "", parameter_name
+                )
+                parameter_name_elem = ET.SubElement(parameter_elem, "DisplayName")
+                parameter_name_elem.text = parameter_name
+                parameter_description = ET.SubElement(parameter_elem, "Description")
+                parameter_description.text = parameter.description
+                parameter_type = ET.SubElement(parameter_elem, "DataType")
+                parameter_basic = ET.SubElement(parameter_type, "Basic")
+                parameter_basic.text = param_type
+            if len(self.node_info.actions[action_name].results) > 0:
+                command_results = ET.SubElement(command_elem, "Response")
+                result_id = ET.SubElement(command_results, "Identifier")
+                result_id.text = "RESULT"
+                result_name = ET.SubElement(command_results, "DisplayName")
+                result_name.text = "result"
+                result_description = ET.SubElement(command_results, "Description")
+                result_description.text = "result of the action"
+                result_type = ET.SubElement(command_results, "DataType")
+                result_hint = get_type_hints(self.action_handlers[action_name]).get(
+                    "return"
+                )
+                result_basic = ET.SubElement(result_type, "Basic")
+                if result_hint.__name__ in sila_basic_datatypes:
+                    result_basic.text = sila_basic_datatypes[result_hint.__name__]
+                elif issubclass(result_hint, ActionFiles):
+                    result_basic.text = "Binary"
+                else:
+                    result_basic.text = "String"
+        return root
+
+    def generate_feature_xml(self) -> str:
+        """Generate the SiLA XML representation of the node"""
+        root = ET.Element(
+            "Feature",
+            attrib={
+                "xmlns": "http://www.sila-standard.org",
+                "xmlns:xsi": "http://www.w3.org/2001/XMLSchema-instance",
+                "Category": "examples",
+                "FeatureVersion": "1.0",
+                "MaturityLevel": "Draft",
+                "Originator": "org.madsci",
+                "SiLA2Version": "1.0",
+                "xsi:schemaLocation": "http://www.sila-standard.org https://gitlab.com/SiLA2/sila_base/raw/master/schema/FeatureDefinition.xsd",
+            },
+        )
+        id = ET.SubElement(root, "Identifier")
+        id.text = "MADSCI" + self.node_info.node_id
+        name = ET.SubElement(root, "DisplayName")
+        name.text = self.node_info.node_name
+        description = ET.SubElement(root, "Description")
+        description.text = self.node_info.node_description
+        property_elem = ET.SubElement(root, "Property")
+        property_id = ET.SubElement(property_elem, "Identifier")
+        property_id.text = "MADSCIGetState"
+        property_name = ET.SubElement(property_elem, "DisplayName")
+        property_name.text = "MADSCIGetState"
+        property_description = ET.SubElement(property_elem, "Description")
+        property_description.text = "The MADSci defined state of the node"
+        property_observable = ET.SubElement(property_elem, "Observable")
+        property_observable.text = "No"
+        property_type = ET.SubElement(property_elem, "DataType")
+        property_basic = ET.SubElement(property_type, "Basic")
+        property_basic.text = "String"
+        root = self.add_actions_to_xml(root)
+
+        return ET.tostring(root).decode("utf-8")
 
 
 if __name__ == "__main__":

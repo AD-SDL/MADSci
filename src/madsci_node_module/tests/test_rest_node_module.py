@@ -23,7 +23,7 @@ from madsci.common.types.event_types import Event
 from madsci.common.types.node_types import NodeInfo, NodeStatus
 from madsci.node_module.abstract_node_module import AbstractNode
 from madsci.node_module.helpers import action
-from madsci.node_module.rest_node_module import RestNode
+from madsci.node_module.rest_node_module import RestNode, SubServer
 from pydantic import BaseModel, Field
 from ulid import ULID
 
@@ -39,6 +39,8 @@ def test_lifecycle_handlers(test_node: TestNode) -> None:
     assert not hasattr(test_node, "startup_has_run")
     assert not hasattr(test_node, "shutdown_has_run")
     assert test_node.test_interface is None
+    assert test_node.server is not None
+    assert isinstance(test_node.server, SubServer)
 
     test_node.start_node(testing=True)
 
@@ -74,7 +76,6 @@ def test_lock_and_unlock(test_client: TestClient) -> None:
         assert response.status_code == 200
         assert NodeStatus.model_validate(response.json()).ready is False
         assert NodeStatus.model_validate(response.json()).locked is True
-
         response = client.post("/admin/unlock")
         assert response.status_code == 200
         validated_response = AdminCommandResponse.model_validate(response.json())

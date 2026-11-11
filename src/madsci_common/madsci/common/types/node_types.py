@@ -160,6 +160,9 @@ class RestNodeConfig(NodeConfig):
         default=300,
         ge=1,
     )
+    sila_mode: bool = Field(
+        title="Sila Mode", description="Run as a Sila Connector", default=False
+    )
 
 
 class NodeClientCapabilities(MadsciBaseModel):
