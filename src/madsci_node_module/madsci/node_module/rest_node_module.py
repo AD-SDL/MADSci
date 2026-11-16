@@ -37,6 +37,7 @@ from madsci.common.types.action_types import (
     ActionRequest,
     ActionResult,
     ActionStatus,
+    ArgumentDefinition,
     RestActionResult,
     create_action_request_model,
     create_dynamic_model,
@@ -60,12 +61,13 @@ from madsci.node_module.abstract_node_module import (
     AbstractNode,
 )
 from pydantic import AnyUrl, ValidationError
+from pydantic_core import to_jsonable_python
 from sila2.framework import Feature
 from sila2.server import FeatureImplementationBase, SilaServer
 from starlette.responses import FileResponse
 
 sila_basic_datatypes = {
-    "string": "String",
+    "str": "String",
     "int": "Integer",
     "float": "Real",
     "bool": "Boolean",
@@ -110,12 +112,15 @@ class RestNode(AbstractNode):
         super().__init__(*args, **kwargs)
         self.node_info.node_url = getattr(self.config, "node_url", None)
         self._action_result_models = {}  # Cache for dynamic result models
+        node_type = getattr(self.node_info.node_type, "value", self.node_info.node_type)
         if self.node_info.node_description is None:
-            self.node_info.node_description = f"A node for {self.node_info.node_name} of type {self.node_info.node_type}"
+            self.node_info.node_description = (
+                f"A node for {self.node_info.node_name} of type {node_type}"
+            )
         self.construct_sila_class(
             self.node_info.node_name,
             self.node_info.node_description,
-            "MADSCI" + self.node_info.node_type,
+            f"MADSCI{node_type}",
         )
 
     async def _get_request_files(self, request: Request) -> list[UploadFile]:
@@ -231,10 +236,14 @@ class RestNode(AbstractNode):
                 new_args += (outer_self.process_sila_arguments(args[i]),)
             new_args = (outer_self, *new_args)
             result = action(*new_args, **kwargs)
-            if get_type_hints(action).get("return") == Path:
+            return_hint = get_type_hints(action).get("return")
+            if result is None or return_hint in (None, type(None)):
+                # Commands without a Response must return nothing
+                return None
+            if return_hint == Path:
                 with Path.open(result, "rb") as f:
                     return f.read()
-            if get_type_hints(action).get("return").__name__ in sila_basic_datatypes:
+            if getattr(return_hint, "__name__", None) in sila_basic_datatypes:
                 return result
             if isinstance(result, ActionFiles):
                 # Multiple files - add all to ZIP with their labels as names
@@ -254,7 +263,7 @@ class RestNode(AbstractNode):
                     return f.read()
             if isinstance(result, MadsciBaseModel):
                 return json.dumps(result.model_dump(mode="json"))
-            return json.dumps(result)
+            return json.dumps(to_jsonable_python(result))
 
         return new_function
 
@@ -1005,6 +1014,52 @@ class RestNode(AbstractNode):
             },
         )
 
+    def handle_complex_type(
+        self, command_elem: ET.Element, parameter: ArgumentDefinition, type_hint: Any
+    ) -> None:
+        """Add a SiLA parameter for an argument whose type isn't a SiLA basic type.
+
+        Lists of basic types become SiLA Lists; anything else becomes a String.
+        """
+        parameter_elem = ET.SubElement(command_elem, "Parameter")
+        parameter_id = ET.SubElement(parameter_elem, "Identifier")
+        parameter_id.text = "MADSCI" + re.sub(r"[^A-Za-z0-9]", "", parameter.name)
+        parameter_name_elem = ET.SubElement(parameter_elem, "DisplayName")
+        parameter_name_elem.text = parameter.name
+        parameter_description = ET.SubElement(parameter_elem, "Description")
+        parameter_description.text = parameter.description
+        parameter_type = ET.SubElement(parameter_elem, "DataType")
+        list_args = get_args(type_hint) if get_origin(type_hint) is list else ()
+        sub_type = getattr(list_args[0], "__name__", None) if list_args else None
+        if sub_type in sila_basic_datatypes:
+            parameter_list = ET.SubElement(parameter_type, "List")
+            list_type = ET.SubElement(parameter_list, "DataType")
+            basic = ET.SubElement(list_type, "Basic")
+            basic.text = sila_basic_datatypes[sub_type]
+        else:
+            basic = ET.SubElement(parameter_type, "Basic")
+            basic.text = "String"
+
+    def _add_response_to_xml(self, command_elem: ET.Element, action: Callable) -> None:
+        """Add the SiLA Response for an action's return value to a command."""
+        command_results = ET.SubElement(command_elem, "Response")
+        result_id = ET.SubElement(command_results, "Identifier")
+        result_id.text = "RESULT"
+        result_name = ET.SubElement(command_results, "DisplayName")
+        result_name.text = "result"
+        result_description = ET.SubElement(command_results, "Description")
+        result_description.text = "result of the action"
+        result_type = ET.SubElement(command_results, "DataType")
+        result_hint = get_type_hints(action).get("return")
+        result_basic = ET.SubElement(result_type, "Basic")
+        result_type_name = getattr(result_hint, "__name__", None)
+        if result_type_name in sila_basic_datatypes:
+            result_basic.text = sila_basic_datatypes[result_type_name]
+        elif inspect.isclass(result_hint) and issubclass(result_hint, ActionFiles):
+            result_basic.text = "Binary"
+        else:
+            result_basic.text = "String"
+
     def add_actions_to_xml(self, root: ET.Element) -> ET.Element:
         """Add actions to the XML representation of the node."""
         for action_name, action in self.action_handlers.items():
@@ -1025,7 +1080,12 @@ class RestNode(AbstractNode):
                     if parameter.argument_type in sila_basic_datatypes:
                         param_type = sila_basic_datatypes[parameter.argument_type]
                     else:
-                        param_type = "String"
+                        self.handle_complex_type(
+                            command_elem,
+                            parameter,
+                            get_type_hints(action)[parameter_name],
+                        )
+                        continue
                 elif parameter_name in self.node_info.actions[action_name].files:
                     parameter = self.node_info.actions[action_name].files[
                         parameter_name
@@ -1050,24 +1110,7 @@ class RestNode(AbstractNode):
                 parameter_basic = ET.SubElement(parameter_type, "Basic")
                 parameter_basic.text = param_type
             if len(self.node_info.actions[action_name].results) > 0:
-                command_results = ET.SubElement(command_elem, "Response")
-                result_id = ET.SubElement(command_results, "Identifier")
-                result_id.text = "RESULT"
-                result_name = ET.SubElement(command_results, "DisplayName")
-                result_name.text = "result"
-                result_description = ET.SubElement(command_results, "Description")
-                result_description.text = "result of the action"
-                result_type = ET.SubElement(command_results, "DataType")
-                result_hint = get_type_hints(self.action_handlers[action_name]).get(
-                    "return"
-                )
-                result_basic = ET.SubElement(result_type, "Basic")
-                if result_hint.__name__ in sila_basic_datatypes:
-                    result_basic.text = sila_basic_datatypes[result_hint.__name__]
-                elif issubclass(result_hint, ActionFiles):
-                    result_basic.text = "Binary"
-                else:
-                    result_basic.text = "String"
+                self._add_response_to_xml(command_elem, action)
         return root
 
     def generate_feature_xml(self) -> str:
