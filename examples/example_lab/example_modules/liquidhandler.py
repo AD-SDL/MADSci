@@ -455,16 +455,6 @@ class LiquidHandlerNode(RestNode):
         return {"protocol_name": str(protocol.name)}
 
     @action
-    def test(self) -> None:
-        print("hi")
-    @action
-    def test2(self) -> None:
-            print("hi")
-    @action
-    def test3(self) -> None:
-                print("hi")
-
-    @action
     @interruptable
     def deck_transfer(
         self, source_location: LocationArgument, target_location: LocationArgument
