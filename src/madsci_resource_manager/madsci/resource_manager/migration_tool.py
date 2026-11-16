@@ -586,14 +586,13 @@ class DatabaseMigrator:
                 # Stamp the database with the current revision
                 command.stamp(self.alembic_cfg, "head")
 
-        except Exception as e:
+        except Exception:
             self.logger.warning(
                 "Could not initialize Alembic",
                 event_type="resources.migration.alembic_init_error",
                 exc_info=True,
             )
             # This might be the first migration, which is OK
-            raise ValueError("Failed to initialize Alembic") from e
 
     def generate_migration(self, message: str) -> None:
         """Generate a new Alembic migration based on model changes."""

@@ -22,9 +22,12 @@ ENV PATH="${MADSCI_VENV}/bin:${PATH}"
 # Ensure Python uses the virtualenv
 ENV VIRTUAL_ENV="${MADSCI_VENV}"
 
+RUN  apt update && apt install -y curl \
+&& curl -fsSL https://deb.nodesource.com/setup_26.x -o nodesource_setup.sh && \
+bash nodesource_setup.sh
 # * Install system dependencies
 RUN apt-get update && \
-	apt-get install -y gosu npm wget && \
+	apt-get install -y gosu nodejs wget && \
 	rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 
 # * Install MongoDB tools from official binaries (works for all architectures)
