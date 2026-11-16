@@ -259,7 +259,7 @@ class RestNode(AbstractNode):
                             file_extension = Path(file_path).suffix
                             zip_filename = f"{file_label}{file_extension}"
                             zip_file.write(file_path, zip_filename)
-                with Path.open(temp_zip_file.name, "rb") as f:
+                with Path.open(Path(temp_zip_file.name), "rb") as f:
                     return f.read()
             if isinstance(result, MadsciBaseModel):
                 return json.dumps(result.model_dump(mode="json"))
