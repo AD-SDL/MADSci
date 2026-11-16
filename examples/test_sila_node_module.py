@@ -8,9 +8,7 @@ from sila2.client import SilaClient
 
 liquid_handler_node = LiquidHandlerNode()
 liquid_handler_node.config = LiquidHandlerConfig(
-    node_name="liquidhandler_1",
-    node_type="device",
-    node_url="http://localhost:4037"
+    node_name="liquidhandler_1", node_type="device", node_url="http://localhost:4037"
 )
 liquid_handler_node.server.start_insecure("localhost", 4037)
 client = SilaClient(address="localhost", port=4037, insecure=True)

@@ -499,10 +499,6 @@ class LiquidHandlerNode(RestNode):
         self.resource_client.push(
             target_location.resource_id, transferred_resource.resource_id
         )
-    
-    @action
-    def test_action(self, test: list[str]):
-        print(test)
 
     def get_location(self) -> AdminCommandResponse:
         """
