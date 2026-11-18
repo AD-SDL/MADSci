@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Annotated, Any, Dict, Optional
 
 from classy_fastapi import get, post
-from fastapi import Form, Response, UploadFile
+from fastapi import Form, Query, Response, UploadFile
 from fastapi.params import Body
 from fastapi.responses import FileResponse, JSONResponse
 from madsci.common.db_handlers.document_storage_handler import (
@@ -365,10 +365,19 @@ class DataManager(AbstractManagerBase[DataManagerSettings]):
             }
 
     @post("/datapoints/query")
-    async def query_datapoints(self, selector: Any = Body()) -> Dict[str, Any]:  # noqa: B008
+    async def query_datapoints(
+        self,
+        selector: Any = Body(),  # noqa: B008
+        limit: Optional[int] = Query(
+            None, ge=1, description="Maximum number of datapoints to return"
+        ),
+    ) -> Dict[str, Any]:
         """Query datapoints based on a selector. Note: this is a raw query, so be careful."""
         with self.span("data.query"):
-            datapoint_list = self.datapoints.find(selector).to_list()
+            cursor = self.datapoints.find(selector)
+            if limit is not None:
+                cursor = cursor.limit(limit)
+            datapoint_list = cursor.to_list()
             return {
                 datapoint["_id"]: DataPoint.discriminate(datapoint)
                 for datapoint in datapoint_list

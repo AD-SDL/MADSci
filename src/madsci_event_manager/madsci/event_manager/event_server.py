@@ -551,10 +551,19 @@ class EventManager(AbstractManagerBase[EventManagerSettings]):
         return {str(event["_id"]): Event.model_validate(event) for event in event_list}
 
     @post("/events/query")
-    async def query_events(self, selector: Any = Body()) -> Dict[str, Event]:  # noqa: B008
+    async def query_events(
+        self,
+        selector: Any = Body(),  # noqa: B008
+        limit: Optional[int] = Query(
+            None, ge=1, description="Maximum number of events to return"
+        ),
+    ) -> Dict[str, Event]:
         """Query events based on a selector. Note: this is a raw query, so be careful."""
         with self.span("event.query"):
-            event_list = self.events.find(selector).to_list()
+            cursor = self.events.find(selector)
+            if limit is not None:
+                cursor = cursor.limit(limit)
+            event_list = cursor.to_list()
             return {event["_id"]: event for event in event_list}
 
     # ==========================================================================

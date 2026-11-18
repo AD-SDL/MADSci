@@ -538,11 +538,56 @@ class TestEventClientQueryEvents:
             "POST",
             "http://localhost:8001/events/query",
             timeout=10.0,
-            params={"selector": selector},
+            json=selector,
+            params={},
         )
         assert isinstance(result, dict)
         assert sample_event.event_id in result
         assert isinstance(result[sample_event.event_id], Event)
+
+    @patch("madsci.client.event_client.create_httpx_client")
+    def test_query_events_with_limit(
+        self, mock_create_session, config_with_server, temp_log_dir
+    ):
+        """query_events sends limit as a query parameter."""
+        config_with_server.log_dir = temp_log_dir
+        mock_response = Mock()
+        mock_response.is_success = True
+        mock_response.json.return_value = {}
+        mock_session = Mock()
+        mock_session.request.return_value = mock_response
+        mock_create_session.return_value = mock_session
+
+        client = EventClient(config=config_with_server)
+        mock_session.request.reset_mock()
+
+        selector = {"event_type": "test"}
+        client.query_events(selector, limit=5)
+
+        mock_session.request.assert_called_once_with(
+            "POST",
+            "http://localhost:8001/events/query",
+            timeout=10.0,
+            json=selector,
+            params={"limit": 5},
+        )
+
+    @pytest.mark.asyncio
+    async def test_async_query_events_with_limit(
+        self, config_with_server, temp_log_dir
+    ):
+        """async_query_events sends the selector as JSON and limit as a parameter."""
+        config_with_server.log_dir = temp_log_dir
+        client = EventClient(config=config_with_server)
+        mock_response = Mock()
+        mock_response.is_success = True
+        mock_response.json.return_value = {}
+        with patch.object(
+            client, "_async_request", new=AsyncMock(return_value=mock_response)
+        ) as mock_request:
+            await client.async_query_events({"event_type": "test"}, limit=5)
+        assert mock_request.call_args.kwargs["json"] == {"event_type": "test"}
+        assert mock_request.call_args.kwargs["params"] == {"limit": 5}
 
     def test_query_events_without_server(self, config_without_server):
         """Test query_events without event server logs warning and returns empty dict."""

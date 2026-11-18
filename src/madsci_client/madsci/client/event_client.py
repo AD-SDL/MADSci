@@ -882,7 +882,10 @@ class EventClient(DualModeClientMixin):
         return response.json()
 
     def query_events(
-        self, selector: dict, timeout: Optional[float] = None
+        self,
+        selector: dict,
+        timeout: Optional[float] = None,
+        limit: Optional[int] = None,
     ) -> dict[str, Event]:
         """
         Query the event server for events based on a selector.
@@ -892,6 +895,7 @@ class EventClient(DualModeClientMixin):
         Args:
             selector: Dictionary selector for filtering events.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+            limit: Optional maximum number of events to return. If None, returns all matches.
         """
         events = OrderedDict()
         if self.event_server:
@@ -899,7 +903,8 @@ class EventClient(DualModeClientMixin):
                 "POST",
                 f"{self.event_server}events/query",
                 timeout=self.config.timeout_default if timeout is None else timeout,
-                params={"selector": selector},
+                json=selector,
+                params={} if limit is None else {"limit": limit},
             )
             if not response.is_success:
                 response.raise_for_status()
@@ -1322,7 +1327,10 @@ class EventClient(DualModeClientMixin):
         return selected_events
 
     async def async_query_events(
-        self, selector: dict, timeout: Optional[float] = None
+        self,
+        selector: dict,
+        timeout: Optional[float] = None,
+        limit: Optional[int] = None,
     ) -> dict[str, Event]:
         """
         Query the event server for events based on a selector asynchronously.
@@ -1330,6 +1338,7 @@ class EventClient(DualModeClientMixin):
         Args:
             selector: Dictionary selector for filtering events.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+            limit: Optional maximum number of events to return. If None, returns all matches.
         """
         events = OrderedDict()
         if self.event_server:
@@ -1337,7 +1346,8 @@ class EventClient(DualModeClientMixin):
                 "POST",
                 f"{self.event_server}events/query",
                 timeout=self.config.timeout_default if timeout is None else timeout,
-                params={"selector": selector},
+                json=selector,
+                params={} if limit is None else {"limit": limit},
             )
             if not response.is_success:
                 response.raise_for_status()

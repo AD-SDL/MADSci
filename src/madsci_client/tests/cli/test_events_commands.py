@@ -164,6 +164,88 @@ class TestEventsQuery:
             )
             assert result.exit_code == 0
 
+    def test_query_with_selector_and_limit(self) -> None:
+        events = OrderedDict({_EVENT_ID: _make_event()})
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("query_events", events) as mock_query,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "query",
+                    "--selector",
+                    '{"event_type": "UNKNOWN"}',
+                    "--limit",
+                    "5",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            mock_query.assert_called_once_with({"event_type": "UNKNOWN"}, limit=5)
+
+    def test_query_with_selector_without_limit(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("query_events", OrderedDict()) as mock_query,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "query",
+                    "--selector",
+                    "{}",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code == 0
+            mock_query.assert_called_once_with({}, limit=None)
+
+    def test_query_rejects_limit_below_one(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            madsci,
+            [
+                "events",
+                "query",
+                "--selector",
+                "{}",
+                "--limit",
+                "0",
+                "--event-url",
+                "http://localhost:8001/",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "not in the range" in result.output
+
+    def test_query_limit_without_selector_is_an_error(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("get_events", OrderedDict()) as mock_get,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "query",
+                    "--limit",
+                    "3",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code != 0
+            assert "--limit needs --selector" in result.output
+            mock_get.assert_not_called()
+
     def test_query_invalid_json(self) -> None:
         runner = CliRunner()
         result = runner.invoke(

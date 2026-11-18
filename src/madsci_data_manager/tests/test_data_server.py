@@ -161,6 +161,40 @@ def test_query_datapoints(test_client: TestClient, test_manager: DataManager) ->
         assert datapoint.value >= test_val
 
 
+def test_query_datapoints_with_limit(
+    test_client: TestClient, test_manager: DataManager
+) -> None:
+    """The limit query parameter caps the number of matching datapoints."""
+    test_manager.datapoints.delete_many({})
+    for i in range(10):
+        test_datapoint = ValueDataPoint(label="test_" + str(i), value=i)
+        test_client.post(
+            "/datapoint", data={"datapoint": test_datapoint.model_dump_json()}
+        )
+    selector = {"value": {"$gte": 2}}
+    response = test_client.post("/datapoints/query", json=selector, params={"limit": 3})
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result) == 3
+    for value in result.values():
+        assert ValueDataPoint.model_validate(value).value >= 2
+
+    # Without a limit, every match comes back (no change for old callers).
+    result = test_client.post("/datapoints/query", json=selector).json()
+    assert len(result) == 8
+
+
+@pytest.mark.parametrize("bad_limit", [0, -1])
+def test_query_datapoints_rejects_bad_limit(
+    test_client: TestClient, bad_limit: int
+) -> None:
+    """A limit below 1 is a validation error, not an unlimited query."""
+    response = test_client.post(
+        "/datapoints/query", json={}, params={"limit": bad_limit}
+    )
+    assert response.status_code == 422
+
+
 def find_free_port():
     """Find a free port to use for object storage."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:

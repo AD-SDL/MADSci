@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import shutil
 from json import JSONDecodeError
 from pathlib import Path
@@ -258,24 +259,30 @@ class DataClient(DualModeClientMixin):
         ]
 
     def query_datapoints(
-        self, selector: Any, timeout: Optional[float] = None
+        self,
+        selector: Any,
+        timeout: Optional[float] = None,
+        limit: Optional[int] = None,
     ) -> dict[str, DataPoint]:
         """Query datapoints based on a selector.
 
         Args:
             selector: Query selector for filtering datapoints.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+            limit: Optional maximum number of datapoints to return. If None, returns all matches.
         """
         if self.data_server_url is None:
-            return {
-                datapoint_id: datapoint
+            matches = (
+                (datapoint_id, datapoint)
                 for datapoint_id, datapoint in self._local_datapoints.items()
                 if selector(datapoint)
-            }
+            )
+            return dict(itertools.islice(matches, limit))
         response = self._request(
             "POST",
             f"{self.data_server_url}datapoints/query",
             json=selector,
+            params={} if limit is None else {"limit": limit},
             timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()
@@ -614,24 +621,30 @@ class DataClient(DualModeClientMixin):
         ]
 
     async def async_query_datapoints(
-        self, selector: Any, timeout: Optional[float] = None
+        self,
+        selector: Any,
+        timeout: Optional[float] = None,
+        limit: Optional[int] = None,
     ) -> dict[str, DataPoint]:
         """Query datapoints based on a selector asynchronously.
 
         Args:
             selector: Query selector for filtering datapoints.
             timeout: Optional timeout override in seconds. If None, uses config.timeout_default.
+            limit: Optional maximum number of datapoints to return. If None, returns all matches.
         """
         if self.data_server_url is None:
-            return {
-                datapoint_id: datapoint
+            matches = (
+                (datapoint_id, datapoint)
                 for datapoint_id, datapoint in self._local_datapoints.items()
                 if selector(datapoint)
-            }
+            )
+            return dict(itertools.islice(matches, limit))
         response = await self._async_request(
             "POST",
             f"{self.data_server_url}datapoints/query",
             json=selector,
+            params={} if limit is None else {"limit": limit},
             timeout=self.config.timeout_default if timeout is None else timeout,
         )
         response.raise_for_status()

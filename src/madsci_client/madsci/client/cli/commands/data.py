@@ -372,9 +372,9 @@ def submit_datapoint(
 )
 @click.option(
     "--limit",
-    type=int,
+    type=click.IntRange(min=1),
     default=None,
-    help="Limit number of results.",
+    help="Maximum number of results. The server applies the limit.",
 )
 @_DATA_URL_OPTION
 @timeout_option(default=10.0)
@@ -404,12 +404,10 @@ def query_datapoints(
         raise click.ClickException(f"Invalid JSON in --selector: {exc}") from exc
 
     with _make_client(url, timeout) as client:
-        results = client.query_datapoints(parsed_selector)
+        results = client.query_datapoints(parsed_selector, limit=limit)
 
         # results is a dict[str, DataPoint]
         datapoints = list(results.values()) if isinstance(results, dict) else results
-        if limit:
-            datapoints = datapoints[:limit]
 
         if fmt in (OutputFormat.JSON, OutputFormat.YAML):
             rows = [_datapoint_to_dict(dp) for dp in datapoints]

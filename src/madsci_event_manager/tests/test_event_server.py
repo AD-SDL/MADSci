@@ -11,12 +11,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
+from madsci.client.event_client import EventClient
 from madsci.common.db_handlers.document_storage_handler import (
     InMemoryDocumentStorageHandler,
 )
 from madsci.common.types.event_types import (
     EmailAlertsConfig,
     Event,
+    EventClientConfig,
     EventManagerSettings,
     EventType,
 )
@@ -117,6 +119,63 @@ def test_query_events(test_client: TestClient) -> None:
     for _, value in result.items():
         event = Event.model_validate(value)
         assert event.event_data["test"] >= test_val
+
+
+def test_query_events_with_limit(test_client: TestClient) -> None:
+    """The limit query parameter caps the number of matching events."""
+    for i in range(10):
+        test_event = Event(event_type=EventType.TEST, event_data={"test": i})
+        test_client.post("/event", json=test_event.model_dump(mode="json"))
+    selector = {"event_data.test": {"$gte": 2}}
+    response = test_client.post("/events/query", json=selector, params={"limit": 3})
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result) == 3
+    for value in result.values():
+        assert Event.model_validate(value).event_data["test"] >= 2
+
+    # Without a limit, every match comes back (no change for old callers).
+    result = test_client.post("/events/query", json=selector).json()
+    assert len(result) == 8
+
+
+@pytest.mark.parametrize("bad_limit", [0, -1])
+def test_query_events_rejects_bad_limit(
+    test_client: TestClient, bad_limit: int
+) -> None:
+    """A limit below 1 is a validation error, not an unlimited query."""
+    response = test_client.post("/events/query", json={}, params={"limit": bad_limit})
+    assert response.status_code == 422
+
+
+def test_event_client_query_events_against_server(
+    test_client: TestClient, tmp_path: Path
+) -> None:
+    """EventClient.query_events sends the selector in the body the server reads."""
+    for i in range(5):
+        test_event = Event(event_type=EventType.TEST, event_data={"test": i})
+        test_client.post("/event", json=test_event.model_dump(mode="json"))
+
+    def request_via_test_client(method: str, url: str, **kwargs):
+        kwargs.pop("timeout", None)
+        return test_client.request(method, url, **kwargs)
+
+    mock_session = MagicMock()
+    mock_session.request = request_via_test_client
+    with patch(
+        "madsci.client.event_client.create_httpx_client", return_value=mock_session
+    ):
+        client = EventClient(
+            config=EventClientConfig(
+                event_server_url="http://testserver", log_dir=tmp_path
+            )
+        )
+        selector = {"event_data.test": {"$gte": 1}}
+        assert len(client.query_events(selector)) == 4
+        limited = client.query_events(selector, limit=2)
+    assert len(limited) == 2
+    for event in limited.values():
+        assert event.event_data["test"] >= 1
 
 
 def test_event_alert(test_client: TestClient) -> None:

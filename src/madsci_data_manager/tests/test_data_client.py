@@ -5,7 +5,7 @@ import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import shutil
 import socket
 import subprocess
@@ -120,6 +120,25 @@ def test_query_datapoints(client: DataClient) -> None:
     )
     assert len(queried_datapoints) == 1
     assert datapoint.datapoint_id in queried_datapoints
+
+
+def test_query_datapoints_with_limit(client: DataClient) -> None:
+    """query_datapoints passes limit to the server, which caps the results."""
+    for i in range(5):
+        client.submit_datapoint(ValueDataPoint(label="Test", value=f"v{i}"))
+    selector = {"label": "Test"}
+    assert len(client.query_datapoints(selector)) == 5
+    assert len(client.query_datapoints(selector, limit=2)) == 2
+
+
+def test_query_datapoints_with_limit_local_mode() -> None:
+    """In local mode, query_datapoints applies the limit to the local store."""
+    with pytest.warns(MadsciLocalOnlyWarning):
+        local_client = DataClient()
+    for i in range(5):
+        local_client.submit_datapoint(ValueDataPoint(label="Test", value=f"v{i}"))
+    assert len(local_client.query_datapoints(lambda _dp: True)) == 5
+    assert len(local_client.query_datapoints(lambda _dp: True, limit=2)) == 2
 
 
 def test_file_datapoint(client: DataClient, tmp_path: str) -> None:
@@ -728,6 +747,20 @@ class TestAsyncGetDatapointsLocalMode:
 
         result = await local_client.async_get_datapoints(number=2)
         assert len(result) == 2
+
+
+@pytest.mark.asyncio
+async def test_async_query_datapoints_sends_limit() -> None:
+    """async_query_datapoints sends limit as a query parameter."""
+    client = DataClient(data_server_url="http://testserver")
+    response = MagicMock()
+    response.json.return_value = {}
+    with patch.object(
+        client, "_async_request", new=AsyncMock(return_value=response)
+    ) as mock_request:
+        await client.async_query_datapoints({"label": "Test"}, limit=7)
+    assert mock_request.call_args.kwargs["json"] == {"label": "Test"}
+    assert mock_request.call_args.kwargs["params"] == {"limit": 7}
 
 
 # Additional tests for improved data client functionality
