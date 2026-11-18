@@ -93,7 +93,7 @@ class TestEventsQuery:
         events = OrderedDict({_EVENT_ID: _make_event()})
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_events", events),
+            _patch_event_client("get_events", events) as mock_get_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -106,12 +106,13 @@ class TestEventsQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_events.assert_called_once_with(number=100, level=-1)
 
     def test_query_json(self) -> None:
         events = OrderedDict({_EVENT_ID: _make_event()})
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_events", events),
+            _patch_event_client("get_events", events) as mock_get_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -125,11 +126,12 @@ class TestEventsQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_events.assert_called_once_with(number=100, level=-1)
 
     def test_query_empty(self) -> None:
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_events", OrderedDict()),
+            _patch_event_client("get_events", OrderedDict()) as mock_get_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -143,12 +145,13 @@ class TestEventsQuery:
             )
             assert result.exit_code == 0
             assert "No events found" in result.output
+            mock_get_events.assert_called_once_with(number=100, level=-1)
 
     def test_query_with_selector(self) -> None:
         events = OrderedDict({_EVENT_ID: _make_event()})
         with (
             _patch_event_client_init(),
-            _patch_event_client("query_events", events),
+            _patch_event_client("query_events", events) as mock_query_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -163,6 +166,7 @@ class TestEventsQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_query_events.assert_called_once_with({"event_type": "UNKNOWN"})
 
     def test_query_invalid_json(self) -> None:
         runner = CliRunner()
@@ -184,7 +188,7 @@ class TestEventsQuery:
         events = OrderedDict({_EVENT_ID: _make_event()})
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_events", events),
+            _patch_event_client("get_events", events) as mock_get_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -198,6 +202,7 @@ class TestEventsQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_events.assert_called_once_with(number=100, level=-1)
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +222,7 @@ class TestEventsGet:
         event = _make_event()
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_event", event),
+            _patch_event_client("get_event", event) as mock_get_event,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -231,11 +236,12 @@ class TestEventsGet:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_event.assert_called_once_with(_EVENT_ID)
 
     def test_get_not_found(self) -> None:
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_event", None),
+            _patch_event_client("get_event", None) as mock_get_event,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -250,12 +256,13 @@ class TestEventsGet:
             )
             assert result.exit_code != 0
             assert "not found" in result.output
+            mock_get_event.assert_called_once_with("NOTFOUND")
 
     def test_get_json(self) -> None:
         event = _make_event()
         with (
             _patch_event_client_init(),
-            _patch_event_client("get_event", event),
+            _patch_event_client("get_event", event) as mock_get_event,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -270,6 +277,7 @@ class TestEventsGet:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_event.assert_called_once_with(_EVENT_ID)
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +312,9 @@ class TestEventsArchive:
     def test_archive_by_date(self) -> None:
         with (
             _patch_event_client_init(),
-            _patch_event_client("archive_events", {"archived_count": 5}),
+            _patch_event_client(
+                "archive_events", {"archived_count": 5}
+            ) as mock_archive_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -320,11 +330,16 @@ class TestEventsArchive:
             )
             assert result.exit_code == 0
             assert "5" in result.output
+            mock_archive_events.assert_called_once_with(
+                before_date="2026-01-01", event_ids=None, timeout=10.0
+            )
 
     def test_archive_by_ids(self) -> None:
         with (
             _patch_event_client_init(),
-            _patch_event_client("archive_events", {"archived_count": 2}),
+            _patch_event_client(
+                "archive_events", {"archived_count": 2}
+            ) as mock_archive_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -340,6 +355,9 @@ class TestEventsArchive:
             )
             assert result.exit_code == 0
             assert "2" in result.output
+            mock_archive_events.assert_called_once_with(
+                before_date=None, event_ids=["id1", "id2"], timeout=10.0
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +378,9 @@ class TestEventsPurge:
     def test_purge_with_yes(self) -> None:
         with (
             _patch_event_client_init(),
-            _patch_event_client("purge_events", {"purged_count": 10}),
+            _patch_event_client(
+                "purge_events", {"purged_count": 10}
+            ) as mock_purge_events,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -375,6 +395,7 @@ class TestEventsPurge:
             )
             assert result.exit_code == 0
             assert "10" in result.output
+            mock_purge_events.assert_called_once_with(older_than_days=30, timeout=10.0)
 
     def test_purge_abort(self) -> None:
         runner = CliRunner()
@@ -425,7 +446,7 @@ class TestEventsBackup:
             _patch_event_client_init(),
             _patch_event_client(
                 "create_backup", {"backup_id": "bk-123", "status": "created"}
-            ),
+            ) as mock_create_backup,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -440,13 +461,14 @@ class TestEventsBackup:
             )
             assert result.exit_code == 0
             assert "created" in result.output.lower()
+            mock_create_backup.assert_called_once_with(timeout=30.0)
 
     def test_backup_status(self) -> None:
         with (
             _patch_event_client_init(),
             _patch_event_client(
                 "get_backup_status", {"last_backup": "2026-01-01", "count": 5}
-            ),
+            ) as mock_get_backup_status,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -460,6 +482,7 @@ class TestEventsBackup:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_backup_status.assert_called_once_with(timeout=30.0)
 
 
 # ---------------------------------------------------------------------------

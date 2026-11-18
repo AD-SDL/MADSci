@@ -84,7 +84,10 @@ class TestCampaignCreate:
 
     def test_create_basic(self) -> None:
         mock_result = _make_campaign(campaign_name="My Campaign")
-        with _patch_client_init(), _patch_client("register_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("register_campaign", mock_result) as mock_register_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -99,10 +102,17 @@ class TestCampaignCreate:
             )
             assert result.exit_code == 0
             assert "created" in result.output.lower()
+            mock_register_campaign.assert_called_once()
+            (camp,) = mock_register_campaign.call_args.args
+            assert camp.campaign_name == "My Campaign"
+            assert camp.campaign_description is None
 
     def test_create_with_desc(self) -> None:
         mock_result = _make_campaign(campaign_name="Test")
-        with _patch_client_init(), _patch_client("register_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("register_campaign", mock_result) as mock_register_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -118,10 +128,17 @@ class TestCampaignCreate:
                 ],
             )
             assert result.exit_code == 0
+            mock_register_campaign.assert_called_once()
+            (camp,) = mock_register_campaign.call_args.args
+            assert camp.campaign_name == "Test"
+            assert camp.campaign_description == "A test campaign"
 
     def test_create_json(self) -> None:
         mock_result = _make_campaign(campaign_name="JSON Test")
-        with _patch_client_init(), _patch_client("register_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("register_campaign", mock_result) as mock_register_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -136,6 +153,8 @@ class TestCampaignCreate:
                 ],
             )
             assert result.exit_code == 0
+            mock_register_campaign.assert_called_once()
+            assert mock_register_campaign.call_args.args[0].campaign_name == "JSON Test"
 
     def test_create_missing_name(self) -> None:
         runner = CliRunner()
@@ -152,7 +171,10 @@ class TestCampaignCreate:
 
     def test_create_quiet(self) -> None:
         mock_result = _make_campaign(campaign_name="Quiet")
-        with _patch_client_init(), _patch_client("register_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("register_campaign", mock_result) as mock_register_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -167,6 +189,8 @@ class TestCampaignCreate:
                 ],
             )
             assert result.exit_code == 0
+            mock_register_campaign.assert_called_once()
+            assert mock_register_campaign.call_args.args[0].campaign_name == "Quiet"
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +209,10 @@ class TestCampaignList:
         assert "List all campaigns" in result.output
 
     def test_list_campaigns_empty(self) -> None:
-        with _patch_client_init(), _patch_client("get_campaigns", []):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaigns", []) as mock_get_campaigns,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -198,12 +225,16 @@ class TestCampaignList:
             )
             assert result.exit_code == 0
             assert "No campaigns found" in result.output
+            mock_get_campaigns.assert_called_once_with(timeout=10.0)
 
     def test_list_campaigns_with_results(self) -> None:
         mock_campaigns = [
             _make_campaign(campaign_name="Campaign Alpha"),
         ]
-        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaigns", mock_campaigns) as mock_get_campaigns,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -216,12 +247,16 @@ class TestCampaignList:
             )
             assert result.exit_code == 0
             assert "Campaign Alpha" in result.output
+            mock_get_campaigns.assert_called_once_with(timeout=10.0)
 
     def test_list_campaigns_json(self) -> None:
         mock_campaigns = [
             _make_campaign(campaign_name="Campaign Beta"),
         ]
-        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaigns", mock_campaigns) as mock_get_campaigns,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -234,12 +269,16 @@ class TestCampaignList:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_campaigns.assert_called_once_with(timeout=10.0)
 
     def test_list_campaigns_quiet(self) -> None:
         mock_campaigns = [
             _make_campaign(campaign_name="Campaign Gamma"),
         ]
-        with _patch_client_init(), _patch_client("get_campaigns", mock_campaigns):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaigns", mock_campaigns) as mock_get_campaigns,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -253,6 +292,7 @@ class TestCampaignList:
             )
             # quiet Console suppresses output; just verify no crash
             assert result.exit_code == 0
+            mock_get_campaigns.assert_called_once_with(timeout=10.0)
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +310,10 @@ class TestCampaignGet:
 
     def test_get_basic(self) -> None:
         mock_result = _make_campaign(campaign_name="Test Campaign")
-        with _patch_client_init(), _patch_client("get_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaign", mock_result) as mock_get_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -284,10 +327,14 @@ class TestCampaignGet:
             )
             assert result.exit_code == 0
             assert "Test Campaign" in result.output
+            mock_get_campaign.assert_called_once_with(_CAMPAIGN_ID)
 
     def test_get_json(self) -> None:
         mock_result = _make_campaign(campaign_name="JSON")
-        with _patch_client_init(), _patch_client("get_campaign", mock_result):
+        with (
+            _patch_client_init(),
+            _patch_client("get_campaign", mock_result) as mock_get_campaign,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -301,6 +348,7 @@ class TestCampaignGet:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_campaign.assert_called_once_with(_CAMPAIGN_ID)
 
     def test_get_missing_arg(self) -> None:
         runner = CliRunner()
