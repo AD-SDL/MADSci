@@ -229,15 +229,36 @@
         "summary": "Query Datapoints",
         "description": "Query datapoints based on a selector. Note: this is a raw query, so be careful.",
         "operationId": "query_datapoints_datapoints_query_post",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Maximum number of datapoints to return",
+              "title": "Limit"
+            },
+            "description": "Maximum number of datapoints to return"
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "title": "Selector"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {

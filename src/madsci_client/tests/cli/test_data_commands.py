@@ -392,6 +392,64 @@ class TestDataQuery:
             )
             assert result.exit_code == 0
 
+    def test_query_limit_is_sent_to_server(self) -> None:
+        dp = _make_datapoint()
+        with (
+            _patch_client_init(),
+            _patch_client("query_datapoints", {"dp1": dp}) as mock_query,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "data",
+                    "query",
+                    "--selector",
+                    '{"label": "test"}',
+                    "--limit",
+                    "5",
+                    "--data-url",
+                    "http://localhost:8004/",
+                ],
+            )
+            assert result.exit_code == 0
+            mock_query.assert_called_once_with({"label": "test"}, limit=5)
+
+    def test_query_without_limit_sends_none(self) -> None:
+        with _patch_client_init(), _patch_client("query_datapoints", {}) as mock_query:
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "data",
+                    "query",
+                    "--selector",
+                    "{}",
+                    "--data-url",
+                    "http://localhost:8004/",
+                ],
+            )
+            assert result.exit_code == 0
+            mock_query.assert_called_once_with({}, limit=None)
+
+    def test_query_rejects_limit_below_one(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(
+            madsci,
+            [
+                "data",
+                "query",
+                "--selector",
+                "{}",
+                "--limit",
+                "0",
+                "--data-url",
+                "http://localhost:8004/",
+            ],
+        )
+        assert result.exit_code != 0
+        assert "--limit" in result.output
+
     def test_query_empty(self) -> None:
         with _patch_client_init(), _patch_client("query_datapoints", {}):
             runner = CliRunner()

@@ -538,7 +538,7 @@ madsci events backup --create           # Create event backup
 
 | Subcommand | Description |
 |------------|-------------|
-| `query` | Query events (`--selector`, `--count`, `--level`) |
+| `query` | Query events (`--selector`, `--limit`, `--count`, `--level`) |
 | `get` | Show event details |
 | `archive` | Archive events (`--before-date`, `--ids`) |
 | `purge` | Purge old events (`--older-than-days`, `--yes` to skip confirmation) |

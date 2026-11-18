@@ -139,6 +139,12 @@ def events() -> None:
     help="Number of events to retrieve.",
 )
 @click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum number of results for a --selector query. The server applies the limit.",
+)
+@click.option(
     "--level",
     default=None,
     help="Filter by log level (DEBUG, INFO, WARNING, ERROR, CRITICAL).",
@@ -151,6 +157,7 @@ def query_events(
     ctx: click.Context,
     selector: str | None,
     count: int,
+    limit: int | None,
     level: str | None,
     event_url: str | None,
     timeout: float,
@@ -166,6 +173,7 @@ def query_events(
         madsci events query --count 50
         madsci events query --level ERROR
         madsci events query --selector '{"event_type": "WORKFLOW_START"}'
+        madsci events query --selector '{"event_type": "WORKFLOW_START"}' --limit 10
     """
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
@@ -179,7 +187,7 @@ def query_events(
                 raise click.ClickException(
                     f"Invalid JSON in --selector: {exc}"
                 ) from exc
-            results = client.query_events(parsed_selector)
+            results = client.query_events(parsed_selector, limit=limit)
         else:
             level_int = -1
             if level:
