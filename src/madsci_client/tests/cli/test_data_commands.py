@@ -448,7 +448,7 @@ class TestDataQuery:
             ],
         )
         assert result.exit_code != 0
-        assert "--limit" in result.output
+        assert "not in the range" in result.output
 
     def test_query_empty(self) -> None:
         with _patch_client_init(), _patch_client("query_datapoints", {}):

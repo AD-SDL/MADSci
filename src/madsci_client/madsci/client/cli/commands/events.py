@@ -175,6 +175,8 @@ def query_events(
         madsci events query --selector '{"event_type": "WORKFLOW_START"}'
         madsci events query --selector '{"event_type": "WORKFLOW_START"}' --limit 10
     """
+    if limit is not None and not selector:
+        raise click.UsageError("--limit needs --selector. Use --count without it.")
     console = get_console(ctx)
     fmt = determine_output_format(ctx)
     url = _get_event_url(ctx, event_url)

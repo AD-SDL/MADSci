@@ -223,7 +223,28 @@ class TestEventsQuery:
             ],
         )
         assert result.exit_code != 0
-        assert "--limit" in result.output
+        assert "not in the range" in result.output
+
+    def test_query_limit_without_selector_is_an_error(self) -> None:
+        with (
+            _patch_event_client_init(),
+            _patch_event_client("get_events", OrderedDict()) as mock_get,
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                [
+                    "events",
+                    "query",
+                    "--limit",
+                    "3",
+                    "--event-url",
+                    "http://localhost:8001/",
+                ],
+            )
+            assert result.exit_code != 0
+            assert "--limit needs --selector" in result.output
+            mock_get.assert_not_called()
 
     def test_query_invalid_json(self) -> None:
         runner = CliRunner()

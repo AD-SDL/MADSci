@@ -261,6 +261,9 @@ Get the latest events from the system.
 #### POST /events/query
 Query events using MongoDB selector syntax.
 
+**Query Parameters**:
+- `limit` (int, optional, at least 1): Maximum number of events to return. Without it, all matching events are returned.
+
 **Request Body**: MongoDB query selector object
 ```json
 {
