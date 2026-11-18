@@ -20,6 +20,7 @@ from madsci.common.types.node_types import Node
 from madsci.common.types.parameter_types import ParameterInputJson
 from madsci.common.types.step_types import Step, StepDefinition
 from madsci.common.types.workcell_types import (
+    WorkcellInfo,
     WorkcellManagerSettings,
     WorkcellState,
 )
@@ -1005,3 +1006,208 @@ class TestAsyncResubmitWorkflow:
         call_args = async_client._async_request.call_args
         assert call_args[0][0] == "POST"
         assert f"workflow/{workflow_id}/resubmit" in call_args[0][1]
+
+
+def _make_error_response(status_code: int = 500) -> MagicMock:
+    """Create a mock httpx.Response whose raise_for_status() raises."""
+    mock_resp = _make_mock_response({}, status_code=status_code)
+    mock_resp.content = b"server error"
+    mock_resp.raise_for_status.side_effect = HTTPStatusError(
+        "Server Error",
+        request=Request("GET", "http://testserver/"),
+        response=Response(status_code),
+    )
+    return mock_resp
+
+
+# (method name, path after the server URL, HTTP method) for the async methods
+# that take only a workflow ID and return one Workflow.
+WORKFLOW_ID_METHODS = [
+    ("async_query_workflow", "workflow/{id}", "GET"),
+    ("async_pause_workflow", "workflow/{id}/pause", "POST"),
+    ("async_resume_workflow", "workflow/{id}/resume", "POST"),
+    ("async_cancel_workflow", "workflow/{id}/cancel", "POST"),
+]
+
+
+class TestAsyncWorkflowMethods:
+    """Tests for the async workflow query and control methods."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "path", "http_method"), WORKFLOW_ID_METHODS
+    )
+    async def test_workflow_id_methods(
+        self,
+        async_client: WorkcellClient,
+        sample_workflow_instance: Workflow,
+        method_name: str,
+        path: str,
+        http_method: str,
+    ) -> None:
+        """Each method sends the right request and returns a Workflow."""
+        workflow_id = sample_workflow_instance.workflow_id
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(
+                sample_workflow_instance.model_dump(mode="json")
+            )
+        )
+
+        result = await getattr(async_client, method_name)(workflow_id)
+
+        async_client._async_request.assert_awaited_once_with(
+            http_method,
+            "http://testserver/" + path.format(id=workflow_id),
+            timeout=10.0,
+        )
+        assert isinstance(result, Workflow)
+        assert result.workflow_id == workflow_id
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "path", "http_method"), WORKFLOW_ID_METHODS
+    )
+    async def test_workflow_id_methods_raise_http_error(
+        self,
+        async_client: WorkcellClient,
+        method_name: str,
+        path: str,
+        http_method: str,
+    ) -> None:
+        """Each method raises HTTPStatusError on an error response."""
+        async_client._async_request = AsyncMock(return_value=_make_error_response())
+
+        with pytest.raises(HTTPStatusError):
+            await getattr(async_client, method_name)(new_ulid_str())
+
+    @pytest.mark.asyncio
+    async def test_get_workflow_definition(
+        self, async_client: WorkcellClient, sample_workflow: WorkflowDefinition
+    ) -> None:
+        """async_get_workflow_definition returns a WorkflowDefinition."""
+        definition_id = sample_workflow.workflow_definition_id
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(sample_workflow.model_dump(mode="json"))
+        )
+
+        result = await async_client.async_get_workflow_definition(definition_id)
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET",
+            f"http://testserver/workflow_definition/{definition_id}",
+            timeout=10.0,
+        )
+        assert isinstance(result, WorkflowDefinition)
+        assert result.name == sample_workflow.name
+
+    @pytest.mark.asyncio
+    async def test_get_active_workflows(
+        self, async_client: WorkcellClient, sample_workflow_instance: Workflow
+    ) -> None:
+        """async_get_active_workflows returns Workflows by ID."""
+        workflow_id = sample_workflow_instance.workflow_id
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(
+                {workflow_id: sample_workflow_instance.model_dump(mode="json")}
+            )
+        )
+
+        result = await async_client.async_get_active_workflows()
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET",
+            "http://testserver/workflows/active",
+            timeout=async_client.config.timeout_long_operations,
+        )
+        assert isinstance(result[workflow_id], Workflow)
+
+    @pytest.mark.asyncio
+    async def test_get_archived_workflows(
+        self, async_client: WorkcellClient, sample_workflow_instance: Workflow
+    ) -> None:
+        """async_get_archived_workflows sends the number and returns Workflows by ID."""
+        workflow_id = sample_workflow_instance.workflow_id
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(
+                {workflow_id: sample_workflow_instance.model_dump(mode="json")}
+            )
+        )
+
+        result = await async_client.async_get_archived_workflows(number=3)
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET",
+            "http://testserver/workflows/archived",
+            params={"number": 3},
+            timeout=async_client.config.timeout_long_operations,
+        )
+        assert isinstance(result[workflow_id], Workflow)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method_name", ["async_get_active_workflows", "async_get_archived_workflows"]
+    )
+    async def test_workflow_lists_reject_non_dict(
+        self, async_client: WorkcellClient, method_name: str
+    ) -> None:
+        """A list response instead of a dict raises ValueError."""
+        async_client._async_request = AsyncMock(return_value=_make_mock_response([]))
+
+        with pytest.raises(ValueError, match="Expected a dictionary of workflows"):
+            await getattr(async_client, method_name)()
+
+    @pytest.mark.asyncio
+    async def test_get_workflow_queue(
+        self, async_client: WorkcellClient, sample_workflow_instance: Workflow
+    ) -> None:
+        """async_get_workflow_queue returns a list of Workflows."""
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(
+                [sample_workflow_instance.model_dump(mode="json")]
+            )
+        )
+
+        result = await async_client.async_get_workflow_queue()
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET", "http://testserver/workflows/queue", timeout=10.0
+        )
+        assert [wf.workflow_id for wf in result] == [
+            sample_workflow_instance.workflow_id
+        ]
+
+    @pytest.mark.asyncio
+    async def test_get_workcell_state(self, async_client: WorkcellClient) -> None:
+        """async_get_workcell_state returns a WorkcellState."""
+        state = WorkcellState(workcell_info=WorkcellInfo(name="test_workcell"))
+        async_client._async_request = AsyncMock(
+            return_value=_make_mock_response(state.model_dump(mode="json"))
+        )
+
+        result = await async_client.async_get_workcell_state()
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET", "http://testserver/state", timeout=10.0
+        )
+        assert isinstance(result, WorkcellState)
+        assert result.workcell_info.name == "test_workcell"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("async_get_workflow_definition", ("definition-id",)),
+            ("async_get_active_workflows", ()),
+            ("async_get_archived_workflows", ()),
+            ("async_get_workflow_queue", ()),
+            ("async_get_workcell_state", ()),
+        ],
+    )
+    async def test_other_methods_raise_http_error(
+        self, async_client: WorkcellClient, method_name: str, args: tuple
+    ) -> None:
+        """The other async methods also raise HTTPStatusError on an error response."""
+        async_client._async_request = AsyncMock(return_value=_make_error_response())
+
+        with pytest.raises(HTTPStatusError):
+            await getattr(async_client, method_name)(*args)

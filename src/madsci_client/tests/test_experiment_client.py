@@ -1,6 +1,6 @@
 """Unit tests for ExperimentClient."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
@@ -562,3 +562,234 @@ class TestExperimentClientCampaignMethods:
 
         with pytest.raises(httpx.HTTPStatusError):
             client.get_campaign("nonexistent_campaign_id")
+
+
+# ------------------------------------------------------------------
+# Async method tests
+# ------------------------------------------------------------------
+
+EXPERIMENT_URL = "http://localhost:8002/"
+
+
+def _async_response(json_data, status_code: int = 200) -> Mock:
+    """Create a mock httpx.Response for the async request path."""
+    response = Mock(spec=httpx.Response)
+    response.json.return_value = json_data
+    response.status_code = status_code
+    response.is_success = status_code < 400
+    if status_code >= 400:
+        response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            f"{status_code} Error",
+            request=httpx.Request("GET", EXPERIMENT_URL),
+            response=httpx.Response(status_code),
+        )
+    return response
+
+
+@pytest.fixture
+def async_client():
+    """ExperimentClient with the async request method replaced by an AsyncMock."""
+    client = ExperimentClient(experiment_server_url=EXPERIMENT_URL)
+    client._async_request = AsyncMock()
+    return client
+
+
+# (method name, path after the server URL, HTTP method) for the async methods
+# that take only an experiment ID and return one Experiment.
+EXPERIMENT_ID_METHODS = [
+    ("async_get_experiment", "experiment/{id}", "GET"),
+    ("async_continue_experiment", "experiment/{id}/continue", "POST"),
+    ("async_pause_experiment", "experiment/{id}/pause", "POST"),
+    ("async_cancel_experiment", "experiment/{id}/cancel", "POST"),
+]
+
+
+class TestExperimentClientAsyncMethods:
+    """Test the async methods of ExperimentClient."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "path", "http_method"), EXPERIMENT_ID_METHODS
+    )
+    async def test_experiment_id_methods(
+        self, async_client, experiment, method_name, path, http_method
+    ):
+        """Each method sends the right request and returns an Experiment."""
+        async_client._async_request.return_value = _async_response(
+            experiment.model_dump(mode="json")
+        )
+
+        result = await getattr(async_client, method_name)(experiment.experiment_id)
+
+        async_client._async_request.assert_awaited_once_with(
+            http_method,
+            EXPERIMENT_URL + path.format(id=experiment.experiment_id),
+            timeout=10.0,
+        )
+        assert isinstance(result, Experiment)
+        assert result.run_name == experiment.run_name
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "path", "http_method"), EXPERIMENT_ID_METHODS
+    )
+    async def test_experiment_id_methods_raise_http_error(
+        self, async_client, method_name, path, http_method
+    ):
+        """Each method raises HTTPStatusError on an error response."""
+        async_client._async_request.return_value = _async_response({}, 404)
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await getattr(async_client, method_name)(new_ulid_str())
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("timeout", [0.0, 3.5])
+    async def test_timeout_override(self, async_client, experiment, timeout):
+        """An explicit timeout is sent as given, including 0.0."""
+        async_client._async_request.return_value = _async_response(
+            experiment.model_dump(mode="json")
+        )
+
+        await async_client.async_get_experiment(
+            experiment.experiment_id, timeout=timeout
+        )
+
+        assert async_client._async_request.await_args.kwargs["timeout"] == timeout
+
+    @pytest.mark.asyncio
+    async def test_get_experiments(self, async_client, experiment):
+        """async_get_experiments sends the number and returns Experiments."""
+        async_client._async_request.return_value = _async_response(
+            [experiment.model_dump(mode="json")]
+        )
+
+        result = await async_client.async_get_experiments(number=5)
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET", EXPERIMENT_URL + "experiments", params={"number": 5}, timeout=10.0
+        )
+        assert len(result) == 1
+        assert isinstance(result[0], Experiment)
+
+    @pytest.mark.asyncio
+    async def test_start_experiment(self, async_client, experiment_design, experiment):
+        """async_start_experiment posts the registration and returns an Experiment."""
+        async_client._async_request.return_value = _async_response(
+            experiment.model_dump(mode="json")
+        )
+
+        result = await async_client.async_start_experiment(
+            experiment_design, run_name="Run 1", run_description="First run"
+        )
+
+        args = async_client._async_request.await_args
+        assert args.args == ("POST", EXPERIMENT_URL + "experiment")
+        body = args.kwargs["json"]
+        assert body["experiment_design"]["experiment_name"] == "Test Experiment"
+        assert body["run_name"] == "Run 1"
+        assert body["run_description"] == "First run"
+        assert args.kwargs["timeout"] == 10.0
+        assert isinstance(result, Experiment)
+
+    @pytest.mark.asyncio
+    async def test_end_experiment_with_status(self, async_client, experiment):
+        """async_end_experiment sends the status as a query parameter."""
+        async_client._async_request.return_value = _async_response(
+            experiment.model_dump(mode="json")
+        )
+
+        result = await async_client.async_end_experiment(
+            experiment.experiment_id, status=ExperimentStatus.COMPLETED
+        )
+
+        async_client._async_request.assert_awaited_once_with(
+            "POST",
+            EXPERIMENT_URL + f"experiment/{experiment.experiment_id}/end",
+            params={"status": ExperimentStatus.COMPLETED},
+            timeout=10.0,
+        )
+        assert isinstance(result, Experiment)
+
+    @pytest.mark.asyncio
+    async def test_register_campaign(self, async_client, campaign):
+        """async_register_campaign posts the campaign and returns it."""
+        async_client._async_request.return_value = _async_response(
+            campaign.model_dump(mode="json")
+        )
+
+        result = await async_client.async_register_campaign(campaign)
+
+        async_client._async_request.assert_awaited_once_with(
+            "POST",
+            EXPERIMENT_URL + "campaign",
+            json=campaign.model_dump(mode="json"),
+            timeout=10.0,
+        )
+        assert isinstance(result, ExperimentalCampaign)
+        assert result.campaign_id == campaign.campaign_id
+
+    @pytest.mark.asyncio
+    async def test_get_campaign(self, async_client, campaign):
+        """async_get_campaign gets one campaign by ID."""
+        async_client._async_request.return_value = _async_response(
+            campaign.model_dump(mode="json")
+        )
+
+        result = await async_client.async_get_campaign(campaign.campaign_id)
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET", EXPERIMENT_URL + f"campaign/{campaign.campaign_id}", timeout=10.0
+        )
+        assert isinstance(result, ExperimentalCampaign)
+
+    @pytest.mark.asyncio
+    async def test_get_campaigns(self, async_client, campaign):
+        """async_get_campaigns returns a list of campaigns."""
+        async_client._async_request.return_value = _async_response(
+            [campaign.model_dump(mode="json")]
+        )
+
+        result = await async_client.async_get_campaigns()
+
+        async_client._async_request.assert_awaited_once_with(
+            "GET", EXPERIMENT_URL + "campaigns", timeout=10.0
+        )
+        assert [c.campaign_id for c in result] == [campaign.campaign_id]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("async_get_experiments", ()),
+            ("async_start_experiment", ("experiment_design",)),
+            ("async_end_experiment", ("exp-id",)),
+            ("async_register_campaign", ("campaign",)),
+            ("async_get_campaign", ("campaign-id",)),
+            ("async_get_campaigns", ()),
+        ],
+    )
+    async def test_other_methods_raise_http_error(
+        self, async_client, request, method_name, args
+    ):
+        """The other async methods also raise HTTPStatusError on an error response."""
+        async_client._async_request.return_value = _async_response({}, 500)
+        fixtures = {"experiment_design", "campaign"}
+        call_args = [
+            request.getfixturevalue(arg) if arg in fixtures else arg for arg in args
+        ]
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await getattr(async_client, method_name)(*call_args)
+
+    @pytest.mark.asyncio
+    async def test_end_experiment_without_status(self, async_client, experiment):
+        """async_end_experiment without a status sends status=None."""
+        async_client._async_request.return_value = _async_response(
+            experiment.model_dump(mode="json")
+        )
+
+        await async_client.async_end_experiment(experiment.experiment_id)
+
+        assert async_client._async_request.await_args.kwargs["params"] == {
+            "status": None
+        }

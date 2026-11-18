@@ -1636,3 +1636,153 @@ class TestEventClientAsyncCleanup:
         # Either the loop ran aclose or the reference was dropped -- either way
         # the client should be None afterward.
         assert client._async_client is None
+
+
+class TestEventClientAsyncQueries:
+    """Test the async query methods of EventClient."""
+
+    EVENT_URL = "http://localhost:8001/"
+
+    @staticmethod
+    def _response(json_data, status_code: int = 200) -> Mock:
+        """Create a mock httpx.Response for the async request path."""
+        response = Mock(spec=httpx.Response)
+        response.json.return_value = json_data
+        response.status_code = status_code
+        response.is_success = status_code < 400
+        if status_code >= 400:
+            response.raise_for_status.side_effect = httpx.HTTPStatusError(
+                f"{status_code} Error",
+                request=httpx.Request("GET", "http://localhost:8001/"),
+                response=httpx.Response(status_code),
+            )
+        return response
+
+    @pytest.fixture
+    def server_client(self, config_with_server, temp_log_dir):
+        """EventClient with an event server and a mocked async request method."""
+        config_with_server.log_dir = temp_log_dir
+        with patch("madsci.client.event_client.create_httpx_client"):
+            client = EventClient(config=config_with_server)
+        client._async_request = AsyncMock()
+        return client
+
+    @pytest.fixture
+    def local_client(self, config_without_server):
+        """EventClient without an event server and a mocked async request method."""
+        client = EventClient(config=config_without_server)
+        client._async_request = AsyncMock()
+        return client
+
+    @pytest.mark.asyncio
+    async def test_async_get_event(self, server_client, sample_event):
+        """async_get_event gets one event by ID and returns an Event."""
+        server_client._async_request.return_value = self._response(
+            sample_event.model_dump(mode="json")
+        )
+
+        result = await server_client.async_get_event(sample_event.event_id)
+
+        server_client._async_request.assert_awaited_once_with(
+            "GET", f"{self.EVENT_URL}event/{sample_event.event_id}", timeout=10.0
+        )
+        assert isinstance(result, Event)
+        assert result.event_id == sample_event.event_id
+
+    @pytest.mark.asyncio
+    async def test_async_get_events(self, server_client, sample_event):
+        """async_get_events sends number and level and returns Events by ID."""
+        server_client._async_request.return_value = self._response(
+            {sample_event.event_id: sample_event.model_dump(mode="json")}
+        )
+
+        result = await server_client.async_get_events(number=5, level=20, timeout=2.0)
+
+        server_client._async_request.assert_awaited_once_with(
+            "GET",
+            f"{self.EVENT_URL}events",
+            timeout=2.0,
+            params={"number": 5, "level": 20},
+        )
+        assert list(result) == [sample_event.event_id]
+        assert isinstance(result[sample_event.event_id], Event)
+
+    @pytest.mark.asyncio
+    async def test_async_get_events_default_level(self, server_client):
+        """async_get_events with level=-1 sends the logger's effective level."""
+        server_client._async_request.return_value = self._response({})
+
+        await server_client.async_get_events()
+
+        params = server_client._async_request.await_args.kwargs["params"]
+        assert params == {
+            "number": 100,
+            "level": server_client.logger.getEffectiveLevel(),
+        }
+
+    @pytest.mark.asyncio
+    async def test_async_query_events(self, server_client, sample_event):
+        """async_query_events posts the selector and returns Events by ID."""
+        selector = {"event_type": "test"}
+        server_client._async_request.return_value = self._response(
+            {sample_event.event_id: sample_event.model_dump(mode="json")}
+        )
+
+        result = await server_client.async_query_events(selector)
+
+        server_client._async_request.assert_awaited_once_with(
+            "POST",
+            f"{self.EVENT_URL}events/query",
+            timeout=10.0,
+            params={"selector": selector},
+        )
+        assert isinstance(result[sample_event.event_id], Event)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("method_name", "args"),
+        [
+            ("async_get_event", ("event-id",)),
+            ("async_get_events", ()),
+            ("async_query_events", ({},)),
+        ],
+    )
+    async def test_async_methods_raise_http_error(
+        self, server_client, method_name, args
+    ):
+        """Each async query method raises HTTPStatusError on an error response."""
+        server_client._async_request.return_value = self._response({}, 500)
+
+        with pytest.raises(httpx.HTTPStatusError):
+            await getattr(server_client, method_name)(*args)
+
+    @pytest.mark.asyncio
+    async def test_async_query_events_without_server(self, local_client):
+        """Without an event server, async_query_events returns {} and sends nothing."""
+        result = await local_client.async_query_events({"event_type": "test"})
+
+        assert result == {}
+        local_client._async_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_async_get_events_without_server(self, local_client, sample_event):
+        """Without an event server, async_get_events reads the local log."""
+        local_client.log(sample_event)
+
+        result = await local_client.async_get_events(number=1)
+
+        assert list(result) == [sample_event.event_id]
+        local_client._async_request.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_async_get_event_without_server(self, local_client, sample_event):
+        """Without an event server, async_get_event reads the local log."""
+        local_client.log(sample_event)
+
+        found = await local_client.async_get_event(sample_event.event_id)
+        missing = await local_client.async_get_event("missing-event-id")
+
+        assert found is not None
+        assert found.event_id == sample_event.event_id
+        assert missing is None
+        local_client._async_request.assert_not_awaited()
