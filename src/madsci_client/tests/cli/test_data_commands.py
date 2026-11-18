@@ -87,7 +87,10 @@ class TestDataList:
 
     def test_list_default(self) -> None:
         dps = [_make_datapoint()]
-        with _patch_client_init(), _patch_client("get_datapoints", dps):
+        with (
+            _patch_client_init(),
+            _patch_client("get_datapoints", dps) as mock_get_datapoints,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -95,10 +98,14 @@ class TestDataList:
             )
             assert result.exit_code == 0
             assert "test-label" in result.output
+            mock_get_datapoints.assert_called_once_with(number=20)
 
     def test_list_json(self) -> None:
         dps = [_make_datapoint()]
-        with _patch_client_init(), _patch_client("get_datapoints", dps):
+        with (
+            _patch_client_init(),
+            _patch_client("get_datapoints", dps) as mock_get_datapoints,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -111,9 +118,13 @@ class TestDataList:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_datapoints.assert_called_once_with(number=20)
 
     def test_list_empty(self) -> None:
-        with _patch_client_init(), _patch_client("get_datapoints", []):
+        with (
+            _patch_client_init(),
+            _patch_client("get_datapoints", []) as mock_get_datapoints,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -121,10 +132,14 @@ class TestDataList:
             )
             assert result.exit_code == 0
             assert "No datapoints found" in result.output
+            mock_get_datapoints.assert_called_once_with(number=20)
 
     def test_list_quiet(self) -> None:
         dps = [_make_datapoint()]
-        with _patch_client_init(), _patch_client("get_datapoints", dps):
+        with (
+            _patch_client_init(),
+            _patch_client("get_datapoints", dps) as mock_get_datapoints,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -137,6 +152,7 @@ class TestDataList:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_datapoints.assert_called_once_with(number=20)
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +172,9 @@ class TestDataGet:
     def test_get_value(self) -> None:
         with (
             _patch_client_init(),
-            _patch_client("get_datapoint_value", {"temperature": 25.3}),
+            _patch_client(
+                "get_datapoint_value", {"temperature": 25.3}
+            ) as mock_get_datapoint_value,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -170,12 +188,13 @@ class TestDataGet:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_datapoint_value.assert_called_once_with(_DP_ID)
 
     def test_get_save_to(self, tmp_path) -> None:
         output_file = tmp_path / "output.json"
         with (
             _patch_client_init(),
-            _patch_client("save_datapoint_value", None),
+            _patch_client("save_datapoint_value", None) as mock_save_datapoint_value,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -192,6 +211,7 @@ class TestDataGet:
             )
             assert result.exit_code == 0
             assert "saved" in result.output.lower()
+            mock_save_datapoint_value.assert_called_once_with(_DP_ID, str(output_file))
 
 
 # ---------------------------------------------------------------------------
@@ -216,7 +236,9 @@ class TestDataMetadata:
         }
         with (
             _patch_client_init(),
-            _patch_client("get_datapoint_metadata", mock_meta),
+            _patch_client(
+                "get_datapoint_metadata", mock_meta
+            ) as mock_get_datapoint_metadata,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -230,6 +252,7 @@ class TestDataMetadata:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_datapoint_metadata.assert_called_once_with(_DP_ID)
 
     def test_metadata_json(self) -> None:
         mock_meta = {
@@ -239,7 +262,9 @@ class TestDataMetadata:
         }
         with (
             _patch_client_init(),
-            _patch_client("get_datapoint_metadata", mock_meta),
+            _patch_client(
+                "get_datapoint_metadata", mock_meta
+            ) as mock_get_datapoint_metadata,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -254,6 +279,7 @@ class TestDataMetadata:
                 ],
             )
             assert result.exit_code == 0
+            mock_get_datapoint_metadata.assert_called_once_with(_DP_ID)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +299,10 @@ class TestDataSubmit:
 
     def test_submit_value(self) -> None:
         dp = _make_datapoint()
-        with _patch_client_init(), _patch_client("submit_datapoint", dp):
+        with (
+            _patch_client_init(),
+            _patch_client("submit_datapoint", dp) as mock_submit_datapoint,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -290,13 +319,21 @@ class TestDataSubmit:
             )
             assert result.exit_code == 0
             assert "submitted" in result.output.lower()
+            mock_submit_datapoint.assert_called_once()
+            (submitted,) = mock_submit_datapoint.call_args.args
+            assert submitted.data_type == "json"
+            assert submitted.value == {"temperature": 25.3}
+            assert submitted.label == "sensor"
 
     def test_submit_file(self, tmp_path) -> None:
         test_file = tmp_path / "data.csv"
         test_file.write_text("col1,col2\n1,2\n")
 
         dp = _make_datapoint(data_type="file")
-        with _patch_client_init(), _patch_client("submit_datapoint", dp):
+        with (
+            _patch_client_init(),
+            _patch_client("submit_datapoint", dp) as mock_submit_datapoint,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -311,6 +348,11 @@ class TestDataSubmit:
             )
             assert result.exit_code == 0
             assert "submitted" in result.output.lower()
+            mock_submit_datapoint.assert_called_once()
+            (submitted,) = mock_submit_datapoint.call_args.args
+            assert submitted.data_type == "file"
+            assert submitted.path == str(test_file.resolve())
+            assert submitted.label is None
 
     def test_submit_mutually_exclusive(self, tmp_path) -> None:
         test_file = tmp_path / "data.csv"
@@ -376,7 +418,7 @@ class TestDataQuery:
         dp = _make_datapoint()
         with (
             _patch_client_init(),
-            _patch_client("query_datapoints", {"dp1": dp}),
+            _patch_client("query_datapoints", {"dp1": dp}) as mock_query_datapoints,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -391,9 +433,13 @@ class TestDataQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_query_datapoints.assert_called_once_with({"label": "test"})
 
     def test_query_empty(self) -> None:
-        with _patch_client_init(), _patch_client("query_datapoints", {}):
+        with (
+            _patch_client_init(),
+            _patch_client("query_datapoints", {}) as mock_query_datapoints,
+        ):
             runner = CliRunner()
             result = runner.invoke(
                 madsci,
@@ -408,6 +454,7 @@ class TestDataQuery:
             )
             assert result.exit_code == 0
             assert "No datapoints matched" in result.output
+            mock_query_datapoints.assert_called_once_with({"label": "nonexistent"})
 
     def test_query_invalid_json(self) -> None:
         runner = CliRunner()
@@ -429,7 +476,7 @@ class TestDataQuery:
         dp = _make_datapoint()
         with (
             _patch_client_init(),
-            _patch_client("query_datapoints", {"dp1": dp}),
+            _patch_client("query_datapoints", {"dp1": dp}) as mock_query_datapoints,
         ):
             runner = CliRunner()
             result = runner.invoke(
@@ -445,6 +492,7 @@ class TestDataQuery:
                 ],
             )
             assert result.exit_code == 0
+            mock_query_datapoints.assert_called_once_with({"label": "test"})
 
 
 # ---------------------------------------------------------------------------
