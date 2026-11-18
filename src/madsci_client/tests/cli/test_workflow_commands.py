@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 from madsci.client.cli import madsci
 from madsci.common.types.action_types import ActionStatus
@@ -814,3 +815,50 @@ class TestWorkflowRegistered:
 
         assert "wf" in AliasedGroup._aliases
         assert AliasedGroup._aliases["wf"] == "workflow"
+
+
+# ---------------------------------------------------------------------------
+# Error paths: the client raises a transport or HTTP error
+# ---------------------------------------------------------------------------
+
+
+_WC_ERR_URL = "http://localhost:8005/workflows"
+
+_WORKFLOW_ERROR_CASES = [
+    pytest.param(["list"], "get_active_workflows", id="list"),
+    pytest.param(["show", _WF_ID_DEFAULT], "query_workflow", id="show"),
+    pytest.param(["pause", _WF_ID_DEFAULT], "pause_workflow", id="pause"),
+    pytest.param(["resume", _WF_ID_DEFAULT], "resume_workflow", id="resume"),
+    pytest.param(["cancel", _WF_ID_DEFAULT, "--yes"], "cancel_workflow", id="cancel"),
+    pytest.param(["retry", _WF_ID_DEFAULT], "query_workflow", id="retry"),
+    pytest.param(["resubmit", _WF_ID_DEFAULT], "resubmit_workflow", id="resubmit"),
+]
+
+
+class TestWorkflowErrorPaths:
+    """Each command reports a service failure as a short message with exit code 1."""
+
+    @pytest.mark.parametrize("kind", ["connect", "timeout", "http"])
+    @pytest.mark.parametrize(("args", "method"), _WORKFLOW_ERROR_CASES)
+    def test_service_error(
+        self,
+        args: list[str],
+        method: str,
+        kind: str,
+        service_error,
+        assert_friendly_error,
+    ) -> None:
+        error = service_error(kind, _WC_ERR_URL)
+        with (
+            _patch_client_init(),
+            patch(
+                f"madsci.client.workcell_client.WorkcellClient.{method}",
+                side_effect=error,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci,
+                ["workflow", *args, "--workcell-url", "http://localhost:8005/"],
+            )
+        assert_friendly_error(result, kind, _WC_ERR_URL)

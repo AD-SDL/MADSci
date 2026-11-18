@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 from madsci.client.cli import madsci
 from madsci.common.types.resource_types import Asset, Resource
@@ -1226,3 +1227,52 @@ class TestResourceRegistered:
 
         assert "res" in AliasedGroup._aliases
         assert AliasedGroup._aliases["res"] == "resource"
+
+
+# ---------------------------------------------------------------------------
+# Error paths: the client raises a transport or HTTP error
+# ---------------------------------------------------------------------------
+
+
+_RES_URL = "http://localhost:8003/"
+_RES_ERR_URL = "http://localhost:8003/resource/query"
+
+_RESOURCE_ERROR_CASES = [
+    pytest.param(["list"], "query_resource", id="list"),
+    pytest.param(["get", _RES_ID_1], "get_resource", id="get"),
+    pytest.param(["delete", _RES_ID_1, "--yes"], "remove_resource", id="delete"),
+    pytest.param(["tree", _RES_ID_1], "query_resource_hierarchy", id="tree"),
+    pytest.param(
+        ["quantity", "set", _RES_ID_1, "5"], "set_quantity", id="quantity-set"
+    ),
+    pytest.param(["template", "list"], "query_templates", id="template-list"),
+    pytest.param(["history", _RES_ID_1], "query_history", id="history"),
+]
+
+
+class TestResourceErrorPaths:
+    """Each command reports a service failure as a short message with exit code 1."""
+
+    @pytest.mark.parametrize("kind", ["connect", "timeout", "http"])
+    @pytest.mark.parametrize(("args", "method"), _RESOURCE_ERROR_CASES)
+    def test_service_error(
+        self,
+        args: list[str],
+        method: str,
+        kind: str,
+        service_error,
+        assert_friendly_error,
+    ) -> None:
+        error = service_error(kind, _RES_ERR_URL)
+        with (
+            _patch_client_init(),
+            patch(
+                f"madsci.client.resource_client.ResourceClient.{method}",
+                side_effect=error,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                madsci, ["resource", *args, "--resource-url", _RES_URL]
+            )
+        assert_friendly_error(result, kind, _RES_ERR_URL)
