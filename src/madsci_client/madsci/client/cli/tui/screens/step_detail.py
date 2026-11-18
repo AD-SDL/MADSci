@@ -8,6 +8,9 @@ from typing import Any, ClassVar
 
 from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
 from madsci.client.cli.utils.formatting import format_status_colored
+from madsci.common.types.action_types import ActionResult
+from madsci.common.types.step_types import Step
+from pydantic import BaseModel
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
@@ -15,103 +18,82 @@ from textual.screen import Screen
 from textual.widgets import Label
 
 
-def _step_status_name(status: Any) -> str:
-    """Derive a display name from a step status value.
+def _display_value(value: Any) -> str:
+    """Format a step value for display.
 
-    Handles both string statuses (e.g. ``"succeeded"``) and dict
-    representations.
+    Pydantic models (for example location arguments and conditions) show
+    as their JSON dict, not as the model repr.
 
     Args:
-        status: Step status, either a string or a dict with status flags.
+        value: The value to format.
 
     Returns:
-        Lowercase status name string.
+        Display string.
     """
-    if isinstance(status, str):
-        return status.lower()
-    if isinstance(status, dict):
-        for key in ("succeeded", "failed", "cancelled", "running", "paused"):
-            if status.get(key):
-                return key
-    return "unknown"
+    if isinstance(value, BaseModel):
+        return str(value.model_dump(mode="json"))
+    return str(value)
 
 
-def _build_general_section(step: dict) -> DetailSection:
+def _build_general_section(step: Step) -> DetailSection:
     """Build the General section for a step.
 
     Args:
-        step: Step data dictionary.
+        step: The workflow step.
 
     Returns:
         DetailSection with general step info.
     """
-    general: dict[str, str] = {
-        "Name": step.get("name") or step.get("action") or "Unknown",
-        "Key": step.get("key") or "-",
-        "Action": step.get("action") or "-",
-        "Node": step.get("node") or "-",
-        "Status": format_status_colored(
-            _step_status_name(step.get("status", "unknown"))
-        ),
-    }
-    step_id = step.get("step_id")
-    if step_id:
-        general["Step ID"] = str(step_id)
-    return DetailSection("General", general)
+    return DetailSection(
+        "General",
+        {
+            "Name": step.name or step.action or "Unknown",
+            "Key": step.key or "-",
+            "Action": step.action or "-",
+            "Node": step.node or "-",
+            "Status": format_status_colored(step.status.value),
+            "Step ID": step.step_id,
+        },
+    )
 
 
-def _build_result_section(result: dict) -> DetailSection | None:
-    """Build the Result section from a step result dict.
+def _build_result_section(result: ActionResult) -> DetailSection:
+    """Build the Result section from a step result.
 
     Args:
-        result: Step result dictionary.
+        result: The latest action result of the step.
 
     Returns:
-        DetailSection if any result fields exist, else None.
+        DetailSection with the result status, data and errors.
     """
-    result_fields: dict[str, str] = {}
-    if result.get("status"):
-        result_fields["Status"] = str(result["status"])
-    if result.get("action_msg"):
-        result_fields["Message"] = str(result["action_msg"])
+    result_fields: dict[str, str] = {"Status": result.status.value}
 
-    json_result = result.get("json_result")
-    if json_result and isinstance(json_result, dict):
-        for k, v in json_result.items():
+    if isinstance(result.json_result, dict):
+        for k, v in result.json_result.items():
             result_fields[f"Data: {k}"] = str(v)[:200]
 
-    errors = result.get("errors")
-    if errors and isinstance(errors, list):
-        for i, err in enumerate(errors):
-            err_msg = (
-                err.get("message", str(err)) if isinstance(err, dict) else str(err)
-            )
-            result_fields[f"Error {i + 1}"] = str(err_msg)[:200]
+    for i, err in enumerate(result.errors):
+        result_fields[f"Error {i + 1}"] = str(err.message or err.error_type)[:200]
 
-    if result_fields:
-        return DetailSection("Result", result_fields)
-    return None
+    return DetailSection("Result", result_fields)
 
 
-def _build_timing_section(step: dict) -> DetailSection | None:
+def _build_timing_section(step: Step) -> DetailSection | None:
     """Build the Timing section for a step.
 
     Args:
-        step: Step data dictionary.
+        step: The workflow step.
 
     Returns:
         DetailSection if any timing info exists, else None.
     """
     timing: dict[str, str] = {}
-    start_time = step.get("start_time")
-    end_time = step.get("end_time")
-    duration = step.get("duration")
-    if start_time:
-        timing["Started"] = str(start_time)
-    if end_time:
-        timing["Ended"] = str(end_time)
-    if duration:
-        timing["Duration"] = str(duration)
+    if step.start_time is not None:
+        timing["Started"] = str(step.start_time)
+    if step.end_time is not None:
+        timing["Ended"] = str(step.end_time)
+    if step.duration is not None:
+        timing["Duration"] = str(step.duration)
     if timing:
         return DetailSection("Timing", timing)
     return None
@@ -127,7 +109,7 @@ class StepDetailScreen(Screen):
     def __init__(
         self,
         workflow_id: str,
-        step_data: dict,  # TODO(#279): Accept typed WorkflowStep model instead of raw dict
+        step_data: Step,
         step_index: int,
         **kwargs: Any,
     ) -> None:
@@ -135,7 +117,7 @@ class StepDetailScreen(Screen):
 
         Args:
             workflow_id: Parent workflow ID.
-            step_data: Step data dictionary.
+            step_data: The workflow step to show.
             step_index: Zero-based index of this step within the workflow.
             **kwargs: Additional keyword arguments forwarded to Screen.
         """
@@ -167,58 +149,47 @@ class StepDetailScreen(Screen):
 
         sections: list[DetailSection] = [_build_general_section(step)]
 
-        # Description
-        description = step.get("description")
-        if description:
-            sections.append(DetailSection("Description", {"": str(description)}))
+        if step.description:
+            sections.append(DetailSection("Description", {"": step.description}))
 
-        # Arguments
-        args = step.get("args") or {}
-        if args:
-            sections.append(
-                DetailSection("Arguments", {str(k): str(v) for k, v in args.items()})
-            )
-
-        # Locations
-        locations = step.get("locations") or {}
-        if locations:
+        if step.args:
             sections.append(
                 DetailSection(
-                    "Locations", {str(k): str(v) for k, v in locations.items()}
+                    "Arguments", {str(k): str(v) for k, v in step.args.items()}
                 )
             )
 
-        # Timing
+        if step.locations:
+            sections.append(
+                DetailSection(
+                    "Locations",
+                    {str(k): _display_value(v) for k, v in step.locations.items()},
+                )
+            )
+
         timing_section = _build_timing_section(step)
         if timing_section:
             sections.append(timing_section)
 
-        # Result
-        result = step.get("result")
-        if result and isinstance(result, dict):
-            result_section = _build_result_section(result)
-            if result_section:
-                sections.append(result_section)
+        if step.result:
+            sections.append(_build_result_section(step.result))
 
-        # Data labels
-        data_labels = step.get("data_labels") or {}
-        if data_labels:
+        if step.data_labels:
             sections.append(
                 DetailSection(
-                    "Data Labels", {str(k): str(v) for k, v in data_labels.items()}
+                    "Data Labels",
+                    {str(k): str(v) for k, v in step.data_labels.items()},
                 )
             )
 
-        # Conditions
-        conditions = step.get("conditions") or []
-        if conditions:
+        if step.conditions:
             cond_fields = {
-                f"Condition {i + 1}": str(cond)[:200]
-                for i, cond in enumerate(conditions)
+                f"Condition {i + 1}": _display_value(cond)[:200]
+                for i, cond in enumerate(step.conditions)
             }
             sections.append(DetailSection("Conditions", cond_fields))
 
-        title = step.get("name") or step.get("action") or f"Step {self.step_index + 1}"
+        title = step.name or step.action or f"Step {self.step_index + 1}"
         panel.update_content(title=title, sections=sections)
 
     def action_go_back(self) -> None:

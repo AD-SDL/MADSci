@@ -205,13 +205,10 @@ class WorkflowDetailScreen(ActionBarMixin, ServiceURLMixin, Screen):
             return
 
         if 0 <= step_index < len(steps):
-            step_data = steps[step_index]
-            if hasattr(step_data, "model_dump"):
-                step_data = step_data.model_dump(mode="json")
             self.app.push_screen(
                 StepDetailScreen(
                     workflow_id=self.workflow_id,
-                    step_data=step_data,
+                    step_data=steps[step_index],
                     step_index=step_index,
                 )
             )
