@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from collections.abc import Callable
+from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Union
 
 import httpx
@@ -28,6 +30,59 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Retry transports
 # ---------------------------------------------------------------------------
+
+#: Default upper bound, in seconds, for a delay taken from a ``Retry-After`` header.
+DEFAULT_MAX_RETRY_AFTER = 60.0
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """
+    Parse a ``Retry-After`` header value into a delay in seconds.
+
+    The header holds either a number of seconds or an HTTP date (RFC 9110,
+    section 10.2.3). Returns ``None`` when the value is missing or invalid.
+    A date in the past gives ``0.0``.
+    """
+    if value is None or not value.strip():
+        return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        return _seconds_until_http_date(value.strip())
+    if not math.isfinite(seconds) or seconds < 0:
+        return None
+    return seconds
+
+
+def _seconds_until_http_date(value: str) -> float | None:
+    """Return the seconds from now until the HTTP date *value*, or ``None`` if invalid."""
+    try:
+        retry_at = parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError):
+        return None
+    if retry_at.tzinfo is None:
+        return None
+    return max(0.0, retry_at.timestamp() - time.time())
+
+
+def _retry_delay(
+    response: httpx.Response,
+    backoff_delay: float,
+    max_retry_after: float,
+) -> float:
+    """
+    Return the delay before the next retry of a failed *response*.
+
+    For a 429 response with a valid ``Retry-After`` header, the delay is the
+    larger of *backoff_delay* and the header value. The header value is capped
+    at *max_retry_after*. For all other responses the delay is *backoff_delay*.
+    """
+    if response.status_code != 429:
+        return backoff_delay
+    retry_after = _parse_retry_after(response.headers.get("Retry-After"))
+    if retry_after is None:
+        return backoff_delay
+    return max(backoff_delay, min(retry_after, max_retry_after))
 
 
 class RetryTransport(httpx.BaseTransport):
@@ -54,6 +109,10 @@ class RetryTransport(httpx.BaseTransport):
         Delay = ``backoff_factor * (2 ** (attempt - 1))``.
     allowed_methods : list[str] | None
         HTTP methods eligible for retry.  ``None`` means *all* methods.
+    max_retry_after : float
+        Upper bound, in seconds, for a delay taken from the ``Retry-After``
+        header of a 429 response.  On a 429 response the delay is
+        ``max(backoff delay, min(Retry-After, max_retry_after))``.
     """
 
     def __init__(
@@ -64,6 +123,7 @@ class RetryTransport(httpx.BaseTransport):
         status_forcelist: list[int] | None = None,
         backoff_factor: float = 0.3,
         allowed_methods: list[str] | None = None,
+        max_retry_after: float = DEFAULT_MAX_RETRY_AFTER,
     ) -> None:
         """Initialise the retry transport with the given configuration."""
         self._transport = transport
@@ -75,6 +135,7 @@ class RetryTransport(httpx.BaseTransport):
             if allowed_methods is not None
             else None
         )
+        self._max_retry_after = max_retry_after
 
     def handle_request(self, request: httpx.Request) -> httpx.Response:
         """Send *request*, retrying on qualifying failures."""
@@ -118,7 +179,11 @@ class RetryTransport(httpx.BaseTransport):
             last_response = response
 
             if attempt < self._retries:
-                delay = self._backoff_factor * (2**attempt)
+                delay = _retry_delay(
+                    response,
+                    self._backoff_factor * (2**attempt),
+                    self._max_retry_after,
+                )
                 logger.debug(
                     "Retry %d/%d for %s %s (status %d), sleeping %.2fs",
                     attempt + 1,
@@ -166,6 +231,10 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
         Multiplier for exponential backoff between retries.
     allowed_methods : list[str] | None
         HTTP methods eligible for retry.  ``None`` means *all* methods.
+    max_retry_after : float
+        Upper bound, in seconds, for a delay taken from the ``Retry-After``
+        header of a 429 response.  On a 429 response the delay is
+        ``max(backoff delay, min(Retry-After, max_retry_after))``.
     """
 
     def __init__(
@@ -176,6 +245,7 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
         status_forcelist: list[int] | None = None,
         backoff_factor: float = 0.3,
         allowed_methods: list[str] | None = None,
+        max_retry_after: float = DEFAULT_MAX_RETRY_AFTER,
     ) -> None:
         """Initialise the async retry transport with the given configuration."""
         self._transport = transport
@@ -187,6 +257,7 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
             if allowed_methods is not None
             else None
         )
+        self._max_retry_after = max_retry_after
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         """Send *request* asynchronously, retrying on qualifying failures."""
@@ -229,7 +300,11 @@ class AsyncRetryTransport(httpx.AsyncBaseTransport):
             last_response = response
 
             if attempt < self._retries:
-                delay = self._backoff_factor * (2**attempt)
+                delay = _retry_delay(
+                    response,
+                    self._backoff_factor * (2**attempt),
+                    self._max_retry_after,
+                )
                 logger.debug(
                     "Async retry %d/%d for %s %s (status %d), sleeping %.2fs",
                     attempt + 1,

@@ -461,6 +461,157 @@ class TestAsyncRetryTransport:
 
 
 # ---------------------------------------------------------------------------
+# Retry-After handling on 429 responses
+# ---------------------------------------------------------------------------
+
+
+def _too_many_requests(retry_after: str | None = None) -> httpx.Response:
+    headers = {"Retry-After": retry_after} if retry_after is not None else {}
+    return httpx.Response(429, headers=headers)
+
+
+class TestRetryAfter:
+    """Tests that the retry transports honour ``Retry-After`` on 429 responses."""
+
+    def test_sync_uses_retry_after_seconds(self) -> None:
+        stub = _StubTransport([_too_many_requests("5"), _ok_response()])
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            response = transport.handle_request(
+                httpx.Request("GET", "http://example.com/")
+            )
+
+        assert response.status_code == 200
+        mock_sleep.assert_called_once_with(5.0)
+
+    def test_sync_keeps_backoff_when_larger_than_retry_after(self) -> None:
+        stub = _StubTransport([_too_many_requests("1"), _ok_response()])
+        transport = RetryTransport(stub, retries=3, backoff_factor=4.0)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(4.0)
+
+    def test_sync_uses_retry_after_http_date(self) -> None:
+        stub = _StubTransport(
+            [_too_many_requests("Wed, 21 Oct 2015 07:28:30 GMT"), _ok_response()]
+        )
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.1)
+        now = 1445412500.0  # 2015-10-21 07:28:20 UTC, 10 s before the header date
+
+        with (
+            patch("madsci.common.http_client.time.time", return_value=now),
+            patch("madsci.common.http_client.time.sleep") as mock_sleep,
+        ):
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(pytest.approx(10.0))
+
+    def test_sync_http_date_in_the_past_uses_backoff(self) -> None:
+        stub = _StubTransport(
+            [_too_many_requests("Wed, 21 Oct 2015 07:28:00 GMT"), _ok_response()]
+        )
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(pytest.approx(0.1))
+
+    @pytest.mark.parametrize("value", ["soon", "-5", "", "nan", "inf"])
+    def test_sync_invalid_retry_after_uses_backoff(self, value: str) -> None:
+        stub = _StubTransport([_too_many_requests(value), _ok_response()])
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(pytest.approx(0.1))
+
+    def test_sync_retry_after_is_capped(self) -> None:
+        stub = _StubTransport([_too_many_requests("3600"), _ok_response()])
+        transport = RetryTransport(
+            stub, retries=3, backoff_factor=0.1, max_retry_after=30.0
+        )
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(30.0)
+
+    def test_sync_ignores_retry_after_on_other_status(self) -> None:
+        stub = _StubTransport(
+            [httpx.Response(503, headers={"Retry-After": "5"}), _ok_response()]
+        )
+        transport = RetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            transport.handle_request(httpx.Request("GET", "http://example.com/"))
+
+        mock_sleep.assert_called_once_with(pytest.approx(0.1))
+
+    def test_sync_no_sleep_after_last_attempt(self) -> None:
+        stub = _StubTransport([_too_many_requests("5")] * 3)
+        transport = RetryTransport(stub, retries=1, backoff_factor=0.1)
+
+        with patch("madsci.common.http_client.time.sleep") as mock_sleep:
+            response = transport.handle_request(
+                httpx.Request("GET", "http://example.com/")
+            )
+
+        assert response.status_code == 429
+        assert stub._call_count == 2
+        mock_sleep.assert_called_once_with(5.0)
+
+    @pytest.mark.asyncio
+    async def test_async_uses_retry_after_seconds(self) -> None:
+        stub = _AsyncStubTransport([_too_many_requests("5"), _ok_response()])
+        transport = AsyncRetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch(
+            "madsci.common.http_client.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            response = await transport.handle_async_request(
+                httpx.Request("GET", "http://example.com/")
+            )
+
+        assert response.status_code == 200
+        mock_sleep.assert_awaited_once_with(5.0)
+
+    @pytest.mark.asyncio
+    async def test_async_retry_after_is_capped(self) -> None:
+        stub = _AsyncStubTransport([_too_many_requests("3600"), _ok_response()])
+        transport = AsyncRetryTransport(
+            stub, retries=3, backoff_factor=0.1, max_retry_after=30.0
+        )
+
+        with patch(
+            "madsci.common.http_client.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            await transport.handle_async_request(
+                httpx.Request("GET", "http://example.com/")
+            )
+
+        mock_sleep.assert_awaited_once_with(30.0)
+
+    @pytest.mark.asyncio
+    async def test_async_invalid_retry_after_uses_backoff(self) -> None:
+        stub = _AsyncStubTransport([_too_many_requests("soon"), _ok_response()])
+        transport = AsyncRetryTransport(stub, retries=3, backoff_factor=0.1)
+
+        with patch(
+            "madsci.common.http_client.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            await transport.handle_async_request(
+                httpx.Request("GET", "http://example.com/")
+            )
+
+        mock_sleep.assert_awaited_once_with(pytest.approx(0.1))
+
+
+# ---------------------------------------------------------------------------
 # Rate limit hook type annotation
 # ---------------------------------------------------------------------------
 
