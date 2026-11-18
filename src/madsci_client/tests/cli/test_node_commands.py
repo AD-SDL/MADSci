@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from click.testing import CliRunner
 from madsci.client.cli import madsci
 from madsci.common.types.action_types import ActionResult, ActionStatus
@@ -1276,3 +1277,76 @@ class TestNodeRegistered:
 
         assert "nd" in AliasedGroup._aliases
         assert AliasedGroup._aliases["nd"] == "node"
+
+
+# ---------------------------------------------------------------------------
+# Error paths: the client raises a transport or HTTP error
+# ---------------------------------------------------------------------------
+
+
+_WC_ERR_URL = "http://localhost:8005/nodes"
+_NODE_ERR_URL = "http://localhost:2000/status"
+
+# Commands that fail while they ask the workcell manager about the node.
+_NODE_WC_ERROR_CASES = [
+    pytest.param(["list"], "get_nodes", id="list"),
+    pytest.param(["info", "test_node"], "get_node", id="info"),
+    pytest.param(["status", "test_node"], "get_node", id="status"),
+]
+
+# Commands that find the node, then fail while they talk to the node itself.
+_NODE_ERROR_CASES = [
+    pytest.param(["status", "test_node"], "get_status", id="status"),
+    pytest.param(["state", "test_node"], "get_state", id="state"),
+    pytest.param(["log", "test_node"], "get_log", id="log"),
+]
+
+
+class TestNodeErrorPaths:
+    """Each command reports a service failure as a short message with exit code 1."""
+
+    @pytest.mark.parametrize("kind", ["connect", "timeout", "http"])
+    @pytest.mark.parametrize(("args", "method"), _NODE_WC_ERROR_CASES)
+    def test_workcell_error(
+        self,
+        args: list[str],
+        method: str,
+        kind: str,
+        service_error,
+        assert_friendly_error,
+    ) -> None:
+        error = service_error(kind, _WC_ERR_URL)
+        with (
+            _patch_wc_init(),
+            patch(
+                f"madsci.client.workcell_client.WorkcellClient.{method}",
+                side_effect=error,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(madsci, ["node", *args, "--workcell-url", _WC_URL])
+        assert_friendly_error(result, kind, _WC_ERR_URL)
+
+    @pytest.mark.parametrize("kind", ["connect", "timeout", "http"])
+    @pytest.mark.parametrize(("args", "method"), _NODE_ERROR_CASES)
+    def test_node_error(
+        self,
+        args: list[str],
+        method: str,
+        kind: str,
+        service_error,
+        assert_friendly_error,
+    ) -> None:
+        error = service_error(kind, _NODE_ERR_URL)
+        with (
+            _patch_wc_init(),
+            _patch_wc("get_node", _make_node_dict()),
+            _patch_node_init(),
+            patch(
+                f"madsci.client.node.rest_node_client.RestNodeClient.{method}",
+                side_effect=error,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(madsci, ["node", *args, "--workcell-url", _WC_URL])
+        assert_friendly_error(result, kind, _NODE_ERR_URL)
