@@ -12,6 +12,8 @@ from madsci.client.cli.tui.screens.workflow_detail import WorkflowDetailScreen
 from madsci.client.cli.tui.widgets import DetailPanel
 from madsci.common.types.action_types import ActionResult, ActionStatus
 from madsci.common.types.base_types import Error
+from madsci.common.types.condition_types import ResourceInLocationCondition
+from madsci.common.types.location_types import LocationArgument
 from madsci.common.types.step_types import Step
 from madsci.common.types.workflow_types import Workflow
 from textual.app import App
@@ -115,6 +117,51 @@ class TestStepDetailScreen:
 
         assert "Result" in text
         assert "succeeded" in text
+
+    @pytest.mark.asyncio
+    async def test_zero_duration_is_shown(self) -> None:
+        """A duration of zero still shows a Duration row."""
+        step = Step(action="measure", duration=timedelta(0))
+
+        text = await _render_text(step)
+
+        assert "Duration" in text
+        assert "0:00:00" in text
+
+    @pytest.mark.asyncio
+    async def test_error_without_message_shows_error_type(self) -> None:
+        """An error with no message shows its error type."""
+        step = Step(
+            action="measure",
+            result=ActionResult(
+                status=ActionStatus.FAILED,
+                errors=[Error(message=None, error_type="TimeoutError")],
+            ),
+        )
+
+        text = await _render_text(step)
+
+        assert "TimeoutError" in text
+        assert "logged_at" not in text
+
+    @pytest.mark.asyncio
+    async def test_models_show_as_dicts(self) -> None:
+        """Location arguments and conditions show as dicts, not model reprs."""
+        step = Step(
+            action="transfer",
+            locations={
+                "source": LocationArgument(representation=[1, 2], location_name="deck"),
+                "target": "reader",
+            },
+            conditions=[ResourceInLocationCondition(location_name="deck")],
+        )
+
+        text = await _render_text(step)
+
+        assert "'location_name': 'deck'" in text
+        assert "reader" in text
+        assert "'condition_type': 'resource_present'" in text
+        assert "ConditionTypeEnum" not in text
 
 
 class TestWorkflowDetailStepSelection:

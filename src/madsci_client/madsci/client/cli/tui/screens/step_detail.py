@@ -10,11 +10,29 @@ from madsci.client.cli.tui.widgets import DetailPanel, DetailSection
 from madsci.client.cli.utils.formatting import format_status_colored
 from madsci.common.types.action_types import ActionResult
 from madsci.common.types.step_types import Step
+from pydantic import BaseModel
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Label
+
+
+def _display_value(value: Any) -> str:
+    """Format a step value for display.
+
+    Pydantic models (for example location arguments and conditions) show
+    as their JSON dict, not as the model repr.
+
+    Args:
+        value: The value to format.
+
+    Returns:
+        Display string.
+    """
+    if isinstance(value, BaseModel):
+        return str(value.model_dump(mode="json"))
+    return str(value)
 
 
 def _build_general_section(step: Step) -> DetailSection:
@@ -55,7 +73,7 @@ def _build_result_section(result: ActionResult) -> DetailSection:
             result_fields[f"Data: {k}"] = str(v)[:200]
 
     for i, err in enumerate(result.errors):
-        result_fields[f"Error {i + 1}"] = str(err.message or err)[:200]
+        result_fields[f"Error {i + 1}"] = str(err.message or err.error_type)[:200]
 
     return DetailSection("Result", result_fields)
 
@@ -70,11 +88,11 @@ def _build_timing_section(step: Step) -> DetailSection | None:
         DetailSection if any timing info exists, else None.
     """
     timing: dict[str, str] = {}
-    if step.start_time:
+    if step.start_time is not None:
         timing["Started"] = str(step.start_time)
-    if step.end_time:
+    if step.end_time is not None:
         timing["Ended"] = str(step.end_time)
-    if step.duration:
+    if step.duration is not None:
         timing["Duration"] = str(step.duration)
     if timing:
         return DetailSection("Timing", timing)
@@ -145,7 +163,7 @@ class StepDetailScreen(Screen):
             sections.append(
                 DetailSection(
                     "Locations",
-                    {str(k): str(v) for k, v in step.locations.items()},
+                    {str(k): _display_value(v) for k, v in step.locations.items()},
                 )
             )
 
@@ -166,7 +184,7 @@ class StepDetailScreen(Screen):
 
         if step.conditions:
             cond_fields = {
-                f"Condition {i + 1}": str(cond)[:200]
+                f"Condition {i + 1}": _display_value(cond)[:200]
                 for i, cond in enumerate(step.conditions)
             }
             sections.append(DetailSection("Conditions", cond_fields))
